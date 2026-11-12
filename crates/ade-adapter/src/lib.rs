@@ -143,16 +143,18 @@ pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
 pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     // 不支援的細部權限選項要明確報錯，不能靜默忽略。
     let is_claude = matches!(spec.kind, AgentKind::ClaudeCode);
-    if !is_claude
-        && (spec.read_only || !spec.allowed_tools.is_empty() || !spec.disallowed_tools.is_empty())
-    {
+    let is_codex = matches!(spec.kind, AgentKind::Codex);
+    if !is_claude && (!spec.allowed_tools.is_empty() || !spec.disallowed_tools.is_empty()) {
         bail!(
-            "{} 尚不支援 read_only／allowed_tools／disallowed_tools；請改用 claude",
+            "{} 尚不支援 allowed_tools／disallowed_tools；請改用 claude",
             spec.kind
         );
     }
-    if spec.sandbox.is_some() {
-        bail!("sandbox 選項尚未實作（Codex 欄位名稱待確認）");
+    if spec.read_only && !is_claude && !is_codex {
+        bail!("{} 尚不支援 read_only；請改用 claude 或 codex", spec.kind);
+    }
+    if spec.sandbox.is_some() && !is_codex {
+        bail!("sandbox 只適用於 codex");
     }
     let want_structured = match spec.transport {
         Transport::Pty => false,
@@ -197,9 +199,6 @@ pub fn supports_structured(kind: &AgentKind) -> bool {
 
 /// 依 agent 種類啟動對應的原生結構化 adapter。
 fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
-    if let (Some(m), AgentKind::Codex) = (&spec.model, &spec.kind) {
-        bail!("codex 尚不支援指定 model（{m}）：欄位名稱尚未確認");
-    }
     match spec.kind {
         AgentKind::OpenCode | AgentKind::Antigravity => {
             let (prog, _) = spec.kind.acp_command().context("此 agent 不支援 ACP")?;

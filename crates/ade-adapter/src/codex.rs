@@ -420,14 +420,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     .context("codex `initialize` 失敗")?;
 
     let started = conn
-        .call(
-            "thread/start",
-            json!({
-                "cwd": spec.cwd.to_string_lossy(),
-                "approvalPolicy": spec.permission.codex_approval_policy(),
-            }),
-            CALL_TIMEOUT,
-        )
+        .call("thread/start", thread_start_params(&spec), CALL_TIMEOUT)
         .context("codex `thread/start` 失敗")?;
     let tid = started["thread"]["id"]
         .as_str()
@@ -444,6 +437,27 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         control.send_input(p)?;
     }
     Ok(Box::new(control))
+}
+
+/// `thread/start` 參數：cwd、approvalPolicy，加上可選的 model 與 sandbox（官方文件範例：
+/// `"model"`、`"sandbox": "workspace-write"`；`read_only` 對應 `read-only`）。
+fn thread_start_params(spec: &SessionSpec) -> Value {
+    let mut p = json!({
+        "cwd": spec.cwd.to_string_lossy(),
+        "approvalPolicy": spec.permission.codex_approval_policy(),
+    });
+    if let Some(m) = &spec.model {
+        p["model"] = json!(m);
+    }
+    let sandbox = if spec.read_only {
+        Some("read-only".to_string())
+    } else {
+        spec.sandbox.clone()
+    };
+    if let Some(s) = sandbox {
+        p["sandbox"] = json!(s);
+    }
+    p
 }
 
 #[cfg(test)]
@@ -470,5 +484,34 @@ mod tests {
             };
             assert_eq!(got, want);
         }
+    }
+
+    #[test]
+    fn thread_start_carries_model_and_sandbox() {
+        let spec = SessionSpec {
+            id: "s".into(),
+            kind: ade_core::AgentKind::Codex,
+            cwd: "/tmp".into(),
+            transport: ade_protocol::Transport::Structured,
+            bin: None,
+            args: vec![],
+            model: Some("m1".into()),
+            allowed_tools: vec![],
+            disallowed_tools: vec![],
+            read_only: false,
+            sandbox: Some("workspace-write".into()),
+            env: vec![],
+            permission: ade_core::PermissionPolicy::Auto,
+            mcp_exe: None,
+            initial_prompt: None,
+            cols: 80,
+            rows: 24,
+        };
+        let p = thread_start_params(&spec);
+        assert_eq!(p["model"], "m1");
+        assert_eq!(p["sandbox"], "workspace-write");
+        let mut ro = spec.clone();
+        ro.read_only = true;
+        assert_eq!(thread_start_params(&ro)["sandbox"], "read-only");
     }
 }
