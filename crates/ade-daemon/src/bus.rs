@@ -298,6 +298,31 @@ impl Shared {
             },
         );
     }
+
+    pub(crate) fn handle_bus_inbox(
+        self: &Arc<Self>,
+        reply: &ClientTx,
+        session: String,
+        unread_only: bool,
+    ) {
+        let sid = self.resolve_session(&session);
+        let mut inner = lock(&self.inner);
+        let after = if unread_only {
+            inner.inbox_cursors.get(&sid).cloned()
+        } else {
+            None
+        };
+        let messages = inner.state.inbox_for(&sid, after.as_deref());
+        if unread_only {
+            if let Some(last) = messages.last() {
+                inner.inbox_cursors.insert(sid, last.id.clone());
+            }
+        }
+        let _ = reply.send(Frame::Messages {
+            messages,
+            timed_out: false,
+        });
+    }
 }
 
 /// 機制 C 後備：把收到的訊息附加到 `<cwd>/.ade/mailbox/<session>.jsonl`。

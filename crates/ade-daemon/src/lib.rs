@@ -15,6 +15,7 @@ use bus::*;
 mod client;
 pub mod config;
 mod git;
+mod handlers;
 mod logwriter;
 mod server;
 use logwriter::*;
@@ -24,17 +25,16 @@ pub use server::{run, run_remote, run_with_options, RemoteOptions};
 mod paths;
 pub use client::{ensure_daemon, is_running, send_request, Client, ConnStream};
 pub use git::compute_worktree_diff;
-use git::*;
 pub use paths::{config_dir, log_path, runtime_dir, socket_path, state_dir};
 pub mod mcp;
 
-use ade_adapter::{spawn as spawn_adapter, AgentControl, AgentEvent, SessionSpec};
+use ade_adapter::{AgentControl, AgentEvent};
+pub(crate) use ade_core::{new_id, now_millis};
 use ade_core::{
-    new_id, now_millis, redact_secrets, Artifact, BusMessage, Decision, Event, MsgId, MsgKind,
-    PermissionPolicy, PolicyEngine, Record, ReviewComment, Seq, Session, SessionId, SessionStatus,
-    State, Target, Task, TaskStatus, WorktreeInfo,
+    redact_secrets, BusMessage, Decision, Event, MsgId, MsgKind, PermissionPolicy, PolicyEngine,
+    Record, Seq, Session, SessionId, SessionStatus, State, Target,
 };
-use ade_protocol::{decode_line, encode_line, Frame, Request, SpawnRequest};
+use ade_protocol::{decode_line, encode_line, Frame, Request};
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::{self, File, OpenOptions};
@@ -48,7 +48,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// 記憶體內保留的事件上限（供新 client 補齊；超過則靠快照）。
 const BACKLOG_CAP: usize = 20_000;
 /// `BusWait` 最長等待上限（5 分鐘，避免永久阻塞）。
@@ -62,7 +62,7 @@ const PAIR_RATE_CAP_PER_MIN: usize = 30;
 const CLIENT_QUEUE_CAP: usize = 4096;
 
 /// 取鎖；鎖中毒時取回內部資料繼續，避免一個 panic 拖垮整個 daemon。
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock()
         .unwrap_or_else(|e: PoisonError<MutexGuard<'_, T>>| {
             tracing::error!("鎖已中毒（某執行緒 panic），取回內部資料繼續");
@@ -170,13 +170,13 @@ fn replay_files(paths: &[PathBuf]) -> Result<(State, Vec<Record>)> {
 // Daemon 內部狀態
 // ---------------------------------------------------------------------------
 
-struct SessionEntry {
-    ctl: Arc<dyn AgentControl>,
+pub(crate) struct SessionEntry {
+    pub(crate) ctl: Arc<dyn AgentControl>,
 }
 
 impl ConnStream {
     /// 關閉連線兩個方向（用於踢掉卡住的 client）。
-    fn shutdown(&self) {
+    pub(crate) fn shutdown(&self) {
         let _ = match self {
             ConnStream::Unix(u) => u.shutdown(std::net::Shutdown::Both),
             ConnStream::Tcp(t) => t.shutdown(std::net::Shutdown::Both),
@@ -252,27 +252,27 @@ impl Iterator for ClientRx {
     }
 }
 
-struct Inner {
-    state: State,
-    seq: Seq,
-    backlog: VecDeque<Record>,
-    sessions: HashMap<SessionId, SessionEntry>,
-    inbox_cursors: HashMap<SessionId, MsgId>,
-    waiters: Vec<Waiter>,
-    bus_guard: BusGuard,
-    policy: PolicyEngine,
-    default_cwd: PathBuf,
-    clients: Vec<ClientTx>,
+pub(crate) struct Inner {
+    pub(crate) state: State,
+    pub(crate) seq: Seq,
+    pub(crate) backlog: VecDeque<Record>,
+    pub(crate) sessions: HashMap<SessionId, SessionEntry>,
+    pub(crate) inbox_cursors: HashMap<SessionId, MsgId>,
+    pub(crate) waiters: Vec<Waiter>,
+    pub(crate) bus_guard: BusGuard,
+    pub(crate) policy: PolicyEngine,
+    pub(crate) default_cwd: PathBuf,
+    pub(crate) clients: Vec<ClientTx>,
 }
 
-struct Shared {
-    inner: Mutex<Inner>,
-    log_tx: Mutex<Sender<LogMsg>>,
+pub(crate) struct Shared {
+    pub(crate) inner: Mutex<Inner>,
+    pub(crate) log_tx: Mutex<Sender<LogMsg>>,
     /// log 目前是否能正常寫入（false 表示寫入失敗中）。
-    log_ok: Arc<AtomicBool>,
-    auth_token: Option<String>,
+    pub(crate) log_ok: Arc<AtomicBool>,
+    pub(crate) auth_token: Option<String>,
     /// 本次 daemon 啟動的世代 id。
-    epoch: String,
+    pub(crate) epoch: String,
 }
 
 impl Shared {
@@ -347,7 +347,7 @@ impl Shared {
     }
 
     /// 廣播一個事件：更新狀態、寫 log（先遮罩憑證）、推給所有 client。
-    fn emit(&self, event: Event) {
+    pub(crate) fn emit(&self, event: Event) {
         let mut inner = lock(&self.inner);
         inner.seq += 1;
         let rec = Record {
@@ -372,7 +372,7 @@ impl Shared {
     }
 
     /// 把 adapter 事件翻譯成核心事件（並在審批事件時先經過 PolicyEngine 規則過濾）。
-    fn ingest(&self, sid: &SessionId, ev: AgentEvent) {
+    pub(crate) fn ingest(&self, sid: &SessionId, ev: AgentEvent) {
         if let AgentEvent::Permission(ref p) = ev {
             let decision_and_ctl = {
                 let inner = lock(&self.inner);
@@ -459,16 +459,16 @@ impl Shared {
         }
     }
 
-    fn snapshot(&self) -> State {
+    pub(crate) fn snapshot(&self) -> State {
         lock(&self.inner).state.clone()
     }
 
-    fn default_cwd(&self) -> PathBuf {
+    pub(crate) fn default_cwd(&self) -> PathBuf {
         lock(&self.inner).default_cwd.clone()
     }
 
     /// 關閉：先結束所有 agent 子程序，再移除 socket，最後離開。
-    fn shutdown(self: &Arc<Self>) {
+    pub(crate) fn shutdown(self: &Arc<Self>) {
         let ctls: Vec<Arc<dyn AgentControl>> = {
             let mut inner = lock(&self.inner);
             inner.sessions.drain().map(|(_, e)| e.ctl).collect()
@@ -481,14 +481,14 @@ impl Shared {
         std::process::exit(0);
     }
 
-    fn resolve_session(&self, id_or_label: &str) -> SessionId {
+    pub(crate) fn resolve_session(&self, id_or_label: &str) -> SessionId {
         lock(&self.inner)
             .state
             .resolve_session_id(id_or_label)
             .unwrap_or_else(|| id_or_label.to_string())
     }
 
-    fn control(&self, id_or_label: &str) -> Option<(SessionId, Arc<dyn AgentControl>)> {
+    pub(crate) fn control(&self, id_or_label: &str) -> Option<(SessionId, Arc<dyn AgentControl>)> {
         let inner = lock(&self.inner);
         let sid = inner
             .state
@@ -498,7 +498,7 @@ impl Shared {
     }
 
     /// 若該 session 處於 `Sleeping`，先自動喚醒再送輸入。
-    fn wake_if_sleeping(&self, sid: &SessionId, ctl: &Arc<dyn AgentControl>) {
+    pub(crate) fn wake_if_sleeping(&self, sid: &SessionId, ctl: &Arc<dyn AgentControl>) {
         let is_sleeping = lock(&self.inner)
             .state
             .sessions
@@ -517,721 +517,7 @@ impl Shared {
     // -----------------------------------------------------------------------
 
     fn handle(self: &Arc<Self>, reply: &ClientTx, req: Request) {
-        match req {
-            Request::Hello {
-                client,
-                since,
-                token,
-                epoch,
-            } => {
-                if let Some(expected) = &self.auth_token {
-                    if !token_matches(token.as_deref(), expected) {
-                        let _ = reply.send(Frame::error("遠端認證失敗：token 不符"));
-                        return;
-                    }
-                }
-                if client == "auth" {
-                    return;
-                }
-                let _ = reply.send(Frame::Ready {
-                    pid: std::process::id(),
-                    version: VERSION.to_string(),
-                    epoch: self.epoch.clone(),
-                });
-                // epoch 不符（或未帶）表示 client 的 seq 屬於別的 log，不能增量。
-                let since = since.filter(|_| epoch.as_deref() == Some(self.epoch.as_str()));
-
-                // M4 增量事件同步：若 `since` 在 backlog 範圍內，只補齊差異事件。
-                let mut inner = lock(&self.inner);
-                let can_incremental = since.is_some_and(|s| {
-                    inner
-                        .backlog
-                        .front()
-                        .is_some_and(|first| s + 1 >= first.seq)
-                        || s == inner.seq
-                });
-                if let (Some(since_seq), true) = (since, can_incremental) {
-                    for rec in inner.backlog.iter().filter(|r| r.seq > since_seq) {
-                        let _ = reply.send(Frame::Record {
-                            record: Box::new(rec.clone()),
-                        });
-                    }
-                } else {
-                    let snap = inner.state.clone();
-                    let _ = reply.send(Frame::Snapshot {
-                        state: Box::new(snap),
-                    });
-                }
-                inner.clients.push(reply.clone());
-            }
-
-            Request::Snapshot => {
-                let snap = self.snapshot();
-                let _ = reply.send(Frame::Snapshot {
-                    state: Box::new(snap),
-                });
-            }
-
-            Request::Spawn(spawn) => self.handle_spawn(reply, spawn),
-
-            Request::Prompt { session, text } => match self.control(&session) {
-                Some((sid, ctl)) => {
-                    self.wake_if_sleeping(&sid, &ctl);
-                    let is_pty = lock(&self.inner)
-                        .state
-                        .sessions
-                        .get(&sid)
-                        .is_some_and(|s| s.transport == "pty");
-                    if !is_pty {
-                        self.emit(Event::UserPrompt {
-                            session: sid.clone(),
-                            text: text.clone(),
-                        });
-                    }
-                    match ctl.send_input(&text) {
-                        Ok(()) => {
-                            let _ = reply.send(Frame::ok());
-                        }
-                        Err(e) => {
-                            let _ = reply.send(Frame::error(format!("送 prompt 失敗：{e}")));
-                        }
-                    }
-                }
-                None => {
-                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                }
-            },
-
-            Request::Cancel { session } => match self.control(&session) {
-                Some((_, ctl)) => {
-                    let _ = ctl.cancel();
-                    let _ = reply.send(Frame::ok());
-                }
-                None => {
-                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                }
-            },
-
-            Request::Kill { session } => match self.control(&session) {
-                Some((sid, ctl)) => {
-                    let _ = ctl.kill();
-                    self.emit(Event::SessionExited {
-                        session: sid,
-                        code: None,
-                    });
-                    let _ = reply.send(Frame::ok());
-                }
-                None => {
-                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                }
-            },
-
-            Request::Sleep { session } => match self.control(&session) {
-                Some((sid, ctl)) => match ctl.sleep() {
-                    Ok(()) => {
-                        self.emit(Event::SessionStatus {
-                            session: sid.clone(),
-                            status: SessionStatus::Sleeping,
-                        });
-                        let _ = reply.send(Frame::ok_note(format!("已休眠 {sid}")));
-                    }
-                    Err(e) => {
-                        let _ = reply.send(Frame::error(format!("休眠失敗：{e}")));
-                    }
-                },
-                None => {
-                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                }
-            },
-
-            Request::Wake { session } => match self.control(&session) {
-                Some((sid, ctl)) => match ctl.wake() {
-                    Ok(()) => {
-                        self.emit(Event::SessionStatus {
-                            session: sid.clone(),
-                            status: SessionStatus::Idle,
-                        });
-                        let _ = reply.send(Frame::ok_note(format!("已喚醒 {sid}")));
-                    }
-                    Err(e) => {
-                        let _ = reply.send(Frame::error(format!("喚醒失敗：{e}")));
-                    }
-                },
-                None => {
-                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                }
-            },
-
-            Request::Permission {
-                session,
-                req,
-                decision,
-            } => match self.control(&session) {
-                Some((sid, ctl)) => match ctl.resolve_permission(&req, decision) {
-                    Ok(()) => {
-                        self.emit(Event::PermissionResolved {
-                            session: sid,
-                            req,
-                            decision,
-                        });
-                        let _ = reply.send(Frame::ok());
-                    }
-                    Err(e) => {
-                        let _ = reply.send(Frame::error(format!("審批回覆失敗：{e}")));
-                    }
-                },
-                None => {
-                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                }
-            },
-
-            Request::BusSend {
-                from,
-                to,
-                kind,
-                body,
-                reply_to,
-            } => self.handle_bus_send(reply, from, to, kind, body, reply_to),
-
-            Request::BusInbox {
-                session,
-                unread_only,
-            } => {
-                let sid = self.resolve_session(&session);
-                let mut inner = lock(&self.inner);
-                let after = if unread_only {
-                    inner.inbox_cursors.get(&sid).cloned()
-                } else {
-                    None
-                };
-                let messages = inner.state.inbox_for(&sid, after.as_deref());
-                if unread_only {
-                    if let Some(last) = messages.last() {
-                        inner.inbox_cursors.insert(sid, last.id.clone());
-                    }
-                }
-                let _ = reply.send(Frame::Messages {
-                    messages,
-                    timed_out: false,
-                });
-            }
-
-            Request::BusWait {
-                session,
-                from,
-                reply_to,
-                timeout_ms,
-            } => self.handle_bus_wait(reply, session, from, reply_to, timeout_ms),
-
-            Request::TaskCreate {
-                title,
-                detail,
-                assignee,
-                created_by,
-                depends_on,
-            } => {
-                let assignee = assignee.map(|a| self.resolve_session(&a));
-                let created_by = created_by.map(|c| self.resolve_session(&c));
-                let id = new_id("task");
-                let body = format!(
-                    "[ade 任務指派 id={id}]\n標題：{title}\n指派者：{}\n說明：{}\n請先用 ade_task_update 把狀態改為 doing，完成後改為 done 並用 ade_send 回報。",
-                    created_by.as_deref().unwrap_or("human"),
-                    if detail.is_empty() { "(無)" } else { &detail }
-                );
-                let task = Task {
-                    id: id.clone(),
-                    title,
-                    detail,
-                    status: TaskStatus::Todo,
-                    assignee: assignee.clone(),
-                    created_by: created_by.clone(),
-                    depends_on,
-                    updated_ms: now_millis(),
-                };
-                self.emit(Event::TaskChanged { task });
-
-                // 指派任務時直接投遞一則 handoff 訊息，讓閒置中的負責人被喚醒。
-                if let Some(target) = assignee.filter(|a| !a.is_empty()) {
-                    if created_by.as_ref() != Some(&target) {
-                        let _ = self.deliver_message(
-                            created_by,
-                            Target::Direct(target),
-                            MsgKind::Handoff,
-                            body,
-                            None,
-                        );
-                    }
-                }
-
-                let _ = reply.send(Frame::ok_note(format!("已建立任務 {id}")));
-            }
-
-            Request::TaskUpdate {
-                id,
-                status,
-                assignee,
-                detail,
-            } => {
-                let resolved_assignee = assignee.map(|a| self.resolve_session(&a));
-                let existing = lock(&self.inner).state.tasks.get(&id).cloned();
-                match existing {
-                    Some(mut task) => {
-                        let previous_assignee = task.assignee.clone();
-                        if let Some(st) = status {
-                            task.status = st;
-                        }
-                        if let Some(a) = resolved_assignee {
-                            task.assignee = if a.is_empty() { None } else { Some(a) };
-                        }
-                        if let Some(d) = detail {
-                            task.detail = d;
-                        }
-                        task.updated_ms = now_millis();
-
-                        // 只有「換人做」時才發通知，避免每次狀態更新都吵醒負責人。
-                        let newly_assigned = task
-                            .assignee
-                            .clone()
-                            .filter(|a| Some(a) != previous_assignee.as_ref());
-                        let creator = task.created_by.clone();
-                        let task_id = task.id.clone();
-                        let title = task.title.clone();
-                        let task_detail = task.detail.clone();
-                        let task_status = task.status;
-
-                        self.emit(Event::TaskChanged { task });
-
-                        if let Some(target) = newly_assigned {
-                            if creator.as_ref() != Some(&target) {
-                                let body = format!(
-                                    "[ade 任務指派 id={task_id}]\n標題：{title}\n狀態：{}\n說明：{}\n請先用 ade_task_update 把狀態改為 doing，完成後改為 done 並用 ade_send 回報。",
-                                    task_status.id(),
-                                    if task_detail.is_empty() { "(無)" } else { &task_detail }
-                                );
-                                let _ = self.deliver_message(
-                                    creator,
-                                    Target::Direct(target),
-                                    MsgKind::Handoff,
-                                    body,
-                                    None,
-                                );
-                            }
-                        }
-
-                        let _ = reply.send(Frame::ok_note(format!("已更新任務 {task_id}")));
-                    }
-                    None => {
-                        let _ = reply.send(Frame::error(format!("找不到任務 {id}")));
-                    }
-                }
-            }
-
-            Request::SessionNote { session, note } => {
-                let sid = self.resolve_session(&session);
-                self.emit(Event::SessionNote { session: sid, note });
-                let _ = reply.send(Frame::ok());
-            }
-
-            Request::ArtifactShare {
-                session,
-                kind,
-                path,
-                note,
-            } => {
-                let sid = self.resolve_session(&session);
-                let id = new_id("art");
-                let ts = now_millis();
-                let artifact = Artifact {
-                    id: id.clone(),
-                    session: sid.clone(),
-                    kind,
-                    path: path.clone(),
-                    note: note.clone(),
-                    ts,
-                };
-                self.emit(Event::ArtifactShared { artifact });
-                let summary = if note.is_empty() {
-                    format!("[{}] {}", kind.id(), path)
-                } else {
-                    format!("[{}] {} — {}", kind.id(), path, note)
-                };
-                let message = BusMessage {
-                    id: new_id("msg"),
-                    from: sid,
-                    to: Target::Broadcast,
-                    kind: MsgKind::Artifact,
-                    body: summary,
-                    reply_to: None,
-                    ts,
-                };
-                self.emit(Event::BusMessage { message });
-                let _ = reply.send(Frame::ok_note(format!("已分享產出 {id}")));
-            }
-
-            Request::WorktreeList => {
-                let worktrees = self.collect_worktrees();
-                let _ = reply.send(Frame::Worktrees { worktrees });
-            }
-
-            Request::WorktreeDiff { session } => {
-                let sid = self.resolve_session(&session);
-                let sess = lock(&self.inner).state.sessions.get(&sid).cloned();
-                match sess {
-                    Some(s) => match compute_worktree_diff(Path::new(&s.cwd)) {
-                        Ok(diff) => {
-                            let _ = reply.send(Frame::Diff {
-                                session: s.id,
-                                branch: s.branch,
-                                cwd: s.cwd,
-                                diff,
-                            });
-                        }
-                        Err(e) => {
-                            let _ = reply.send(Frame::error(format!("取得 diff 失敗：{e}")));
-                        }
-                    },
-                    None => {
-                        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                    }
-                }
-            }
-
-            Request::WorktreeMerge { session } => {
-                let sid = self.resolve_session(&session);
-                let sess = lock(&self.inner).state.sessions.get(&sid).cloned();
-                let default_cwd = self.default_cwd();
-                match sess {
-                    Some(s) => match merge_worktree(&session_repo(&default_cwd, &s), &s) {
-                        Ok(msg) => {
-                            let _ = reply.send(Frame::ok_note(msg));
-                        }
-                        Err(e) => {
-                            let _ = reply.send(Frame::error(format!("合併失敗：{e}")));
-                        }
-                    },
-                    None => {
-                        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                    }
-                }
-            }
-
-            Request::WorktreePr {
-                session,
-                title,
-                body,
-            } => {
-                let sid = self.resolve_session(&session);
-                let sess = lock(&self.inner).state.sessions.get(&sid).cloned();
-                match sess {
-                    Some(s) => match create_worktree_pr(&s, &title, &body) {
-                        Ok(url) => {
-                            let _ = reply.send(Frame::ok_note(url));
-                        }
-                        Err(e) => {
-                            let _ = reply.send(Frame::error(format!("建立 PR 失敗：{e}")));
-                        }
-                    },
-                    None => {
-                        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
-                    }
-                }
-            }
-
-            Request::WorktreeGc { session, force } => {
-                let target_sid = session.map(|s| self.resolve_session(&s));
-                let default_cwd = self.default_cwd();
-                let candidates: Vec<Session> = {
-                    let inner = lock(&self.inner);
-                    inner
-                        .state
-                        .sessions
-                        .values()
-                        .filter(|s| {
-                            s.branch.is_some()
-                                && match &target_sid {
-                                    Some(id) => &s.id == id,
-                                    None => !s.status.is_live(),
-                                }
-                        })
-                        .cloned()
-                        .collect()
-                };
-                let mut removed = 0usize;
-                let mut skipped: Vec<String> = Vec::new();
-                for s in candidates {
-                    let repo = session_repo(&default_cwd, &s);
-                    if !force {
-                        if let Some(reason) = gc_block_reason(&repo, &s) {
-                            skipped.push(format!("{}（{reason}）", s.label));
-                            continue;
-                        }
-                    }
-                    match remove_worktree(&repo, &s, force) {
-                        Ok(()) => removed += 1,
-                        Err(e) => skipped.push(format!("{}（移除失敗：{e}）", s.label)),
-                    }
-                }
-                let mut note = format!("已清理 {removed} 個 worktree");
-                if !skipped.is_empty() {
-                    note.push_str(&format!(
-                        "；略過 {} 個：{}（可用 --force 強制移除）",
-                        skipped.len(),
-                        skipped.join("、")
-                    ));
-                }
-                let _ = reply.send(Frame::ok_note(note));
-            }
-
-            Request::ReviewComment {
-                session,
-                location,
-                comment,
-            } => {
-                let sid = self.resolve_session(&session);
-                let review = ReviewComment {
-                    id: new_id("rev"),
-                    session: sid.clone(),
-                    location: location.clone(),
-                    comment: comment.clone(),
-                    ts: now_millis(),
-                };
-                self.emit(Event::ReviewCommented { review });
-                let message = BusMessage {
-                    id: new_id("msg"),
-                    from: "reviewer".into(),
-                    to: Target::Direct(sid.clone()),
-                    kind: MsgKind::Chat,
-                    body: format!("[review @ {location}] {comment}"),
-                    reply_to: None,
-                    ts: now_millis(),
-                };
-                self.emit(Event::BusMessage { message });
-
-                if let Some((target_id, ctl)) = self.control(&sid) {
-                    self.wake_if_sleeping(&target_id, &ctl);
-                    let prompt = format!(
-                        "[ade 程式碼審查註解]\n位置：{location}\n意見：{comment}\n請針對上述位置與審查意見修正程式碼。"
-                    );
-                    let _ = ctl.send_input(&prompt);
-                }
-                let _ = reply.send(Frame::ok_note("已送出審查註解"));
-            }
-
-            Request::Shutdown => {
-                let _ = reply.send(Frame::ok_note("daemon 關閉中"));
-                let shared = self.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(150));
-                    shared.shutdown();
-                });
-            }
-        }
-    }
-
-    fn collect_worktrees(&self) -> Vec<WorktreeInfo> {
-        let sessions: Vec<Session> = lock(&self.inner)
-            .state
-            .sessions_sorted()
-            .into_iter()
-            .filter(|s| s.branch.is_some())
-            .cloned()
-            .collect();
-        let mut out = Vec::with_capacity(sessions.len());
-        for s in sessions {
-            let path = Path::new(&s.cwd);
-            let (changed_files, summary) = if path.is_dir() {
-                git_status_summary(path)
-            } else {
-                (0, "(已移除)".to_string())
-            };
-            out.push(WorktreeInfo {
-                session: s.id,
-                label: s.label,
-                path: s.cwd,
-                branch: s.branch.unwrap_or_default(),
-                live: s.status.is_live(),
-                changed_files,
-                summary,
-            });
-        }
-        out
-    }
-    fn handle_spawn(self: &Arc<Self>, reply: &ClientTx, spawn: SpawnRequest) {
-        let id = new_id("ses");
-        let mut cwd = spawn
-            .cwd
-            .as_ref()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| self.default_cwd());
-        let mut branch = None;
-        let mut repo_root = None;
-
-        if spawn.worktree {
-            let root = git_toplevel(&cwd).unwrap_or_else(|| cwd.clone());
-            match make_worktree(&root, &id) {
-                Ok((dir, br)) => {
-                    repo_root = Some(root.to_string_lossy().to_string());
-                    cwd = dir;
-                    branch = Some(br);
-                }
-                Err(e) => {
-                    let _ = reply.send(Frame::error(format!("建立 worktree 失敗：{e}")));
-                    return;
-                }
-            }
-        }
-
-        let parent = spawn.parent.as_ref().map(|p| self.resolve_session(p));
-        let role = spawn.role.clone();
-        let label = spawn
-            .label
-            .clone()
-            .unwrap_or_else(|| format!("{}/{}", role.id(), &id[4..8]));
-
-        let global_dir = config_dir();
-        let resolved = config::Config::load(&global_dir, &cwd).resolve(
-            &spawn.kind,
-            &role,
-            spawn.model.as_deref(),
-            &spawn.args,
-            spawn.permission,
-        );
-        // 子 agent 的權限不得高於父 session 與設定的上限（防呆，不是安全邊界）。
-        let mut permission = resolved.permission;
-        let mut downgraded = None;
-        if let Some(pid) = &parent {
-            let parent_perm = lock(&self.inner)
-                .state
-                .sessions
-                .get(pid)
-                .map(|p| p.permission);
-            let mut cap = parent_perm;
-            if let Some(m) = resolved.max_agent_permission {
-                cap = Some(cap.map_or(m, |c| c.min_policy(m)));
-            }
-            if let Some(cap) = cap {
-                let clamped = permission.min_policy(cap);
-                if clamped != permission {
-                    downgraded = Some((permission, clamped));
-                    permission = clamped;
-                }
-            }
-        }
-
-        let session = Session {
-            id: id.clone(),
-            kind: spawn.kind.clone(),
-            label,
-            cwd: cwd.to_string_lossy().to_string(),
-            branch,
-            role,
-            status: SessionStatus::Starting,
-            model: resolved.model.clone(),
-            cost: Default::default(),
-            parent,
-            created_ms: now_millis(),
-            transport: String::new(),
-            status_note: None,
-            repo_root,
-            permission,
-        };
-        self.emit(Event::SessionStarted {
-            session: session.clone(),
-        });
-
-        let mcp_exe = std::env::current_exe().ok();
-        let mut env = vec![
-            ("ADE_SESSION".to_string(), id.clone()),
-            (
-                "ADE_SOCKET".to_string(),
-                socket_path().to_string_lossy().to_string(),
-            ),
-        ];
-        if let Some(exe) = &mcp_exe {
-            env.push(("ADE_BIN".to_string(), exe.to_string_lossy().to_string()));
-            if let Some(bin_dir) = exe.parent() {
-                let current_path = std::env::var("PATH").unwrap_or_default();
-                env.push((
-                    "PATH".to_string(),
-                    format!("{}:{current_path}", bin_dir.to_string_lossy()),
-                ));
-            }
-        }
-
-        env.extend(resolved.env.iter().cloned());
-        let (tx, rx) = mpsc::channel();
-        let spec = SessionSpec {
-            id: id.clone(),
-            kind: spawn.kind.clone(),
-            cwd: cwd.clone(),
-            transport: spawn.transport,
-            args: resolved.args.clone(),
-            model: resolved.model.clone(),
-            env,
-            permission,
-            allowed_tools: resolved.allowed_tools.clone(),
-            disallowed_tools: resolved.disallowed_tools.clone(),
-            read_only: resolved.read_only,
-            sandbox: resolved.sandbox.clone(),
-            mcp_exe,
-            initial_prompt: spawn.prompt.clone(),
-            cols: 120,
-            rows: 40,
-        };
-
-        match spawn_adapter(spec, tx) {
-            Ok(ctl) => {
-                let transport = ctl.transport().to_string();
-                self.emit(Event::SessionStatus {
-                    session: id.clone(),
-                    status: SessionStatus::Idle,
-                });
-                if transport != "pty" {
-                    if let Some(prompt) = spawn.prompt.as_deref().filter(|p| !p.trim().is_empty()) {
-                        self.emit(Event::UserPrompt {
-                            session: id.clone(),
-                            text: prompt.to_string(),
-                        });
-                    }
-                }
-                let mut inner = lock(&self.inner);
-                if let Some(s) = inner.state.sessions.get_mut(&id) {
-                    s.transport = transport;
-                }
-                inner.sessions.insert(
-                    id.clone(),
-                    SessionEntry {
-                        ctl: Arc::from(ctl),
-                    },
-                );
-                drop(inner);
-
-                let shared = self.clone();
-                let sid = id.clone();
-                std::thread::spawn(move || {
-                    for ev in rx {
-                        shared.ingest(&sid, ev);
-                    }
-                });
-
-                let mut note = format!("已建立 session {id}");
-                if let Some((from, to)) = downgraded {
-                    note.push_str(&format!(
-                        "（權限由 {} 調降為 {}：不得高於父 session／設定上限）",
-                        from.id(),
-                        to.id()
-                    ));
-                }
-                let _ = reply.send(Frame::ok_note(note));
-            }
-            Err(e) => {
-                self.emit(Event::SessionExited {
-                    session: id.clone(),
-                    code: None,
-                });
-                let _ = reply.send(Frame::error(format!("啟動 agent 失敗：{e}")));
-            }
-        }
+        handlers::dispatch(self, reply, req);
     }
 }
 

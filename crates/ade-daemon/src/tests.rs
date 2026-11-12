@@ -1,4 +1,5 @@
 use super::*;
+use crate::git::*;
 use ade_core::{AgentKind, Cost, Decision, Role};
 
 // -----------------------------------------------------------------------
