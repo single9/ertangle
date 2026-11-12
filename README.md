@@ -22,9 +22,9 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 | 平行不打架 | 每個 session 一個 `git worktree` + branch |
 | 支援多種 agent | Adapter 抽象層（ACP / stream-json / app-server / headless / PTY） |
 
-## 現況（M0–M5 全里程碑已完成並實機驗證）
+## 現況（M0–M5 功能已實作；部分路徑尚未實機驗證）
 
-四家 agent 都有**原生、零額外依賴**的結構化介面，並已實機驗證：
+四家 agent 都有**原生、零額外依賴**的結構化介面，實機驗證狀態如下：
 
 | Agent | 原生協定 | 啟動方式 | 傳輸標記 | 實機狀態 |
 | --- | --- | --- | --- | --- |
@@ -33,9 +33,13 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 | **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 雙向結構化（逐字串流、工具、成本、MCP 注入） |
 | **Codex** | app-server | `codex app-server`（stdio JSON-RPC） | `app-server` | ⚠️ 握手與 thread 已驗證；回合需 OpenAI 授權 |
 
+> **尚未驗證或未實作**：Codex 回合（需 OpenAI 授權）、ACP 逐項審批（受測 agent 預設自行核准）、
+> Claude 逐項審批（未轉發到 TUI）、`outbox/` 監看、其他 MCP 工具回傳的秘密過濾。
+> 與原始設計的差異彙整於 [`docs/DESIGN.md`](docs/DESIGN.md) 附錄 A。
+
 > 找不到原生協定、或該 agent 未安裝時，`--transport auto` 會**自動退回 PTY 直通**。
 
-已完成並實機驗證（M0–M5）：
+已實作（M0–M5；驗證紀錄見 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)）：
 
 - **daemon（M0/M2/M4/M5）**：Unix domain socket + 選配 TCP 遠端監聽（`--listen 127.0.0.1:port`，需 `ADE_TOKEN` 或 `--token-file`，建議搭配 SSH 轉發）、
   增量事件同步（`since`）、事件重播（`ade replay`）與秘密遮罩（`sk-...` / `ghp_...` 自動轉 `<REDACTED>`）、
@@ -127,9 +131,6 @@ cargo test                     # 全部單元測試
 ```bash
 # 本地安裝（在專案根目錄執行，編譯並安裝 ade 到 ~/.cargo/bin）
 cargo install --path .
-
-# 或直接透過 Git 安裝
-cargo install --git https://github.com/duyechen/ade-rust
 
 # 亦可使用 Makefile 安裝至 ~/.local/bin/ade
 make install
