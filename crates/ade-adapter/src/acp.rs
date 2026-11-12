@@ -291,6 +291,33 @@ impl AgentControl for AcpControl {
     }
 }
 
+/// 從 `session/new` 回應的 `configOptions` 找出 model 選項，並驗證 `wanted` 合法。
+/// 回傳 `(configId, value)`；agent 沒有回報 model 選項或值不在清單內時回傳明確錯誤。
+fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
+    let opts = new["configOptions"].as_array().cloned().unwrap_or_default();
+    let opt = opts
+        .iter()
+        .find(|o| o["category"] == "model" || o["id"] == "model")
+        .ok_or_else(|| anyhow!("此 agent 沒有回報可選的 model（configOptions 無 model 項）"))?;
+    let id = opt["id"].as_str().unwrap_or("model").to_string();
+    // options 可能是平的 [{value,name}]，也可能分組 [{options:[...]}]。
+    let mut values: Vec<String> = Vec::new();
+    for o in opt["options"].as_array().into_iter().flatten() {
+        if let Some(v) = o["value"].as_str() {
+            values.push(v.to_string());
+        }
+        for g in o["options"].as_array().into_iter().flatten() {
+            if let Some(v) = g["value"].as_str() {
+                values.push(v.to_string());
+            }
+        }
+    }
+    if !values.is_empty() && !values.iter().any(|v| v == wanted) {
+        bail!("未知的 model `{wanted}`；可用：{}", values.join(", "));
+    }
+    Ok((id, wanted.to_string()))
+}
+
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     let (default_prog, args) = spec
         .kind
@@ -385,7 +412,17 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .as_str()
         .context("`session/new` 未回傳 sessionId")?
         .to_string();
-    *conn.acp_session.lock().unwrap() = sid;
+    *conn.acp_session.lock().unwrap() = sid.clone();
+    if let Some(wanted) = &spec.model {
+        let (config_id, value) = pick_model_option(&new, wanted)?;
+        conn.call(
+            "session/set_config_option",
+            json!({ "sessionId": sid, "configId": config_id, "value": value }),
+            CALL_TIMEOUT,
+        )
+        .with_context(|| format!("設定 model `{value}` 失敗"))?;
+        let _ = tx.send(AgentEvent::Model(value));
+    }
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
     let control = AcpControl { conn, child };
@@ -395,4 +432,21 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     }
 
     Ok(Box::new(control))
+}
+
+#[cfg(test)]
+mod model_tests {
+    use super::*;
+
+    #[test]
+    fn picks_model_option_and_validates() {
+        let new = json!({"sessionId":"x","configOptions":[
+            {"id":"mode","category":"mode","options":[{"value":"a"}]},
+            {"id":"model","category":"model","type":"select","options":[
+                {"value":"p/m1","name":"M1"},{"value":"p/m2","name":"M2"}]}]});
+        assert_eq!(pick_model_option(&new, "p/m2").unwrap().1, "p/m2");
+        let e = pick_model_option(&new, "zzz").unwrap_err().to_string();
+        assert!(e.contains("p/m1") && e.contains("zzz"));
+        assert!(pick_model_option(&json!({"sessionId":"x"}), "a").is_err());
+    }
 }

@@ -163,7 +163,7 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if want_structured {
         match structured_start(spec.clone(), tx.clone()) {
             Ok(ctl) => return Ok(ctl),
-            Err(e) if spec.transport == Transport::Auto => {
+            Err(e) if spec.transport == Transport::Auto && spec.model.is_none() => {
                 tracing::warn!("{} 原生協定啟動失敗，退回 PTY：{e}", spec.kind);
             }
             Err(e) => return Err(e),
@@ -197,8 +197,8 @@ pub fn supports_structured(kind: &AgentKind) -> bool {
 
 /// 依 agent 種類啟動對應的原生結構化 adapter。
 fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
-    if let (Some(m), false) = (&spec.model, matches!(spec.kind, AgentKind::ClaudeCode)) {
-        bail!("{} 尚不支援指定 model（{m}）", spec.kind);
+    if let (Some(m), AgentKind::Codex) = (&spec.model, &spec.kind) {
+        bail!("codex 尚不支援指定 model（{m}）：欄位名稱尚未確認");
     }
     match spec.kind {
         AgentKind::OpenCode | AgentKind::Antigravity => {
