@@ -351,6 +351,33 @@ pub fn tool_definitions() -> Vec<Value> {
                 "required": ["text"]
             }
         }),
+        json!({
+            "name": "ade_diff",
+            "description": "取得某個 session 工作區的 git diff（供 coordinator 或 reviewer 審查變更）。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session": {
+                        "type": "string",
+                        "description": "目標 session id 或 label（未填則查自己）"
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "ade_merge",
+            "description": "將某個 worker session 的 worktree 分支合併回主工作區。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session": {
+                        "type": "string",
+                        "description": "要合併的 worker session id 或 label"
+                    }
+                },
+                "required": ["session"]
+            }
+        }),
     ]
 }
 
@@ -620,6 +647,38 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 note: text,
             })?;
             Ok(json!({ "ok": true }))
+        }
+
+        "ade_diff" => {
+            let target = args["session"]
+                .as_str()
+                .unwrap_or(session)
+                .to_string();
+            match roundtrip(&Request::WorktreeDiff { session: target })? {
+                Frame::Diff {
+                    session,
+                    branch,
+                    cwd,
+                    diff,
+                } => Ok(json!({
+                    "session": session,
+                    "branch": branch,
+                    "cwd": cwd,
+                    "diff": ade_core::redact_secrets(&diff),
+                })),
+                other => bail!("未預期的回應：{other:?}"),
+            }
+        }
+
+        "ade_merge" => {
+            let target = args["session"]
+                .as_str()
+                .context("缺少 `session` 參數")?
+                .to_string();
+            match roundtrip(&Request::WorktreeMerge { session: target })? {
+                Frame::Ok { note } => Ok(json!({ "ok": true, "note": note })),
+                other => bail!("未預期的回應：{other:?}"),
+            }
         }
 
         other => bail!("未知的 MCP 工具：{other}"),

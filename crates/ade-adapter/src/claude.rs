@@ -254,6 +254,16 @@ impl AgentControl for ClaudeControl {
         Ok(())
     }
 
+    fn sleep(&self) -> Result<()> {
+        let pid = self.child.lock().unwrap().id();
+        crate::signal_pid(pid, "-STOP")
+    }
+
+    fn wake(&self) -> Result<()> {
+        let pid = self.child.lock().unwrap().id();
+        crate::signal_pid(pid, "-CONT")
+    }
+
     /// M1 尚未支援逐項審批：Claude 的權限在啟動時以 `--permission-mode` 決定。
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
         bail!("claude adapter 尚未支援逐項審批（請用 --permission auto/bypass）")

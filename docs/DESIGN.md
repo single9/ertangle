@@ -517,14 +517,28 @@ M2 已驗證（實機）：
 | 端到端多 Agent 協作 | `coord` 呼叫 `ade_task_create` + 2×`ade_spawn(worktree=true)` + 2×`ade_wait` | `worker/a` 與 `worker/b` 各自於獨立 worktree 寫檔並 `ade_send(kind=handoff)` 回報，`coord` 收齊後將兩任務標為 `done` 並更新 `status_note` |
 | 測試 / lint | `cargo test` / `cargo clippy --all-targets -- -D warnings` | 22 passed / 無警告 |
 
-**M3 — 工作區與 review**
-worktree 管理、diff 視圖、行內註解送回 agent、merge / PR。
+**M3 — 工作區與 review（已完成，見 `crates/ade-daemon` 與 `crates/ade-tui`）**
+worktree 管理（`ade worktrees` / `ade gc`）、彩色 diff 視圖（含未追蹤新檔預覽，`ade diff` / TUI `g` 鍵）、行內註解送回 agent（`ade review` / TUI `c` 鍵）、自動 commit 並 merge 回主工作區（`ade merge` / TUI `M` 鍵）/ 開 PR（`ade pr`）。
 
-**M4 — 打磨**
-命令面板、jump-anywhere、成本/用量追蹤、閒置休眠、事件重播、設定精靈。
+**M4 — 打磨（已完成，見 `crates/ade-core`、`crates/ade-daemon`、`crates/ade-tui`）**
+命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、成本/用量追蹤（`ade cost` 與 TUI 標題列）、閒置休眠與自動喚醒（`SIGSTOP`/`SIGCONT`，`ade sleep`/`ade wake`/TUI `z` 鍵）、事件重播与增量同步（`ade replay`、`Hello.since`）、Policy 規則引擎（`policy.toml`）與秘密自動遮罩（`redact_secrets`）。
 
-**M5 — 遠端（可選）**
-daemon 支援 `--listen`（TCP + token）與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 管理。
+**M5 — 遠端（已完成，見 `crates/ade-daemon` 與 `crates/ade-cli`）**
+daemon 支援 `--listen <host:port> --token <secret>`（TCP + token 驗證），client 支援 `--remote <host:port> --token <secret>`（或 `ADE_REMOTE` / `ADE_TOKEN` 環境變數）與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
+
+M3–M5 已驗證（實機）：
+
+| 驗證項 | 指令 / 功能 | 結果 |
+| --- | --- | --- |
+| Worktree 清單與 Diff | `ade worktrees` / `ade diff worker/feat` | 正確列出變更檔案數與統一格式 diff（含新增未追蹤檔案） |
+| Worktree 自動 Commit + Merge | `ade merge worker/feat` | 自動將 worktree 內未 commit 的變更打包 commit 並 merge 回主分支 |
+| Worktree 清理 | `ade gc` | 自動移除已結束 session 的 `.ade/wt/<id>` 與 `ade/<id>` 分支 |
+| 行內審查註解（Review 迴圈） | `ade review <session> --location ...` / TUI `c` | 記錄 `ReviewCommented` 事件並向該 agent 送出定位修正 prompt |
+| 閒置休眠與喚醒 | `ade sleep <id>` / `ade wake <id>` | 送出 `SIGSTOP` / `SIGCONT`，狀態切換 `sleeping` ↔ `idle`；收到新 prompt 時自動喚醒 |
+| 成本統計 | `ade cost` | 逐 session 與總計顯示 USD 與 input/output tokens |
+| 事件重播與秘密遮罩 | `ade replay` | 完整重播 `events.jsonl`；`sk-...` / `ghp_...` 自動遮罩為 `<REDACTED>` |
+| 遠端 TCP + Token 連線 | `ade daemon --listen 127.0.0.1:17429 --token ...` | 透過 `--remote` + `--token` 建立任務與查詢狀態成功 |
+| 測試 / lint | `cargo test` / `cargo clippy --all-targets -- -D warnings` | 23 passed / 無警告 |
 
 ---
 

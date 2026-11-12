@@ -22,7 +22,7 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 | 平行不打架 | 每個 session 一個 `git worktree` + branch |
 | 支援多種 agent | Adapter 抽象層（ACP / stream-json / app-server / headless / PTY） |
 
-## 現況（M1 原生介面 + M2 協作核心）
+## 現況（M0–M5 全里程碑已完成並實機驗證）
 
 四家 agent 都有**原生、零額外依賴**的結構化介面，並已實機驗證：
 
@@ -35,21 +35,20 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 
 > 找不到原生協定、或該 agent 未安裝時，`--transport auto` 會**自動退回 PTY 直通**。
 
-已完成並實機驗證：
+已完成並實機驗證（M0–M5）：
 
-- **daemon**：Unix domain socket、newline-delimited JSON 控制 API、事件記錄（`events.jsonl`）、
-  訊息匯流排、收件匣游標与阻塞等待（`BusInbox` / `BusWait`）、防呆斷路器（速率限制 + 連續重複迴圈偵測）、任務板、`git worktree` 建立。
-- **MCP 協作伺服器（`ade mcp`）**：spawn session 時自動注入每個 agent，提供 12 個協作工具
+- **daemon（M0/M2/M4/M5）**：Unix domain socket + 選配 TCP 遠端監聽（`--listen host:port --token secret`）、
+  增量事件同步（`since`）、事件重播（`ade replay`）與秘密遮罩（`sk-...` / `ghp_...` 自動轉 `<REDACTED>`）、
+  訊息匯流排、收件匣游標與阻塞等待（`BusInbox` / `BusWait`）、防呆斷路器（速率限制 + 連續重複迴圈偵測）、任務板。
+- **MCP 協作伺服器（`ade mcp`，M2/M3）**：spawn session 時自動注入每個 agent，提供 14 個協作工具
   （`ade_whoami`、`ade_peers`、`ade_send`、`ade_inbox`、`ade_wait`、`ade_ask`、
-  `ade_task_list`、`ade_task_create`、`ade_task_update`、`ade_spawn`、`ade_artifact_share`、`ade_status`），
-  並支援端到端由 coordinator 自主 `ade_spawn` 多個 worktree worker 平行實作、交握與回報。
-- **adapter**：四家原生 adapter + PTY 萬用後備（輸出會剝除 ANSI 控制碼）。
-- **統一權限政策**：`--permission ask|auto|bypass`，對應各 agent 的原生權限機制。
-- **TUI**：三欄（Sessions / Transcript / Bus & Tasks）、工具呼叫與進度備註呈現、輸入模式、審批、中斷/結束。
-- **CLI**：`ade whoami/peers/spawn/prompt/send/inbox/wait/ask/task/task-update/tasks/status/artifact/...`，讓 shell 與不走 MCP 的 agent 也能驅動環境。
+  `ade_task_list`、`ade_task_create`、`ade_task_update`、`ade_spawn`、`ade_artifact_share`、`ade_status`、`ade_diff`、`ade_merge`）。
+- **工作區與 Review 迴圈（M3）**：每個 worktree 獨立 branch（`ade/<session>`）、TUI 即時彩色 Diff 視圖、
+  對行下審查註解送回 agent 修改（`ade review` / TUI `c` 鍵）、自動 commit 並合併回主分支（`ade merge` / TUI `M` 鍵）、PR 建立（`ade pr`）與已結束 worktree 清理（`ade gc` / TUI `G` 鍵）。
+- **打磨與資源控制（M4）**：命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、即時成本與 token 統計（`ade cost`）、
+  閒置休眠與自動喚醒（`SIGSTOP` / `SIGCONT`、`ade sleep` / `ade wake` / TUI `z` 鍵）、權限規則引擎（`.ade/policy.toml` 或 `~/.config/ade/policy.toml`）。
+- **TUI**：三種中央視圖（Overview / Diff / Worktrees）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
 - **檔案信箱後備**：自動同步寫入 `<cwd>/.ade/mailbox/<session>.jsonl`。
-
-尚未實作（見里程碑）：M3 worktree diff/review 視圖與 merge/PR、Claude/Codex 的逐項審批轉發。
 
 ### 權限政策
 
@@ -91,13 +90,20 @@ cargo test                     # 19 個單元測試
 
 | 鍵 | 動作 |
 | --- | --- |
-| `j` / `k`、↑ / ↓ | 選擇 session |
-| `i` / `Enter` | 對選取 session 送 prompt |
+| `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標） |
+| `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
+| `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
+| `i` / `Enter` | 對選取 session 送 prompt（支援 `@peer 訊息`、`#channel 訊息`、`/命令`） |
 | `n` | 建立 session：`<agent> <prompt>`（`Ctrl-W` 切換是否開 worktree） |
 | `m` | 送訊息到匯流排（agent 之間溝通） |
-| `a` / `d` | 允許 / 拒絕待審批請求 |
+| `c` | （Diff 視圖）對目前選取的 diff 行下審查註解並送回 agent 修改 |
+| `M` / `G` | 合併選取 session 的 worktree 分支回主工作區 / 清理已結束 worktree |
+| `z` | 切換選取 session 的休眠（`SIGSTOP`）/ 喚醒（`SIGCONT`） |
+| `/` 或 `Ctrl-P` | 開啟命令面板（`spawn` / `merge` / `diff` / `gc` / `sleep` / `wake` / `task` / `shutdown`） |
+| `Ctrl-K` | Jump-Anywhere：關鍵字快速跳轉至任何 session |
+| `a` / `A` / `d` | 允許 / 一律允許 / 拒絕待審批請求 |
 | `x` / `K` | 中斷當前回合 / 結束 session |
-| `r` | 向 daemon 重新要快照 |
+| `r` | 向 daemon 重新要快照与重整當前視圖 |
 | `q` | 離開 TUI（daemon 與 agent 續跑） |
 
 ### CLI
@@ -116,6 +122,17 @@ ade task-update <task-id> --status done
 ade tasks [--json]
 ade status "正在跑整合測試"
 ade artifact src/zip.rs --kind file --note "新增驗證模組"
+ade worktrees [--json]                      # 列出所有受管 git worktrees
+ade diff <session-or-label>                 # 查看該 session 工作區的 git diff
+ade review <session-or-label> --location src/lib.rs:42 "請補上空字串檢查"
+ade merge <session-or-label>                # 將該 session 的 worktree 分支合併回主工作區
+ade pr <session-or-label> --title "..."     # 透過 gh 建立 Pull Request
+ade gc [--session <id>]                     # 清理已結束 session 的 worktrees
+ade sleep <session> ; ade wake <session>    # 暫停 / 喚醒閒置 agent 子程序
+ade cost [--json]                           # 查看各 session 與總計的成本與 token 用量
+ade replay [--since <seq>] [--json]         # 重播與審計 events.jsonl
+ade daemon --listen 0.0.0.0:7420 --token <secret> # 啟動含遠端 TCP 監聽的 daemon
+ade --remote <host:port> --token <secret> ...     # 連線至遠端 daemon
 ade mcp [--session <id>]                    # stdio MCP 協作伺服器（由 adapter 自動注入）
 ade cancel <session-id> ; ade kill <session-id>
 ade shutdown

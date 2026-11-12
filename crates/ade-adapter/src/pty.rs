@@ -37,6 +37,20 @@ impl AgentControl for PtyControl {
         Ok(())
     }
 
+    fn sleep(&self) -> Result<()> {
+        if let Some(pid) = self.child.lock().unwrap().process_id() {
+            crate::signal_pid(pid, "-STOP")?;
+        }
+        Ok(())
+    }
+
+    fn wake(&self) -> Result<()> {
+        if let Some(pid) = self.child.lock().unwrap().process_id() {
+            crate::signal_pid(pid, "-CONT")?;
+        }
+        Ok(())
+    }
+
     /// PTY 沒有結構化協定，無法逐項審批。
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
         Ok(())

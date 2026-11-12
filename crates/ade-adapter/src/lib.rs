@@ -75,10 +75,30 @@ pub trait AgentControl: Send + Sync {
     fn cancel(&self) -> Result<()>;
     /// 結束並殺掉程序。
     fn kill(&self) -> Result<()>;
+    /// 暫停子程序（SIGSTOP，用於閒置休眠）。
+    fn sleep(&self) -> Result<()> {
+        Ok(())
+    }
+    /// 喚醒子程序（SIGCONT）。
+    fn wake(&self) -> Result<()> {
+        Ok(())
+    }
     /// 回覆審批請求。
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
     /// 這個 session 實際使用的傳輸方式（顯示用）。
     fn transport(&self) -> &'static str;
+}
+
+/// 對指定 PID 送出 Unix 訊號（例如 `-STOP` / `-CONT`）。
+pub fn signal_pid(pid: u32, sig: &str) -> Result<()> {
+    let status = std::process::Command::new("kill")
+        .args([sig, &pid.to_string()])
+        .status()
+        .context("執行 kill 失敗")?;
+    if !status.success() {
+        bail!("kill {sig} {pid} 失敗");
+    }
+    Ok(())
 }
 
 /// 探測某個可執行程式是否存在，回傳絕對路徑。

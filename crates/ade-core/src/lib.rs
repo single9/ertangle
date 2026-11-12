@@ -154,6 +154,8 @@ pub enum SessionStatus {
     Idle,
     Busy,
     WaitingApproval,
+    /// 閒置休眠（程序已 SIGSTOP 暫停，收到新訊息或喚醒時自動 SIGCONT）。
+    Sleeping,
     Exited,
     Failed,
 }
@@ -166,6 +168,7 @@ impl SessionStatus {
             SessionStatus::Idle => "○",
             SessionStatus::Busy => "●",
             SessionStatus::WaitingApproval => "⏸",
+            SessionStatus::Sleeping => "☾",
             SessionStatus::Exited => "✓",
             SessionStatus::Failed => "✗",
         }
@@ -393,6 +396,29 @@ pub struct Artifact {
     pub ts: u64,
 }
 
+/// 審查者在 diff 行內留下的註解（M3 review 迴圈）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewComment {
+    pub id: String,
+    pub session: SessionId,
+    /// 檔案與行號或 diff 行內容摘要。
+    pub location: String,
+    pub comment: String,
+    pub ts: u64,
+}
+
+/// Worktree 摘要資訊（M3 工作區管理）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorktreeInfo {
+    pub session: SessionId,
+    pub label: String,
+    pub path: String,
+    pub branch: String,
+    pub live: bool,
+    pub changed_files: usize,
+    pub summary: String,
+}
+
 // ---------------------------------------------------------------------------
 // 審批
 // ---------------------------------------------------------------------------
@@ -549,6 +575,9 @@ pub enum Event {
     ArtifactShared {
         artifact: Artifact,
     },
+    ReviewCommented {
+        review: ReviewComment,
+    },
     SessionExited {
         session: SessionId,
         code: Option<i32>,
@@ -587,6 +616,8 @@ pub struct State {
     pub messages: Vec<BusMessage>,
     #[serde(default)]
     pub artifacts: Vec<Artifact>,
+    #[serde(default)]
+    pub reviews: Vec<ReviewComment>,
     /// 尚未回覆的審批請求。
     pub pending_permissions: BTreeMap<String, PermissionRequest>,
     /// session id → 輸出文字行。
@@ -688,6 +719,14 @@ impl State {
                     self.artifacts.remove(0);
                 }
             }
+            Event::ReviewCommented { review } => {
+                let line = format!("💬 review [{}]: {}", review.location, review.comment);
+                self.push_transcript_line(&review.session, line);
+                self.reviews.push(review.clone());
+                while self.reviews.len() > ARTIFACT_CAP {
+                    self.reviews.remove(0);
+                }
+            }
             Event::SessionExited { session, .. } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     if s.status.is_live() {
@@ -712,6 +751,17 @@ impl State {
 
     pub fn live_sessions(&self) -> impl Iterator<Item = &Session> {
         self.sessions.values().filter(|s| s.status.is_live())
+    }
+
+    /// 計算所有 session 的累計成本與 token 用量。
+    pub fn total_cost(&self) -> Cost {
+        let mut total = Cost::default();
+        for s in self.sessions.values() {
+            total.usd += s.cost.usd;
+            total.input_tokens += s.cost.input_tokens;
+            total.output_tokens += s.cost.output_tokens;
+        }
+        total
     }
 
     /// 以 `id` 或 `label` 解析 session id（優先回傳完全匹配的 id，其次為存活中的同 label session）。
@@ -749,6 +799,125 @@ impl State {
             .cloned()
             .collect()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Policy Engine & 秘密保護（M4）
+// ---------------------------------------------------------------------------
+
+/// 權限規則引擎：在 `PermissionPolicy` 之前先過濾明確安全與高風險操作。
+///
+/// 可由 `~/.config/ade/policy.toml`（或專案 `.ade/policy.toml`）覆寫：
+/// ```toml
+/// allow = ["Read", "Grep", "Glob", "git status"]
+/// deny = ["rm -rf /", "git push --force", "/.ssh/"]
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PolicyEngine {
+    pub allow: Vec<String>,
+    pub deny: Vec<String>,
+}
+
+impl Default for PolicyEngine {
+    fn default() -> Self {
+        Self {
+            allow: vec![
+                "Read".into(),
+                "Grep".into(),
+                "Glob".into(),
+                "git status".into(),
+                "git diff".into(),
+                "git log".into(),
+            ],
+            deny: vec![
+                "rm -rf /".into(),
+                "rm -rf ~".into(),
+                "git push --force".into(),
+                "git push -f".into(),
+                "/.ssh/".into(),
+                "id_rsa".into(),
+                "mkfs.".into(),
+            ],
+        }
+    }
+}
+
+impl PolicyEngine {
+    /// 從簡易 TOML 文字解析規則（未指定的區塊保留預設值）。
+    pub fn parse_toml(src: &str) -> Self {
+        let mut engine = Self::default();
+        for raw_line in src.lines() {
+            let line = raw_line.split('#').next().unwrap_or("").trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Some((k, v)) = line.split_once('=') {
+                let key = k.trim();
+                let list = parse_string_array(v.trim());
+                if key == "allow" && !list.is_empty() {
+                    engine.allow = list;
+                } else if key == "deny" && !list.is_empty() {
+                    engine.deny = list;
+                }
+            }
+        }
+        engine
+    }
+
+    /// 評估一個審批請求：
+    /// * 命中 `deny` → `Some(Decision::Deny)`
+    /// * 命中 `allow` → `Some(Decision::Allow)`
+    /// * 其餘 → `None`（交由 session 的 `PermissionPolicy` 或人類決定）
+    pub fn evaluate(&self, title: &str, detail: &str) -> Option<Decision> {
+        let combined = format!("{title} {detail}");
+        for pat in &self.deny {
+            if !pat.is_empty() && combined.contains(pat.as_str()) {
+                return Some(Decision::Deny);
+            }
+        }
+        for pat in &self.allow {
+            if !pat.is_empty() && (title == pat || combined.contains(pat.as_str())) {
+                return Some(Decision::Allow);
+            }
+        }
+        None
+    }
+}
+
+fn parse_string_array(s: &str) -> Vec<String> {
+    let s = s.trim().trim_start_matches('[').trim_end_matches(']');
+    s.split(',')
+        .map(|item| item.trim().trim_matches('"').trim_matches('\'').to_string())
+        .filter(|item| !item.is_empty())
+        .collect()
+}
+
+/// 遮罩文字中的常見金鑰與憑證樣式（寫入 event log 前保護秘密）。
+pub fn redact_secrets(input: &str) -> String {
+    const PREFIXES: &[&str] = &["sk-", "ghp_", "gho_", "AIza", "AKIA", "xoxb-"];
+    let mut out = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let rest = &input[i..];
+        if let Some(pref) = PREFIXES.iter().find(|&&p| rest.starts_with(p)) {
+            let after = &rest[pref.len()..];
+            let token_len = after
+                .bytes()
+                .take_while(|b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-')
+                .count();
+            if token_len >= 12 {
+                out.push_str(pref);
+                out.push_str("<REDACTED>");
+                i += pref.len() + token_len;
+                continue;
+            }
+        }
+        let ch = rest.chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
 }
 
 #[cfg(test)]
@@ -908,5 +1077,37 @@ mod tests {
         let inbox2 = st.inbox_for("ses_2", None);
         assert_eq!(inbox2.len(), 1);
         assert_eq!(inbox2[0].id, "m2");
+    }
+
+    #[test]
+    fn policy_engine_and_secret_redaction() {
+        let policy = PolicyEngine::default();
+        assert_eq!(
+            policy.evaluate("Bash", "rm -rf / --no-preserve-root"),
+            Some(Decision::Deny)
+        );
+        assert_eq!(
+            policy.evaluate("Read", "src/main.rs"),
+            Some(Decision::Allow)
+        );
+        assert_eq!(policy.evaluate("Bash", "cargo test"), None);
+
+        let custom = PolicyEngine::parse_toml(
+            r#"
+            allow = ["cargo test", "Read"]
+            deny = ["curl http"]
+            "#,
+        );
+        assert_eq!(custom.evaluate("Bash", "cargo test"), Some(Decision::Allow));
+        assert_eq!(
+            custom.evaluate("Bash", "curl http://evil"),
+            Some(Decision::Deny)
+        );
+
+        let raw = "key is sk-1234567890abcdefghij and ghp_abcdefghijklmnopqrst1234";
+        let scrubbed = redact_secrets(raw);
+        assert!(scrubbed.contains("sk-<REDACTED>"));
+        assert!(scrubbed.contains("ghp_<REDACTED>"));
+        assert!(!scrubbed.contains("1234567890abcdefghij"));
     }
 }

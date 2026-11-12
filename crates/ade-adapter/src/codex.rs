@@ -294,6 +294,16 @@ impl AgentControl for CodexControl {
         Ok(())
     }
 
+    fn sleep(&self) -> Result<()> {
+        let pid = self.child.lock().unwrap().id();
+        crate::signal_pid(pid, "-STOP")
+    }
+
+    fn wake(&self) -> Result<()> {
+        let pid = self.child.lock().unwrap().id();
+        crate::signal_pid(pid, "-CONT")
+    }
+
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()> {
         let entry = self.conn.perms.lock().unwrap().remove(req);
         let Some(entry) = entry else {

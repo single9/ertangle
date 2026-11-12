@@ -2,25 +2,27 @@
 //!
 //! 負責：
 //! * 持有 agent 子程序（透過 adapter）與其控制把手；
-//! * 把 adapter 事件正規化後寫入 append-only event log 並廣播給所有 client；
-//! * 提供 Unix socket 控制介面（[`ade_protocol`]）；
+//! * 把 adapter 事件正規化後寫入 append-only event log（含秘密遮罩）並廣播給所有 client；
+//! * 提供 Unix socket 與選配 TCP（M5 遠端）控制介面（[`ade_protocol`]）；
 //! * 提供 agent 之間的訊息匯流排、收件匣/阻塞等待、防呆斷路器與任務看板；
+//! * 提供 git worktree 管理、diff、行內審查註解（review 迴圈）、merge 與 PR（M3）；
+//! * 提供權限規則引擎（`policy.toml`）與閒置休眠/喚醒（M4）；
 //! * 提供內建的 stdio MCP server（[`mcp`]）。
-//!
-//! TUI 只是其中一個 client；daemon 可在 TUI 關閉後繼續運作。
 
 pub mod mcp;
 
 use ade_adapter::{spawn as spawn_adapter, AgentControl, AgentEvent, SessionSpec};
 use ade_core::{
-    new_id, now_millis, Artifact, BusMessage, Event, MsgId, MsgKind, Record, Seq, Session,
-    SessionId, SessionStatus, State, Target, Task, TaskStatus,
+    new_id, now_millis, redact_secrets, Artifact, BusMessage, Event, MsgId, MsgKind, PolicyEngine,
+    Record, ReviewComment, Seq, Session, SessionId, SessionStatus, State, Target, Task, TaskStatus,
+    WorktreeInfo,
 };
 use ade_protocol::{decode_line, encode_line, Frame, Request, SpawnRequest};
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, VecDeque};
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -65,6 +67,17 @@ pub fn state_dir() -> PathBuf {
     }
 }
 
+/// 設定目錄（放 `policy.toml`）。
+pub fn config_dir() -> PathBuf {
+    match std::env::var_os("XDG_CONFIG_HOME") {
+        Some(d) => PathBuf::from(d).join("ade"),
+        None => match std::env::var_os("HOME") {
+            Some(h) => PathBuf::from(h).join(".config/ade"),
+            None => std::env::temp_dir().join("ade-config"),
+        },
+    }
+}
+
 pub fn socket_path() -> PathBuf {
     if let Some(s) = std::env::var_os("ADE_SOCKET") {
         return PathBuf::from(s);
@@ -76,21 +89,117 @@ pub fn log_path() -> PathBuf {
     state_dir().join("events.jsonl")
 }
 
+/// 載入權限規則引擎：優先讀工作目錄 `.ade/policy.toml`，其次 `~/.config/ade/policy.toml`。
+pub fn load_policy(cwd: &Path) -> PolicyEngine {
+    let local = cwd.join(".ade").join("policy.toml");
+    if let Ok(src) = fs::read_to_string(&local) {
+        return PolicyEngine::parse_toml(&src);
+    }
+    let global = config_dir().join("policy.toml");
+    if let Ok(src) = fs::read_to_string(&global) {
+        return PolicyEngine::parse_toml(&src);
+    }
+    PolicyEngine::default()
+}
+
+/// 從 `events.jsonl` 重播歷史事件，回傳重建後的 `(State, Vec<Record>)`。
+pub fn replay_log(path: &Path) -> Result<(State, Vec<Record>)> {
+    let mut state = State::new();
+    let mut records = Vec::new();
+    if !path.is_file() {
+        return Ok((state, records));
+    }
+    let file = File::open(path).with_context(|| format!("開啟 {path:?} 失敗"))?;
+    for line in BufReader::new(file).lines() {
+        let Ok(line) = line else { continue };
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Ok(rec) = serde_json::from_str::<Record>(line.trim()) {
+            state.apply(&rec);
+            records.push(rec);
+        }
+    }
+    Ok((state, records))
+}
+
+// ---------------------------------------------------------------------------
+// 雙模連線傳輸（Unix Socket + M5 TCP Remote）
+// ---------------------------------------------------------------------------
+
+pub enum ConnStream {
+    Unix(UnixStream),
+    Tcp(TcpStream),
+}
+
+impl ConnStream {
+    pub fn try_clone(&self) -> std::io::Result<ConnStream> {
+        match self {
+            ConnStream::Unix(u) => Ok(ConnStream::Unix(u.try_clone()?)),
+            ConnStream::Tcp(t) => Ok(ConnStream::Tcp(t.try_clone()?)),
+        }
+    }
+}
+
+impl Read for ConnStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            ConnStream::Unix(u) => u.read(buf),
+            ConnStream::Tcp(t) => t.read(buf),
+        }
+    }
+}
+
+impl Write for ConnStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            ConnStream::Unix(u) => u.write(buf),
+            ConnStream::Tcp(t) => t.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            ConnStream::Unix(u) => u.flush(),
+            ConnStream::Tcp(t) => t.flush(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Client（給 TUI / CLI / MCP 用）
 // ---------------------------------------------------------------------------
 
 pub struct Client {
-    stream: UnixStream,
-    reader: BufReader<UnixStream>,
+    stream: ConnStream,
+    reader: BufReader<ConnStream>,
 }
 
 impl Client {
+    /// 連線至 daemon：若設定了 `ADE_REMOTE=<host:port>` 則走 TCP，否則走本地 Unix socket。
     pub fn connect() -> Result<Client> {
-        let stream = UnixStream::connect(socket_path())
-            .with_context(|| format!("無法連線 daemon（{:?}）", socket_path()))?;
+        let stream = if let Ok(remote) = std::env::var("ADE_REMOTE") {
+            let tcp = TcpStream::connect(remote.trim())
+                .with_context(|| format!("無法連線遠端 daemon（{remote}）"))?;
+            ConnStream::Tcp(tcp)
+        } else {
+            let unix = UnixStream::connect(socket_path())
+                .with_context(|| format!("無法連線 daemon（{:?}）", socket_path()))?;
+            ConnStream::Unix(unix)
+        };
         let reader = BufReader::new(stream.try_clone()?);
-        Ok(Client { stream, reader })
+        let mut client = Client { stream, reader };
+        // 若設定了 `ADE_TOKEN`，在第一個請求前自動送出帶 token 的 Hello 驗證。
+        if let Ok(token) = std::env::var("ADE_TOKEN") {
+            if !token.is_empty() {
+                client.send(&Request::Hello {
+                    client: "auth".into(),
+                    since: None,
+                    token: Some(token),
+                })?;
+            }
+        }
+        Ok(client)
     }
 
     pub fn send(&mut self, req: &Request) -> Result<()> {
@@ -101,7 +210,7 @@ impl Client {
     }
 
     /// 取得一個可獨立寫入的 stream（給需要「同時讀與寫」的 client，例如 TUI）。
-    pub fn try_clone_stream(&self) -> Result<UnixStream> {
+    pub fn try_clone_stream(&self) -> Result<ConnStream> {
         Ok(self.stream.try_clone()?)
     }
 
@@ -120,7 +229,7 @@ pub fn is_running() -> bool {
 }
 
 /// 送一個請求到一個 stream（給持有寫入端的 client 用）。
-pub fn send_request(stream: &mut UnixStream, req: &Request) -> Result<()> {
+pub fn send_request(stream: &mut ConnStream, req: &Request) -> Result<()> {
     let line = encode_line(req)?;
     stream.write_all(line.as_bytes())?;
     stream.flush()?;
@@ -131,6 +240,9 @@ pub fn send_request(stream: &mut UnixStream, req: &Request) -> Result<()> {
 pub fn ensure_daemon() -> Result<()> {
     if is_running() {
         return Ok(());
+    }
+    if std::env::var_os("ADE_REMOTE").is_some() {
+        bail!("無法連線至 ADE_REMOTE 指定的遠端 daemon");
     }
     let exe = std::env::current_exe().context("取得自身執行檔路徑失敗")?;
     Command::new(exe)
@@ -244,8 +356,6 @@ impl Waiter {
             }
         }
         if let Some(expected_reply) = &self.reply_to {
-            // 若對方明確帶了 `reply_to`，就比對；若對方直接用 `ade_send(to=asker)` 回覆而沒帶 `reply_to`，
-            // 只要 `from` 已鎖定該 peer，也視為對此問題的回覆。
             if let Some(actual_reply) = &msg.reply_to {
                 if actual_reply != expected_reply {
                     return false;
@@ -263,11 +373,10 @@ struct Inner {
     seq: Seq,
     backlog: VecDeque<Record>,
     sessions: HashMap<SessionId, SessionEntry>,
-    /// 每個 session 已讀的最後一則訊息 id。
     inbox_cursors: HashMap<SessionId, MsgId>,
-    /// 正在阻塞等待訊息的 client。
     waiters: Vec<Waiter>,
     bus_guard: BusGuard,
+    policy: PolicyEngine,
     default_cwd: PathBuf,
     clients: Vec<Sender<Frame>>,
 }
@@ -275,10 +384,11 @@ struct Inner {
 struct Shared {
     inner: Mutex<Inner>,
     log: Mutex<File>,
+    auth_token: Option<String>,
 }
 
 impl Shared {
-    /// 廣播一個事件：更新狀態、寫 log、推給所有 client。
+    /// 廣播一個事件：更新狀態、寫 log（先遮罩憑證）、推給所有 client。
     fn emit(&self, event: Event) {
         let mut inner = self.inner.lock().unwrap();
         inner.seq += 1;
@@ -290,8 +400,9 @@ impl Shared {
         inner.state.apply(&rec);
 
         if let Ok(line) = serde_json::to_string(&rec) {
+            let safe_line = redact_secrets(&line);
             let mut log = self.log.lock().unwrap();
-            let _ = log.write_all(line.as_bytes());
+            let _ = log.write_all(safe_line.as_bytes());
             let _ = log.write_all(b"\n");
         }
 
@@ -306,8 +417,27 @@ impl Shared {
         inner.clients.retain(|c| c.send(frame.clone()).is_ok());
     }
 
-    /// 把 adapter 事件翻譯成核心事件。
+    /// 把 adapter 事件翻譯成核心事件（並在審批事件時先經過 PolicyEngine 規則過濾）。
     fn ingest(&self, sid: &SessionId, ev: AgentEvent) {
+        if let AgentEvent::Permission(ref p) = ev {
+            let decision_and_ctl = {
+                let inner = self.inner.lock().unwrap();
+                let d = inner.policy.evaluate(&p.title, &p.detail);
+                let ctl = inner.sessions.get(sid).map(|e| e.ctl.clone());
+                d.zip(ctl)
+            };
+            if let Some((decision, ctl)) = decision_and_ctl {
+                if ctl.resolve_permission(&p.req, decision).is_ok() {
+                    self.emit(Event::PermissionResolved {
+                        session: sid.clone(),
+                        req: p.req.clone(),
+                        decision,
+                    });
+                    return;
+                }
+            }
+        }
+
         let event = match ev {
             AgentEvent::Status(s) => Event::SessionStatus {
                 session: sid.clone(),
@@ -356,8 +486,6 @@ impl Shared {
     }
 
     /// 關閉：先結束所有 agent 子程序，再移除 socket，最後離開。
-    ///
-    /// 不這樣做的話，agent 程序會被 reparent 到 init 變成孤兒，daemon 也再也管不到它們。
     fn shutdown(self: &Arc<Self>) {
         let ctls: Vec<Arc<dyn AgentControl>> = {
             let mut inner = self.inner.lock().unwrap();
@@ -391,23 +519,71 @@ impl Shared {
             .map(|e| (sid, e.ctl.clone()))
     }
 
+    /// 若該 session 處於 `Sleeping`，先自動喚醒再送輸入。
+    fn wake_if_sleeping(&self, sid: &SessionId, ctl: &Arc<dyn AgentControl>) {
+        let is_sleeping = self
+            .inner
+            .lock()
+            .unwrap()
+            .state
+            .sessions
+            .get(sid)
+            .is_some_and(|s| s.status == SessionStatus::Sleeping);
+        if is_sleeping && ctl.wake().is_ok() {
+            self.emit(Event::SessionStatus {
+                session: sid.clone(),
+                status: SessionStatus::Idle,
+            });
+        }
+    }
+
     // -----------------------------------------------------------------------
     // 請求處理
     // -----------------------------------------------------------------------
 
     fn handle(self: &Arc<Self>, reply: &Sender<Frame>, req: Request) {
         match req {
-            Request::Hello { since, .. } => {
+            Request::Hello {
+                client,
+                since,
+                token,
+            } => {
+                if let Some(expected) = &self.auth_token {
+                    if token.as_deref() != Some(expected.as_str()) {
+                        let _ = reply.send(Frame::error("遠端認證失敗：token 不符"));
+                        return;
+                    }
+                }
+                if client == "auth" {
+                    return;
+                }
                 let _ = reply.send(Frame::Ready {
                     pid: std::process::id(),
                     version: VERSION.to_string(),
                 });
-                let _ = since;
-                let snap = self.snapshot();
-                let _ = reply.send(Frame::Snapshot {
-                    state: Box::new(snap),
+
+                // M4 增量事件同步：若 `since` 在 backlog 範圍內，只補齊差異事件。
+                let mut inner = self.inner.lock().unwrap();
+                let can_incremental = since.is_some_and(|s| {
+                    inner
+                        .backlog
+                        .front()
+                        .is_some_and(|first| s + 1 >= first.seq)
+                        || s == inner.seq
                 });
-                self.inner.lock().unwrap().clients.push(reply.clone());
+                if let (Some(since_seq), true) = (since, can_incremental) {
+                    for rec in inner.backlog.iter().filter(|r| r.seq > since_seq) {
+                        let _ = reply.send(Frame::Record {
+                            record: Box::new(rec.clone()),
+                        });
+                    }
+                } else {
+                    let snap = inner.state.clone();
+                    let _ = reply.send(Frame::Snapshot {
+                        state: Box::new(snap),
+                    });
+                }
+                inner.clients.push(reply.clone());
             }
 
             Request::Snapshot => {
@@ -420,14 +596,17 @@ impl Shared {
             Request::Spawn(spawn) => self.handle_spawn(reply, spawn),
 
             Request::Prompt { session, text } => match self.control(&session) {
-                Some((_, ctl)) => match ctl.send_input(&text) {
-                    Ok(()) => {
-                        let _ = reply.send(Frame::ok());
+                Some((sid, ctl)) => {
+                    self.wake_if_sleeping(&sid, &ctl);
+                    match ctl.send_input(&text) {
+                        Ok(()) => {
+                            let _ = reply.send(Frame::ok());
+                        }
+                        Err(e) => {
+                            let _ = reply.send(Frame::error(format!("送 prompt 失敗：{e}")));
+                        }
                     }
-                    Err(e) => {
-                        let _ = reply.send(Frame::error(format!("送 prompt 失敗：{e}")));
-                    }
-                },
+                }
                 None => {
                     let _ = reply.send(Frame::error(format!("找不到 session {session}")));
                 }
@@ -452,6 +631,42 @@ impl Shared {
                     });
                     let _ = reply.send(Frame::ok());
                 }
+                None => {
+                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+                }
+            },
+
+            Request::Sleep { session } => match self.control(&session) {
+                Some((sid, ctl)) => match ctl.sleep() {
+                    Ok(()) => {
+                        self.emit(Event::SessionStatus {
+                            session: sid.clone(),
+                            status: SessionStatus::Sleeping,
+                        });
+                        let _ = reply.send(Frame::ok_note(format!("已休眠 {sid}")));
+                    }
+                    Err(e) => {
+                        let _ = reply.send(Frame::error(format!("休眠失敗：{e}")));
+                    }
+                },
+                None => {
+                    let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+                }
+            },
+
+            Request::Wake { session } => match self.control(&session) {
+                Some((sid, ctl)) => match ctl.wake() {
+                    Ok(()) => {
+                        self.emit(Event::SessionStatus {
+                            session: sid.clone(),
+                            status: SessionStatus::Idle,
+                        });
+                        let _ = reply.send(Frame::ok_note(format!("已喚醒 {sid}")));
+                    }
+                    Err(e) => {
+                        let _ = reply.send(Frame::error(format!("喚醒失敗：{e}")));
+                    }
+                },
                 None => {
                     let _ = reply.send(Frame::error(format!("找不到 session {session}")));
                 }
@@ -613,6 +828,138 @@ impl Shared {
                 let _ = reply.send(Frame::ok_note(format!("已分享產出 {id}")));
             }
 
+            Request::WorktreeList => {
+                let worktrees = self.collect_worktrees();
+                let _ = reply.send(Frame::Worktrees { worktrees });
+            }
+
+            Request::WorktreeDiff { session } => {
+                let sid = self.resolve_session(&session);
+                let sess = self.inner.lock().unwrap().state.sessions.get(&sid).cloned();
+                match sess {
+                    Some(s) => match compute_worktree_diff(Path::new(&s.cwd)) {
+                        Ok(diff) => {
+                            let _ = reply.send(Frame::Diff {
+                                session: s.id,
+                                branch: s.branch,
+                                cwd: s.cwd,
+                                diff,
+                            });
+                        }
+                        Err(e) => {
+                            let _ = reply.send(Frame::error(format!("取得 diff 失敗：{e}")));
+                        }
+                    },
+                    None => {
+                        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+                    }
+                }
+            }
+
+            Request::WorktreeMerge { session } => {
+                let sid = self.resolve_session(&session);
+                let sess = self.inner.lock().unwrap().state.sessions.get(&sid).cloned();
+                let default_cwd = self.default_cwd();
+                match sess {
+                    Some(s) => match merge_worktree(&default_cwd, &s) {
+                        Ok(msg) => {
+                            let _ = reply.send(Frame::ok_note(msg));
+                        }
+                        Err(e) => {
+                            let _ = reply.send(Frame::error(format!("合併失敗：{e}")));
+                        }
+                    },
+                    None => {
+                        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+                    }
+                }
+            }
+
+            Request::WorktreePr {
+                session,
+                title,
+                body,
+            } => {
+                let sid = self.resolve_session(&session);
+                let sess = self.inner.lock().unwrap().state.sessions.get(&sid).cloned();
+                match sess {
+                    Some(s) => match create_worktree_pr(&s, &title, &body) {
+                        Ok(url) => {
+                            let _ = reply.send(Frame::ok_note(url));
+                        }
+                        Err(e) => {
+                            let _ = reply.send(Frame::error(format!("建立 PR 失敗：{e}")));
+                        }
+                    },
+                    None => {
+                        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+                    }
+                }
+            }
+
+            Request::WorktreeGc { session } => {
+                let target_sid = session.map(|s| self.resolve_session(&s));
+                let default_cwd = self.default_cwd();
+                let candidates: Vec<Session> = {
+                    let inner = self.inner.lock().unwrap();
+                    inner
+                        .state
+                        .sessions
+                        .values()
+                        .filter(|s| {
+                            s.branch.is_some()
+                                && match &target_sid {
+                                    Some(id) => &s.id == id,
+                                    None => !s.status.is_live(),
+                                }
+                        })
+                        .cloned()
+                        .collect()
+                };
+                let mut removed = 0usize;
+                for s in candidates {
+                    if remove_worktree(&default_cwd, &s).is_ok() {
+                        removed += 1;
+                    }
+                }
+                let _ = reply.send(Frame::ok_note(format!("已清理 {removed} 個 worktree")));
+            }
+
+            Request::ReviewComment {
+                session,
+                location,
+                comment,
+            } => {
+                let sid = self.resolve_session(&session);
+                let review = ReviewComment {
+                    id: new_id("rev"),
+                    session: sid.clone(),
+                    location: location.clone(),
+                    comment: comment.clone(),
+                    ts: now_millis(),
+                };
+                self.emit(Event::ReviewCommented { review });
+                let message = BusMessage {
+                    id: new_id("msg"),
+                    from: "reviewer".into(),
+                    to: Target::Direct(sid.clone()),
+                    kind: MsgKind::Chat,
+                    body: format!("[review @ {location}] {comment}"),
+                    reply_to: None,
+                    ts: now_millis(),
+                };
+                self.emit(Event::BusMessage { message });
+
+                if let Some((target_id, ctl)) = self.control(&sid) {
+                    self.wake_if_sleeping(&target_id, &ctl);
+                    let prompt = format!(
+                        "[ade 程式碼審查註解]\n位置：{location}\n意見：{comment}\n請針對上述位置與審查意見修正程式碼。"
+                    );
+                    let _ = ctl.send_input(&prompt);
+                }
+                let _ = reply.send(Frame::ok_note("已送出審查註解"));
+            }
+
             Request::Shutdown => {
                 let _ = reply.send(Frame::ok_note("daemon 關閉中"));
                 let shared = self.clone();
@@ -622,6 +969,38 @@ impl Shared {
                 });
             }
         }
+    }
+
+    fn collect_worktrees(&self) -> Vec<WorktreeInfo> {
+        let sessions: Vec<Session> = self
+            .inner
+            .lock()
+            .unwrap()
+            .state
+            .sessions_sorted()
+            .into_iter()
+            .filter(|s| s.branch.is_some())
+            .cloned()
+            .collect();
+        let mut out = Vec::with_capacity(sessions.len());
+        for s in sessions {
+            let path = Path::new(&s.cwd);
+            let (changed_files, summary) = if path.is_dir() {
+                git_status_summary(path)
+            } else {
+                (0, "(已移除)".to_string())
+            };
+            out.push(WorktreeInfo {
+                session: s.id,
+                label: s.label,
+                path: s.cwd,
+                branch: s.branch.unwrap_or_default(),
+                live: s.status.is_live(),
+                changed_files,
+                summary,
+            });
+        }
+        out
     }
 
     fn handle_bus_send(
@@ -637,20 +1016,12 @@ impl Shared {
         let (from_sid, resolved_to) = {
             let mut inner = self.inner.lock().unwrap();
             let from_sid = from
-                .map(|f| {
-                    inner
-                        .state
-                        .resolve_session_id(&f)
-                        .unwrap_or(f)
-                })
+                .map(|f| inner.state.resolve_session_id(&f).unwrap_or(f))
                 .unwrap_or_else(|| "human".into());
             let resolved_to = match to {
-                Target::Direct(t) => Target::Direct(
-                    inner
-                        .state
-                        .resolve_session_id(&t)
-                        .unwrap_or(t),
-                ),
+                Target::Direct(t) => {
+                    Target::Direct(inner.state.resolve_session_id(&t).unwrap_or(t))
+                }
                 other => other,
             };
             if let Err(e) = inner.bus_guard.check(&from_sid, &resolved_to, &body, now) {
@@ -674,9 +1045,8 @@ impl Shared {
             message: message.clone(),
         });
 
-        // 喚醒正在 `BusWait` 的等待者，並同步寫入檔案信箱（機制 C 後備）。
         let mut woke_waiter = false;
-        let mut idle_target_ctl: Option<Arc<dyn AgentControl>> = None;
+        let mut idle_target: Option<(SessionId, Arc<dyn AgentControl>)> = None;
         let mut mailbox_dirs: Vec<(PathBuf, String)> = Vec::new();
         {
             let mut inner = self.inner.lock().unwrap();
@@ -685,7 +1055,9 @@ impl Shared {
             let mut remaining = Vec::with_capacity(waiters.len());
             for w in waiters {
                 if w.matches(&state_clone, &message) && w.tx.send(message.clone()).is_ok() {
-                    inner.inbox_cursors.insert(w.session.clone(), message.id.clone());
+                    inner
+                        .inbox_cursors
+                        .insert(w.session.clone(), message.id.clone());
                     if matches!(&resolved_to, Target::Direct(t) if t == &w.session) {
                         woke_waiter = true;
                     }
@@ -701,18 +1073,15 @@ impl Shared {
                 }
             }
 
-            // 若是直接發給某個 session 的 Question / Handoff，且對方目前 Idle 又沒有在 BusWait，
-            // 自動把訊息轉成一個 prompt 喚醒對方處理。
             if !woke_waiter && matches!(kind, MsgKind::Question | MsgKind::Handoff) {
                 if let Target::Direct(target_sid) = &resolved_to {
-                    let is_idle = inner
-                        .state
-                        .sessions
-                        .get(target_sid)
-                        .is_some_and(|s| s.status == SessionStatus::Idle);
-                    if is_idle {
-                        idle_target_ctl =
-                            inner.sessions.get(target_sid).map(|e| e.ctl.clone());
+                    let is_idle_or_sleeping = inner.state.sessions.get(target_sid).is_some_and(
+                        |s| matches!(s.status, SessionStatus::Idle | SessionStatus::Sleeping),
+                    );
+                    if is_idle_or_sleeping {
+                        if let Some(entry) = inner.sessions.get(target_sid) {
+                            idle_target = Some((target_sid.clone(), entry.ctl.clone()));
+                        }
                     }
                 }
             }
@@ -722,7 +1091,8 @@ impl Shared {
             let _ = append_mailbox(&cwd, &sid, &message);
         }
 
-        if let Some(ctl) = idle_target_ctl {
+        if let Some((target_sid, ctl)) = idle_target {
+            self.wake_if_sleeping(&target_sid, &ctl);
             let nudge = format!(
                 "[ade 匯流排訊息 id={} 來自 {} ({})]: {}\n請處理並使用 ade_send（或 `ade send --to {}`）回覆。",
                 message.id,
@@ -754,7 +1124,6 @@ impl Shared {
             tx,
         };
 
-        // 先檢查收件匣是否已經有符合條件的未讀訊息。
         {
             let mut inner = self.inner.lock().unwrap();
             let after = inner.inbox_cursors.get(&sid).cloned();
@@ -912,6 +1281,10 @@ impl Shared {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Git / Worktree 輔助函式（M3）
+// ---------------------------------------------------------------------------
+
 /// 機制 C 後備：把收到的訊息附加到 `<cwd>/.ade/mailbox/<session>.jsonl`。
 fn append_mailbox(cwd: &Path, session: &str, msg: &BusMessage) -> Result<()> {
     let dir = cwd.join(".ade").join("mailbox");
@@ -947,11 +1320,202 @@ fn make_worktree(repo: &Path, id: &str) -> Result<(PathBuf, String)> {
     Ok((dir, branch))
 }
 
+/// 查詢某個工作目錄的變更檔案數與簡短摘要。
+fn git_status_summary(cwd: &Path) -> (usize, String) {
+    let Ok(out) = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["status", "--porcelain"])
+        .output()
+    else {
+        return (0, String::new());
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|l| !l.contains(".ade/"))
+        .collect();
+    let count = lines.len();
+    let files: Vec<&str> = lines
+        .iter()
+        .take(3)
+        .map(|l| l.get(3..).unwrap_or(l).trim())
+        .collect();
+    let summary = if count == 0 {
+        "clean".to_string()
+    } else {
+        format!("{count} changed ({})", files.join(", "))
+    };
+    (count, summary)
+}
+
+/// 取得工作目錄的統一格式 diff（含已追蹤變更與新增未追蹤檔案的內容預覽）。
+pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
+    if !cwd.is_dir() {
+        bail!("工作目錄不存在：{cwd:?}");
+    }
+    let mut out = String::new();
+
+    // 1) 已追蹤檔案相對於 HEAD 的 diff。
+    let diff = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["diff", "HEAD"])
+        .output()
+        .context("執行 git diff 失敗")?;
+    let diff_str = String::from_utf8_lossy(&diff.stdout);
+    if !diff_str.trim().is_empty() {
+        out.push_str(&diff_str);
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+    }
+
+    // 2) 未追蹤的新檔案（排除 `.ade/`）：也產生 unified diff 樣式，方便在 TUI Diff 視圖審查與留註解。
+    let untracked = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["ls-files", "--others", "--exclude-standard"])
+        .output()
+        .context("執行 git ls-files 失敗")?;
+    for rel in String::from_utf8_lossy(&untracked.stdout).lines() {
+        let rel = rel.trim();
+        if rel.is_empty() || rel.starts_with(".ade/") {
+            continue;
+        }
+        let full = cwd.join(rel);
+        if let Ok(content) = fs::read_to_string(&full) {
+            out.push_str(&format!("diff --git a/{rel} b/{rel}\n"));
+            out.push_str("new file mode 100644\n");
+            out.push_str("--- /dev/null\n");
+            out.push_str(&format!("+++ b/{rel}\n"));
+            let lines: Vec<&str> = content.lines().collect();
+            out.push_str(&format!("@@ -0,0 +1,{} @@\n", lines.len()));
+            for (idx, l) in lines.iter().take(200).enumerate() {
+                out.push_str(&format!("+{l}\n"));
+                if idx == 199 && lines.len() > 200 {
+                    out.push_str("+... (truncated)\n");
+                }
+            }
+        }
+    }
+
+    if out.trim().is_empty() {
+        Ok("(目前工作區沒有尚未合併的變更)\n".to_string())
+    } else {
+        Ok(out)
+    }
+}
+
+/// 若 worktree 內有尚未 commit 的變更，先自動 commit 到該 worktree 分支上。
+fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(wt_dir)
+        .args(["status", "--porcelain"])
+        .output()
+        .context("檢查 worktree 狀態失敗")?;
+    let has_changes = String::from_utf8_lossy(&status.stdout)
+        .lines()
+        .any(|l| !l.trim().is_empty() && !l.contains(".ade/"));
+    if !has_changes {
+        return Ok(());
+    }
+    let _ = Command::new("git")
+        .arg("-C")
+        .arg(wt_dir)
+        .args(["add", "-A"])
+        .output();
+    // 確保不把 `.ade` 塞進 commit
+    let _ = Command::new("git")
+        .arg("-C")
+        .arg(wt_dir)
+        .args(["reset", "-q", "--", ".ade"])
+        .output();
+    let commit = Command::new("git")
+        .arg("-C")
+        .arg(wt_dir)
+        .args(["commit", "-m", &format!("ade: changes from {label}")])
+        .output()
+        .context("自動 commit worktree 變更失敗")?;
+    if !commit.status.success() {
+        let stderr = String::from_utf8_lossy(&commit.stderr);
+        if !stderr.contains("nothing to commit") {
+            bail!("commit worktree 失敗：{}", stderr.trim());
+        }
+    }
+    Ok(())
+}
+
+/// 把 session 的 worktree 分支合併回主工作區。
+fn merge_worktree(main_repo: &Path, session: &Session) -> Result<String> {
+    let branch = session
+        .branch
+        .as_deref()
+        .context("此 session 沒有獨立的 worktree 分支")?;
+    let wt_dir = Path::new(&session.cwd);
+    if wt_dir.is_dir() {
+        auto_commit_worktree(wt_dir, &session.label)?;
+    }
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(main_repo)
+        .args(["merge", "--no-edit", branch])
+        .output()
+        .context("執行 git merge 失敗")?;
+    if !out.status.success() {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(format!("已將 {branch}（{}）合併回主工作區", session.label))
+}
+
+/// 透過 `gh pr create` 建立 Pull Request。
+fn create_worktree_pr(session: &Session, title: &str, body: &str) -> Result<String> {
+    let branch = session
+        .branch
+        .as_deref()
+        .context("此 session 沒有獨立分支，無法建立 PR")?;
+    let wt_dir = Path::new(&session.cwd);
+    if wt_dir.is_dir() {
+        auto_commit_worktree(wt_dir, &session.label)?;
+    }
+    let out = Command::new("gh")
+        .current_dir(wt_dir)
+        .args(["pr", "create", "--title", title, "--body", body, "--head", branch])
+        .output()
+        .context("找不到或無法執行 `gh` CLI")?;
+    if !out.status.success() {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// 移除某個 session 的 worktree 與對應分支。
+fn remove_worktree(main_repo: &Path, session: &Session) -> Result<()> {
+    let wt_dir = Path::new(&session.cwd);
+    if wt_dir.exists() {
+        let _ = Command::new("git")
+            .arg("-C")
+            .arg(main_repo)
+            .args(["worktree", "remove", "--force"])
+            .arg(wt_dir)
+            .output();
+    }
+    if let Some(branch) = &session.branch {
+        let _ = Command::new("git")
+            .arg("-C")
+            .arg(main_repo)
+            .args(["branch", "-D", branch])
+            .output();
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // 伺服器
 // ---------------------------------------------------------------------------
 
-fn handle_conn(shared: Arc<Shared>, stream: UnixStream) -> Result<()> {
+fn handle_conn(shared: Arc<Shared>, stream: ConnStream, require_auth: bool) -> Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
     let mut writer = stream;
     let (tx, rx) = mpsc::channel::<Frame>();
@@ -970,13 +1534,30 @@ fn handle_conn(shared: Arc<Shared>, stream: UnixStream) -> Result<()> {
         }
     });
 
+    let mut authenticated = !require_auth || shared.auth_token.is_none();
+
     for line in reader.lines() {
         let line = line?;
         if line.trim().is_empty() {
             continue;
         }
         match decode_line::<Request>(line.trim()) {
-            Ok(req) => shared.handle(&tx, req),
+            Ok(req) => {
+                if !authenticated {
+                    if let Request::Hello { ref token, .. } = req {
+                        if token.as_deref() == shared.auth_token.as_deref() {
+                            authenticated = true;
+                        } else {
+                            let _ = tx.send(Frame::error("遠端認證失敗：請設定正確的 ADE_TOKEN"));
+                            break;
+                        }
+                    } else {
+                        let _ = tx.send(Frame::error("未認證的遠端連線：請先送 Hello 帶 token"));
+                        break;
+                    }
+                }
+                shared.handle(&tx, req);
+            }
             Err(e) => {
                 let _ = tx.send(Frame::error(format!("無法解析請求：{e}")));
             }
@@ -985,14 +1566,18 @@ fn handle_conn(shared: Arc<Shared>, stream: UnixStream) -> Result<()> {
     Ok(())
 }
 
-/// 以前景方式跑 daemon，直到被關閉。
+/// 以前景方式跑 daemon（預設只綁本地 Unix socket）。
 pub fn run() -> Result<()> {
+    run_with_options(None, None)
+}
+
+/// 以前景方式跑 daemon，可選同時開放 TCP 遠端監聽與認證 token（M5）。
+pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Result<()> {
     let sock = socket_path();
     if let Some(dir) = sock.parent() {
         fs::create_dir_all(dir).with_context(|| format!("建立 {dir:?} 失敗"))?;
     }
     if sock.exists() {
-        // 已經有 daemon 在跑就不要搶它的 socket；只有「殘留的死 socket」才清掉。
         if is_running() {
             bail!("已有 daemon 在執行（{sock:?}）；請直接連線，或先 `ade shutdown`");
         }
@@ -1006,6 +1591,10 @@ pub fn run() -> Result<()> {
         .append(true)
         .open(log_path())?;
 
+    let default_cwd = std::env::current_dir()?;
+    let policy = load_policy(&default_cwd);
+    let auth_token = token.or_else(|| std::env::var("ADE_TOKEN").ok().filter(|t| !t.is_empty()));
+
     let shared = Arc::new(Shared {
         inner: Mutex::new(Inner {
             state: State::new(),
@@ -1015,11 +1604,34 @@ pub fn run() -> Result<()> {
             inbox_cursors: HashMap::new(),
             waiters: Vec::new(),
             bus_guard: BusGuard::default(),
-            default_cwd: std::env::current_dir()?,
+            policy,
+            default_cwd,
             clients: Vec::new(),
         }),
         log: Mutex::new(log),
+        auth_token,
     });
+
+    // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽（M5 遠端模式）。
+    if let Some(addr) = listen_tcp {
+        let tcp_listener =
+            TcpListener::bind(&addr).with_context(|| format!("綁定 TCP {addr} 失敗"))?;
+        tracing::info!("ade daemon 遠端監聽已啟動：tcp={addr}");
+        let shared_tcp = shared.clone();
+        std::thread::spawn(move || {
+            for stream in tcp_listener.incoming() {
+                match stream {
+                    Ok(s) => {
+                        let shared = shared_tcp.clone();
+                        std::thread::spawn(move || {
+                            let _ = handle_conn(shared, ConnStream::Tcp(s), true);
+                        });
+                    }
+                    Err(e) => tracing::warn!("TCP accept 失敗：{e}"),
+                }
+            }
+        });
+    }
 
     tracing::info!("ade daemon 已啟動：socket={sock:?} log={:?}", log_path());
 
@@ -1028,7 +1640,7 @@ pub fn run() -> Result<()> {
             Ok(s) => {
                 let shared = shared.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = handle_conn(shared, s) {
+                    if let Err(e) = handle_conn(shared, ConnStream::Unix(s), false) {
                         tracing::debug!("client 連線結束：{e}");
                     }
                 });
@@ -1066,7 +1678,6 @@ mod tests {
             .to_string();
         assert!(err.contains("迴圈偵測"));
 
-        // 不同內容應重置連續計數，但超過每分鐘上限仍會被擋下。
         let mut guard2 = BusGuard::default();
         for i in 0..PAIR_RATE_CAP_PER_MIN {
             assert!(guard2

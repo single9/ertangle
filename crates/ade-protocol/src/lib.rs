@@ -7,7 +7,7 @@
 
 use ade_core::{
     AgentKind, ArtifactKind, BusMessage, Decision, MsgId, MsgKind, PermissionPolicy, Record, Role,
-    Seq, SessionId, State, Target, TaskId, TaskStatus,
+    Seq, SessionId, State, Target, TaskId, TaskStatus, WorktreeInfo,
 };
 use serde::{Deserialize, Serialize};
 
@@ -64,11 +64,13 @@ pub struct SpawnRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
-    /// 打招呼並（可選）要求補齊 `since` 之後的事件。
+    /// 打招呼並（可選）要求補齊 `since` 之後的事件；遠端連線可帶 `token`。
     Hello {
         client: String,
         #[serde(default)]
         since: Option<Seq>,
+        #[serde(default)]
+        token: Option<String>,
     },
     /// 要一份完整狀態快照。
     Snapshot,
@@ -84,6 +86,14 @@ pub enum Request {
     },
     /// 結束 session 並殺掉程序。
     Kill {
+        session: SessionId,
+    },
+    /// 暫停閒置 session 子程序（SIGSTOP）。
+    Sleep {
+        session: SessionId,
+    },
+    /// 喚醒休眠中的 session 子程序（SIGCONT）。
+    Wake {
         session: SessionId,
     },
     /// 回覆審批請求。
@@ -153,6 +163,34 @@ pub enum Request {
         #[serde(default)]
         note: String,
     },
+    /// 列出所有受管 worktree。
+    WorktreeList,
+    /// 取得某個 session 工作區的 `git diff`（含未追蹤檔案摘要）。
+    WorktreeDiff {
+        session: SessionId,
+    },
+    /// 將某個 session 的 worktree 分支合併回主工作區。
+    WorktreeMerge {
+        session: SessionId,
+    },
+    /// 為某個 session 的分支建立 Pull Request（透過 `gh`）。
+    WorktreePr {
+        session: SessionId,
+        title: String,
+        #[serde(default)]
+        body: String,
+    },
+    /// 清除已結束 session 的 worktree（若指定 `session` 則清除該筆）。
+    WorktreeGc {
+        #[serde(default)]
+        session: Option<SessionId>,
+    },
+    /// 對某個 session 的 diff 行留下審查註解並送回該 agent 修正。
+    ReviewComment {
+        session: SessionId,
+        location: String,
+        comment: String,
+    },
     /// 要 daemon 關閉。
     Shutdown,
 }
@@ -179,6 +217,18 @@ pub enum Frame {
         messages: Vec<BusMessage>,
         #[serde(default)]
         timed_out: bool,
+    },
+    /// 某個 session 工作區的 git diff。
+    Diff {
+        session: SessionId,
+        #[serde(default)]
+        branch: Option<String>,
+        cwd: String,
+        diff: String,
+    },
+    /// 所有受管 worktree 清單。
+    Worktrees {
+        worktrees: Vec<WorktreeInfo>,
     },
     /// 操作成功（可帶說明）。
     Ok {

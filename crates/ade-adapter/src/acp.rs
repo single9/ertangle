@@ -283,6 +283,16 @@ impl AgentControl for AcpControl {
         Ok(())
     }
 
+    fn sleep(&self) -> Result<()> {
+        let pid = self.child.lock().unwrap().id();
+        crate::signal_pid(pid, "-STOP")
+    }
+
+    fn wake(&self) -> Result<()> {
+        let pid = self.child.lock().unwrap().id();
+        crate::signal_pid(pid, "-CONT")
+    }
+
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()> {
         self.conn.resolve(req, decision)
     }
