@@ -545,3 +545,17 @@ fn header_shows_log_failure_indicator() {
     let (_, text_err) = render_size(&mut app, 120, 40);
     assert!(text_err.contains("log ✗"));
 }
+
+#[test]
+fn tool_lines_are_not_mangled_by_markdown() {
+    let mut app = sample_app(&["x"]);
+    let id = app.selected_id().unwrap();
+    app.state
+        .transcripts
+        .get_mut(&id)
+        .unwrap()
+        .push_back("▸ mcp__ade__ade_peers: {\"timeout_ms\":1}".to_string());
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(text.contains("mcp__ade__ade_peers"), "{text}");
+    assert!(text.contains("timeout_ms"));
+}

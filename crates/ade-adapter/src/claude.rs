@@ -165,6 +165,12 @@ impl Conn {
             let ok = !block["is_error"].as_bool().unwrap_or(false);
             let output = match &block["content"] {
                 Value::String(s) => s.clone(),
+                // MCP 工具回傳 [{"type":"text","text":...}]：取出文字，不顯示 JSON 外殼。
+                Value::Array(parts) if parts.iter().all(|p| p["text"].is_string()) => parts
+                    .iter()
+                    .filter_map(|p| p["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
                 other => other.to_string(),
             };
             let _ = self.tx.send(AgentEvent::ToolCall {

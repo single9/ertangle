@@ -368,10 +368,10 @@ impl Shared {
         Ok(shared)
     }
 
-    /// 重啟還原後，清掉太舊且已結束、又沒有 worktree 分支的 session（log 仍完整保留）。
+    /// 重啟還原後，清掉超過 1 小時且已結束、又沒有 worktree 分支的 session（log 仍完整保留）。
     /// 否則歷史上所有 session 都會一直堆在清單裡。
     pub(crate) fn prune_ended_sessions(&self, now_ms: u64) {
-        const KEEP_ENDED_MS: u64 = 24 * 3600 * 1000;
+        const KEEP_ENDED_MS: u64 = 3600 * 1000;
         let mut inner = lock(&self.inner);
         let stale: Vec<SessionId> = inner
             .state

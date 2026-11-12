@@ -268,7 +268,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         tab("Worktrees", app.view == CenterView::Worktrees),
         Span::raw("   "),
         Span::styled(
-            format!("{} sessions", live),
+            format!("{live}/{} live", app.state.sessions.len()),
             Style::default().fg(Color::Green),
         ),
         Span::styled(
@@ -427,6 +427,20 @@ pub(crate) fn transcript_stamp(app: &App, id: &SessionId) -> (usize, usize, usiz
 }
 
 /// 依目前模式（Markdown / 原始）與寬度，把逐字稿建成樣式化且已換行的行。
+/// 工具呼叫（`▸ …`）與結果（`  ✓ …`／`  ✗ …`）行：原樣顯示並上色。
+fn tool_line(l: &str) -> Option<Line<'static>> {
+    let style = if l.starts_with("▸ ") {
+        Style::default().fg(Color::Cyan)
+    } else if l.starts_with("  ✓") {
+        Style::default().fg(Color::DarkGray)
+    } else if l.starts_with("  ✗") {
+        Style::default().fg(Color::Red)
+    } else {
+        return None;
+    };
+    Some(Line::from(Span::styled(l.to_string(), style)))
+}
+
 pub(crate) fn build_transcript_lines(
     app: &App,
     id: &SessionId,
@@ -444,7 +458,25 @@ pub(crate) fn build_transcript_lines(
     let lines: Vec<Line<'static>> = if app.raw_md {
         src.iter().map(|l| Line::raw(l.clone())).collect()
     } else {
-        markdown::Renderer::new().render(&src, width)
+        // 工具呼叫／結果行是程式產生的摘要，不能當 Markdown：
+        // `_`、`*`、反斜線會被吃掉（例如 mcp__ade__ade_peers 變成 mcpadeadepeers）。
+        let mut out: Vec<Line<'static>> = Vec::new();
+        let mut batch: Vec<String> = Vec::new();
+        for l in src {
+            if let Some(line) = tool_line(&l) {
+                if !batch.is_empty() {
+                    out.extend(markdown::Renderer::new().render(&batch, width));
+                    batch.clear();
+                }
+                out.push(line);
+            } else {
+                batch.push(l);
+            }
+        }
+        if !batch.is_empty() {
+            out.extend(markdown::Renderer::new().render(&batch, width));
+        }
+        out
     };
     markdown::wrap_lines(lines, width)
 }
