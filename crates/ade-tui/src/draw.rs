@@ -340,6 +340,10 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
                 Color::Yellow
             }),
         ),
+        Span::styled(
+            if app.state.log_ok { "" } else { "   log ✗" },
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
     ]);
 
     f.render_widget(Paragraph::new(vec![tabs, stats]), area);

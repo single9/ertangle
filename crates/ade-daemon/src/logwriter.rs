@@ -54,6 +54,7 @@ pub(crate) struct LogWriter {
     size: u64,
     state: State,
     ok: Arc<AtomicBool>,
+    health_tx: Option<Sender<bool>>,
     last_try: Option<std::time::Instant>,
 }
 
@@ -89,6 +90,9 @@ impl LogWriter {
     pub(crate) fn fail(&mut self, e: &std::io::Error) {
         if self.ok.swap(false, Ordering::SeqCst) {
             tracing::error!("event log 寫入失敗（{:?}）：{e}；之後定期重試", self.path);
+            if let Some(tx) = &self.health_tx {
+                let _ = tx.send(false);
+            }
         }
     }
 
@@ -105,6 +109,9 @@ impl LogWriter {
                 self.size += line.len() as u64 + 1;
                 if !self.ok.swap(true, Ordering::SeqCst) {
                     tracing::info!("event log 已恢復寫入");
+                    if let Some(tx) = &self.health_tx {
+                        let _ = tx.send(true);
+                    }
                 }
             }
             Err(e) => {
@@ -166,6 +173,7 @@ pub(crate) fn spawn_log_writer(
     path: PathBuf,
     state: State,
     cfg: LogConfig,
+    health_tx: Option<Sender<bool>>,
 ) -> (Sender<LogMsg>, Arc<AtomicBool>) {
     let (tx, rx) = mpsc::channel::<LogMsg>();
     let ok = Arc::new(AtomicBool::new(true));
@@ -176,6 +184,7 @@ pub(crate) fn spawn_log_writer(
         size: 0,
         state,
         ok: ok.clone(),
+        health_tx,
         last_try: None,
     };
     w.open();

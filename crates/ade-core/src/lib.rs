@@ -622,6 +622,10 @@ pub enum Event {
         session: SessionId,
         cost: Cost,
     },
+    /// event log 寫入健康狀態（`ok == false` 表示寫入失敗，TUI 顯示 `log ✗`）。
+    LogHealth {
+        ok: bool,
+    },
 }
 
 /// 事件 + 序號 + 時間，是對外（socket / log）傳遞的單位。
@@ -644,7 +648,11 @@ pub const MESSAGE_CAP: usize = 1000;
 /// artifact 保留上限。
 pub const ARTIFACT_CAP: usize = 500;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct State {
     pub seq: Seq,
     pub sessions: BTreeMap<SessionId, Session>,
@@ -658,6 +666,25 @@ pub struct State {
     pub pending_permissions: BTreeMap<String, PermissionRequest>,
     /// session id → 輸出文字行。
     pub transcripts: HashMap<SessionId, VecDeque<String>>,
+    /// event log 寫入健康狀態（預設正常）。
+    #[serde(default = "default_true")]
+    pub log_ok: bool,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State {
+            seq: 0,
+            sessions: BTreeMap::new(),
+            tasks: BTreeMap::new(),
+            messages: Vec::new(),
+            artifacts: Vec::new(),
+            reviews: Vec::new(),
+            pending_permissions: BTreeMap::new(),
+            transcripts: HashMap::new(),
+            log_ok: true,
+        }
+    }
 }
 
 impl State {
@@ -800,6 +827,9 @@ impl State {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.cost = *cost;
                 }
+            }
+            Event::LogHealth { ok } => {
+                self.log_ok = *ok;
             }
         }
     }
@@ -1247,6 +1277,16 @@ mod tests {
             },
         });
         assert_eq!(st.sessions["s1"].model.as_deref(), Some("opus"));
+    }
+
+    #[test]
+    fn log_health_event_updates_state_and_defaults_to_true() {
+        let mut st = State::new();
+        assert!(st.log_ok);
+        st.apply(&rec(1, Event::LogHealth { ok: false }));
+        assert!(!st.log_ok);
+        st.apply(&rec(2, Event::LogHealth { ok: true }));
+        assert!(st.log_ok);
     }
 
     #[test]

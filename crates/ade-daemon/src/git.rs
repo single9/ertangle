@@ -183,11 +183,7 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
 }
 
 /// 把 session 的 worktree 分支合併回主工作區。
-pub(crate) fn merge_worktree(
-    main_repo: &Path,
-    session: &Session,
-    dry_run: bool,
-) -> Result<String> {
+pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool) -> Result<String> {
     let branch = session
         .branch
         .as_deref()
@@ -243,7 +239,11 @@ pub(crate) fn merge_worktree(
         let pending_desc = if pending_files.is_empty() {
             "無未提交變更".to_string()
         } else {
-            format!("待提交檔案（{}）：{}", pending_files.len(), pending_files.join(", "))
+            format!(
+                "待提交檔案（{}）：{}",
+                pending_files.len(),
+                pending_files.join(", ")
+            )
         };
         return Ok(format!(
             "[dry-run] 合併 {branch}（{}）至 {target}：{ff_desc}，{pending_desc}",

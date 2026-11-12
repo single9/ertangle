@@ -71,12 +71,7 @@ pub(crate) fn handle_diff(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
     }
 }
 
-pub(crate) fn handle_merge(
-    shared: &Arc<Shared>,
-    reply: &ClientTx,
-    session: String,
-    dry_run: bool,
-) {
+pub(crate) fn handle_merge(shared: &Arc<Shared>, reply: &ClientTx, session: String, dry_run: bool) {
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     let default_cwd = shared.default_cwd();

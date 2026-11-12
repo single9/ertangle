@@ -534,3 +534,14 @@ fn layout_key_command_and_unread_counter() {
     let (_, text) = render_size(&mut app, 120, 40);
     assert!(text.contains("Bus / Tasks") && !squash(&text).contains("未讀"));
 }
+
+#[test]
+fn header_shows_log_failure_indicator() {
+    let mut app = sample_app(&["hi"]);
+    let (_, text_ok) = render_size(&mut app, 120, 40);
+    assert!(!text_ok.contains("log ✗"));
+
+    app.state.log_ok = false;
+    let (_, text_err) = render_size(&mut app, 120, 40);
+    assert!(text_err.contains("log ✗"));
+}

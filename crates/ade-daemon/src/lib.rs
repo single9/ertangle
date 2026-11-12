@@ -300,7 +300,13 @@ impl Shared {
         log_cfg: LogConfig,
     ) -> Result<Arc<Shared>> {
         let (state, records) = replay_log(log_file)?;
-        let (log_tx, log_ok) = spawn_log_writer(log_file.to_path_buf(), state.clone(), log_cfg);
+        let (health_tx, health_rx) = mpsc::channel();
+        let (log_tx, log_ok) = spawn_log_writer(
+            log_file.to_path_buf(),
+            state.clone(),
+            log_cfg,
+            Some(health_tx),
+        );
         let seq = records.last().map_or(0, |r| r.seq);
         let backlog_all: Vec<Record> = records
             .into_iter()
@@ -326,6 +332,18 @@ impl Shared {
             auth_token,
             epoch: new_id("ep"),
         });
+
+        let weak_shared = Arc::downgrade(&shared);
+        std::thread::spawn(move || {
+            while let Ok(ok) = health_rx.recv() {
+                if let Some(sh) = weak_shared.upgrade() {
+                    sh.set_log_health(ok);
+                } else {
+                    break;
+                }
+            }
+        });
+
         // 重啟後子程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
         let orphans: Vec<SessionId> = {
             let inner = lock(&shared.inner);
@@ -344,6 +362,19 @@ impl Shared {
             });
         }
         Ok(shared)
+    }
+
+    pub(crate) fn set_log_health(&self, ok: bool) {
+        let mut inner = lock(&self.inner);
+        if inner.state.log_ok == ok {
+            return;
+        }
+        inner.state.log_ok = ok;
+        let snap = inner.state.clone();
+        let frame = Frame::Snapshot {
+            state: Box::new(snap),
+        };
+        inner.clients.retain(|c| c.send_bounded(frame.clone()));
     }
 
     /// 廣播一個事件：更新狀態、寫 log（先遮罩憑證）、推給所有 client。
@@ -460,7 +491,9 @@ impl Shared {
     }
 
     pub(crate) fn snapshot(&self) -> State {
-        lock(&self.inner).state.clone()
+        let mut st = lock(&self.inner).state.clone();
+        st.log_ok = self.log_ok.load(Ordering::SeqCst);
+        st
     }
 
     pub(crate) fn default_cwd(&self) -> PathBuf {
