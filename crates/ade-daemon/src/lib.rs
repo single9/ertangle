@@ -19,7 +19,7 @@ use ade_core::{
 };
 use ade_protocol::{decode_line, encode_line, Frame, Request, SpawnRequest};
 use anyhow::{bail, Context, Result};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -325,6 +325,14 @@ impl BusGuard {
 // ---------------------------------------------------------------------------
 // Daemon 內部狀態
 // ---------------------------------------------------------------------------
+
+/// 哪些訊息種類值得主動叫醒閒置的收件者。
+///
+/// `Status` 與 `Artifact` 屬於被動資訊（更新狀態、分享產出），留在收件匣即可；
+/// 其餘（chat / handoff / question / answer）都代表對方可能需要動作。
+fn kind_wakes_recipient(kind: MsgKind) -> bool {
+    !matches!(kind, MsgKind::Status | MsgKind::Artifact)
+}
 
 struct SessionEntry {
     ctl: Arc<dyn AgentControl>,
@@ -740,17 +748,36 @@ impl Shared {
                 let assignee = assignee.map(|a| self.resolve_session(&a));
                 let created_by = created_by.map(|c| self.resolve_session(&c));
                 let id = new_id("task");
+                let body = format!(
+                    "[ade 任務指派 id={id}]\n標題：{title}\n指派者：{}\n說明：{}\n請先用 ade_task_update 把狀態改為 doing，完成後改為 done 並用 ade_send 回報。",
+                    created_by.as_deref().unwrap_or("human"),
+                    if detail.is_empty() { "(無)" } else { &detail }
+                );
                 let task = Task {
                     id: id.clone(),
                     title,
                     detail,
                     status: TaskStatus::Todo,
-                    assignee,
-                    created_by,
+                    assignee: assignee.clone(),
+                    created_by: created_by.clone(),
                     depends_on,
                     updated_ms: now_millis(),
                 };
                 self.emit(Event::TaskChanged { task });
+
+                // 指派任務時直接投遞一則 handoff 訊息，讓閒置中的負責人被喚醒。
+                if let Some(target) = assignee.filter(|a| !a.is_empty()) {
+                    if created_by.as_ref() != Some(&target) {
+                        let _ = self.deliver_message(
+                            created_by,
+                            Target::Direct(target),
+                            MsgKind::Handoff,
+                            body,
+                            None,
+                        );
+                    }
+                }
+
                 let _ = reply.send(Frame::ok_note(format!("已建立任務 {id}")));
             }
 
@@ -764,6 +791,7 @@ impl Shared {
                 let existing = self.inner.lock().unwrap().state.tasks.get(&id).cloned();
                 match existing {
                     Some(mut task) => {
+                        let previous_assignee = task.assignee.clone();
                         if let Some(st) = status {
                             task.status = st;
                         }
@@ -774,8 +802,38 @@ impl Shared {
                             task.detail = d;
                         }
                         task.updated_ms = now_millis();
+
+                        // 只有「換人做」時才發通知，避免每次狀態更新都吵醒負責人。
+                        let newly_assigned = task
+                            .assignee
+                            .clone()
+                            .filter(|a| Some(a) != previous_assignee.as_ref());
+                        let creator = task.created_by.clone();
+                        let task_id = task.id.clone();
+                        let title = task.title.clone();
+                        let task_detail = task.detail.clone();
+                        let task_status = task.status;
+
                         self.emit(Event::TaskChanged { task });
-                        let _ = reply.send(Frame::ok_note(format!("已更新任務 {id}")));
+
+                        if let Some(target) = newly_assigned {
+                            if creator.as_ref() != Some(&target) {
+                                let body = format!(
+                                    "[ade 任務指派 id={task_id}]\n標題：{title}\n狀態：{}\n說明：{}\n請先用 ade_task_update 把狀態改為 doing，完成後改為 done 並用 ade_send 回報。",
+                                    task_status.id(),
+                                    if task_detail.is_empty() { "(無)" } else { &task_detail }
+                                );
+                                let _ = self.deliver_message(
+                                    creator,
+                                    Target::Direct(target),
+                                    MsgKind::Handoff,
+                                    body,
+                                    None,
+                                );
+                            }
+                        }
+
+                        let _ = reply.send(Frame::ok_note(format!("已更新任務 {task_id}")));
                     }
                     None => {
                         let _ = reply.send(Frame::error(format!("找不到任務 {id}")));
@@ -1009,6 +1067,33 @@ impl Shared {
         body: String,
         reply_to: Option<MsgId>,
     ) {
+        match self.deliver_message(from, to, kind, body, reply_to) {
+            Ok(msg_id) => {
+                let _ = reply.send(Frame::ok_note(format!("已送出訊息 {msg_id}")));
+            }
+            Err(e) => {
+                let _ = reply.send(Frame::error(e));
+            }
+        }
+    }
+
+    /// 把訊息送進匯流排：防呆檢查、喚醒阻塞中的 waiter、寫入各 session 的
+    /// mailbox，並主動叫醒閒置（`Idle`）或休眠（`Sleeping`）的收件者。
+    ///
+    /// 喚醒規則：
+    /// * 直接訊息（`Direct`）與廣播／頻道（`Broadcast` / `Channel`）都會喚醒收件者。
+    /// * 只喚醒狀態為 `Idle` / `Sleeping` 的 session；`Busy` 代表正在工作，
+    ///   訊息留在收件匣即可。
+    /// * 已經透過 `ade_wait` / `ade_ask` 取得訊息的 session 不重複打擾。
+    /// * `Status` / `Artifact` 屬於被動資訊，不主動喚醒任何人。
+    fn deliver_message(
+        self: &Arc<Self>,
+        from: Option<SessionId>,
+        to: Target,
+        kind: MsgKind,
+        body: String,
+        reply_to: Option<MsgId>,
+    ) -> std::result::Result<MsgId, String> {
         let now = now_millis();
         let (from_sid, resolved_to) = {
             let mut inner = self.inner.lock().unwrap();
@@ -1021,10 +1106,10 @@ impl Shared {
                 }
                 other => other,
             };
-            if let Err(e) = inner.bus_guard.check(&from_sid, &resolved_to, &body, now) {
-                let _ = reply.send(Frame::error(e.to_string()));
-                return;
-            }
+            inner
+                .bus_guard
+                .check(&from_sid, &resolved_to, &body, now)
+                .map_err(|e| e.to_string())?;
             (from_sid, resolved_to)
         };
 
@@ -1042,8 +1127,8 @@ impl Shared {
             message: message.clone(),
         });
 
-        let mut woke_waiter = false;
-        let mut idle_target: Option<(SessionId, Arc<dyn AgentControl>)> = None;
+        let mut woken_by_waiter: HashSet<SessionId> = HashSet::new();
+        let mut idle_targets: Vec<(SessionId, Arc<dyn AgentControl>)> = Vec::new();
         let mut mailbox_dirs: Vec<(PathBuf, String)> = Vec::new();
         {
             let mut inner = self.inner.lock().unwrap();
@@ -1055,9 +1140,7 @@ impl Shared {
                     inner
                         .inbox_cursors
                         .insert(w.session.clone(), message.id.clone());
-                    if matches!(&resolved_to, Target::Direct(t) if t == &w.session) {
-                        woke_waiter = true;
-                    }
+                    woken_by_waiter.insert(w.session.clone());
                 } else {
                     remaining.push(w);
                 }
@@ -1070,16 +1153,17 @@ impl Shared {
                 }
             }
 
-            if !woke_waiter && matches!(kind, MsgKind::Question | MsgKind::Handoff) {
-                if let Target::Direct(target_sid) = &resolved_to {
-                    let is_idle_or_sleeping =
-                        inner.state.sessions.get(target_sid).is_some_and(|s| {
-                            matches!(s.status, SessionStatus::Idle | SessionStatus::Sleeping)
-                        });
-                    if is_idle_or_sleeping {
-                        if let Some(entry) = inner.sessions.get(target_sid) {
-                            idle_target = Some((target_sid.clone(), entry.ctl.clone()));
-                        }
+            if kind_wakes_recipient(kind) {
+                for s in state_clone.sessions.values() {
+                    if s.id == from_sid
+                        || woken_by_waiter.contains(&s.id)
+                        || !matches!(s.status, SessionStatus::Idle | SessionStatus::Sleeping)
+                        || !message.matches_recipient(&s.id, Some(&s.label))
+                    {
+                        continue;
+                    }
+                    if let Some(entry) = inner.sessions.get(&s.id) {
+                        idle_targets.push((s.id.clone(), entry.ctl.clone()));
                     }
                 }
             }
@@ -1089,20 +1173,26 @@ impl Shared {
             let _ = append_mailbox(&cwd, &sid, &message);
         }
 
-        if let Some((target_sid, ctl)) = idle_target {
+        for (target_sid, ctl) in idle_targets {
             self.wake_if_sleeping(&target_sid, &ctl);
+            let reply_hint = match &message.to {
+                Target::Direct(_) => format!(
+                    "請處理並使用 ade_send（或 `ade send --to {}`）回覆。",
+                    message.from
+                ),
+                _ => "請處理；可先呼叫 ade_inbox 查看完整收件匣，再用 ade_send 回覆。".to_string(),
+            };
             let nudge = format!(
-                "[ade 匯流排訊息 id={} 來自 {} ({})]: {}\n請處理並使用 ade_send（或 `ade send --to {}`）回覆。",
+                "[ade 匯流排訊息 id={} 來自 {} ({})]: {}\n{reply_hint}",
                 message.id,
                 message.from,
                 message.kind.id(),
                 message.body,
-                message.from
             );
             let _ = ctl.send_input(&nudge);
         }
 
-        let _ = reply.send(Frame::ok_note(format!("已送出訊息 {msg_id}")));
+        Ok(msg_id)
     }
 
     fn handle_bus_wait(
@@ -1652,11 +1742,271 @@ pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ade_core::{AgentKind, Cost, Decision, Role};
 
     #[test]
     fn paths_are_under_expected_dirs() {
         assert!(socket_path().ends_with("daemon.sock"));
         assert!(log_path().ends_with("events.jsonl"));
+    }
+
+    // -----------------------------------------------------------------------
+    // 喚醒行為測試（廣播 / 直接訊息 / 任務指派）
+    // -----------------------------------------------------------------------
+
+    #[derive(Clone, Default)]
+    struct MockCtl {
+        inputs: Arc<Mutex<Vec<String>>>,
+        wakes: Arc<Mutex<usize>>,
+    }
+
+    impl MockCtl {
+        fn as_ctl(&self) -> Arc<dyn AgentControl> {
+            Arc::new(self.clone())
+        }
+        fn inputs(&self) -> Vec<String> {
+            self.inputs.lock().unwrap().clone()
+        }
+        fn wake_count(&self) -> usize {
+            *self.wakes.lock().unwrap()
+        }
+    }
+
+    impl AgentControl for MockCtl {
+        fn send_input(&self, text: &str) -> Result<()> {
+            self.inputs.lock().unwrap().push(text.to_string());
+            Ok(())
+        }
+        fn cancel(&self) -> Result<()> {
+            Ok(())
+        }
+        fn kill(&self) -> Result<()> {
+            Ok(())
+        }
+        fn wake(&self) -> Result<()> {
+            *self.wakes.lock().unwrap() += 1;
+            Ok(())
+        }
+        fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
+            Ok(())
+        }
+        fn transport(&self) -> &'static str {
+            "mock"
+        }
+    }
+
+    fn test_shared() -> Arc<Shared> {
+        let log = OpenOptions::new()
+            .append(true)
+            .open("/dev/null")
+            .expect("開啟 /dev/null");
+        Arc::new(Shared {
+            inner: Mutex::new(Inner {
+                state: State::new(),
+                seq: 0,
+                backlog: VecDeque::new(),
+                sessions: HashMap::new(),
+                inbox_cursors: HashMap::new(),
+                waiters: Vec::new(),
+                bus_guard: BusGuard::default(),
+                policy: PolicyEngine::default(),
+                default_cwd: std::env::temp_dir(),
+                clients: Vec::new(),
+            }),
+            log: Mutex::new(log),
+            auth_token: None,
+        })
+    }
+
+    fn temp_cwd() -> PathBuf {
+        let dir = std::env::temp_dir().join(new_id("ade-test"));
+        fs::create_dir_all(&dir).expect("建立測試目錄");
+        dir
+    }
+
+    fn add_session(
+        shared: &Arc<Shared>,
+        id: &str,
+        label: &str,
+        status: SessionStatus,
+        ctl: Arc<dyn AgentControl>,
+        cwd: &Path,
+    ) {
+        let mut inner = shared.inner.lock().unwrap();
+        inner.state.sessions.insert(
+            id.to_string(),
+            Session {
+                id: id.to_string(),
+                kind: AgentKind::OpenCode,
+                label: label.to_string(),
+                cwd: cwd.to_string_lossy().to_string(),
+                branch: None,
+                role: Role::Worker,
+                status,
+                model: None,
+                cost: Cost::default(),
+                parent: None,
+                created_ms: now_millis(),
+                transport: "mock".to_string(),
+                status_note: None,
+            },
+        );
+        inner.sessions.insert(id.to_string(), SessionEntry { ctl });
+    }
+
+    #[test]
+    fn broadcast_wakes_idle_and_sleeping_recipients_only() {
+        let shared = test_shared();
+        let dir = temp_cwd();
+        let sender = MockCtl::default();
+        let idle = MockCtl::default();
+        let sleeping = MockCtl::default();
+        let busy = MockCtl::default();
+
+        add_session(
+            &shared,
+            "ses_sender",
+            "worker/sender",
+            SessionStatus::Idle,
+            sender.as_ctl(),
+            &dir,
+        );
+        add_session(
+            &shared,
+            "ses_idle",
+            "worker/idle",
+            SessionStatus::Idle,
+            idle.as_ctl(),
+            &dir,
+        );
+        add_session(
+            &shared,
+            "ses_sleep",
+            "worker/sleep",
+            SessionStatus::Sleeping,
+            sleeping.as_ctl(),
+            &dir,
+        );
+        add_session(
+            &shared,
+            "ses_busy",
+            "worker/busy",
+            SessionStatus::Busy,
+            busy.as_ctl(),
+            &dir,
+        );
+
+        shared
+            .deliver_message(
+                Some("ses_sender".into()),
+                Target::Broadcast,
+                MsgKind::Chat,
+                "請大家回報狀態".into(),
+                None,
+            )
+            .expect("廣播應成功");
+
+        assert!(sender.inputs().is_empty(), "發送者不該被自己喚醒");
+        assert_eq!(idle.inputs().len(), 1, "idle 收件者應被喚醒");
+        assert!(idle.inputs()[0].contains("請大家回報狀態"));
+        assert_eq!(sleeping.inputs().len(), 1, "sleeping 收件者應被喚醒");
+        assert_eq!(sleeping.wake_count(), 1, "sleeping 應先 SIGCONT 再送輸入");
+        assert!(busy.inputs().is_empty(), "busy 收件者不該被打斷");
+    }
+
+    #[test]
+    fn artifact_broadcast_does_not_wake_anyone() {
+        let shared = test_shared();
+        let dir = temp_cwd();
+        let idle = MockCtl::default();
+        add_session(
+            &shared,
+            "ses_idle",
+            "worker/idle",
+            SessionStatus::Idle,
+            idle.as_ctl(),
+            &dir,
+        );
+
+        shared
+            .deliver_message(
+                Some("human".into()),
+                Target::Broadcast,
+                MsgKind::Artifact,
+                "分享了一個檔案".into(),
+                None,
+            )
+            .expect("artifact 廣播應成功");
+
+        assert!(idle.inputs().is_empty(), "artifact 只進收件匣，不主動喚醒");
+    }
+
+    #[test]
+    fn direct_chat_wakes_idle_target() {
+        let shared = test_shared();
+        let dir = temp_cwd();
+        let target = MockCtl::default();
+        add_session(
+            &shared,
+            "ses_target",
+            "worker/target",
+            SessionStatus::Idle,
+            target.as_ctl(),
+            &dir,
+        );
+
+        shared
+            .deliver_message(
+                Some("human".into()),
+                Target::Direct("worker/target".into()),
+                MsgKind::Chat,
+                "請看一下這則訊息".into(),
+                None,
+            )
+            .expect("直接訊息應成功");
+
+        assert_eq!(target.inputs().len(), 1, "直接訊息應喚醒 idle 對象");
+    }
+
+    #[test]
+    fn task_assignment_wakes_idle_assignee() {
+        let shared = test_shared();
+        let dir = temp_cwd();
+        let assignee = MockCtl::default();
+        add_session(
+            &shared,
+            "ses_assignee",
+            "worker/assignee",
+            SessionStatus::Idle,
+            assignee.as_ctl(),
+            &dir,
+        );
+
+        let (tx, _rx) = mpsc::channel();
+        shared.handle(
+            &tx,
+            Request::TaskCreate {
+                title: "跑測試".into(),
+                detail: "跑完整測試並回報".into(),
+                assignee: Some("worker/assignee".into()),
+                created_by: Some("human".into()),
+                depends_on: vec![],
+            },
+        );
+
+        let inputs = assignee.inputs();
+        assert_eq!(inputs.len(), 1, "指派任務應喚醒負責人");
+        assert!(inputs[0].contains("任務指派"));
+        assert!(inputs[0].contains("跑測試"));
+
+        let inbox = shared
+            .inner
+            .lock()
+            .unwrap()
+            .state
+            .inbox_for("ses_assignee", None);
+        assert_eq!(inbox.len(), 1, "任務通知應進負責人的收件匣");
+        assert_eq!(inbox[0].kind, MsgKind::Handoff);
     }
 
     #[test]

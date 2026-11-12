@@ -107,7 +107,7 @@ enum Cmd {
     Sleep { session: String },
     /// 喚醒某個休眠中的 session 子程序（SIGCONT）
     Wake { session: String },
-    /// 送訊息到匯流排（agent 之間溝通）
+    /// 送訊息到匯流排（agent 之間溝通；會喚醒閒置或休眠中的收件者）
     Send {
         /// 收件 session（id 或 label；亦可用 #channel 或 *）
         #[arg(long)]
@@ -175,7 +175,7 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// 建立任務
+    /// 建立任務（指定 --assignee 時會喚醒對方）
     Task {
         title: String,
         #[arg(long)]

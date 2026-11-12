@@ -137,7 +137,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_send",
-            "description": "傳送訊息給另一個 session（可用 id 或 label）、頻道（#channel）或全體廣播（*）。",
+            "description": "傳送訊息給另一個 session（可用 id 或 label）、頻道（#channel）或全體廣播（*）。閒置（idle）或休眠中的收件者會被自動喚醒；status/artifact 訊息只進收件匣，不主動喚醒。",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -224,7 +224,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_task_create",
-            "description": "在共用任務看板建立新任務。",
+            "description": "在共用任務看板建立新任務。指定 assignee 時會自動投遞 handoff 訊息並喚醒閒置中的負責人。",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -251,7 +251,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_task_update",
-            "description": "更新共用任務看板上的任務狀態、負責人或說明。",
+            "description": "更新共用任務看板上的任務狀態、負責人或說明。改派負責人時會喚醒新的負責人。",
             "inputSchema": {
                 "type": "object",
                 "properties": {

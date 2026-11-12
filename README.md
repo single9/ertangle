@@ -40,6 +40,7 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 - **daemon（M0/M2/M4/M5）**：Unix domain socket + 選配 TCP 遠端監聽（`--listen host:port --token secret`）、
   增量事件同步（`since`）、事件重播（`ade replay`）與秘密遮罩（`sk-...` / `ghp_...` 自動轉 `<REDACTED>`）、
   訊息匯流排、收件匣游標與阻塞等待（`BusInbox` / `BusWait`）、防呆斷路器（速率限制 + 連續重複迴圈偵測）、任務板。
+  `ade_send` 直接訊息與廣播（`*`）都會喚醒狀態為 `idle` 或休眠中的收件者；指派任務（`ade_task_create` / 改派負責人）也會自動喚醒對方。
 - **MCP 協作伺服器（`ade mcp`，M2/M3）**：spawn session 時自動注入每個 agent，提供 14 個協作工具
   （`ade_whoami`、`ade_peers`、`ade_send`、`ade_inbox`、`ade_wait`、`ade_ask`、
   `ade_task_list`、`ade_task_create`、`ade_task_update`、`ade_spawn`、`ade_artifact_share`、`ade_status`、`ade_diff`、`ade_merge`）。
