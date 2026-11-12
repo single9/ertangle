@@ -72,8 +72,10 @@ enum Cmd {
     /// 建立新的 agent session
     Spawn {
         /// Agent 種類：opencode / claude / codex / antigravity；可加 `:model`（例如 claude:opus）
+        #[arg(long, default_value = "opencode")]
         kind: String,
-        /// 初始 prompt
+        /// 啟動後立刻送出的 prompt
+        #[arg(long)]
         prompt: Option<String>,
         /// 工作目錄（預設為目前目錄）
         #[arg(long)]
@@ -90,13 +92,13 @@ enum Cmd {
         /// 傳輸通道：auto（預設）/ structured / pty
         #[arg(long, default_value = "auto")]
         transport: String,
-        /// 權限政策：ask（預設）/ auto / bypass
+        /// 權限政策：ask / auto / bypass（省略則依 config.toml，預設 auto）
         #[arg(long)]
         permission: Option<String>,
         /// 父 session id 或標籤（未指定時若有 ADE_SESSION 則自動繼承）
         #[arg(long)]
         parent: Option<String>,
-        /// 明確指定 model（覆蓋 kind 後贅與設定檔）
+        /// 明確指定 model（優先於 kind 的 `:model` 與設定檔）
         #[arg(long)]
         model: Option<String>,
         /// 附加給底層 agent 的命令列參數

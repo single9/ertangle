@@ -66,7 +66,7 @@ pub(crate) fn cmd_sessions(json: bool) -> Result<()> {
             .map(|n| format!("  ({n})"))
             .unwrap_or_default();
         println!(
-            "{}  {:<22} {:<11} {:<9} {:<4} {} @{}{}",
+            "{}  {:<22} {:<11} {:<9} {:<6} {:<7} {} @{}{}",
             s.id,
             s.label,
             match &s.model {
@@ -74,6 +74,7 @@ pub(crate) fn cmd_sessions(json: bool) -> Result<()> {
                 None => s.kind.id().to_string(),
             },
             status,
+            s.permission.id(),
             transport,
             s.cwd,
             branch,
@@ -97,8 +98,15 @@ pub(crate) fn cmd_spawn(
     model: Option<String>,
     extra: Vec<String>,
 ) -> Result<()> {
-    let kind = AgentKind::parse(&kind)
-        .with_context(|| format!("未知的 agent：{kind}（opencode/claude/codex/antigravity）"))?;
+    // `claude:opus` 形式同時指定 model；`--model` 優先。
+    let (kind_str, kind_model) = match kind.split_once(':') {
+        Some((k, m)) if !m.is_empty() => (k.to_string(), Some(m.to_string())),
+        _ => (kind.clone(), None),
+    };
+    let model = model.or(kind_model);
+    let kind = AgentKind::parse(&kind_str).with_context(|| {
+        format!("未知的 agent：{kind_str}（opencode/claude/codex/antigravity）")
+    })?;
     let transport = match transport.as_str() {
         "auto" => Transport::Auto,
         "structured" | "acp" => Transport::Structured,
