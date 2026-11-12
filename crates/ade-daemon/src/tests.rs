@@ -1,4 +1,3 @@
-
 use super::*;
 use ade_core::{AgentKind, Cost, Decision, Role};
 
