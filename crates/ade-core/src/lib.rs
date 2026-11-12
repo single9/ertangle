@@ -549,6 +549,10 @@ pub struct PermissionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Event {
+    /// log 輪替後寫在新檔第一行的完整狀態；重播時以它為起點。seq 沿用輪替當下的值。
+    Snapshot {
+        state: Box<State>,
+    },
     SessionStarted {
         session: Session,
     },
@@ -673,6 +677,10 @@ impl State {
     pub fn apply(&mut self, rec: &Record) {
         self.seq = self.seq.max(rec.seq);
         match &rec.event {
+            Event::Snapshot { state } => {
+                *self = (**state).clone();
+                self.seq = rec.seq;
+            }
             Event::SessionStarted { session } => {
                 self.sessions.insert(session.id.clone(), session.clone());
             }

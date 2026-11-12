@@ -117,32 +117,56 @@ pub fn load_policy(cwd: &Path) -> PolicyEngine {
 }
 
 /// 從 `events.jsonl` 重播歷史事件，回傳重建後的 `(State, Vec<Record>)`。
+/// 只讀這一份檔；輪替後的檔案第一行是 snapshot，狀態以它為起點。
 pub fn replay_log(path: &Path) -> Result<(State, Vec<Record>)> {
+    replay_files(&[path.to_path_buf()])
+}
+
+/// 輪替過的舊檔（由舊到新），不含目前這一份。
+pub fn rotated_logs(path: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = (1..)
+        .map(|n| rotated_log_path(path, n))
+        .take_while(|p| p.is_file())
+        .collect();
+    out.reverse();
+    out
+}
+
+/// 依序重播所有輪替檔與目前這一份（`ade replay --all`）。
+pub fn replay_log_all(path: &Path) -> Result<(State, Vec<Record>)> {
+    let mut files = rotated_logs(path);
+    files.push(path.to_path_buf());
+    replay_files(&files)
+}
+
+fn replay_files(paths: &[PathBuf]) -> Result<(State, Vec<Record>)> {
     let mut state = State::new();
     let mut records = Vec::new();
-    if !path.is_file() {
-        return Ok((state, records));
-    }
-    let file = File::open(path).with_context(|| format!("開啟 {path:?} 失敗"))?;
-    let mut bad = 0usize;
-    for line in BufReader::new(file).lines() {
-        let Ok(line) = line else {
-            bad += 1;
-            continue;
-        };
-        if line.trim().is_empty() {
+    for path in paths {
+        if !path.is_file() {
             continue;
         }
-        match serde_json::from_str::<Record>(line.trim()) {
-            Ok(rec) => {
-                state.apply(&rec);
-                records.push(rec);
+        let file = File::open(path).with_context(|| format!("開啟 {path:?} 失敗"))?;
+        let mut bad = 0usize;
+        for line in BufReader::new(file).lines() {
+            let Ok(line) = line else {
+                bad += 1;
+                continue;
+            };
+            if line.trim().is_empty() {
+                continue;
             }
-            Err(_) => bad += 1,
+            match serde_json::from_str::<Record>(line.trim()) {
+                Ok(rec) => {
+                    state.apply(&rec);
+                    records.push(rec);
+                }
+                Err(_) => bad += 1,
+            }
         }
-    }
-    if bad > 0 {
-        tracing::warn!("replay_log：略過 {bad} 行無法解析的紀錄（{path:?}）");
+        if bad > 0 {
+            tracing::warn!("replay_log：略過 {bad} 行無法解析的紀錄（{path:?}）");
+        }
     }
     Ok((state, records))
 }
@@ -483,18 +507,53 @@ impl Iterator for ClientRx {
 // event log 寫入執行緒（T07 / T08）
 // ---------------------------------------------------------------------------
 
+const DEFAULT_LOG_MAX_BYTES: u64 = 64 * 1024 * 1024;
+const DEFAULT_LOG_KEEP: usize = 3;
 /// log 開檔失敗後，重試開檔的最短間隔。
 const LOG_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
+/// log 輪替設定。
+#[derive(Debug, Clone, Copy)]
+pub struct LogConfig {
+    pub max_bytes: u64,
+    pub keep: usize,
+}
+
+impl LogConfig {
+    /// 讀取 `ADE_LOG_MAX_BYTES`（預設 64 MB）與 `ADE_LOG_KEEP`（預設 3 份）。
+    pub fn from_env() -> Self {
+        let get = |k: &str| {
+            std::env::var(k)
+                .ok()
+                .and_then(|v| v.trim().parse::<u64>().ok())
+        };
+        LogConfig {
+            max_bytes: get("ADE_LOG_MAX_BYTES")
+                .filter(|n| *n > 0)
+                .unwrap_or(DEFAULT_LOG_MAX_BYTES),
+            keep: get("ADE_LOG_KEEP").map_or(DEFAULT_LOG_KEEP, |n| n as usize),
+        }
+    }
+}
 
 enum LogMsg {
     Rec(Box<Record>),
     Flush(Sender<()>),
 }
 
+/// 第 `n` 份舊檔路徑：`events.jsonl.<n>`。
+pub fn rotated_log_path(path: &Path, n: usize) -> PathBuf {
+    let mut s = path.as_os_str().to_owned();
+    s.push(format!(".{n}"));
+    PathBuf::from(s)
+}
+
 struct LogWriter {
     path: PathBuf,
+    cfg: LogConfig,
     file: Option<File>,
     size: u64,
+    state: State,
     ok: Arc<AtomicBool>,
     last_try: Option<std::time::Instant>,
 }
@@ -556,21 +615,67 @@ impl LogWriter {
         }
     }
 
-    fn handle(&mut self, rec: &Record) {
-        if let Ok(line) = serde_json::to_string(rec) {
+    /// 超過門檻就輪替：舊檔後移、開新檔，新檔第一行寫入目前狀態的 snapshot。
+    fn maybe_rotate(&mut self) {
+        if self.file.is_none() || self.size < self.cfg.max_bytes {
+            return;
+        }
+        if !fs::metadata(&self.path).is_ok_and(|m| m.is_file()) {
+            return;
+        }
+        let keep = self.cfg.keep.max(1);
+        self.file = None;
+        let _ = fs::remove_file(rotated_log_path(&self.path, keep));
+        for n in (1..keep).rev() {
+            let _ = fs::rename(
+                rotated_log_path(&self.path, n),
+                rotated_log_path(&self.path, n + 1),
+            );
+        }
+        if let Err(e) = fs::rename(&self.path, rotated_log_path(&self.path, 1)) {
+            self.fail(&e);
+            return;
+        }
+        self.last_try = None;
+        self.size = 0;
+        if !self.open() {
+            return;
+        }
+        let snap = Record {
+            seq: self.state.seq,
+            ts: now_millis(),
+            event: Event::Snapshot {
+                state: Box::new(self.state.clone()),
+            },
+        };
+        if let Ok(line) = serde_json::to_string(&snap) {
             self.write_line(&redact_secrets(&line));
         }
     }
+
+    fn handle(&mut self, rec: &Record) {
+        self.maybe_rotate();
+        if let Ok(line) = serde_json::to_string(rec) {
+            self.write_line(&redact_secrets(&line));
+        }
+        self.state.apply(rec);
+    }
 }
 
-/// 啟動 log 寫入執行緒。
-fn spawn_log_writer(path: PathBuf) -> (Sender<LogMsg>, Arc<AtomicBool>) {
+/// 啟動 log 寫入執行緒。`state` 是目前已重播的狀態（供輪替時寫 snapshot）。
+fn spawn_log_writer(
+    path: PathBuf,
+    state: State,
+    cfg: LogConfig,
+) -> (Sender<LogMsg>, Arc<AtomicBool>) {
     let (tx, rx) = mpsc::channel::<LogMsg>();
     let ok = Arc::new(AtomicBool::new(true));
     let mut w = LogWriter {
         path,
+        cfg,
         file: None,
         size: 0,
+        state,
         ok: ok.clone(),
         last_try: None,
     };
@@ -619,11 +724,31 @@ impl Shared {
         default_cwd: PathBuf,
         auth_token: Option<String>,
     ) -> Result<Arc<Shared>> {
+        Self::restore_with(
+            log_file,
+            policy,
+            default_cwd,
+            auth_token,
+            LogConfig::from_env(),
+        )
+    }
+
+    fn restore_with(
+        log_file: &Path,
+        policy: PolicyEngine,
+        default_cwd: PathBuf,
+        auth_token: Option<String>,
+        log_cfg: LogConfig,
+    ) -> Result<Arc<Shared>> {
         let (state, records) = replay_log(log_file)?;
-        let (log_tx, log_ok) = spawn_log_writer(log_file.to_path_buf());
+        let (log_tx, log_ok) = spawn_log_writer(log_file.to_path_buf(), state.clone(), log_cfg);
         let seq = records.last().map_or(0, |r| r.seq);
-        let skip = records.len().saturating_sub(BACKLOG_CAP);
-        let backlog: VecDeque<Record> = records.into_iter().skip(skip).collect();
+        let backlog_all: Vec<Record> = records
+            .into_iter()
+            .filter(|r| !matches!(r.event, Event::Snapshot { .. }))
+            .collect();
+        let skip = backlog_all.len().saturating_sub(BACKLOG_CAP);
+        let backlog: VecDeque<Record> = backlog_all.into_iter().skip(skip).collect();
         let shared = Arc::new(Shared {
             inner: Mutex::new(Inner {
                 state,
@@ -3000,6 +3125,58 @@ mod tests {
         let (_, recs) = replay_log(&log).unwrap();
         assert_eq!(recs.len(), 2);
         assert!(matches!(&recs[1].event, Event::Output { text, .. } if text.starts_with("line 2")));
+    }
+
+    #[test]
+    fn log_rotates_with_snapshot_and_continuous_seq() {
+        let dir = temp_cwd();
+        let log = dir.join("events.jsonl");
+        let cfg = LogConfig {
+            max_bytes: 2000,
+            keep: 2,
+        };
+        let shared = Shared::restore_with(
+            &log,
+            PolicyEngine::default(),
+            std::env::temp_dir(),
+            None,
+            cfg,
+        )
+        .unwrap();
+        shared.emit(Event::SessionStarted {
+            session: restart_session("ses-a", SessionStatus::Idle),
+        });
+        for i in 0..60 {
+            shared.emit(out_event(i));
+        }
+        shared.flush_log();
+        assert!(rotated_log_path(&log, 1).is_file());
+        let first_line = fs::read_to_string(&log)
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap()
+            .to_string();
+        let first: Record = serde_json::from_str(&first_line).unwrap();
+        assert!(matches!(first.event, Event::Snapshot { .. }));
+
+        // 只用目前這份重播，狀態與記憶體中的一致。
+        let (state, _) = replay_log(&log).unwrap();
+        let live = shared.snapshot();
+        assert_eq!(
+            serde_json::to_value(&state).unwrap(),
+            serde_json::to_value(&live).unwrap()
+        );
+
+        // seq 跨檔案連續（排除 snapshot 紀錄本身，它沿用前一筆的 seq）。
+        let (_, recs) = replay_log_all(&log).unwrap();
+        let real: Vec<u64> = recs
+            .iter()
+            .filter(|r| !matches!(r.event, Event::Snapshot { .. }))
+            .map(|r| r.seq)
+            .collect();
+        assert!(real.windows(2).all(|w| w[1] == w[0] + 1));
+        assert_eq!(*real.last().unwrap(), live.seq);
     }
 
     #[test]
