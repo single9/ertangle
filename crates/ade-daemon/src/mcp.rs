@@ -374,6 +374,10 @@ pub fn tool_definitions() -> Vec<Value> {
                     "session": {
                         "type": "string",
                         "description": "Worker session id or label to merge"
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "If true, only report files to commit and fast-forwardability without modifying the workspace"
                     }
                 },
                 "required": ["session"]
@@ -697,7 +701,11 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .as_str()
                 .context("missing required parameter `session`")?
                 .to_string();
-            match roundtrip(&Request::WorktreeMerge { session: target })? {
+            let dry_run = args["dry_run"].as_bool().unwrap_or(false);
+            match roundtrip(&Request::WorktreeMerge {
+                session: target,
+                dry_run,
+            })? {
                 Frame::Ok { note } => Ok(json!({ "ok": true, "note": note })),
                 other => bail!("unexpected response: {other:?}"),
             }

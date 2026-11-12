@@ -71,12 +71,17 @@ pub(crate) fn handle_diff(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
     }
 }
 
-pub(crate) fn handle_merge(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
+pub(crate) fn handle_merge(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    dry_run: bool,
+) {
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     let default_cwd = shared.default_cwd();
     match sess {
-        Some(s) => match merge_worktree(&session_repo(&default_cwd, &s), &s) {
+        Some(s) => match merge_worktree(&session_repo(&default_cwd, &s), &s, dry_run) {
             Ok(msg) => {
                 let _ = reply.send(Frame::ok_note(msg));
             }

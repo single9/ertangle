@@ -65,13 +65,25 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
     match verb.as_str() {
         "spawn" => submit_spawn(app, writer, rest)?,
         "merge" => {
-            let target = if rest.is_empty() {
-                app.selected_id()
-            } else {
-                Some(rest.to_string())
-            };
+            let parts = rest.split_whitespace();
+            let mut dry_run = false;
+            let mut target = None;
+            for p in parts {
+                if p == "--dry-run" || p == "-n" || p == "dry-run" {
+                    dry_run = true;
+                } else if target.is_none() {
+                    target = Some(p.to_string());
+                }
+            }
+            let target = target.or_else(|| app.selected_id());
             if let Some(s) = target {
-                send(writer, &Request::WorktreeMerge { session: s })?;
+                send(
+                    writer,
+                    &Request::WorktreeMerge {
+                        session: s,
+                        dry_run,
+                    },
+                )?;
             }
         }
         "diff" => {

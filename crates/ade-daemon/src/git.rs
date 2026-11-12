@@ -183,7 +183,11 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
 }
 
 /// 把 session 的 worktree 分支合併回主工作區。
-pub(crate) fn merge_worktree(main_repo: &Path, session: &Session) -> Result<String> {
+pub(crate) fn merge_worktree(
+    main_repo: &Path,
+    session: &Session,
+    dry_run: bool,
+) -> Result<String> {
     let branch = session
         .branch
         .as_deref()
@@ -206,7 +210,7 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session) -> Result<Stri
     };
     for marker in ["MERGE_HEAD", "rebase-merge", "rebase-apply"] {
         if git_dir.join(marker).exists() {
-            bail!("主工作區正在合併／rebase 中（{marker}），請先處理完畢");
+            bail!("主工作區正在合併、rebase 中（{marker}），請先處理完畢");
         }
     }
     if has_uncommitted(main_repo)? {
@@ -216,6 +220,37 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session) -> Result<Stri
     let target = String::from_utf8_lossy(&target.stdout).trim().to_string();
 
     let wt_dir = Path::new(&session.cwd);
+    if dry_run {
+        // 乾跑：不改動 repo，回報會 commit 的檔案與是否可快轉。
+        let mut pending_files = Vec::new();
+        if wt_dir.is_dir() {
+            if let Ok(st) = git_output(wt_dir, &["status", "--porcelain"]) {
+                for line in String::from_utf8_lossy(&st.stdout).lines() {
+                    if !line.trim().is_empty() && !is_ade_status_line(line) {
+                        pending_files.push(line.get(3..).unwrap_or(line).trim().to_string());
+                    }
+                }
+            }
+        }
+        let can_ff = git_output(main_repo, &["merge-base", "--is-ancestor", "HEAD", branch])
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        let ff_desc = if can_ff {
+            "可快轉 (fast-forward)"
+        } else {
+            "需三方合併 (three-way merge)"
+        };
+        let pending_desc = if pending_files.is_empty() {
+            "無未提交變更".to_string()
+        } else {
+            format!("待提交檔案（{}）：{}", pending_files.len(), pending_files.join(", "))
+        };
+        return Ok(format!(
+            "[dry-run] 合併 {branch}（{}）至 {target}：{ff_desc}，{pending_desc}",
+            session.label
+        ));
+    }
+
     if wt_dir.is_dir() {
         auto_commit_worktree(wt_dir, &session.label)?;
     }

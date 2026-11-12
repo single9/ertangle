@@ -239,7 +239,12 @@ enum Cmd {
         comment: Vec<String>,
     },
     /// 將指定 session 的 worktree 合併回主分支（M3）
-    Merge { session: String },
+    Merge {
+        session: String,
+        /// 僅乾跑：不改動 repo，回報會 commit 的檔案與是否可快轉
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// 為指定 session 的 worktree 建立 GitHub PR（M3）
     Pr {
         session: String,
@@ -374,7 +379,7 @@ fn main() -> Result<()> {
             location,
             comment,
         } => cmd_review(session, location, comment),
-        Cmd::Merge { session } => cmd_merge(session),
+        Cmd::Merge { session, dry_run } => cmd_merge(session, dry_run),
         Cmd::Pr {
             session,
             title,

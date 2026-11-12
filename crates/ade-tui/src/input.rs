@@ -146,7 +146,13 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         }
         KeyCode::Char('M') => {
             if let Some(id) = app.selected_id() {
-                send(writer, &Request::WorktreeMerge { session: id })?;
+                send(
+                    writer,
+                    &Request::WorktreeMerge {
+                        session: id,
+                        dry_run: false,
+                    },
+                )?;
             }
         }
         KeyCode::Char('G') => {

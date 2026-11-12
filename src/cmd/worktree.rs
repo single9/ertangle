@@ -47,8 +47,8 @@ pub(crate) fn cmd_review(session: String, location: String, comment: Vec<String>
     Ok(())
 }
 
-pub(crate) fn cmd_merge(session: String) -> Result<()> {
-    let frame = roundtrip(&Request::WorktreeMerge { session })?;
+pub(crate) fn cmd_merge(session: String, dry_run: bool) -> Result<()> {
+    let frame = roundtrip(&Request::WorktreeMerge { session, dry_run })?;
     if let Frame::Ok { note } = frame {
         println!("{}", note.unwrap_or_else(|| "已合併至 main".into()));
     }

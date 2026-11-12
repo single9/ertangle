@@ -181,6 +181,8 @@ pub enum Request {
     /// 將某個 session 的 worktree 分支合併回主工作區。
     WorktreeMerge {
         session: SessionId,
+        #[serde(default)]
+        dry_run: bool,
     },
     /// 為某個 session 的分支建立 Pull Request（透過 `gh`）。
     WorktreePr {

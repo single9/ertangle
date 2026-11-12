@@ -443,11 +443,27 @@ fn merge_clean_succeeds_and_excludes_ade_dir() {
     fs::write(wt.join("sub.ade/f.txt"), "f").unwrap();
     fs::create_dir_all(wt.join(".ade/mailbox")).unwrap();
     fs::write(wt.join(".ade/mailbox/m"), "m").unwrap();
-    merge_worktree(&repo, &s).unwrap();
+    merge_worktree(&repo, &s, false).unwrap();
     assert!(repo.join("new.txt").exists());
     assert!(repo.join("sub.ade/f.txt").exists());
     assert!(!repo.join(".ade/mailbox/m").exists());
     assert!(!has_uncommitted(&repo).unwrap());
+}
+
+#[test]
+fn merge_dry_run_reports_files_and_preserves_workspace() {
+    let repo = temp_repo("m_dry");
+    let s = wt_session(&repo, "s_dry");
+    let wt = Path::new(&s.cwd);
+    fs::write(wt.join("dry_file.txt"), "content").unwrap();
+    let res = merge_worktree(&repo, &s, true).unwrap();
+    assert!(res.contains("[dry-run]"), "{res}");
+    assert!(res.contains("dry_file.txt"), "{res}");
+    assert!(res.contains("可快轉"), "{res}");
+    // 主工作區不應有變更
+    assert!(!repo.join("dry_file.txt").exists());
+    // worktree 內檔案尚未被 commit
+    assert!(has_uncommitted(wt).unwrap());
 }
 
 #[test]
@@ -458,7 +474,7 @@ fn merge_conflict_is_aborted() {
     fs::write(repo.join("a.txt"), "main\n").unwrap();
     git(&repo, &["commit", "-qam", "main change"]);
     let head = git(&repo, &["rev-parse", "HEAD"]);
-    let err = merge_worktree(&repo, &s).unwrap_err().to_string();
+    let err = merge_worktree(&repo, &s, false).unwrap_err().to_string();
     assert!(err.contains("a.txt"), "{err}");
     assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head);
     assert!(!repo.join(".git/MERGE_HEAD").exists());
@@ -471,7 +487,7 @@ fn merge_refuses_dirty_main() {
     let s = wt_session(&repo, "s3");
     fs::write(Path::new(&s.cwd).join("n.txt"), "n").unwrap();
     fs::write(repo.join("a.txt"), "dirty\n").unwrap();
-    assert!(merge_worktree(&repo, &s).is_err());
+    assert!(merge_worktree(&repo, &s, false).is_err());
     assert_eq!(fs::read_to_string(repo.join("a.txt")).unwrap(), "dirty\n");
     assert!(!repo.join("n.txt").exists());
 }
@@ -484,8 +500,8 @@ fn merge_targets_each_sessions_own_repo() {
     let s2 = wt_session(&r2, "s4b");
     fs::write(Path::new(&s1.cwd).join("one.txt"), "1").unwrap();
     fs::write(Path::new(&s2.cwd).join("two.txt"), "2").unwrap();
-    merge_worktree(&session_repo(&r1, &s1), &s1).unwrap();
-    merge_worktree(&session_repo(&r1, &s2), &s2).unwrap();
+    merge_worktree(&session_repo(&r1, &s1), &s1, false).unwrap();
+    merge_worktree(&session_repo(&r1, &s2), &s2, false).unwrap();
     assert!(r1.join("one.txt").exists() && !r1.join("two.txt").exists());
     assert!(r2.join("two.txt").exists() && !r2.join("one.txt").exists());
 }
