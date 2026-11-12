@@ -924,17 +924,70 @@ impl PolicyEngine {
     /// * 其餘 → `None`（交由 session 的 `PermissionPolicy` 或人類決定）
     pub fn evaluate(&self, title: &str, detail: &str) -> Option<Decision> {
         let combined = format!("{title} {detail}");
+        // deny 維持保守的子字串比對：寧可多擋。
         for pat in &self.deny {
             if !pat.is_empty() && combined.contains(pat.as_str()) {
                 return Some(Decision::Deny);
             }
         }
+        // allow 要嚴格：工具名稱完全相等，或指令以該規則為「整詞前綴」，
+        // 避免 `Read` 命中 `README`。
+        let command = command_text(detail);
         for pat in &self.allow {
-            if !pat.is_empty() && (title == pat || combined.contains(pat.as_str())) {
+            if pat.is_empty() {
+                continue;
+            }
+            let title_tool = title.split_whitespace().next().unwrap_or("");
+            if title_tool == pat
+                || word_prefix(title, pat)
+                || command.as_deref().is_some_and(|c| word_prefix(c, pat))
+            {
                 return Some(Decision::Allow);
             }
         }
         None
+    }
+
+    /// 疊上 repo 層級規則：`deny` 取聯集（不能移除全域 deny），`allow` 也合併。
+    pub fn merged_with(&self, local: &PolicyEngine) -> PolicyEngine {
+        let mut out = self.clone();
+        for d in &local.deny {
+            if !out.deny.contains(d) {
+                out.deny.push(d.clone());
+            }
+        }
+        for a in &local.allow {
+            if !out.allow.contains(a) {
+                out.allow.push(a.clone());
+            }
+        }
+        out
+    }
+}
+
+/// `text` 是否以 `pat` 開頭，且 `pat` 結束處是詞邊界（空白或結尾）。
+fn word_prefix(text: &str, pat: &str) -> bool {
+    let t = text.trim_start();
+    t.starts_with(pat)
+        && t[pat.len()..]
+            .chars()
+            .next()
+            .is_none_or(char::is_whitespace)
+}
+
+/// 從審批請求的 `detail`（通常是 JSON rawInput）取出指令字串。
+fn command_text(detail: &str) -> Option<String> {
+    // 不是 JSON 時，整段當作指令文字。
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(detail) else {
+        return Some(detail.to_string());
+    };
+    match &v {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Object(m) => ["command", "cmd"]
+            .iter()
+            .find_map(|k| m.get(*k).and_then(|x| x.as_str()))
+            .map(str::to_string),
+        _ => None,
     }
 }
 
@@ -1194,5 +1247,37 @@ mod tests {
         v.as_object_mut().unwrap().remove("permission");
         let s: Session = serde_json::from_value(v).unwrap();
         assert_eq!(s.permission, PermissionPolicy::Auto);
+    }
+
+    #[test]
+    fn allow_rules_match_whole_words_only() {
+        let p = PolicyEngine::default();
+        // `cat README.md` 不能因 `Read` 被放行
+        assert_eq!(
+            p.evaluate("cat README.md", r#"{"command":"cat README.md"}"#),
+            None
+        );
+        assert_eq!(p.evaluate("Read", "{}"), Some(Decision::Allow));
+        assert_eq!(
+            p.evaluate("bash", r#"{"command":"git status -s"}"#),
+            Some(Decision::Allow)
+        );
+        assert_eq!(p.evaluate("bash", r#"{"command":"git statusx"}"#), None);
+    }
+
+    #[test]
+    fn deny_beats_allow_and_repo_cannot_remove_deny() {
+        let p = PolicyEngine::default();
+        assert_eq!(
+            p.evaluate("bash", r#"{"command":"git status && git push --force"}"#),
+            Some(Decision::Deny)
+        );
+        let local = PolicyEngine {
+            allow: vec![],
+            deny: vec!["curl".into()],
+        };
+        let m = p.merged_with(&local);
+        assert!(m.deny.contains(&"git push --force".to_string()));
+        assert!(m.deny.contains(&"curl".to_string()));
     }
 }

@@ -14,9 +14,9 @@ pub mod mcp;
 
 use ade_adapter::{spawn as spawn_adapter, AgentControl, AgentEvent, SessionSpec};
 use ade_core::{
-    new_id, now_millis, redact_secrets, Artifact, BusMessage, Event, MsgId, MsgKind, PolicyEngine,
-    Record, ReviewComment, Seq, Session, SessionId, SessionStatus, State, Target, Task, TaskStatus,
-    WorktreeInfo,
+    new_id, now_millis, redact_secrets, Artifact, BusMessage, Decision, Event, MsgId, MsgKind,
+    PermissionPolicy, PolicyEngine, Record, ReviewComment, Seq, Session, SessionId, SessionStatus,
+    State, Target, Task, TaskStatus, WorktreeInfo,
 };
 use ade_protocol::{decode_line, encode_line, Frame, Request, SpawnRequest};
 use anyhow::{bail, Context, Result};
@@ -101,6 +101,34 @@ pub fn load_policy(cwd: &Path) -> PolicyEngine {
         return PolicyEngine::parse_toml(&src);
     }
     PolicyEngine::default()
+}
+
+/// repo 層級的 `.ade/policy.toml`；不存在回傳空規則。
+fn load_local_policy(dir: &Path) -> PolicyEngine {
+    match fs::read_to_string(dir.join(".ade").join("policy.toml")) {
+        Ok(src) => PolicyEngine::parse_toml(&src),
+        Err(_) => PolicyEngine {
+            allow: vec![],
+            deny: vec![],
+        },
+    }
+}
+
+/// 審批決策順序：deny → allow → session 政策（auto／bypass 自動允許）→ 交給人（`None`）。
+fn decide_permission(
+    policy: &PolicyEngine,
+    session_policy: PermissionPolicy,
+    title: &str,
+    detail: &str,
+) -> Option<Decision> {
+    if let Some(d) = policy.evaluate(title, detail) {
+        return Some(d);
+    }
+    match session_policy {
+        PermissionPolicy::Bypass => Some(Decision::AllowAlways),
+        PermissionPolicy::Auto => Some(Decision::Allow),
+        PermissionPolicy::Ask => None,
+    }
 }
 
 /// 從 `events.jsonl` 重播歷史事件，回傳重建後的 `(State, Vec<Record>)`。
@@ -496,7 +524,19 @@ impl Shared {
         if let AgentEvent::Permission(ref p) = ev {
             let decision_and_ctl = {
                 let inner = self.inner.lock().unwrap();
-                let d = inner.policy.evaluate(&p.title, &p.detail);
+                let sess = inner.state.sessions.get(sid);
+                let policy = match sess {
+                    Some(s) => inner.policy.merged_with(&load_local_policy(Path::new(
+                        s.repo_root.as_deref().unwrap_or(&s.cwd),
+                    ))),
+                    None => inner.policy.clone(),
+                };
+                let d = decide_permission(
+                    &policy,
+                    sess.map(|s| s.permission).unwrap_or_default(),
+                    &p.title,
+                    &p.detail,
+                );
                 let ctl = inner.sessions.get(sid).map(|e| e.ctl.clone());
                 d.zip(ctl)
             };
@@ -2737,5 +2777,47 @@ mod tests {
             },
         );
         assert!(!rx2.try_iter().any(|f| matches!(f, Frame::Snapshot { .. })));
+    }
+
+    // ---- 審批決策（T04）----
+
+    #[test]
+    fn permission_decision_order() {
+        let p = PolicyEngine::default();
+        let deny = r#"{"command":"git push --force origin x"}"#;
+        // auto 也要被 deny 擋下
+        assert_eq!(
+            decide_permission(&p, PermissionPolicy::Auto, "bash", deny),
+            Some(Decision::Deny)
+        );
+        // auto 未命中任何規則 → 自動允許
+        assert_eq!(
+            decide_permission(&p, PermissionPolicy::Auto, "bash", r#"{"command":"make"}"#),
+            Some(Decision::Allow)
+        );
+        // ask 且 `cat README.md` 不會被 `Read` 放行 → 交給人
+        assert_eq!(
+            decide_permission(
+                &p,
+                PermissionPolicy::Ask,
+                "cat README.md",
+                r#"{"command":"cat README.md"}"#
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn repo_policy_adds_deny_but_cannot_remove() {
+        let dir = temp_cwd();
+        fs::create_dir_all(dir.join(".ade")).unwrap();
+        fs::write(
+            dir.join(".ade/policy.toml"),
+            "deny = [\"curl\"]\nallow = [\"make\"]\n",
+        )
+        .unwrap();
+        let merged = PolicyEngine::default().merged_with(&load_local_policy(&dir));
+        assert!(merged.deny.iter().any(|d| d == "curl"));
+        assert!(merged.deny.iter().any(|d| d == "git push --force"));
     }
 }

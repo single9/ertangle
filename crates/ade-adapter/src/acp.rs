@@ -8,7 +8,7 @@
 
 use crate::stream::StreamBuf;
 use crate::{AgentControl, AgentEvent, SessionSpec};
-use ade_core::{new_id, Decision, PermissionPolicy, PermissionRequest, SessionStatus};
+use ade_core::{new_id, Decision, PermissionRequest, SessionStatus};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -35,7 +35,6 @@ struct Conn {
     /// 串流輸出的行緩衝（把 token 級 chunk 併成完整行）。
     stream: Mutex<StreamBuf>,
     /// 權限政策：`Auto` / `Bypass` 時由 adapter 直接代為核准。
-    policy: PermissionPolicy,
     tx: Sender<AgentEvent>,
 }
 
@@ -155,17 +154,7 @@ impl Conn {
         let params = &msg["params"];
         let options = params["options"].as_array().cloned().unwrap_or_default();
 
-        // Auto / Bypass：不打扰使用者，直接代為核准。
-        if self.policy.auto_approves() {
-            let decision = if self.policy == PermissionPolicy::Bypass {
-                Decision::AllowAlways
-            } else {
-                Decision::Allow
-            };
-            self.respond(&jid, decision_result(decision, &options));
-            return;
-        }
-
+        // 一律轉給 daemon：規則引擎與 session 政策（auto／bypass 自動核准）都在那裡決定。
         let req = new_id("perm");
         let title = params["toolCall"]["title"]
             .as_str()
@@ -334,7 +323,6 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         pending: Mutex::new(HashMap::new()),
         perms: Mutex::new(HashMap::new()),
         stream: Mutex::new(StreamBuf::default()),
-        policy: spec.permission,
         tx: tx.clone(),
     });
 
