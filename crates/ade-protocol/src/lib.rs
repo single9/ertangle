@@ -105,6 +105,13 @@ pub enum Request {
     Wake {
         session: SessionId,
     },
+    /// agent（經 MCP `ade_approve`）請求審批並等待結果；回覆 `Ok` 的 note 為 `allow` 或 `deny`。
+    ApprovalAsk {
+        session: SessionId,
+        tool: String,
+        /// 工具輸入（JSON 字串）。
+        input: String,
+    },
     /// 回覆審批請求。
     Permission {
         session: SessionId,

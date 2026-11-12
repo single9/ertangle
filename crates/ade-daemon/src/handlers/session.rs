@@ -299,6 +299,18 @@ pub(crate) fn handle_permission(
     req: String,
     decision: Decision,
 ) {
+    // MCP 審批請求：把決定交給等待中的 `handle_approval_ask`。
+    let waiter = lock(&shared.inner).approval_waiters.remove(&req);
+    if let Some(tx) = waiter {
+        let _ = tx.send(decision);
+        shared.emit(Event::PermissionResolved {
+            session: shared.resolve_session(&session),
+            req,
+            decision,
+        });
+        let _ = reply.send(Frame::ok());
+        return;
+    }
     match shared.control(&session) {
         Some((sid, ctl)) => match ctl.resolve_permission(&req, decision) {
             Ok(()) => {
@@ -317,6 +329,56 @@ pub(crate) fn handle_permission(
             let _ = reply.send(Frame::error(format!("找不到 session {session}")));
         }
     }
+}
+
+/// MCP `ade_approve`：先套用規則與政策，沒有結論就發審批請求並等人回覆（逾時視為拒絕）。
+pub(crate) fn handle_approval_ask(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    tool: String,
+    input: String,
+) {
+    const APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+    let sid = shared.resolve_session(&session);
+    let p = ade_core::PermissionRequest {
+        req: ade_core::new_id("perm"),
+        session: sid.clone(),
+        title: tool,
+        detail: input,
+    };
+    let word = |d: Decision| match d {
+        Decision::Deny => "deny",
+        _ => "allow",
+    };
+    if let Some(d) = shared.auto_decision(&sid, &p) {
+        shared.emit(Event::PermissionResolved {
+            session: sid,
+            req: p.req,
+            decision: d,
+        });
+        let _ = reply.send(Frame::ok_note(word(d)));
+        return;
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    lock(&shared.inner)
+        .approval_waiters
+        .insert(p.req.clone(), tx);
+    let req = p.req.clone();
+    shared.emit(Event::PermissionRequested { request: p });
+    let d = match rx.recv_timeout(APPROVAL_TIMEOUT) {
+        Ok(d) => d,
+        Err(_) => {
+            lock(&shared.inner).approval_waiters.remove(&req);
+            shared.emit(Event::PermissionResolved {
+                session: sid,
+                req,
+                decision: Decision::Deny,
+            });
+            Decision::Deny
+        }
+    };
+    let _ = reply.send(Frame::ok_note(word(d)));
 }
 
 pub(crate) fn handle_note(shared: &Arc<Shared>, reply: &ClientTx, session: String, note: String) {

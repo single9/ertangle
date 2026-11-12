@@ -812,3 +812,79 @@ fn unwritable_log_does_not_stop_daemon() {
     shared.emit(out_event(2));
     assert_eq!(shared.snapshot().seq, 2);
 }
+
+// ---- MCP 審批轉發（Claude --permission-prompt-tool）----
+
+fn ask_sess(id: &str, perm: PermissionPolicy) -> Session {
+    let mut s = restart_session(id, SessionStatus::Idle);
+    s.permission = perm;
+    s
+}
+
+#[test]
+fn approval_ask_auto_policy_answers_immediately_and_deny_wins() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: ask_sess("ses-auto", PermissionPolicy::Auto),
+    });
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::ApprovalAsk {
+            session: "ses-auto".into(),
+            tool: "Bash".into(),
+            input: r#"{"command":"make"}"#.into(),
+        },
+    );
+    assert!(matches!(rx.try_iter().next(), Some(Frame::Ok { note: Some(n) }) if n == "allow"));
+    shared.handle(
+        &tx,
+        Request::ApprovalAsk {
+            session: "ses-auto".into(),
+            tool: "Bash".into(),
+            input: r#"{"command":"git push --force"}"#.into(),
+        },
+    );
+    assert!(matches!(rx.try_iter().next(), Some(Frame::Ok { note: Some(n) }) if n == "deny"));
+}
+
+#[test]
+fn approval_ask_waits_for_human_decision() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: ask_sess("ses-ask", PermissionPolicy::Ask),
+    });
+    let s2 = shared.clone();
+    let h = std::thread::spawn(move || {
+        let (tx, rx) = client_channel(None);
+        s2.handle(
+            &tx,
+            Request::ApprovalAsk {
+                session: "ses-ask".into(),
+                tool: "Bash".into(),
+                input: r#"{"command":"make"}"#.into(),
+            },
+        );
+        let r = rx.try_iter().next();
+        r
+    });
+    // 等審批請求出現在狀態裡，再由「人」回覆
+    let req = loop {
+        if let Some(r) = lock(&shared.inner).state.pending_permissions.keys().next() {
+            break r.clone();
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Permission {
+            session: "ses-ask".into(),
+            req,
+            decision: Decision::Deny,
+        },
+    );
+    let reply = h.join().unwrap();
+    assert!(matches!(reply, Some(Frame::Ok { note: Some(n) }) if n == "deny"));
+    assert!(lock(&shared.inner).state.pending_permissions.is_empty());
+}

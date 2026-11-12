@@ -52,7 +52,7 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
   對行下審查註解送回 agent 修改（`ade review` / TUI `c` 鍵）、自動 commit 並合併回主分支（`ade merge` / TUI `M` 鍵）、PR 建立（`ade pr`）與已結束 worktree 清理（`ade gc` / TUI `G` 鍵）。
 - **打磨與資源控制（M4）**：命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、即時成本與 token 統計（`ade cost`）、
   閒置休眠與自動喚醒（`SIGSTOP` / `SIGCONT`、`ade sleep` / `ade wake` / TUI `z` 鍵）、權限規則引擎（`.ade/policy.toml` 或 `~/.config/ade/policy.toml`）。
-  規則引擎是防呆而非安全邊界：決策順序為 `deny`（子字串比對）→ `allow`（工具名稱或指令整詞前綴）→ session 政策（`auto`／`bypass` 自動允許）→ 詢問使用者；repo 的 `.ade/policy.toml` 只能新增 `deny`，不能移除全域規則。字串比對可被改寫指令繞過，真正的隔離要靠 agent 自己的 sandbox。目前 Claude（stream-json）不轉發審批，因此規則引擎不適用於 Claude session；ACP 與 Codex 會經過它。
+  規則引擎是防呆而非安全邊界：決策順序為 `deny`（子字串比對）→ `allow`（工具名稱或指令整詞前綴）→ session 政策（`auto`／`bypass` 自動允許）→ 詢問使用者；repo 的 `.ade/policy.toml` 只能新增 `deny`，不能移除全域規則。字串比對可被改寫指令繞過，真正的隔離要靠 agent 自己的 sandbox。ACP、Codex 與 Claude 都會經過它；Claude 是透過 `--permission-prompt-tool=mcp__ade__ade_approve` 轉發（非 bypass 時啟用），回應格式依官方 SDK 文件實作，但**尚未用真實 claude 驗證**，逾時 300 秒視為拒絕。
 - **TUI**：三種中央視圖（Overview / Diff / Worktrees）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
   逐字稿會顯示使用者送出的 prompt（`❯` 前綴）並即時渲染 Markdown（標題、粗體／斜體、行內程式碼、清單、引言、分隔線、圍籬程式碼區塊與 GFM 表格），
   可用 `t` 在渲染後與原始文字之間切換；支援滑鼠拖曳選取（只複製中央區塊）、滾輪捲動、OSC 52 複製，以及帶可見游標與中文 IME 的輸入框。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。

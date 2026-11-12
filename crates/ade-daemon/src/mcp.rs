@@ -339,6 +339,19 @@ pub fn tool_definitions() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "ade_approve",
+            "description": "Internal: permission prompt tool used by Claude Code (--permission-prompt-tool). Forwards a tool-use approval request to ADE and returns the decision.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "tool_name": { "type": "string" },
+                    "input": { "type": "object" },
+                    "tool_use_id": { "type": "string" }
+                },
+                "required": ["tool_name"]
+            }
+        }),
+        json!({
             "name": "ade_status",
             "description": "Update your short progress status shown in the TUI.",
             "inputSchema": {
@@ -396,6 +409,16 @@ fn roundtrip(req: &Request) -> Result<Frame> {
             other => return Ok(other),
         }
     }
+}
+
+/// Claude `--permission-prompt-tool` 要求的回應格式（以 JSON 字串回傳）。
+fn approval_response(allowed: bool, input: &Value) -> Value {
+    let v = if allowed {
+        json!({ "behavior": "allow", "updatedInput": input })
+    } else {
+        json!({ "behavior": "deny", "message": "Denied by ADE policy or user" })
+    };
+    Value::String(v.to_string())
 }
 
 /// 執行單一 MCP 工具呼叫。
@@ -666,6 +689,18 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             Ok(json!({ "ok": true, "note": msg }))
         }
 
+        "ade_approve" => {
+            let tool = args["tool_name"].as_str().unwrap_or("tool").to_string();
+            let input = args["input"].clone();
+            let frame = roundtrip(&Request::ApprovalAsk {
+                session: session.to_string(),
+                tool,
+                input: input.to_string(),
+            })?;
+            let allowed = matches!(&frame, Frame::Ok { note: Some(n) } if n == "allow");
+            Ok(approval_response(allowed, &input))
+        }
+
         "ade_status" => {
             let text = args["text"]
                 .as_str()
@@ -767,8 +802,27 @@ mod tests {
             "ade_spawn",
             "ade_artifact_share",
             "ade_status",
+            "ade_approve",
         ] {
             assert!(names.contains(&expected), "missing tool {expected}");
         }
+    }
+}
+
+#[cfg(test)]
+mod approval_tests {
+    use super::*;
+
+    #[test]
+    fn approval_response_matches_claude_format() {
+        let input = json!({"command": "ls"});
+        let allow: Value =
+            serde_json::from_str(approval_response(true, &input).as_str().unwrap()).unwrap();
+        assert_eq!(allow["behavior"], "allow");
+        assert_eq!(allow["updatedInput"], input);
+        let deny: Value =
+            serde_json::from_str(approval_response(false, &input).as_str().unwrap()).unwrap();
+        assert_eq!(deny["behavior"], "deny");
+        assert!(deny["message"].is_string());
     }
 }

@@ -83,6 +83,11 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         Request::Kill { session } => session::handle_kill(shared, reply, session),
         Request::Sleep { session } => session::handle_sleep(shared, reply, session),
         Request::Wake { session } => session::handle_wake(shared, reply, session),
+        Request::ApprovalAsk {
+            session,
+            tool,
+            input,
+        } => session::handle_approval_ask(shared, reply, session, tool, input),
         Request::Permission {
             session,
             req,

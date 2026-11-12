@@ -259,6 +259,8 @@ pub(crate) struct Inner {
     pub(crate) sessions: HashMap<SessionId, SessionEntry>,
     pub(crate) inbox_cursors: HashMap<SessionId, MsgId>,
     pub(crate) waiters: Vec<Waiter>,
+    /// 等待人類回覆的 MCP 審批請求：req id → 決定通道。
+    pub(crate) approval_waiters: HashMap<String, Sender<Decision>>,
     pub(crate) bus_guard: BusGuard,
     pub(crate) policy: PolicyEngine,
     pub(crate) default_cwd: PathBuf,
@@ -322,6 +324,7 @@ impl Shared {
                 sessions: HashMap::new(),
                 inbox_cursors: HashMap::new(),
                 waiters: Vec::new(),
+                approval_waiters: HashMap::new(),
                 bus_guard: BusGuard::default(),
                 policy,
                 default_cwd,
@@ -403,6 +406,28 @@ impl Shared {
     }
 
     /// 把 adapter 事件翻譯成核心事件（並在審批事件時先經過 PolicyEngine 規則過濾）。
+    /// 依規則引擎與 session 政策自動決定審批；`None` 表示要問人。
+    pub(crate) fn auto_decision(
+        &self,
+        sid: &SessionId,
+        p: &ade_core::PermissionRequest,
+    ) -> Option<Decision> {
+        let inner = lock(&self.inner);
+        let sess = inner.state.sessions.get(sid);
+        let policy = match sess {
+            Some(s) => inner.policy.merged_with(&load_local_policy(Path::new(
+                s.repo_root.as_deref().unwrap_or(&s.cwd),
+            ))),
+            None => inner.policy.clone(),
+        };
+        decide_permission(
+            &policy,
+            sess.map(|s| s.permission).unwrap_or_default(),
+            &p.title,
+            &p.detail,
+        )
+    }
+
     pub(crate) fn ingest(&self, sid: &SessionId, ev: AgentEvent) {
         if let AgentEvent::Permission(ref p) = ev {
             let decision_and_ctl = {

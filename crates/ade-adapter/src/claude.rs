@@ -286,6 +286,10 @@ fn permission_args(spec: &SessionSpec) -> Vec<String> {
     } else {
         out.extend(spec.permission.claude_flags().into_iter().map(String::from));
     }
+    // 非 bypass 時，需要審批的工具呼叫交給 ade（規則引擎／使用者）決定。
+    if spec.mcp_exe.is_some() && spec.permission != ade_core::PermissionPolicy::Bypass {
+        out.push("--permission-prompt-tool=mcp__ade__ade_approve".into());
+    }
     let mut allowed = spec.allowed_tools.clone();
     if spec.mcp_exe.is_some() && spec.permission.auto_approves() {
         allowed.push("mcp__ade__*".into());
@@ -447,6 +451,17 @@ mod tests {
         s.read_only = true;
         let a = permission_args(&s);
         assert!(a.windows(2).any(|w| w == ["--permission-mode", "plan"]));
+    }
+
+    #[test]
+    fn prompt_tool_flag_added_unless_bypass() {
+        let a = permission_args(&spec_for_args());
+        assert!(a.contains(&"--permission-prompt-tool=mcp__ade__ade_approve".to_string()));
+        let mut s = spec_for_args();
+        s.permission = ade_core::PermissionPolicy::Bypass;
+        assert!(!permission_args(&s)
+            .iter()
+            .any(|x| x.contains("permission-prompt-tool")));
     }
 
     #[test]
