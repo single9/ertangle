@@ -117,6 +117,14 @@ pub fn which(prog: &str) -> Option<PathBuf> {
     None
 }
 
+/// 找 agent 執行檔：先看環境變數覆寫（測試與自訂安裝位置用），否則在 PATH 找。
+pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
+    match std::env::var(env_var) {
+        Ok(p) if !p.is_empty() => which(&p),
+        _ => which(prog),
+    }
+}
+
 /// 啟動一個 session，回傳控制把手；事件會從 `tx` 流出。
 ///
 /// 依 `spec.transport` 決定用原生結構化協定還是 PTY 直通。
@@ -149,7 +157,7 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 pub fn supports_structured(kind: &AgentKind) -> bool {
     match kind {
         AgentKind::OpenCode | AgentKind::Antigravity => kind.acp_command().is_some(),
-        AgentKind::ClaudeCode => which("claude").is_some(),
+        AgentKind::ClaudeCode => agent_bin("claude", "ADE_CLAUDE_BIN").is_some(),
         AgentKind::Codex => which("codex").is_some(),
         AgentKind::Custom(_) => false,
     }

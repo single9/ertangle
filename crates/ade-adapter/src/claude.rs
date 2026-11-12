@@ -279,7 +279,7 @@ impl AgentControl for ClaudeControl {
 // ---------------------------------------------------------------------------
 
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
-    let prog = crate::which("claude").context("找不到 `claude`")?;
+    let prog = crate::agent_bin("claude", "ADE_CLAUDE_BIN").context("找不到 `claude`")?;
     let mut cmd = Command::new(prog);
     cmd.args([
         "-p",
