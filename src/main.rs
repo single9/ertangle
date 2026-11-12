@@ -253,6 +253,9 @@ enum Cmd {
         /// 若指定，僅清理該 session 的 worktree
         #[arg(long)]
         session: Option<String>,
+        /// 連未合併或有未 commit 變更的 worktree 也一併移除（會遺失成果）
+        #[arg(long)]
+        force: bool,
     },
     /// 統計各 session 與總計的成本與 token 用量（M4）
     Cost {
@@ -494,8 +497,8 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Cmd::Gc { session } => {
-            match roundtrip(&Request::WorktreeGc { session })? {
+        Cmd::Gc { session, force } => {
+            match roundtrip(&Request::WorktreeGc { session, force })? {
                 Frame::Ok { note: Some(n) } => println!("{n}"),
                 _ => println!("已清理 worktree"),
             }

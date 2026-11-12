@@ -930,7 +930,7 @@ impl Shared {
                 let sess = self.inner.lock().unwrap().state.sessions.get(&sid).cloned();
                 let default_cwd = self.default_cwd();
                 match sess {
-                    Some(s) => match merge_worktree(&default_cwd, &s) {
+                    Some(s) => match merge_worktree(&session_repo(&default_cwd, &s), &s) {
                         Ok(msg) => {
                             let _ = reply.send(Frame::ok_note(msg));
                         }
@@ -966,7 +966,7 @@ impl Shared {
                 }
             }
 
-            Request::WorktreeGc { session } => {
+            Request::WorktreeGc { session, force } => {
                 let target_sid = session.map(|s| self.resolve_session(&s));
                 let default_cwd = self.default_cwd();
                 let candidates: Vec<Session> = {
@@ -986,12 +986,29 @@ impl Shared {
                         .collect()
                 };
                 let mut removed = 0usize;
+                let mut skipped: Vec<String> = Vec::new();
                 for s in candidates {
-                    if remove_worktree(&default_cwd, &s).is_ok() {
-                        removed += 1;
+                    let repo = session_repo(&default_cwd, &s);
+                    if !force {
+                        if let Some(reason) = gc_block_reason(&repo, &s) {
+                            skipped.push(format!("{}（{reason}）", s.label));
+                            continue;
+                        }
+                    }
+                    match remove_worktree(&repo, &s, force) {
+                        Ok(()) => removed += 1,
+                        Err(e) => skipped.push(format!("{}（移除失敗：{e}）", s.label)),
                     }
                 }
-                let _ = reply.send(Frame::ok_note(format!("已清理 {removed} 個 worktree")));
+                let mut note = format!("已清理 {removed} 個 worktree");
+                if !skipped.is_empty() {
+                    note.push_str(&format!(
+                        "；略過 {} 個：{}（可用 --force 強制移除）",
+                        skipped.len(),
+                        skipped.join("、")
+                    ));
+                }
+                let _ = reply.send(Frame::ok_note(note));
             }
 
             Request::ReviewComment {
@@ -1269,10 +1286,13 @@ impl Shared {
             .map(PathBuf::from)
             .unwrap_or_else(|| self.default_cwd());
         let mut branch = None;
+        let mut repo_root = None;
 
         if spawn.worktree {
-            match make_worktree(&cwd, &id) {
+            let root = git_toplevel(&cwd).unwrap_or_else(|| cwd.clone());
+            match make_worktree(&root, &id) {
                 Ok((dir, br)) => {
+                    repo_root = Some(root.to_string_lossy().to_string());
                     cwd = dir;
                     branch = Some(br);
                 }
@@ -1304,6 +1324,7 @@ impl Shared {
             created_ms: now_millis(),
             transport: String::new(),
             status_note: None,
+            repo_root,
         };
         self.emit(Event::SessionStarted {
             session: session.clone(),
@@ -1441,7 +1462,7 @@ fn git_status_summary(cwd: &Path) -> (usize, String) {
         return (0, String::new());
     };
     let text = String::from_utf8_lossy(&out.stdout);
-    let lines: Vec<&str> = text.lines().filter(|l| !l.contains(".ade/")).collect();
+    let lines: Vec<&str> = text.lines().filter(|l| !is_ade_status_line(l)).collect();
     let count = lines.len();
     let files: Vec<&str> = lines
         .iter()
@@ -1514,41 +1535,77 @@ pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
     }
 }
 
+/// `git status --porcelain` 的一行是否屬於 `.ade/` 目錄下的路徑。
+fn is_ade_status_line(line: &str) -> bool {
+    let path = line.get(3..).unwrap_or("").trim();
+    path == ".ade" || path.starts_with(".ade/")
+}
+
+fn git_output(dir: &Path, args: &[&str]) -> Result<std::process::Output> {
+    Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .with_context(|| format!("執行 git {} 失敗", args.join(" ")))
+}
+
+/// 取得 `dir` 所在 repo 的根目錄。
+fn git_toplevel(dir: &Path) -> Option<PathBuf> {
+    let out = git_output(dir, &["rev-parse", "--show-toplevel"]).ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!s.is_empty()).then(|| PathBuf::from(s))
+}
+
+/// session 所屬的主 repo；舊事件沒有記錄時退回預設目錄。
+fn session_repo(default_cwd: &Path, s: &Session) -> PathBuf {
+    s.repo_root
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_cwd.to_path_buf())
+}
+
+/// 目錄內是否有未 commit 的變更（忽略 `.ade/`）。
+fn has_uncommitted(dir: &Path) -> Result<bool> {
+    let out = git_output(dir, &["status", "--porcelain"])?;
+    if !out.status.success() {
+        bail!(
+            "git status 失敗：{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .any(|l| !l.trim().is_empty() && !is_ade_status_line(l)))
+}
+
 /// 若 worktree 內有尚未 commit 的變更，先自動 commit 到該 worktree 分支上。
 fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
-    let status = Command::new("git")
-        .arg("-C")
-        .arg(wt_dir)
-        .args(["status", "--porcelain"])
-        .output()
-        .context("檢查 worktree 狀態失敗")?;
-    let has_changes = String::from_utf8_lossy(&status.stdout)
-        .lines()
-        .any(|l| !l.trim().is_empty() && !l.contains(".ade/"));
-    if !has_changes {
+    if !has_uncommitted(wt_dir)? {
         return Ok(());
     }
-    let _ = Command::new("git")
-        .arg("-C")
-        .arg(wt_dir)
-        .args(["add", "-A"])
-        .output();
-    // 確保不把 `.ade` 塞進 commit
-    let _ = Command::new("git")
-        .arg("-C")
-        .arg(wt_dir)
-        .args(["reset", "-q", "--", ".ade"])
-        .output();
-    let commit = Command::new("git")
-        .arg("-C")
-        .arg(wt_dir)
-        .args(["commit", "-m", &format!("ade: changes from {label}")])
-        .output()
-        .context("自動 commit worktree 變更失敗")?;
+    let add = git_output(wt_dir, &["add", "-A", "--", ".", ":(exclude).ade"])?;
+    if !add.status.success() {
+        bail!(
+            "git add 失敗：{}",
+            String::from_utf8_lossy(&add.stderr).trim()
+        );
+    }
+    let commit = git_output(
+        wt_dir,
+        &["commit", "-m", &format!("ade: changes from {label}")],
+    )?;
     if !commit.status.success() {
-        let stderr = String::from_utf8_lossy(&commit.stderr);
-        if !stderr.contains("nothing to commit") {
-            bail!("commit worktree 失敗：{}", stderr.trim());
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&commit.stdout),
+            String::from_utf8_lossy(&commit.stderr)
+        );
+        if !text.contains("nothing to commit") && !text.contains("nothing added to commit") {
+            bail!("commit worktree 失敗：{}", text.trim());
         }
     }
     Ok(())
@@ -1560,20 +1617,58 @@ fn merge_worktree(main_repo: &Path, session: &Session) -> Result<String> {
         .branch
         .as_deref()
         .context("此 session 沒有獨立的 worktree 分支")?;
+    // 前置檢查：任一不成立就不動 repo。
+    let git_dir_out = git_output(main_repo, &["rev-parse", "--git-dir"])?;
+    if !git_dir_out.status.success() {
+        bail!("{main_repo:?} 不是 git repo");
+    }
+    let git_dir = {
+        let p = String::from_utf8_lossy(&git_dir_out.stdout)
+            .trim()
+            .to_string();
+        let p = PathBuf::from(p);
+        if p.is_absolute() {
+            p
+        } else {
+            main_repo.join(p)
+        }
+    };
+    for marker in ["MERGE_HEAD", "rebase-merge", "rebase-apply"] {
+        if git_dir.join(marker).exists() {
+            bail!("主工作區正在合併／rebase 中（{marker}），請先處理完畢");
+        }
+    }
+    if has_uncommitted(main_repo)? {
+        bail!("主工作區有未 commit 的變更，請先 commit 或 stash 後再合併");
+    }
+    let target = git_output(main_repo, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    let target = String::from_utf8_lossy(&target.stdout).trim().to_string();
+
     let wt_dir = Path::new(&session.cwd);
     if wt_dir.is_dir() {
         auto_commit_worktree(wt_dir, &session.label)?;
     }
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(main_repo)
-        .args(["merge", "--no-edit", branch])
-        .output()
-        .context("執行 git merge 失敗")?;
+    let out = git_output(main_repo, &["merge", "--no-edit", branch])?;
     if !out.status.success() {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+        let conflicts = git_output(main_repo, &["diff", "--name-only", "--diff-filter=U"])
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let _ = git_output(main_repo, &["merge", "--abort"]);
+        let detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if conflicts.is_empty() {
+            bail!("合併 {branch} 到 {target} 失敗，已還原：{detail}");
+        }
+        bail!(
+            "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{}",
+            conflicts.join(", ")
+        );
     }
-    Ok(format!("已將 {branch}（{}）合併回主工作區", session.label))
+    Ok(format!("已將 {branch}（{}）合併進 {target}", session.label))
 }
 
 /// 透過 `gh pr create` 建立 Pull Request。
@@ -1599,23 +1694,49 @@ fn create_worktree_pr(session: &Session, title: &str, body: &str) -> Result<Stri
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// 移除某個 session 的 worktree 與對應分支。
-fn remove_worktree(main_repo: &Path, session: &Session) -> Result<()> {
+/// gc 預設保護：未合併或有未 commit 變更時回傳原因。
+fn gc_block_reason(main_repo: &Path, session: &Session) -> Option<String> {
     let wt_dir = Path::new(&session.cwd);
-    if wt_dir.exists() {
-        let _ = Command::new("git")
-            .arg("-C")
-            .arg(main_repo)
-            .args(["worktree", "remove", "--force"])
-            .arg(wt_dir)
-            .output();
+    if wt_dir.is_dir() {
+        match has_uncommitted(wt_dir) {
+            Ok(true) => return Some("有未 commit 變更".into()),
+            Ok(false) => {}
+            Err(e) => return Some(format!("無法檢查狀態：{e}")),
+        }
     }
     if let Some(branch) = &session.branch {
-        let _ = Command::new("git")
-            .arg("-C")
-            .arg(main_repo)
-            .args(["branch", "-D", branch])
-            .output();
+        match git_output(main_repo, &["merge-base", "--is-ancestor", branch, "HEAD"]) {
+            Ok(o) if o.status.success() => {}
+            Ok(_) => return Some("尚未合併".into()),
+            Err(e) => return Some(format!("無法檢查合併狀態：{e}")),
+        }
+    }
+    None
+}
+
+/// 移除某個 session 的 worktree 與對應分支；`force` 時連未合併／未 commit 的內容一併丟棄。
+fn remove_worktree(main_repo: &Path, session: &Session, force: bool) -> Result<()> {
+    let wt_dir = Path::new(&session.cwd);
+    if wt_dir.exists() {
+        let wt = wt_dir.to_string_lossy();
+        let mut args = vec!["worktree", "remove"];
+        if force {
+            args.push("--force");
+        }
+        args.push(&wt);
+        let out = git_output(main_repo, &args)?;
+        if !out.status.success() {
+            bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+        }
+    }
+    if let Some(branch) = &session.branch {
+        let out = git_output(
+            main_repo,
+            &["branch", if force { "-D" } else { "-d" }, branch],
+        )?;
+        if !out.status.success() {
+            bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+        }
     }
     Ok(())
 }
@@ -1871,6 +1992,7 @@ mod tests {
                 created_ms: now_millis(),
                 transport: "mock".to_string(),
                 status_note: None,
+                repo_root: None,
             },
         );
         inner.sessions.insert(id.to_string(), SessionEntry { ctl });
@@ -2060,5 +2182,147 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err2.contains("速率限制"));
+    }
+
+    // ---- git 輔助函式（T02／T03）----
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let o = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["-c", "user.email=t@t", "-c", "user.name=t"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            o.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    }
+
+    fn temp_repo(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("ade-git-{tag}-{}", new_id("t")));
+        fs::create_dir_all(&d).unwrap();
+        git(&d, &["init", "-q", "-b", "main"]);
+        fs::write(d.join("a.txt"), "base\n").unwrap();
+        git(&d, &["add", "."]);
+        git(&d, &["commit", "-qm", "init"]);
+        d
+    }
+
+    fn wt_session(repo: &Path, id: &str) -> Session {
+        let (dir, branch) = make_worktree(repo, id).unwrap();
+        Session {
+            id: id.into(),
+            kind: AgentKind::ClaudeCode,
+            label: format!("w/{id}"),
+            cwd: dir.to_string_lossy().to_string(),
+            branch: Some(branch),
+            role: Role::Worker,
+            status: SessionStatus::Exited,
+            model: None,
+            cost: Default::default(),
+            parent: None,
+            created_ms: 0,
+            transport: String::new(),
+            status_note: None,
+            repo_root: Some(repo.to_string_lossy().to_string()),
+        }
+    }
+
+    #[test]
+    fn merge_clean_succeeds_and_excludes_ade_dir() {
+        let repo = temp_repo("m1");
+        let s = wt_session(&repo, "s1");
+        let wt = Path::new(&s.cwd);
+        fs::write(wt.join("new.txt"), "x").unwrap();
+        fs::create_dir_all(wt.join("sub.ade")).unwrap();
+        fs::write(wt.join("sub.ade/f.txt"), "f").unwrap();
+        fs::create_dir_all(wt.join(".ade/mailbox")).unwrap();
+        fs::write(wt.join(".ade/mailbox/m"), "m").unwrap();
+        merge_worktree(&repo, &s).unwrap();
+        assert!(repo.join("new.txt").exists());
+        assert!(repo.join("sub.ade/f.txt").exists());
+        assert!(!repo.join(".ade/mailbox/m").exists());
+        assert!(!has_uncommitted(&repo).unwrap());
+    }
+
+    #[test]
+    fn merge_conflict_is_aborted() {
+        let repo = temp_repo("m2");
+        let s = wt_session(&repo, "s2");
+        fs::write(Path::new(&s.cwd).join("a.txt"), "branch\n").unwrap();
+        fs::write(repo.join("a.txt"), "main\n").unwrap();
+        git(&repo, &["commit", "-qam", "main change"]);
+        let head = git(&repo, &["rev-parse", "HEAD"]);
+        let err = merge_worktree(&repo, &s).unwrap_err().to_string();
+        assert!(err.contains("a.txt"), "{err}");
+        assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head);
+        assert!(!repo.join(".git/MERGE_HEAD").exists());
+        assert!(!has_uncommitted(&repo).unwrap());
+    }
+
+    #[test]
+    fn merge_refuses_dirty_main() {
+        let repo = temp_repo("m3");
+        let s = wt_session(&repo, "s3");
+        fs::write(Path::new(&s.cwd).join("n.txt"), "n").unwrap();
+        fs::write(repo.join("a.txt"), "dirty\n").unwrap();
+        assert!(merge_worktree(&repo, &s).is_err());
+        assert_eq!(fs::read_to_string(repo.join("a.txt")).unwrap(), "dirty\n");
+        assert!(!repo.join("n.txt").exists());
+    }
+
+    #[test]
+    fn merge_targets_each_sessions_own_repo() {
+        let r1 = temp_repo("m4a");
+        let r2 = temp_repo("m4b");
+        let s1 = wt_session(&r1, "s4a");
+        let s2 = wt_session(&r2, "s4b");
+        fs::write(Path::new(&s1.cwd).join("one.txt"), "1").unwrap();
+        fs::write(Path::new(&s2.cwd).join("two.txt"), "2").unwrap();
+        merge_worktree(&session_repo(&r1, &s1), &s1).unwrap();
+        merge_worktree(&session_repo(&r1, &s2), &s2).unwrap();
+        assert!(r1.join("one.txt").exists() && !r1.join("two.txt").exists());
+        assert!(r2.join("two.txt").exists() && !r2.join("one.txt").exists());
+    }
+
+    #[test]
+    fn gc_protects_unmerged_and_dirty() {
+        let repo = temp_repo("g1");
+        // 已合併且乾淨
+        let merged = wt_session(&repo, "gm");
+        assert!(gc_block_reason(&repo, &merged).is_none());
+        remove_worktree(&repo, &merged, false).unwrap();
+        assert!(!Path::new(&merged.cwd).exists());
+        // 未合併 commit
+        let unmerged = wt_session(&repo, "gu");
+        let wt = Path::new(&unmerged.cwd);
+        fs::write(wt.join("u.txt"), "u").unwrap();
+        git(wt, &["add", "u.txt"]);
+        git(wt, &["commit", "-qm", "u"]);
+        assert!(gc_block_reason(&repo, &unmerged)
+            .unwrap()
+            .contains("未合併"));
+        assert!(remove_worktree(&repo, &unmerged, false).is_err());
+        // 未 commit
+        let dirty = wt_session(&repo, "gd");
+        fs::write(Path::new(&dirty.cwd).join("d.txt"), "d").unwrap();
+        assert!(gc_block_reason(&repo, &dirty)
+            .unwrap()
+            .contains("未 commit"));
+        // force 全部移除
+        remove_worktree(&repo, &unmerged, true).unwrap();
+        remove_worktree(&repo, &dirty, true).unwrap();
+        assert!(!Path::new(&unmerged.cwd).exists() && !Path::new(&dirty.cwd).exists());
+    }
+
+    #[test]
+    fn ade_status_line_matches_only_ade_dir() {
+        assert!(is_ade_status_line("?? .ade/wt/x"));
+        assert!(!is_ade_status_line("?? sub.ade/f"));
+        assert!(!is_ade_status_line(" M src/.ade/f"));
     }
 }

@@ -497,7 +497,13 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             }
         }
         KeyCode::Char('G') => {
-            send(writer, &Request::WorktreeGc { session: None })?;
+            send(
+                writer,
+                &Request::WorktreeGc {
+                    session: None,
+                    force: false,
+                },
+            )?;
         }
         KeyCode::Char('z') => {
             if let Some(id) = app.selected_id() {
@@ -1050,7 +1056,13 @@ fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<
             } else {
                 Some(rest.to_string())
             };
-            send(writer, &Request::WorktreeGc { session })?;
+            send(
+                writer,
+                &Request::WorktreeGc {
+                    session,
+                    force: false,
+                },
+            )?;
         }
         "sleep" => {
             if let Some(id) = app.selected_id() {
@@ -2075,6 +2087,7 @@ mod tests {
             created_ms: 1,
             transport: "acp".into(),
             status_note: None,
+            repo_root: None,
         };
         app.state.sessions.insert(s.id.clone(), s);
         let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();

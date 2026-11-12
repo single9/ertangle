@@ -184,6 +184,9 @@ pub enum Request {
     WorktreeGc {
         #[serde(default)]
         session: Option<SessionId>,
+        /// 連未合併或有未 commit 變更的也一併移除。
+        #[serde(default)]
+        force: bool,
     },
     /// 對某個 session 的 diff 行留下審查註解並送回該 agent 修正。
     ReviewComment {

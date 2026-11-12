@@ -208,6 +208,9 @@ pub struct Session {
     /// agent 透過 `ade_status` 回報的簡短進度說明。
     #[serde(default)]
     pub status_note: Option<String>,
+    /// 建立 worktree 時所屬的主 repo 根目錄（merge／gc／pr 用）。
+    #[serde(default)]
+    pub repo_root: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -963,6 +966,7 @@ mod tests {
             created_ms: 1,
             transport: "acp".into(),
             status_note: None,
+            repo_root: None,
         }
     }
 
