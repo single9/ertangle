@@ -73,7 +73,8 @@ impl Conn {
             if let Some(model) = msg["model"].as_str() {
                 let _ = self.tx.send(AgentEvent::Model(model.to_string()));
             }
-            let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
+            // 狀態由 daemon 在啟動完成時設為 Idle，回合結束由 `result` 設回 Idle；
+            // 這裡不能送 Idle，否則初始 prompt 還在處理時畫面會顯示閒置。
         }
     }
 
@@ -147,9 +148,8 @@ impl Conn {
                 _ => {}
             }
         }
-        if let Some(cost) = usage_cost(&msg["message"]["usage"]) {
-            let _ = self.tx.send(AgentEvent::Cost(cost));
-        }
+        // 不在這裡送逐訊息的 usage：它只有單則訊息的 token 數，會把累計值蓋成很小的數字，
+        // 讓畫面上的成本與 token 在回合中途往回跳。累計值只以 `result` 為準。
     }
 
     /// 工具結果（Claude 用 `user` 訊息回報）。
@@ -197,17 +197,6 @@ fn result_cost(msg: &Value) -> Option<Cost> {
         usd,
         input_tokens: usage["input_tokens"].as_u64().unwrap_or(0)
             + usage["cache_read_input_tokens"].as_u64().unwrap_or(0),
-        output_tokens: usage["output_tokens"].as_u64().unwrap_or(0),
-    })
-}
-
-fn usage_cost(usage: &Value) -> Option<Cost> {
-    if usage.is_null() {
-        return None;
-    }
-    Some(Cost {
-        usd: 0.0,
-        input_tokens: usage["input_tokens"].as_u64().unwrap_or(0),
         output_tokens: usage["output_tokens"].as_u64().unwrap_or(0),
     })
 }
@@ -349,8 +338,6 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let mut child = cmd.spawn().context("無法啟動 `claude`")?;
     let stdin = child.stdin.take().context("取得 claude stdin 失敗")?;
     let stdout = child.stdout.take().context("取得 claude stdout 失敗")?;
-
-    let _ = tx.send(AgentEvent::Status(SessionStatus::Starting));
 
     let conn = Arc::new(Conn {
         stdin: Mutex::new(stdin),

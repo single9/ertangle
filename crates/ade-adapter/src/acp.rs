@@ -344,7 +344,6 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 
     let stdin = child.stdin.take().context("取得 stdin 失敗")?;
     let stdout = child.stdout.take().context("取得 stdout 失敗")?;
-    let _ = tx.send(AgentEvent::Status(SessionStatus::Starting));
 
     let conn = Arc::new(Conn {
         session_id: spec.id.clone(),
