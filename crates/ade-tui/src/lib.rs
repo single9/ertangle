@@ -58,6 +58,9 @@ enum CenterView {
     Worktrees,
 }
 
+/// 串流期間逐字稿最短重算間隔；其餘變動（換 session／寬度／模式）立即重算。
+const MD_REBUILD_INTERVAL: Duration = Duration::from_millis(120);
+
 /// 逐字稿渲染快取：只有來源／寬度／模式改變時才重算 Markdown。
 struct MdCache {
     session: SessionId,
@@ -99,6 +102,10 @@ struct App {
     /// 是否顯示 agent 的思考行（`💭`）。預設隱藏，避免長篇思考拖慢渲染。
     show_thoughts: bool,
     md_cache: Option<MdCache>,
+    /// 上次重算逐字稿的時間；串流期間用來節流（見 `MD_REBUILD_INTERVAL`）。
+    last_rebuild: std::time::Instant,
+    /// 因節流而延後的重算，下一輪迴圈需補畫。
+    rebuild_pending: bool,
     /// 最近一次繪製時 Sessions 清單的區域（供滑鼠點選）。
     sessions_area: Rect,
     /// Sessions 清單目前捲動的起始索引（滑鼠點選需加此偏移）。
@@ -139,6 +146,8 @@ impl App {
             raw_md: false,
             show_thoughts: false,
             md_cache: None,
+            last_rebuild: std::time::Instant::now(),
+            rebuild_pending: false,
             sessions_area: Rect::default(),
             sessions_offset: 0,
             transcript_area: Rect::default(),
@@ -289,6 +298,7 @@ fn event_loop(
             dirty = true;
         }
 
+        dirty |= app.rebuild_pending;
         // 只在有狀態或輸入變動時重繪，閒置時不佔 CPU。
         // 每秒至少重繪一次，讓時間／狀態類顯示保持更新。
         if dirty || last_draw.elapsed() >= Duration::from_secs(1) {
@@ -1406,15 +1416,23 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     // 保留右側一行給捲軸。
     let inner_w = area.width.saturating_sub(3).max(8) as usize;
 
-    let need_rebuild = match (&app.md_cache, &selected) {
+    let mut need_rebuild = match (&app.md_cache, &selected) {
         (Some(c), Some(id)) => {
             c.session != *id
-                || c.stamp != transcript_stamp(app, id)
                 || c.raw != app.raw_md
                 || c.width != area.width
+                || (c.stamp != transcript_stamp(app, id) && {
+                    // 只有內容增量：節流，避免串流時每個 delta 都重算整份。
+                    let due = app.last_rebuild.elapsed() >= MD_REBUILD_INTERVAL;
+                    app.rebuild_pending = !due;
+                    due
+                })
         }
         _ => true,
     };
+    if selected.is_none() && app.md_cache.is_none() {
+        need_rebuild = false;
+    }
     if need_rebuild {
         match &selected {
             Some(id) => {
@@ -1423,6 +1441,8 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     app.selection = None;
                 }
                 let lines = build_transcript_lines(app, id, inner_w);
+                app.last_rebuild = std::time::Instant::now();
+                app.rebuild_pending = false;
                 app.md_cache = Some(MdCache {
                     session: id.clone(),
                     stamp: transcript_stamp(app, id),
