@@ -443,7 +443,7 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         model: None,
         cost: Default::default(),
         parent: None,
-        created_ms: 0,
+        created_ms: now_millis(),
         transport: String::new(),
         status_note: None,
         repo_root: Some(repo.to_string_lossy().to_string()),
@@ -575,7 +575,7 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         model: None,
         cost: Default::default(),
         parent: None,
-        created_ms: 0,
+        created_ms: now_millis(),
         transport: String::new(),
         status_note: None,
         repo_root: None,
@@ -908,6 +908,7 @@ fn restore_prunes_old_ended_sessions_but_keeps_branches_and_recent() {
     ] {
         first.emit(Event::SessionStarted { session: s });
     }
+    first.flush_log();
     drop(first);
     let second =
         Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
