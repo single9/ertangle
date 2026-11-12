@@ -61,7 +61,9 @@ enum CenterView {
 /// 逐字稿渲染快取：只有來源／寬度／模式改變時才重算 Markdown。
 struct MdCache {
     session: SessionId,
-    seq: u64,
+    /// 該 session 逐字稿的輕量指紋（行數、首行長、末行長）；其他 session 或
+    /// 非逐字稿事件造成的 `state.seq` 變動不會讓快取失效。
+    stamp: (usize, usize, usize),
     raw: bool,
     width: u16,
     lines: Vec<Line<'static>>,
@@ -94,12 +96,21 @@ struct App {
     transcript_total: usize,
     /// 逐字稿是否以原始文字（不做 Markdown 渲染）顯示。
     raw_md: bool,
+    /// 是否顯示 agent 的思考行（`💭`）。預設隱藏，避免長篇思考拖慢渲染。
+    show_thoughts: bool,
     md_cache: Option<MdCache>,
     /// 最近一次繪製時 Sessions 清單的區域（供滑鼠點選）。
     sessions_area: Rect,
     /// Sessions 清單目前捲動的起始索引（滑鼠點選需加此偏移）。
     sessions_offset: usize,
-    /// 是否擷取滑鼠（預設關閉，保留終端原生選取／複製；`F2` 切換）。
+    /// 最近一次繪製時逐字稿的區域、捲動偏移與可用寬度（供滑鼠選取）。
+    transcript_area: Rect,
+    transcript_offset: usize,
+    transcript_inner_w: usize,
+    /// 滑鼠拖曳選取範圍：((起始行, 起始欄), (目前行, 目前欄))，
+    /// 行是渲染後的絕對行索引，欄是顯示欄位。
+    selection: Option<((usize, usize), (usize, usize))>,
+    /// 是否擷取滑鼠（預設開啟，支援應用內拖曳選取；`F2` 關閉以使用終端原生選取）。
     mouse_capture: bool,
     should_quit: bool,
 }
@@ -126,10 +137,15 @@ impl App {
             transcript_viewport: 0,
             transcript_total: 0,
             raw_md: false,
+            show_thoughts: false,
             md_cache: None,
             sessions_area: Rect::default(),
             sessions_offset: 0,
-            mouse_capture: false,
+            transcript_area: Rect::default(),
+            transcript_offset: 0,
+            transcript_inner_w: 0,
+            selection: None,
+            mouse_capture: true,
             should_quit: false,
         }
     }
@@ -214,9 +230,15 @@ pub fn run() -> Result<()> {
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableBracketedPaste)?;
-    // 不擷取滑鼠：保留終端原生拖曳選取／複製。改用 alternate scroll（DECSET 1007）
-    // 讓滾輪在 alternate screen 裡變成 Up/Down，仍然可以捲動逐字稿。
+    // 預設擷取滑鼠：應用內可拖曳選取中央區塊並用 OSC 52 複製，滾輪也能捲動。
+    // 需要終端原生選取時按 `F2` 關閉擷取（Shift+拖曳在多數終端也可直接繞過）。
+    // 另外保留 DECSET 1007：關閉擷取後滾輪仍會變成 Up/Down 來捲動逐字稿。
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        EnableBracketedPaste,
+        EnableMouseCapture
+    )?;
     write!(stdout, "\x1b[?1007h")?;
     stdout.flush()?;
     let backend = CrosstermBackend::new(stdout);
@@ -258,15 +280,25 @@ fn event_loop(
     rx: Receiver<Frame>,
 ) -> Result<()> {
     let mut app = App::new();
+    let mut dirty = true;
+    let mut last_draw = std::time::Instant::now();
 
     loop {
         while let Ok(frame) = rx.try_recv() {
             apply_frame(&mut app, frame);
+            dirty = true;
         }
 
-        terminal.draw(|f| draw(f, &mut app))?;
+        // 只在有狀態或輸入變動時重繪，閒置時不佔 CPU。
+        // 每秒至少重繪一次，讓時間／狀態類顯示保持更新。
+        if dirty || last_draw.elapsed() >= Duration::from_secs(1) {
+            last_draw = std::time::Instant::now();
+            terminal.draw(|f| draw(f, &mut app))?;
+            dirty = false;
+        }
 
         if event::poll(Duration::from_millis(60))? {
+            dirty = true;
             match event::read()? {
                 CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
                     handle_key(&mut app, writer, key)?;
@@ -376,6 +408,7 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             app.should_quit = true;
         }
         KeyCode::Tab => {
+            app.selection = None;
             app.view = match app.view {
                 CenterView::Transcript => {
                     request_selected_diff(app, writer)?;
@@ -389,6 +422,7 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             };
         }
         KeyCode::Char('g') => {
+            app.selection = None;
             if app.view == CenterView::Diff {
                 app.view = CenterView::Transcript;
             } else {
@@ -522,6 +556,7 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
         KeyCode::Char('t') => {
             app.raw_md = !app.raw_md;
             app.md_cache = None;
+            app.selection = None;
             app.status = format!(
                 "逐字稿顯示：{}",
                 if app.raw_md {
@@ -535,10 +570,15 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             app.mouse_capture = !app.mouse_capture;
             set_mouse_capture(app.mouse_capture)?;
             app.status = if app.mouse_capture {
-                "滑鼠擷取：開（滾輪／點選 session；Shift+拖曳可原生選取）".into()
+                "滑鼠擷取：開（可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取）".into()
             } else {
                 "滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端 alternate scroll）".into()
             };
+        }
+        KeyCode::Char('T') => toggle_thoughts(app),
+        KeyCode::Esc => {
+            app.selection = None;
+            app.status = "已清除選取".into();
         }
         KeyCode::Char('Y') => copy_main_pane(app),
         KeyCode::PageUp => scroll_transcript(app, -1),
@@ -690,7 +730,7 @@ fn delete_input(app: &mut App) {
     app.input.remove(b);
 }
 
-/// 滑鼠事件：滾輪捲動中央視圖，左鍵點 Sessions 清單可選取 session。
+/// 滑鼠事件：滾輪捲動中央視圖、左鍵點 Sessions 清單，或在逐字稿上拖曳選取。
 fn handle_mouse(app: &mut App, writer: &mut ConnStream, mouse: MouseEvent) -> Result<()> {
     match mouse.kind {
         MouseEventKind::ScrollUp => {
@@ -719,8 +759,48 @@ fn handle_mouse(app: &mut App, writer: &mut ConnStream, mouse: MouseEvent) -> Re
                 let idx = app.sessions_offset + mouse.row.saturating_sub(area.y + 1) as usize;
                 if idx < app.session_ids().len() {
                     app.selected = idx;
+                    app.selection = None;
                     if app.view == CenterView::Diff {
                         request_selected_diff(app, writer)?;
+                    }
+                }
+                return Ok(());
+            }
+            // 逐字稿拖曳選取：只涵蓋中央區塊，不會選到左右側欄。
+            if app.view == CenterView::Transcript {
+                if let Some(p) = transcript_pos(app, mouse.column, mouse.row, false) {
+                    app.selection = Some((p, p));
+                }
+            }
+        }
+        MouseEventKind::Drag(MouseButton::Left) if app.view == CenterView::Transcript => {
+            if let (Some(sel), Some(p)) = (
+                app.selection,
+                transcript_pos(app, mouse.column, mouse.row, true),
+            ) {
+                app.selection = Some((sel.0, p));
+                let ((l0, _), (l1, _)) = normalize_selection((sel.0, p));
+                app.status = format!("選取第 {}–{} 行（放開滑鼠複製）", l0 + 1, l1 + 1);
+            }
+        }
+        MouseEventKind::Up(MouseButton::Left) if app.view == CenterView::Transcript => {
+            if let Some(sel) = app.selection {
+                let ((l0, c0), (l1, c1)) = normalize_selection(sel);
+                if (l0, c0) == (l1, c1) {
+                    app.selection = None;
+                } else {
+                    let text = selection_text(app);
+                    if text.is_empty() {
+                        app.status = "選取範圍沒有文字".into();
+                    } else {
+                        match write_clipboard(&text) {
+                            Ok(()) => {
+                                let n = text.lines().count().max(1);
+                                app.status =
+                                    format!("已複製選取 {n} 行（OSC 52；Shift+拖曳可原生選取）");
+                            }
+                            Err(e) => app.status = format!("複製失敗：{e}"),
+                        }
                     }
                 }
             }
@@ -728,6 +808,141 @@ fn handle_mouse(app: &mut App, writer: &mut ConnStream, mouse: MouseEvent) -> Re
         _ => {}
     }
     Ok(())
+}
+
+/// 把滑鼠座標映射成逐字稿的（絕對渲染行, 顯示欄）；`clamp` 時允許拖到區域外。
+fn transcript_pos(app: &App, column: u16, row: u16, clamp: bool) -> Option<(usize, usize)> {
+    let area = app.transcript_area;
+    if area.width < 4 || area.height < 4 || app.transcript_total == 0 {
+        return None;
+    }
+    let x0 = area.x + 1;
+    let y0 = area.y + 1;
+    let w = app.transcript_inner_w.max(1) as u16;
+    let h = area.height.saturating_sub(2);
+    let inside = column >= x0 && column < x0 + w && row >= y0 && row < y0 + h;
+    if !inside && !clamp {
+        return None;
+    }
+    let col = column.saturating_sub(x0) as usize;
+    let rel_row = row.saturating_sub(y0) as usize;
+    let col = col.min(w.saturating_sub(1) as usize);
+    let rel_row = rel_row.min(h.saturating_sub(1) as usize);
+    let line = app.transcript_offset.saturating_add(rel_row);
+    Some((line.min(app.transcript_total - 1), col))
+}
+
+/// 讓選取範圍的起點在終點之前（行優先）。
+fn normalize_selection(sel: ((usize, usize), (usize, usize))) -> ((usize, usize), (usize, usize)) {
+    let (a, b) = sel;
+    if a <= b {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
+
+/// 指定行在選取範圍內要標亮的顯示欄區間 `[from, to)`。
+fn selection_columns(
+    sel: ((usize, usize), (usize, usize)),
+    line: usize,
+    inner_w: usize,
+) -> Option<(usize, usize)> {
+    let ((l0, c0), (l1, c1)) = normalize_selection(sel);
+    if line < l0 || line > l1 {
+        return None;
+    }
+    let from = if line == l0 { c0 } else { 0 };
+    let to = if line == l1 {
+        (c1 + 1).min(inner_w)
+    } else {
+        inner_w
+    };
+    (to > from).then_some((from, to))
+}
+
+/// 依顯示欄位標亮一行中的選取區間（保留原本樣式）。
+fn highlight_columns(line: &Line<'static>, from: usize, to: usize) -> Line<'static> {
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut col = 0usize;
+    for span in &line.spans {
+        let mut buf = String::new();
+        let mut state: Option<bool> = None;
+        for ch in span.content.chars() {
+            let w = ch.width().unwrap_or(0);
+            let selected = if w == 0 {
+                state.unwrap_or(false)
+            } else {
+                col < to && col + w > from
+            };
+            if let Some(prev) = state {
+                if prev != selected {
+                    let style = select_style(span.style, prev);
+                    spans.push(Span::styled(std::mem::take(&mut buf), style));
+                    state = Some(selected);
+                }
+            } else {
+                state = Some(selected);
+            }
+            buf.push(ch);
+            col += w;
+        }
+        if let Some(selected) = state {
+            spans.push(Span::styled(buf, select_style(span.style, selected)));
+        }
+    }
+    Line::from(spans)
+}
+
+fn select_style(base: Style, selected: bool) -> Style {
+    if selected {
+        base.add_modifier(Modifier::REVERSED)
+    } else {
+        base
+    }
+}
+
+/// 依顯示欄位切出字串片段（中文等寬字元以 2 欄計）。
+fn slice_display(s: &str, from: usize, to: usize) -> String {
+    let mut out = String::new();
+    let mut col = 0usize;
+    for ch in s.chars() {
+        if col >= to {
+            break;
+        }
+        let w = ch.width().unwrap_or(0);
+        if col + w > from {
+            out.push(ch);
+        }
+        col += w;
+    }
+    out
+}
+
+/// 目前滑鼠選取範圍的純文字（只含中央逐字稿，不含側欄與邊框）。
+fn selection_text(app: &App) -> String {
+    let Some(sel) = app.selection else {
+        return String::new();
+    };
+    let Some(cache) = &app.md_cache else {
+        return String::new();
+    };
+    if cache.lines.is_empty() {
+        return String::new();
+    }
+    let ((l0, c0), (l1, c1)) = normalize_selection(sel);
+    let last = l1.min(cache.lines.len() - 1);
+    let mut out: Vec<String> = Vec::new();
+    for (i, line) in cache.lines.iter().enumerate().take(last + 1).skip(l0) {
+        let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        let from = if i == l0 { c0 } else { 0 };
+        let to = if i == last { c1 + 1 } else { usize::MAX };
+        out.push(slice_display(&text, from, to).trim_end().to_string());
+    }
+    while out.last().is_some_and(|l| l.is_empty()) {
+        out.pop();
+    }
+    out.join("\n")
 }
 
 /// 貼上（bracketed paste）：只插入目前輸入框；換行轉成空白以維持單行輸入。
@@ -806,15 +1021,19 @@ fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<
         }
         "diff" => {
             app.view = CenterView::Diff;
+            app.selection = None;
             request_selected_diff(app, writer)?;
         }
         "transcript" | "overview" => {
             app.view = CenterView::Transcript;
+            app.selection = None;
         }
         "worktrees" | "wt" => {
             app.view = CenterView::Worktrees;
+            app.selection = None;
             send(writer, &Request::WorktreeList)?;
         }
+        "thoughts" | "think" => toggle_thoughts(app),
         "gc" => {
             let session = if rest.is_empty() {
                 None
@@ -1063,6 +1282,14 @@ fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
+            format!("   think:{}", if app.show_thoughts { "on" } else { "off" }),
+            Style::default().fg(if app.show_thoughts {
+                Color::Yellow
+            } else {
+                Color::DarkGray
+            }),
+        ),
+        Span::styled(
             format!("   mouse:{}", if app.mouse_capture { "on" } else { "off" }),
             Style::default().fg(if app.mouse_capture {
                 Color::Yellow
@@ -1144,13 +1371,28 @@ fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.sessions_offset = list_state.offset();
 }
 
+/// 逐字稿指紋：串流增量會改變末行長度或行數，滿額截斷會改變首行。
+fn transcript_stamp(app: &App, id: &SessionId) -> (usize, usize, usize) {
+    app.state.transcripts.get(id).map_or((0, 0, 0), |b| {
+        (
+            b.len(),
+            b.front().map_or(0, String::len),
+            b.back().map_or(0, String::len),
+        )
+    })
+}
+
 /// 依目前模式（Markdown / 原始）與寬度，把逐字稿建成樣式化且已換行的行。
 fn build_transcript_lines(app: &App, id: &SessionId, width: usize) -> Vec<Line<'static>> {
     let buf = match app.state.transcripts.get(id) {
         Some(b) => b,
         None => return Vec::new(),
     };
-    let src: Vec<String> = buf.iter().cloned().collect();
+    let src: Vec<String> = buf
+        .iter()
+        .filter(|l| app.show_thoughts || !l.starts_with("💭 "))
+        .cloned()
+        .collect();
     let lines: Vec<Line<'static>> = if app.raw_md {
         src.iter().map(|l| Line::raw(l.clone())).collect()
     } else {
@@ -1167,7 +1409,7 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let need_rebuild = match (&app.md_cache, &selected) {
         (Some(c), Some(id)) => {
             c.session != *id
-                || c.seq != app.state.seq
+                || c.stamp != transcript_stamp(app, id)
                 || c.raw != app.raw_md
                 || c.width != area.width
         }
@@ -1178,11 +1420,12 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
             Some(id) => {
                 if app.md_cache.as_ref().map(|c| &c.session) != Some(id) {
                     app.transcript_scroll = None; // 換 session 時回到跟隨
+                    app.selection = None;
                 }
                 let lines = build_transcript_lines(app, id, inner_w);
                 app.md_cache = Some(MdCache {
                     session: id.clone(),
-                    seq: app.state.seq,
+                    stamp: transcript_stamp(app, id),
                     raw: app.raw_md,
                     width: area.width,
                     lines,
@@ -1196,6 +1439,8 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let total = app.md_cache.as_ref().map_or(0, |c| c.lines.len());
     app.transcript_viewport = viewport;
     app.transcript_total = total;
+    app.transcript_area = area;
+    app.transcript_inner_w = inner_w;
 
     let max_off = total.saturating_sub(viewport);
     let off = match app.transcript_scroll {
@@ -1233,11 +1478,17 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         None => " (尚無 session：按 n 建立) ".into(),
     };
 
-    let mut visible: Vec<Line> = app
-        .md_cache
-        .as_ref()
-        .map(|c| c.lines.iter().skip(off).take(viewport).cloned().collect())
-        .unwrap_or_default();
+    let selection = app.selection;
+    let mut visible: Vec<Line> = Vec::new();
+    if let Some(c) = &app.md_cache {
+        for (idx, line) in c.lines.iter().enumerate().skip(off).take(viewport) {
+            let line = match selection.and_then(|sel| selection_columns(sel, idx, inner_w)) {
+                Some((from, to)) => highlight_columns(line, from, to),
+                None => line.clone(),
+            };
+            visible.push(line);
+        }
+    }
     if visible.is_empty() {
         visible.push(Line::styled(
             "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。",
@@ -1247,6 +1498,7 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
 
     let para = Paragraph::new(visible).block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(para, area);
+    app.transcript_offset = off;
 
     if total > viewport {
         let mut sb_state = ScrollbarState::new(max_off).position(off);
@@ -1477,7 +1729,7 @@ fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
         Mode::Normal => {
-            " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令, Ctrl-K=跳轉, g=Diff, z=休眠, t=原始/渲染, PgUp/PgDn=捲動, Y=複製, F2=滑鼠） "
+            " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令, Ctrl-K=跳轉, g=Diff, z=休眠, t=原始/渲染, T=思考, 拖曳=選取複製, PgUp/PgDn=捲動, Y=複製, F2=滑鼠） "
         }
         Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、/命令，Enter 送出） ",
         Mode::Spawn => " spawn：<agent> <prompt>（Ctrl-W 切換 worktree, Enter 送出） ",
@@ -1525,7 +1777,7 @@ fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
 fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     let hints = match app.view {
         CenterView::Transcript => {
-            "  q 離開(保留 daemon)  Q 關閉 daemon  Tab 切換  i prompt  n spawn  t 原始/渲染  PgUp/PgDn 捲動  / 命令"
+            "  q 離開(保留 daemon)  Q 關閉 daemon  Tab 切換  i prompt  n spawn  t 原始/渲染  T 思考  PgUp/PgDn 捲動  / 命令"
         }
         CenterView::Diff => {
             "  q 離開  Q 關閉 daemon  j/k 選行  {/} hunk  c 審查註解  M 合併  [ ] 換 session  r 重整"
@@ -1548,7 +1800,13 @@ fn main_pane_text(app: &App) -> String {
         CenterView::Transcript => app
             .selected_id()
             .and_then(|id| app.state.transcripts.get(&id))
-            .map(|buf| buf.iter().cloned().collect::<Vec<_>>().join("\n"))
+            .map(|buf| {
+                buf.iter()
+                    .filter(|l| app.show_thoughts || !l.starts_with("💭 "))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default(),
         CenterView::Diff => app.diff_lines.join("\n"),
         CenterView::Worktrees => app
@@ -1614,6 +1872,18 @@ fn copy_main_pane(app: &mut App) {
         }
         Err(e) => app.status = format!("複製失敗：{e}"),
     }
+}
+
+/// 切換是否顯示 agent 的思考行（`💭`）。
+fn toggle_thoughts(app: &mut App) {
+    app.show_thoughts = !app.show_thoughts;
+    app.md_cache = None;
+    app.selection = None;
+    app.status = if app.show_thoughts {
+        "思考顯示：開（顯示 💭 行）".into()
+    } else {
+        "思考顯示：關（已隱藏 💭 行，按 T 顯示）".into()
+    };
 }
 
 /// 逐字稿翻頁捲動：`dir < 0` 往上、`dir > 0` 往下；到底時恢復跟隨最新。
@@ -1967,5 +2237,138 @@ mod tests {
         let pos = term.get_cursor_position().unwrap();
         // 輸入框在倒數第二列；內框起點為 (1, 37)，游標應落在「你好」之後。
         assert_eq!((pos.x, pos.y), (5, 37));
+    }
+
+    #[test]
+    fn thinking_lines_are_hidden_by_default() {
+        let mut app = sample_app(&["💭 planning", "answer", "💭 more", "done"]);
+        let id: SessionId = "ses_test".into();
+
+        let lines = build_transcript_lines(&app, &id, 80);
+        let text: String = lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!text.contains("planning"), "thought leaked: {text}");
+        assert!(!text.contains("more"), "thought leaked: {text}");
+        assert!(text.contains("answer"));
+        assert!(text.contains("done"));
+        assert!(!main_pane_text(&app).contains("planning"));
+
+        app.show_thoughts = true;
+        let lines = build_transcript_lines(&app, &id, 80);
+        let text: String = lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("planning"));
+        assert!(text.contains("more"));
+        assert!(main_pane_text(&app).contains("planning"));
+    }
+
+    fn cache_lines(lines: Vec<Line<'static>>) -> MdCache {
+        MdCache {
+            session: "ses_test".into(),
+            stamp: (0, 0, 0),
+            raw: false,
+            width: 80,
+            lines,
+        }
+    }
+
+    #[test]
+    fn selection_text_uses_display_columns() {
+        let mut app = sample_app(&[]);
+        app.md_cache = Some(cache_lines(vec![
+            Line::raw("hello 你好 world"),
+            Line::raw("second"),
+        ]));
+
+        // 「你好」從顯示欄 6 開始，各佔 2 欄。
+        app.selection = Some(((0, 6), (0, 9)));
+        assert_eq!(selection_text(&app), "你好");
+
+        // 跨行：第一行尾端到第二行開頭。
+        app.selection = Some(((0, 11), (1, 1)));
+        assert_eq!(selection_text(&app), "world\nse");
+
+        // 反向拖曳（由下往上）也要正常。
+        app.selection = Some(((1, 1), (0, 11)));
+        assert_eq!(selection_text(&app), "world\nse");
+    }
+
+    #[test]
+    fn highlight_columns_marks_only_selected_range() {
+        let out = highlight_columns(&Line::raw("abcd"), 1, 3);
+        let spans: Vec<(String, bool)> = out
+            .spans
+            .iter()
+            .map(|s| {
+                (
+                    s.content.to_string(),
+                    s.style.add_modifier.contains(Modifier::REVERSED),
+                )
+            })
+            .collect();
+        assert_eq!(
+            spans,
+            vec![
+                ("a".to_string(), false),
+                ("bc".to_string(), true),
+                ("d".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn selection_columns_cover_full_middle_lines() {
+        let sel = ((2, 5), (4, 1));
+        assert_eq!(selection_columns(sel, 1, 40), None);
+        assert_eq!(selection_columns(sel, 2, 40), Some((5, 40)));
+        assert_eq!(selection_columns(sel, 3, 40), Some((0, 40)));
+        assert_eq!(selection_columns(sel, 4, 40), Some((0, 2)));
+        assert_eq!(selection_columns(sel, 5, 40), None);
+    }
+
+    #[test]
+    fn mouse_selection_copies_only_middle_pane() {
+        let mut app = sample_app(&["alpha", "beta", "gamma"]);
+        let _ = render(&mut app); // 先畫一次，建立 md_cache 與 transcript_area
+        app.selection = Some(((1, 0), (1, 3)));
+        let text = selection_text(&app);
+        assert_eq!(text, "beta");
+        assert!(!text.contains("Sessions"), "side pane leaked: {text}");
+
+        let rendered = render(&mut app);
+        assert!(rendered.contains("beta"));
+    }
+
+    #[test]
+    fn transcript_pos_maps_rows_and_columns() {
+        let mut app = sample_app(&[]);
+        app.transcript_area = Rect::new(0, 0, 40, 10);
+        app.transcript_inner_w = 37;
+        app.transcript_total = 100;
+        app.transcript_offset = 5;
+
+        // 內框起點是 (1, 1)，所以 (3, 2) → 行 6、欄 2。
+        assert_eq!(transcript_pos(&app, 3, 2, false), Some((6, 2)));
+        // 區域外不啟動選取。
+        assert_eq!(transcript_pos(&app, 39, 2, false), None);
+        // 拖曳出界時夾在可見範圍。
+        assert_eq!(transcript_pos(&app, 3, 99, true), Some((12, 2)));
+        assert_eq!(transcript_pos(&app, 0, 2, true), Some((6, 0)));
     }
 }

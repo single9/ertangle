@@ -50,7 +50,7 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
   閒置休眠與自動喚醒（`SIGSTOP` / `SIGCONT`、`ade sleep` / `ade wake` / TUI `z` 鍵）、權限規則引擎（`.ade/policy.toml` 或 `~/.config/ade/policy.toml`）。
 - **TUI**：三種中央視圖（Overview / Diff / Worktrees）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
   逐字稿會顯示使用者送出的 prompt（`❯` 前綴）並即時渲染 Markdown（標題、粗體／斜體、行內程式碼、清單、引言、分隔線、圍籬程式碼區塊與 GFM 表格），
-  可用 `t` 在渲染後與原始文字之間切換；支援滑鼠滾輪／點選、OSC 52 複製主要區塊，以及帶可見游標與中文 IME 的輸入框。
+  可用 `t` 在渲染後與原始文字之間切換；支援滑鼠拖曳選取（只複製中央區塊）、滾輪捲動、OSC 52 複製，以及帶可見游標與中文 IME 的輸入框。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。
 - **檔案信箱後備**：自動同步寫入 `<cwd>/.ade/mailbox/<session>.jsonl`。
 
 ### 權限政策
@@ -94,11 +94,13 @@ cargo test                     # 全部單元測試
 | 鍵 | 動作 |
 | --- | --- |
 | `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標） |
-| 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標）；預設不擷取滑鼠，可直接拖曳選取複製 |
-| `F2` | 切換完整滑鼠擷取（開啟後可點選 Sessions；`Shift`+拖曳仍可原生選取） |
+| 滑鼠拖曳 | 在逐字稿上選取（只含中央區塊，不含側欄與邊框），放開即以 OSC 52 複製 |
+| 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標） |
+| `F2` | 切換滑鼠擷取（預設開啟；關閉後可用終端原生拖曳選取，`Shift`+拖曳在開啟時也可原生選取） |
 | `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
 | `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
 | `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
+| `T`（或 `/thoughts`） | 顯示 / 隱藏 agent 的思考行（`💭`；預設隱藏以減少渲染量） |
 | `Y` 或 `/copy` | 用 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees），不含側欄與邊框 |
 | `PgUp` / `PgDn`（或 `Ctrl-U` / `Ctrl-D`） | 逐字稿 / diff 翻頁捲動（捲動後暫停跟隨，狀態列會顯示 `⏸ paused`） |
 | `Home` / `End` | 跳到最前 / 回到跟隨最新輸出（`▼ follow`） |
@@ -118,7 +120,7 @@ cargo test                     # 全部單元測試
 | `q` | 離開 TUI（daemon 與 agent 續跑） |
 | `Q` | 關閉 daemon：結束所有 agent、移除 socket（等同 `/shutdown`） |
 
-> 預設不啟用滑鼠擷取，終端原生拖曳選取／複製可直接使用；滾輪透過 alternate scroll 捲動。需要點選 Sessions 時按 `F2` 開啟滑鼠擷取，再按一次關閉。任何時候都可用 `Y` / `/copy` 複製主要區塊（OSC 52）。
+> 預設啟用滑鼠擷取：可直接在逐字稿上拖曳選取，放開即以 OSC 52 複製（只含中央區塊）；滾輪捲動逐字稿。需要終端原生選取時按 `F2` 關閉擷取，或直接 `Shift`+拖曳。任何時候都可用 `Y` / `/copy` 複製整個主要區塊。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。
 
 ### CLI
 

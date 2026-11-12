@@ -337,12 +337,13 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 - **中**：選定 session 的對話/工具呼叫/diff（結構化渲染；無法結構化時 fallback 成 PTY 原始輸出）。
   - 逐字稿會即時渲染 **Markdown**：標題、粗體／斜體／刪除線、行內程式碼、連結、無序／有序／工作清單、引言、分隔線、圍籬程式碼區塊（含語言標籤與底色）、GFM 表格（含對齊）。
   - ade 的語意前綴分色：`❯`（使用者 prompt，綠色）、`💭`（思考，暗色斜體）、`▸`（工具呼叫，琥珀色）、`💬`（審查註解，洋紅）。
-  - 支援翻頁捲動與「跟隨最新」（follow-tail），右側顯示捲軸；滾輪預設走終端 alternate scroll（不擷取滑鼠，保留原生選取），`F2` 可切換完整滑鼠擷取與點選；`t` 可在渲染後與原始文字間切換。
+  - 支援翻頁捲動與「跟隨最新」（follow-tail），右側顯示捲軸；滾輪可捲動，滑鼠拖曳可直接選取逐字稿（只含中央區塊）並以 OSC 52 複製；`F2` 可關閉滑鼠擷取改用終端原生選取；`t` 可在渲染後與原始文字間切換。
+  - `💭` 思考行預設隱藏（`T` 或 `/thoughts` 切換），避免長篇思考拖慢渲染。
   - `Y` 或 `/copy` 以 OSC 52 複製中央主要區塊（不含側欄與邊框），在 SSH / tmux 下也不需終端原生選取。
   - Diff 視圖每行附舊／新檔行號邊欄，標題顯示 `+N -M` 統計，`{` / `}` 可跳 hunk。
 - **右**：bus 活動流 + 任務看板（可切 tab）。
 - **底**：輸入框。`@session` 指定對象、`#channel` 廣播、`/` 開命令面板（`/spawn`、`/merge`、`/task`）。
-- **標題列**：兩行——上排為視圖頁籤與 session/task 數，下排為成本、token 用量與 `md`／`follow` 狀態指示。
+- **標題列**：兩行——上排為視圖頁籤與 session/task 數，下排為成本、token 用量與 `md`／`think`／`mouse`／`follow` 狀態指示。
 - **Diff 視圖**：每個 worktree 的 `git diff`，可對行下註解並送回該 agent（借用 Antigravity/Orca 的 review 迴圈概念）。
 
 ### 7.2 關鍵按鍵
@@ -352,8 +353,9 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | `n` | 新 session（精靈：agent、worktree、role、prompt） |
 | `Tab` / `g` | 切換 pane / 視圖 |
 | `t` | 切換逐字稿顯示（Markdown 渲染 ↔ 原始文字） |
+| `T` / `/thoughts` | 顯示 / 隱藏 agent 思考行（預設隱藏） |
 | `Y` / `/copy` | 以 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees） |
-| 滑鼠 | 滾輪捲動逐字稿或 diff（預設不擷取滑鼠，可直接拖曳選取）；`F2` 切換完整滑鼠擷取與 Sessions 點選 |
+| 滑鼠 | 滾輪捲動逐字稿或 diff；拖曳選取逐字稿（只含中央區塊）並以 OSC 52 複製；`F2` 關閉擷取改用原生選取 |
 | `PgUp` / `PgDn`（`Ctrl-U` / `Ctrl-D`） | 捲動逐字稿 / diff（捲動即暫停跟隨） |
 | `←` / `→`、`Home` / `End`、`Delete` | 輸入框游標移動 / 跳至頭尾 / 刪除（支援中文與 bracketed paste） |
 | `Home` / `End` | 跳到最前 / 回到跟隨最新 |
