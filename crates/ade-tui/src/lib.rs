@@ -2882,7 +2882,7 @@ mod tests {
         let n = peer.read(&mut bytes).unwrap();
         let buf = String::from_utf8_lossy(&bytes[..n]).to_string();
         assert!(
-            buf.contains("Permission") && buf.contains("r1"),
+            buf.contains("\"permission\"") && buf.contains("r1"),
             "got {buf}"
         );
     }
