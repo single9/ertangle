@@ -9,7 +9,8 @@
 mod markdown;
 
 use ade_core::{
-    AgentKind, Decision, MsgKind, Role, SessionId, SessionStatus, State, Target, WorktreeInfo,
+    AgentKind, Decision, MsgKind, PermissionPolicy, Role, SessionId, SessionStatus, State, Target,
+    WorktreeInfo,
 };
 use ade_daemon::{Client, ConnStream};
 use ade_protocol::{Frame, Request, SpawnRequest, Transport};
@@ -131,6 +132,9 @@ struct App {
     input_cursor: usize,
     status: String,
     spawn_worktree: bool,
+    /// 建立 session 的權限；`None` 依 config.toml。
+    spawn_permission: Option<PermissionPolicy>,
+    spawn_bypass_armed: bool,
     /// M3：目前顯示的 worktree diff 內容與游標行。
     diff_session: Option<SessionId>,
     diff_lines: Vec<String>,
@@ -191,6 +195,8 @@ impl App {
             input_cursor: 0,
             status: "已連線 daemon".into(),
             spawn_worktree: false,
+            spawn_permission: None,
+            spawn_bypass_armed: false,
             diff_session: None,
             diff_lines: Vec::new(),
             diff_cursor: 0,
@@ -619,7 +625,9 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             app.input.clear();
             app.input_cursor = 0;
             app.spawn_worktree = false;
-            app.status = "輸入：<agent> <prompt>（Ctrl-W 切換 worktree）".into();
+            app.spawn_permission = None;
+            app.spawn_bypass_armed = false;
+            app.status = "輸入：<agent> <prompt>（Ctrl-W 切換 worktree，Ctrl-E 切換權限）".into();
         }
         KeyCode::Char('m') => {
             app.mode = Mode::Message;
@@ -726,6 +734,19 @@ fn handle_input_mode(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.status = format!(
                 "worktree = {}",
                 if app.spawn_worktree { "on" } else { "off" }
+            );
+        }
+        KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.spawn_permission = match app.spawn_permission {
+                None => Some(PermissionPolicy::Ask),
+                Some(PermissionPolicy::Ask) => Some(PermissionPolicy::Auto),
+                Some(PermissionPolicy::Auto) => Some(PermissionPolicy::Bypass),
+                Some(PermissionPolicy::Bypass) => None,
+            };
+            app.spawn_bypass_armed = false;
+            app.status = format!(
+                "權限 = {}",
+                app.spawn_permission.map_or("預設(config)", |p| p.id())
             );
         }
         KeyCode::Backspace => backspace_input(app),
@@ -1266,6 +1287,15 @@ fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()
         return Ok(());
     };
     let prompt = prompt.filter(|p| !p.is_empty());
+    // bypass 需要再按一次 Enter 確認。
+    if app.spawn_permission == Some(PermissionPolicy::Bypass) && !app.spawn_bypass_armed {
+        app.spawn_bypass_armed = true;
+        app.mode = Mode::Spawn;
+        app.input = text.to_string();
+        app.input_cursor = app.input.chars().count();
+        app.status = "⚠ bypass 會跳過所有權限檢查；再按一次 Enter 確認".into();
+        return Ok(());
+    }
     send(
         writer,
         &Request::Spawn(SpawnRequest {
@@ -1276,7 +1306,7 @@ fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()
             prompt,
             worktree: app.spawn_worktree,
             transport: Transport::Auto,
-            permission: None,
+            permission: app.spawn_permission,
             parent: None,
             model,
             args: vec![],
@@ -1684,7 +1714,12 @@ fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                         s.model
                             .as_deref()
                             .map(|m| format!(":{m}"))
-                            .unwrap_or_default(),
+                            .unwrap_or_default()
+                            + if s.permission == PermissionPolicy::Bypass {
+                                " !bypass"
+                            } else {
+                                ""
+                            },
                         if branch.is_empty() {
                             String::new()
                         } else {
@@ -2089,7 +2124,7 @@ fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
             " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令, Ctrl-K=跳轉, g=Diff, z=休眠, t=原始/渲染, T=思考, 拖曳=選取複製, PgUp/PgDn=捲動, Y=複製, F2=滑鼠） "
         }
         Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、/命令，Enter 送出） ",
-        Mode::Spawn => " spawn：<agent> <prompt>（Ctrl-W 切換 worktree, Enter 送出） ",
+        Mode::Spawn => " spawn：<agent[:model]> <prompt>（Ctrl-W worktree, Ctrl-E 權限, Enter 送出） ",
         Mode::Message => " message → 選取的 session（Enter 送出） ",
         Mode::Review => " review 註解 → 送回選取的 session 修改（Enter 送出） ",
         Mode::Command => " 命令面板（spawn / merge / diff / gc / sleep / wake / task / copy / shutdown） ",
