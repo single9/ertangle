@@ -27,8 +27,9 @@ use std::net::{TcpListener, TcpStream};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -40,6 +41,18 @@ const MAX_WAIT_MS: u64 = 300_000;
 const LOOP_REPEAT_CAP: usize = 3;
 /// 同一對 session 每分鐘最多可傳送的訊息數。
 const PAIR_RATE_CAP_PER_MIN: usize = 30;
+
+/// 每個 client 佇列中可累積的未送出 frame 上限；超過即視為卡住並斷線。
+const CLIENT_QUEUE_CAP: usize = 4096;
+
+/// 取鎖；鎖中毒時取回內部資料繼續，避免一個 panic 拖垮整個 daemon。
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock()
+        .unwrap_or_else(|e: PoisonError<MutexGuard<'_, T>>| {
+            tracing::error!("鎖已中毒（某執行緒 panic），取回內部資料繼續");
+            e.into_inner()
+        })
+}
 
 // ---------------------------------------------------------------------------
 // 路徑
@@ -388,6 +401,193 @@ impl Waiter {
     }
 }
 
+impl ConnStream {
+    /// 關閉連線兩個方向（用於踢掉卡住的 client）。
+    fn shutdown(&self) {
+        let _ = match self {
+            ConnStream::Unix(u) => u.shutdown(std::net::Shutdown::Both),
+            ConnStream::Tcp(t) => t.shutdown(std::net::Shutdown::Both),
+        };
+    }
+}
+
+/// 送往單一連線的有界佇列發送端：回覆照常送入，廣播則受 `CLIENT_QUEUE_CAP` 限制。
+#[derive(Clone)]
+struct ClientTx {
+    tx: Sender<Frame>,
+    pending: Arc<AtomicUsize>,
+    /// 佇列滿時用來關閉底層連線。
+    closer: Option<Arc<ConnStream>>,
+}
+
+struct ClientRx {
+    rx: Receiver<Frame>,
+    pending: Arc<AtomicUsize>,
+}
+
+fn client_channel(closer: Option<ConnStream>) -> (ClientTx, ClientRx) {
+    let (tx, rx) = mpsc::channel();
+    let pending = Arc::new(AtomicUsize::new(0));
+    (
+        ClientTx {
+            tx,
+            pending: pending.clone(),
+            closer: closer.map(Arc::new),
+        },
+        ClientRx { rx, pending },
+    )
+}
+
+impl ClientTx {
+    fn send(&self, frame: Frame) -> Result<(), mpsc::SendError<Frame>> {
+        self.pending.fetch_add(1, Ordering::SeqCst);
+        self.tx.send(frame).inspect_err(|_| {
+            self.pending.fetch_sub(1, Ordering::SeqCst);
+        })
+    }
+
+    /// 廣播用：佇列已滿則回傳 false，並關閉連線讓 client 重連補齊。
+    fn send_bounded(&self, frame: Frame) -> bool {
+        if self.pending.load(Ordering::SeqCst) >= CLIENT_QUEUE_CAP {
+            tracing::warn!("client 佇列已滿（{CLIENT_QUEUE_CAP}），中斷連線");
+            if let Some(c) = &self.closer {
+                c.shutdown();
+            }
+            return false;
+        }
+        self.send(frame).is_ok()
+    }
+}
+
+impl ClientRx {
+    fn note_taken(&self) {
+        self.pending.fetch_sub(1, Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    fn try_iter(&self) -> impl Iterator<Item = Frame> + '_ {
+        self.rx.try_iter().inspect(|_| self.note_taken())
+    }
+}
+
+impl Iterator for ClientRx {
+    type Item = Frame;
+    fn next(&mut self) -> Option<Frame> {
+        let f = self.rx.recv().ok()?;
+        self.note_taken();
+        Some(f)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// event log 寫入執行緒（T07 / T08）
+// ---------------------------------------------------------------------------
+
+/// log 開檔失敗後，重試開檔的最短間隔。
+const LOG_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
+enum LogMsg {
+    Rec(Box<Record>),
+    Flush(Sender<()>),
+}
+
+struct LogWriter {
+    path: PathBuf,
+    file: Option<File>,
+    size: u64,
+    ok: Arc<AtomicBool>,
+    last_try: Option<std::time::Instant>,
+}
+
+impl LogWriter {
+    fn open(&mut self) -> bool {
+        if self.file.is_some() {
+            return true;
+        }
+        if self
+            .last_try
+            .is_some_and(|t| t.elapsed() < LOG_RETRY_INTERVAL)
+        {
+            return false;
+        }
+        self.last_try = Some(std::time::Instant::now());
+        match OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+        {
+            Ok(f) => {
+                self.size = f.metadata().map_or(0, |m| m.len());
+                self.file = Some(f);
+                true
+            }
+            Err(e) => {
+                self.fail(&e);
+                false
+            }
+        }
+    }
+
+    fn fail(&mut self, e: &std::io::Error) {
+        if self.ok.swap(false, Ordering::SeqCst) {
+            tracing::error!("event log 寫入失敗（{:?}）：{e}；之後定期重試", self.path);
+        }
+    }
+
+    fn write_line(&mut self, line: &str) {
+        if !self.open() {
+            return;
+        }
+        let Some(f) = self.file.as_mut() else { return };
+        let res = f
+            .write_all(line.as_bytes())
+            .and_then(|_| f.write_all(b"\n"));
+        match res {
+            Ok(()) => {
+                self.size += line.len() as u64 + 1;
+                if !self.ok.swap(true, Ordering::SeqCst) {
+                    tracing::info!("event log 已恢復寫入");
+                }
+            }
+            Err(e) => {
+                self.file = None;
+                self.fail(&e);
+            }
+        }
+    }
+
+    fn handle(&mut self, rec: &Record) {
+        if let Ok(line) = serde_json::to_string(rec) {
+            self.write_line(&redact_secrets(&line));
+        }
+    }
+}
+
+/// 啟動 log 寫入執行緒。
+fn spawn_log_writer(path: PathBuf) -> (Sender<LogMsg>, Arc<AtomicBool>) {
+    let (tx, rx) = mpsc::channel::<LogMsg>();
+    let ok = Arc::new(AtomicBool::new(true));
+    let mut w = LogWriter {
+        path,
+        file: None,
+        size: 0,
+        ok: ok.clone(),
+        last_try: None,
+    };
+    w.open();
+    std::thread::spawn(move || {
+        for msg in rx {
+            match msg {
+                LogMsg::Rec(rec) => w.handle(&rec),
+                LogMsg::Flush(done) => {
+                    let _ = done.send(());
+                }
+            }
+        }
+    });
+    (tx, ok)
+}
+
 struct Inner {
     state: State,
     seq: Seq,
@@ -398,12 +598,14 @@ struct Inner {
     bus_guard: BusGuard,
     policy: PolicyEngine,
     default_cwd: PathBuf,
-    clients: Vec<Sender<Frame>>,
+    clients: Vec<ClientTx>,
 }
 
 struct Shared {
     inner: Mutex<Inner>,
-    log: Mutex<File>,
+    log_tx: Mutex<Sender<LogMsg>>,
+    /// log 目前是否能正常寫入（false 表示寫入失敗中）。
+    log_ok: Arc<AtomicBool>,
     auth_token: Option<String>,
     /// 本次 daemon 啟動的世代 id。
     epoch: String,
@@ -418,10 +620,7 @@ impl Shared {
         auth_token: Option<String>,
     ) -> Result<Arc<Shared>> {
         let (state, records) = replay_log(log_file)?;
-        let log = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_file)?;
+        let (log_tx, log_ok) = spawn_log_writer(log_file.to_path_buf());
         let seq = records.last().map_or(0, |r| r.seq);
         let skip = records.len().saturating_sub(BACKLOG_CAP);
         let backlog: VecDeque<Record> = records.into_iter().skip(skip).collect();
@@ -438,13 +637,14 @@ impl Shared {
                 default_cwd,
                 clients: Vec::new(),
             }),
-            log: Mutex::new(log),
+            log_tx: Mutex::new(log_tx),
+            log_ok,
             auth_token,
             epoch: new_id("ep"),
         });
         // 重啟後子程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
         let orphans: Vec<SessionId> = {
-            let inner = shared.inner.lock().unwrap();
+            let inner = lock(&shared.inner);
             inner
                 .state
                 .sessions
@@ -464,7 +664,7 @@ impl Shared {
 
     /// 廣播一個事件：更新狀態、寫 log（先遮罩憑證）、推給所有 client。
     fn emit(&self, event: Event) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock(&self.inner);
         inner.seq += 1;
         let rec = Record {
             seq: inner.seq,
@@ -473,12 +673,8 @@ impl Shared {
         };
         inner.state.apply(&rec);
 
-        if let Ok(line) = serde_json::to_string(&rec) {
-            let safe_line = redact_secrets(&line);
-            let mut log = self.log.lock().unwrap();
-            let _ = log.write_all(safe_line.as_bytes());
-            let _ = log.write_all(b"\n");
-        }
+        // 序列化、遮罩與寫檔都在 log 寫入執行緒；這裡持鎖送出，順序與 seq 一致。
+        let _ = lock(&self.log_tx).send(LogMsg::Rec(Box::new(rec.clone())));
 
         inner.backlog.push_back(rec.clone());
         while inner.backlog.len() > BACKLOG_CAP {
@@ -488,14 +684,14 @@ impl Shared {
         let frame = Frame::Record {
             record: Box::new(rec),
         };
-        inner.clients.retain(|c| c.send(frame.clone()).is_ok());
+        inner.clients.retain(|c| c.send_bounded(frame.clone()));
     }
 
     /// 把 adapter 事件翻譯成核心事件（並在審批事件時先經過 PolicyEngine 規則過濾）。
     fn ingest(&self, sid: &SessionId, ev: AgentEvent) {
         if let AgentEvent::Permission(ref p) = ev {
             let decision_and_ctl = {
-                let inner = self.inner.lock().unwrap();
+                let inner = lock(&self.inner);
                 let d = inner.policy.evaluate(&p.title, &p.detail);
                 let ctl = inner.sessions.get(sid).map(|e| e.ctl.clone());
                 d.zip(ctl)
@@ -550,42 +746,54 @@ impl Shared {
         let exited = matches!(event, Event::SessionExited { .. });
         self.emit(event);
         if exited {
-            self.inner.lock().unwrap().sessions.remove(sid);
+            lock(&self.inner).sessions.remove(sid);
+        }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn log_healthy(&self) -> bool {
+        self.log_ok.load(Ordering::SeqCst)
+    }
+
+    /// 等 log 寫入執行緒把目前佇列中的事件全部寫完。
+    fn flush_log(&self) {
+        let (tx, rx) = mpsc::channel();
+        if lock(&self.log_tx).send(LogMsg::Flush(tx)).is_ok() {
+            let _ = rx.recv_timeout(Duration::from_secs(5));
         }
     }
 
     fn snapshot(&self) -> State {
-        self.inner.lock().unwrap().state.clone()
+        lock(&self.inner).state.clone()
     }
 
     fn default_cwd(&self) -> PathBuf {
-        self.inner.lock().unwrap().default_cwd.clone()
+        lock(&self.inner).default_cwd.clone()
     }
 
     /// 關閉：先結束所有 agent 子程序，再移除 socket，最後離開。
     fn shutdown(self: &Arc<Self>) {
         let ctls: Vec<Arc<dyn AgentControl>> = {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = lock(&self.inner);
             inner.sessions.drain().map(|(_, e)| e.ctl).collect()
         };
         for ctl in ctls {
             let _ = ctl.kill();
         }
+        self.flush_log();
         let _ = fs::remove_file(socket_path());
         std::process::exit(0);
     }
 
     fn resolve_session(&self, id_or_label: &str) -> SessionId {
-        self.inner
-            .lock()
-            .unwrap()
+        lock(&self.inner)
             .state
             .resolve_session_id(id_or_label)
             .unwrap_or_else(|| id_or_label.to_string())
     }
 
     fn control(&self, id_or_label: &str) -> Option<(SessionId, Arc<dyn AgentControl>)> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock(&self.inner);
         let sid = inner
             .state
             .resolve_session_id(id_or_label)
@@ -595,10 +803,7 @@ impl Shared {
 
     /// 若該 session 處於 `Sleeping`，先自動喚醒再送輸入。
     fn wake_if_sleeping(&self, sid: &SessionId, ctl: &Arc<dyn AgentControl>) {
-        let is_sleeping = self
-            .inner
-            .lock()
-            .unwrap()
+        let is_sleeping = lock(&self.inner)
             .state
             .sessions
             .get(sid)
@@ -615,7 +820,7 @@ impl Shared {
     // 請求處理
     // -----------------------------------------------------------------------
 
-    fn handle(self: &Arc<Self>, reply: &Sender<Frame>, req: Request) {
+    fn handle(self: &Arc<Self>, reply: &ClientTx, req: Request) {
         match req {
             Request::Hello {
                 client,
@@ -641,7 +846,7 @@ impl Shared {
                 let since = since.filter(|_| epoch.as_deref() == Some(self.epoch.as_str()));
 
                 // M4 增量事件同步：若 `since` 在 backlog 範圍內，只補齊差異事件。
-                let mut inner = self.inner.lock().unwrap();
+                let mut inner = lock(&self.inner);
                 let can_incremental = since.is_some_and(|s| {
                     inner
                         .backlog
@@ -676,10 +881,7 @@ impl Shared {
             Request::Prompt { session, text } => match self.control(&session) {
                 Some((sid, ctl)) => {
                     self.wake_if_sleeping(&sid, &ctl);
-                    let is_pty = self
-                        .inner
-                        .lock()
-                        .unwrap()
+                    let is_pty = lock(&self.inner)
                         .state
                         .sessions
                         .get(&sid)
@@ -800,7 +1002,7 @@ impl Shared {
                 unread_only,
             } => {
                 let sid = self.resolve_session(&session);
-                let mut inner = self.inner.lock().unwrap();
+                let mut inner = lock(&self.inner);
                 let after = if unread_only {
                     inner.inbox_cursors.get(&sid).cloned()
                 } else {
@@ -875,7 +1077,7 @@ impl Shared {
                 detail,
             } => {
                 let resolved_assignee = assignee.map(|a| self.resolve_session(&a));
-                let existing = self.inner.lock().unwrap().state.tasks.get(&id).cloned();
+                let existing = lock(&self.inner).state.tasks.get(&id).cloned();
                 match existing {
                     Some(mut task) => {
                         let previous_assignee = task.assignee.clone();
@@ -977,7 +1179,7 @@ impl Shared {
 
             Request::WorktreeDiff { session } => {
                 let sid = self.resolve_session(&session);
-                let sess = self.inner.lock().unwrap().state.sessions.get(&sid).cloned();
+                let sess = lock(&self.inner).state.sessions.get(&sid).cloned();
                 match sess {
                     Some(s) => match compute_worktree_diff(Path::new(&s.cwd)) {
                         Ok(diff) => {
@@ -1000,7 +1202,7 @@ impl Shared {
 
             Request::WorktreeMerge { session } => {
                 let sid = self.resolve_session(&session);
-                let sess = self.inner.lock().unwrap().state.sessions.get(&sid).cloned();
+                let sess = lock(&self.inner).state.sessions.get(&sid).cloned();
                 let default_cwd = self.default_cwd();
                 match sess {
                     Some(s) => match merge_worktree(&session_repo(&default_cwd, &s), &s) {
@@ -1023,7 +1225,7 @@ impl Shared {
                 body,
             } => {
                 let sid = self.resolve_session(&session);
-                let sess = self.inner.lock().unwrap().state.sessions.get(&sid).cloned();
+                let sess = lock(&self.inner).state.sessions.get(&sid).cloned();
                 match sess {
                     Some(s) => match create_worktree_pr(&s, &title, &body) {
                         Ok(url) => {
@@ -1043,7 +1245,7 @@ impl Shared {
                 let target_sid = session.map(|s| self.resolve_session(&s));
                 let default_cwd = self.default_cwd();
                 let candidates: Vec<Session> = {
-                    let inner = self.inner.lock().unwrap();
+                    let inner = lock(&self.inner);
                     inner
                         .state
                         .sessions
@@ -1131,10 +1333,7 @@ impl Shared {
     }
 
     fn collect_worktrees(&self) -> Vec<WorktreeInfo> {
-        let sessions: Vec<Session> = self
-            .inner
-            .lock()
-            .unwrap()
+        let sessions: Vec<Session> = lock(&self.inner)
             .state
             .sessions_sorted()
             .into_iter()
@@ -1164,7 +1363,7 @@ impl Shared {
 
     fn handle_bus_send(
         self: &Arc<Self>,
-        reply: &Sender<Frame>,
+        reply: &ClientTx,
         from: Option<SessionId>,
         to: Target,
         kind: MsgKind,
@@ -1200,7 +1399,7 @@ impl Shared {
     ) -> std::result::Result<MsgId, String> {
         let now = now_millis();
         let (from_sid, resolved_to) = {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = lock(&self.inner);
             let from_sid = from
                 .map(|f| inner.state.resolve_session_id(&f).unwrap_or(f))
                 .unwrap_or_else(|| "human".into());
@@ -1235,7 +1434,7 @@ impl Shared {
         let mut idle_targets: Vec<(SessionId, Arc<dyn AgentControl>)> = Vec::new();
         let mut mailbox_dirs: Vec<(PathBuf, String)> = Vec::new();
         {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = lock(&self.inner);
             let state_clone = inner.state.clone();
             let waiters = std::mem::take(&mut inner.waiters);
             let mut remaining = Vec::with_capacity(waiters.len());
@@ -1301,7 +1500,7 @@ impl Shared {
 
     fn handle_bus_wait(
         self: &Arc<Self>,
-        reply: &Sender<Frame>,
+        reply: &ClientTx,
         session: SessionId,
         from: Option<SessionId>,
         reply_to: Option<MsgId>,
@@ -1317,7 +1516,7 @@ impl Shared {
         };
 
         {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = lock(&self.inner);
             let after = inner.inbox_cursors.get(&sid).cloned();
             let unread = inner.state.inbox_for(&sid, after.as_deref());
             if let Some(found) = unread.into_iter().find(|m| waiter.matches(&inner.state, m)) {
@@ -1351,7 +1550,7 @@ impl Shared {
         );
     }
 
-    fn handle_spawn(self: &Arc<Self>, reply: &Sender<Frame>, spawn: SpawnRequest) {
+    fn handle_spawn(self: &Arc<Self>, reply: &ClientTx, spawn: SpawnRequest) {
         let id = new_id("ses");
         let mut cwd = spawn
             .cwd
@@ -1395,10 +1594,7 @@ impl Shared {
         let mut permission = resolved.permission;
         let mut downgraded = None;
         if let Some(pid) = &parent {
-            let parent_perm = self
-                .inner
-                .lock()
-                .unwrap()
+            let parent_perm = lock(&self.inner)
                 .state
                 .sessions
                 .get(pid)
@@ -1492,7 +1688,7 @@ impl Shared {
                         });
                     }
                 }
-                let mut inner = self.inner.lock().unwrap();
+                let mut inner = lock(&self.inner);
                 if let Some(s) = inner.state.sessions.get_mut(&id) {
                     s.transport = transport;
                 }
@@ -1868,8 +2064,9 @@ fn remove_worktree(main_repo: &Path, session: &Session, force: bool) -> Result<(
 
 fn handle_conn(shared: Arc<Shared>, stream: ConnStream, require_auth: bool) -> Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
+    let stream_closer = stream.try_clone().ok();
     let mut writer = stream;
-    let (tx, rx) = mpsc::channel::<Frame>();
+    let (tx, rx) = client_channel(stream_closer);
 
     std::thread::spawn(move || {
         for frame in rx {
@@ -1915,7 +2112,15 @@ fn handle_conn(shared: Arc<Shared>, stream: ConnStream, require_auth: bool) -> R
                         break;
                     }
                 }
-                shared.handle(&tx, req);
+                // 單一請求 panic 只斷這條連線，不影響 daemon 與其他 session。
+                let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    shared.handle(&tx, req)
+                }));
+                if handled.is_err() {
+                    tracing::error!("處理請求時 panic，中斷此連線");
+                    let _ = tx.send(Frame::error("daemon 處理請求時發生內部錯誤"));
+                    break;
+                }
             }
             Err(e) => {
                 let _ = tx.send(Frame::error(format!("無法解析請求：{e}")));
@@ -2451,7 +2656,7 @@ mod tests {
             &dir,
         );
 
-        let (tx, _rx) = mpsc::channel();
+        let (tx, _rx) = client_channel(None);
         shared.handle(
             &tx,
             Request::TaskCreate {
@@ -2686,6 +2891,7 @@ mod tests {
             session: restart_session("ses-done", SessionStatus::Exited),
         });
         let n = first.inner.lock().unwrap().seq;
+        first.flush_log();
         drop(first);
 
         let second =
@@ -2701,6 +2907,7 @@ mod tests {
             session: "ses-done".into(),
             status: SessionStatus::Exited,
         });
+        second.flush_log();
         drop(second);
 
         let (_, recs) = replay_log(&log).unwrap();
@@ -2714,7 +2921,7 @@ mod tests {
         shared.emit(Event::SessionStarted {
             session: restart_session("ses-a", SessionStatus::Idle),
         });
-        let (tx, rx) = mpsc::channel::<Frame>();
+        let (tx, rx) = client_channel(None);
         shared.handle(
             &tx,
             Request::Hello {
@@ -2726,7 +2933,7 @@ mod tests {
         );
         let frames: Vec<Frame> = rx.try_iter().collect();
         assert!(frames.iter().any(|f| matches!(f, Frame::Snapshot { .. })));
-        let (tx2, rx2) = mpsc::channel::<Frame>();
+        let (tx2, rx2) = client_channel(None);
         shared.handle(
             &tx2,
             Request::Hello {
@@ -2737,5 +2944,75 @@ mod tests {
             },
         );
         assert!(!rx2.try_iter().any(|f| matches!(f, Frame::Snapshot { .. })));
+    }
+
+    // ---- 併發與 log 輪替（T07 / T08）----
+
+    fn out_event(i: usize) -> Event {
+        Event::Output {
+            session: "ses-a".into(),
+            text: format!("line {i} {}", "x".repeat(60)),
+        }
+    }
+
+    #[test]
+    fn stalled_client_is_dropped_others_unaffected() {
+        let shared = test_shared();
+        let (slow_tx, _slow_rx) = client_channel(None);
+        let (good_tx, good_rx) = client_channel(None);
+        {
+            let mut inner = lock(&shared.inner);
+            inner.clients.push(slow_tx);
+            inner.clients.push(good_tx);
+        }
+        let total = CLIENT_QUEUE_CAP + 50;
+        let mut got = 0;
+        for i in 0..total {
+            shared.emit(out_event(i));
+            got += good_rx.try_iter().count();
+        }
+        assert_eq!(got, total);
+        assert_eq!(lock(&shared.inner).clients.len(), 1);
+    }
+
+    #[test]
+    fn snapshot_works_after_lock_poisoned() {
+        let shared = test_shared();
+        let s2 = shared.clone();
+        let r = std::thread::spawn(move || {
+            let _g = s2.inner.lock().unwrap();
+            panic!("故意中毒");
+        })
+        .join();
+        assert!(r.is_err());
+        let _ = shared.snapshot();
+        shared.emit(out_event(0));
+    }
+
+    #[test]
+    fn flush_persists_last_event() {
+        let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ade-log")));
+        let shared =
+            Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+        shared.emit(out_event(1));
+        shared.emit(out_event(2));
+        shared.flush_log();
+        let (_, recs) = replay_log(&log).unwrap();
+        assert_eq!(recs.len(), 2);
+        assert!(matches!(&recs[1].event, Event::Output { text, .. } if text.starts_with("line 2")));
+    }
+
+    #[test]
+    fn unwritable_log_does_not_stop_daemon() {
+        let log = std::env::temp_dir()
+            .join(new_id("ade-nodir"))
+            .join("events.jsonl");
+        let shared =
+            Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+        shared.emit(out_event(1));
+        shared.flush_log();
+        assert!(!shared.log_healthy());
+        shared.emit(out_event(2));
+        assert_eq!(shared.snapshot().seq, 2);
     }
 }
