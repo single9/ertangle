@@ -19,6 +19,7 @@ fn claude_roundtrip_output_cost_and_exit() {
         kind: AgentKind::ClaudeCode,
         cwd: std::env::temp_dir(),
         transport: Transport::Structured,
+        bin: None,
         args: vec![],
         model: None,
         allowed_tools: vec![],

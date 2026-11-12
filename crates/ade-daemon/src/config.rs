@@ -270,4 +270,17 @@ model = "haiku"
     fn bad_file_is_ignored() {
         assert!(Config::parse("[[[").is_err());
     }
+
+    #[test]
+    fn custom_bin_in_agent_cfg() {
+        let c = Config::parse(
+            r#"
+[agents.claude]
+bin = "/opt/custom/claude"
+"#,
+        )
+        .unwrap();
+        let r = c.resolve(&AgentKind::ClaudeCode, &Role::Worker, None, &[], None);
+        assert_eq!(r.bin.as_deref(), Some("/opt/custom/claude"));
+    }
 }

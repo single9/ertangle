@@ -124,6 +124,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         kind: spawn.kind.clone(),
         cwd: cwd.clone(),
         transport: spawn.transport,
+        bin: resolved.bin,
         args: resolved.args.clone(),
         model: resolved.model.clone(),
         env,

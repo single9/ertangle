@@ -336,7 +336,10 @@ impl AgentControl for CodexControl {
 // ---------------------------------------------------------------------------
 
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
-    let prog = crate::which("codex").context("找不到 `codex`")?;
+    let prog = match spec.bin.as_deref() {
+        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
+        None => crate::which("codex").context("找不到 `codex`")?,
+    };
     let mut cmd = Command::new(prog);
     cmd.arg("app-server");
     cmd.args(spec.permission.codex_flags());

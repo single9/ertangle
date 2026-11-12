@@ -72,7 +72,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         })
         .context("openpty 失敗")?;
 
-    let (prog, base) = spec.kind.pty_command();
+    let (default_prog, base) = spec.kind.pty_command();
+    let prog = match spec.bin.as_deref() {
+        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
+        None => crate::which(default_prog).context(format!("找不到 `{default_prog}`"))?,
+    };
     let mut cmd = CommandBuilder::new(prog);
     for a in base {
         cmd.arg(a);

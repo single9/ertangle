@@ -53,6 +53,8 @@ pub struct SessionSpec {
     pub kind: AgentKind,
     pub cwd: PathBuf,
     pub transport: Transport,
+    /// 自訂執行檔路徑或名稱（覆寫預設 PATH 探測）。
+    pub bin: Option<String>,
     /// 額外命令列參數。
     pub args: Vec<String>,
     /// 要使用的 model（目前僅 Claude 結構化模式支援）。
@@ -201,20 +203,25 @@ fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn
     match spec.kind {
         AgentKind::OpenCode | AgentKind::Antigravity => {
             let (prog, _) = spec.kind.acp_command().context("此 agent 不支援 ACP")?;
-            if which(prog).is_none() {
-                bail!("找不到 `{prog}`，請先安裝或改用 --transport pty");
+            let target = spec.bin.as_deref().unwrap_or(prog);
+            if which(target).is_none() {
+                bail!("找不到 `{target}`，請先安裝或改用 --transport pty");
             }
             acp::start(spec, tx)
         }
         AgentKind::ClaudeCode => {
-            if which("claude").is_none() {
-                bail!("找不到 `claude`，請先安裝或改用 --transport pty");
+            let target = spec.bin.as_deref().unwrap_or("claude");
+            if spec.bin.is_none() && std::env::var_os("ADE_CLAUDE_BIN").is_some() {
+                // 由 claude::start 透過 ADE_CLAUDE_BIN 處理
+            } else if which(target).is_none() {
+                bail!("找不到 `{target}`，請先安裝或改用 --transport pty");
             }
             claude::start(spec, tx)
         }
         AgentKind::Codex => {
-            if which("codex").is_none() {
-                bail!("找不到 `codex`，請先安裝或改用 --transport pty");
+            let target = spec.bin.as_deref().unwrap_or("codex");
+            if which(target).is_none() {
+                bail!("找不到 `{target}`，請先安裝或改用 --transport pty");
             }
             codex::start(spec, tx)
         }

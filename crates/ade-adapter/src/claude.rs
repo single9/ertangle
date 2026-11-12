@@ -303,7 +303,10 @@ fn permission_args(spec: &SessionSpec) -> Vec<String> {
 }
 
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
-    let prog = crate::agent_bin("claude", "ADE_CLAUDE_BIN").context("找不到 `claude`")?;
+    let prog = match spec.bin.as_deref() {
+        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
+        None => crate::agent_bin("claude", "ADE_CLAUDE_BIN").context("找不到 `claude`")?,
+    };
     let mut cmd = Command::new(prog);
     cmd.args([
         "-p",
@@ -416,6 +419,7 @@ mod tests {
             kind: ade_core::AgentKind::ClaudeCode,
             cwd: std::env::temp_dir(),
             transport: ade_protocol::Transport::Structured,
+            bin: None,
             args: vec![],
             model: None,
             allowed_tools: vec!["Read".into(), "Grep".into()],
