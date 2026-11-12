@@ -301,9 +301,7 @@ impl BusMessage {
     pub fn matches_recipient(&self, session_id: &str, label: Option<&str>) -> bool {
         match &self.to {
             Target::Broadcast | Target::Channel(_) => self.from != session_id,
-            Target::Direct(target) => {
-                target == session_id || label.is_some_and(|l| l == target)
-            }
+            Target::Direct(target) => target == session_id || label.is_some_and(|l| l == target),
         }
     }
 }

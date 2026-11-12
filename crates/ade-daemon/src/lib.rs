@@ -513,10 +513,7 @@ impl Shared {
             .state
             .resolve_session_id(id_or_label)
             .unwrap_or_else(|| id_or_label.to_string());
-        inner
-            .sessions
-            .get(&sid)
-            .map(|e| (sid, e.ctl.clone()))
+        inner.sessions.get(&sid).map(|e| (sid, e.ctl.clone()))
     }
 
     /// 若該 session 處於 `Sleeping`，先自動喚醒再送輸入。
@@ -1075,9 +1072,10 @@ impl Shared {
 
             if !woke_waiter && matches!(kind, MsgKind::Question | MsgKind::Handoff) {
                 if let Target::Direct(target_sid) = &resolved_to {
-                    let is_idle_or_sleeping = inner.state.sessions.get(target_sid).is_some_and(
-                        |s| matches!(s.status, SessionStatus::Idle | SessionStatus::Sleeping),
-                    );
+                    let is_idle_or_sleeping =
+                        inner.state.sessions.get(target_sid).is_some_and(|s| {
+                            matches!(s.status, SessionStatus::Idle | SessionStatus::Sleeping)
+                        });
                     if is_idle_or_sleeping {
                         if let Some(entry) = inner.sessions.get(target_sid) {
                             idle_target = Some((target_sid.clone(), entry.ctl.clone()));
@@ -1141,8 +1139,8 @@ impl Shared {
 
         let reply = reply.clone();
         let clamped_ms = timeout_ms.clamp(1, MAX_WAIT_MS);
-        std::thread::spawn(move || {
-            match rx.recv_timeout(Duration::from_millis(clamped_ms)) {
+        std::thread::spawn(
+            move || match rx.recv_timeout(Duration::from_millis(clamped_ms)) {
                 Ok(msg) => {
                     let _ = reply.send(Frame::Messages {
                         messages: vec![msg],
@@ -1155,8 +1153,8 @@ impl Shared {
                         timed_out: true,
                     });
                 }
-            }
-        });
+            },
+        );
     }
 
     fn handle_spawn(self: &Arc<Self>, reply: &Sender<Frame>, spawn: SpawnRequest) {
@@ -1331,10 +1329,7 @@ fn git_status_summary(cwd: &Path) -> (usize, String) {
         return (0, String::new());
     };
     let text = String::from_utf8_lossy(&out.stdout);
-    let lines: Vec<&str> = text
-        .lines()
-        .filter(|l| !l.contains(".ade/"))
-        .collect();
+    let lines: Vec<&str> = text.lines().filter(|l| !l.contains(".ade/")).collect();
     let count = lines.len();
     let files: Vec<&str> = lines
         .iter()
@@ -1481,7 +1476,9 @@ fn create_worktree_pr(session: &Session, title: &str, body: &str) -> Result<Stri
     }
     let out = Command::new("gh")
         .current_dir(wt_dir)
-        .args(["pr", "create", "--title", title, "--body", body, "--head", branch])
+        .args([
+            "pr", "create", "--title", title, "--body", body, "--head", branch,
+        ])
         .output()
         .context("找不到或無法執行 `gh` CLI")?;
     if !out.status.success() {
@@ -1668,7 +1665,9 @@ mod tests {
         let target = Target::Direct("ses_b".into());
         for i in 0..LOOP_REPEAT_CAP {
             assert!(
-                guard.check("ses_a", &target, "ping", 1000 + i as u64).is_ok(),
+                guard
+                    .check("ses_a", &target, "ping", 1000 + i as u64)
+                    .is_ok(),
                 "repeat {i} should pass"
             );
         }

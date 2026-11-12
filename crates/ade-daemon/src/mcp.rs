@@ -99,10 +99,7 @@ pub fn handle_rpc(session: &str, msg: &Value) -> Option<Value> {
                 })),
             }
         }
-        other => Err((
-            -32601,
-            format!("不支援的 MCP 方法：{other}"),
-        )),
+        other => Err((-32601, format!("不支援的 MCP 方法：{other}"))),
     };
 
     Some(match result {
@@ -436,7 +433,10 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
 
         "ade_send" => {
             let to_str = args["to"].as_str().context("缺少 `to` 參數")?;
-            let body = args["body"].as_str().context("缺少 `body` 參數")?.to_string();
+            let body = args["body"]
+                .as_str()
+                .context("缺少 `body` 參數")?
+                .to_string();
             let kind = args["kind"]
                 .as_str()
                 .and_then(MsgKind::parse)
@@ -501,16 +501,21 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 reply_to: None,
             })?;
             let qid = match send_frame {
-                Frame::Ok { note: Some(n) } => {
-                    n.rsplit_once(' ').map(|(_, id)| id.to_string()).unwrap_or(n)
-                }
+                Frame::Ok { note: Some(n) } => n
+                    .rsplit_once(' ')
+                    .map(|(_, id)| id.to_string())
+                    .unwrap_or(n),
                 _ => String::new(),
             };
 
             match roundtrip(&Request::BusWait {
                 session: session.to_string(),
                 from: Some(peer.to_string()),
-                reply_to: if qid.is_empty() { None } else { Some(qid.clone()) },
+                reply_to: if qid.is_empty() {
+                    None
+                } else {
+                    Some(qid.clone())
+                },
                 timeout_ms,
             })? {
                 Frame::Messages {
@@ -534,7 +539,10 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "ade_task_create" => {
-            let title = args["title"].as_str().context("缺少 `title` 參數")?.to_string();
+            let title = args["title"]
+                .as_str()
+                .context("缺少 `title` 參數")?
+                .to_string();
             let detail = args["detail"].as_str().unwrap_or("").to_string();
             let assignee = args["assignee"].as_str().map(|s| s.to_string());
             let depends_on = args["depends_on"]
@@ -564,10 +572,9 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         "ade_task_update" => {
             let id = args["id"].as_str().context("缺少 `id` 參數")?.to_string();
             let status = match args.get("status").and_then(|v| v.as_str()) {
-                Some(s) => Some(
-                    TaskStatus::parse(s)
-                        .with_context(|| format!("未知的任務狀態：{s}（todo/doing/blocked/review/done）"))?,
-                ),
+                Some(s) => Some(TaskStatus::parse(s).with_context(|| {
+                    format!("未知的任務狀態：{s}（todo/doing/blocked/review/done）")
+                })?),
                 None => None,
             };
             let assignee = args["assignee"].as_str().map(|s| s.to_string());
@@ -584,8 +591,8 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
 
         "ade_spawn" => {
             let kind_str = args["kind"].as_str().unwrap_or("opencode");
-            let kind = AgentKind::parse(kind_str)
-                .with_context(|| format!("未知的 agent：{kind_str}"))?;
+            let kind =
+                AgentKind::parse(kind_str).with_context(|| format!("未知的 agent：{kind_str}"))?;
             let prompt = args["prompt"]
                 .as_str()
                 .context("缺少 `prompt` 參數")?
@@ -621,7 +628,10 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "ade_artifact_share" => {
-            let path = args["path"].as_str().context("缺少 `path` 參數")?.to_string();
+            let path = args["path"]
+                .as_str()
+                .context("缺少 `path` 參數")?
+                .to_string();
             let kind = args["kind"]
                 .as_str()
                 .and_then(ArtifactKind::parse)
@@ -641,7 +651,10 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "ade_status" => {
-            let text = args["text"].as_str().context("缺少 `text` 參數")?.to_string();
+            let text = args["text"]
+                .as_str()
+                .context("缺少 `text` 參數")?
+                .to_string();
             roundtrip(&Request::SessionNote {
                 session: session.to_string(),
                 note: text,
@@ -650,10 +663,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "ade_diff" => {
-            let target = args["session"]
-                .as_str()
-                .unwrap_or(session)
-                .to_string();
+            let target = args["session"].as_str().unwrap_or(session).to_string();
             match roundtrip(&Request::WorktreeDiff { session: target })? {
                 Frame::Diff {
                     session,

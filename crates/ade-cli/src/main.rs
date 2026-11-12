@@ -706,7 +706,10 @@ fn cmd_ask(
         reply_to: None,
     })?;
     let qid = match send_frame {
-        Frame::Ok { note: Some(n) } => n.rsplit_once(' ').map(|(_, id)| id.to_string()).unwrap_or(n),
+        Frame::Ok { note: Some(n) } => n
+            .rsplit_once(' ')
+            .map(|(_, id)| id.to_string())
+            .unwrap_or(n),
         _ => String::new(),
     };
     let Frame::Messages {
@@ -715,7 +718,11 @@ fn cmd_ask(
     } = roundtrip(&Request::BusWait {
         session,
         from: Some(peer),
-        reply_to: if qid.is_empty() { None } else { Some(qid.clone()) },
+        reply_to: if qid.is_empty() {
+            None
+        } else {
+            Some(qid.clone())
+        },
         timeout_ms,
     })?
     else {
