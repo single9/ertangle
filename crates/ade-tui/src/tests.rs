@@ -1,4 +1,3 @@
-
 use super::*;
 use ade_core::{Cost, Role, Session};
 use ratatui::backend::TestBackend;
