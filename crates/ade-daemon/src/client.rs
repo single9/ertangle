@@ -124,18 +124,49 @@ pub fn ensure_daemon() -> Result<()> {
     if std::env::var_os("ADE_REMOTE").is_some() {
         bail!("無法連線至 ADE_REMOTE 指定的遠端 daemon");
     }
+    let sock = socket_path();
+    if let Some(dir) = sock.parent() {
+        if dir == runtime_dir() {
+            crate::server::ensure_private_dir(dir)?;
+        }
+    }
     let exe = std::env::current_exe().context("取得自身執行檔路徑失敗")?;
-    Command::new(exe)
-        .arg("daemon")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .context("無法啟動 daemon")?;
+    let log_dir = state_dir();
+    let _ = fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join("daemon.log");
+    let err_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_path);
+    let mut cmd = Command::new(exe);
+    cmd.arg("daemon").stdin(Stdio::null()).stdout(Stdio::null());
+    if let Ok(f) = err_file {
+        cmd.stderr(f);
+    } else {
+        cmd.stderr(Stdio::null());
+    }
+    let mut child = cmd.spawn().context("無法啟動 daemon")?;
     for _ in 0..120 {
         std::thread::sleep(Duration::from_millis(50));
         if is_running() {
             return Ok(());
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            let detail = fs::read_to_string(&log_path)
+                .ok()
+                .and_then(|s| {
+                    s.lines()
+                        .rev()
+                        .find(|l| !l.trim().is_empty())
+                        .map(str::to_string)
+                })
+                .unwrap_or_default();
+            if detail.is_empty() {
+                bail!("daemon 異常退出（{status}）");
+            } else {
+                bail!("daemon 啟動失敗：{detail}");
+            }
         }
     }
     bail!("daemon 啟動逾時（{:?}）", socket_path())

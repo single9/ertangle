@@ -65,6 +65,24 @@ fn socket_dir_is_0700_and_loose_dir_rejected() {
 }
 
 #[test]
+fn ensure_daemon_validates_socket_dir_before_spawn() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = temp_cwd();
+    let old_xdg = std::env::var_os("XDG_RUNTIME_DIR");
+    std::env::set_var("XDG_RUNTIME_DIR", &base);
+    let d = base.join("ade");
+    fs::create_dir(&d).unwrap();
+    fs::set_permissions(&d, fs::Permissions::from_mode(0o777)).unwrap();
+    let err = crate::client::ensure_daemon().unwrap_err().to_string();
+    if let Some(old) = old_xdg {
+        std::env::set_var("XDG_RUNTIME_DIR", old);
+    } else {
+        std::env::remove_var("XDG_RUNTIME_DIR");
+    }
+    assert!(err.contains("權限過寬"), "{err}");
+}
+
+#[test]
 fn wrong_token_tcp_connection_is_closed() {
     use std::io::{BufRead, Write};
     let shared = Shared::restore(
