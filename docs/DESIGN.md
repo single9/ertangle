@@ -335,16 +335,25 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 
 - **左**：repo → worktree → session 樹；狀態以顏色/符號表示（●忙 ○閒 ⏸待審批 ✗失敗）。
 - **中**：選定 session 的對話/工具呼叫/diff（結構化渲染；無法結構化時 fallback 成 PTY 原始輸出）。
+  - 逐字稿會即時渲染 **Markdown**：標題、粗體／斜體／刪除線、行內程式碼、連結、無序／有序／工作清單、引言、分隔線、圍籬程式碼區塊（含語言標籤與底色）、GFM 表格（含對齊）。
+  - ade 的語意前綴分色：`💭`（思考，暗色斜體）、`▸`（工具呼叫，琥珀色）、`💬`（審查註解，洋紅）。
+  - 支援翻頁捲動與「跟隨最新」（follow-tail），右側顯示捲軸；`t` 可在渲染後與原始文字間切換。
+  - Diff 視圖每行附舊／新檔行號邊欄，標題顯示 `+N -M` 統計，`{` / `}` 可跳 hunk。
 - **右**：bus 活動流 + 任務看板（可切 tab）。
 - **底**：輸入框。`@session` 指定對象、`#channel` 廣播、`/` 開命令面板（`/spawn`、`/merge`、`/task`）。
+- **標題列**：兩行——上排為視圖頁籤與 session/task 數，下排為成本、token 用量與 `md`／`follow` 狀態指示。
 - **Diff 視圖**：每個 worktree 的 `git diff`，可對行下註解並送回該 agent（借用 Antigravity/Orca 的 review 迴圈概念）。
 
-### 7.2 關鍵按鍵（草案）
+### 7.2 關鍵按鍵
 | 鍵 | 動作 |
 | --- | --- |
 | `Ctrl-P` / `Ctrl-K` | 命令面板 / 跳轉任何 session（jump anywhere） |
 | `n` | 新 session（精靈：agent、worktree、role、prompt） |
-| `Tab` / `Shift-Tab` | 切換 pane / 視圖 |
+| `Tab` / `g` | 切換 pane / 視圖 |
+| `t` | 切換逐字稿顯示（Markdown 渲染 ↔ 原始文字） |
+| `PgUp` / `PgDn`（`Ctrl-U` / `Ctrl-D`） | 捲動逐字稿 / diff（捲動即暫停跟隨） |
+| `Home` / `End` | 跳到最前 / 回到跟隨最新 |
+| `{` / `}` | （Diff）上一個 / 下一個 hunk |
 | `Enter` | 送 prompt 給當前 session |
 | `a` / `d` | 對待審批按 allow / deny |
 | `m` | 開 bus 訊息面板（寄訊息給任一 session/channel） |
@@ -353,9 +362,9 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | `q` | 離開 TUI（**不**殺 daemon） |
 
 ### 7.3 效能策略
-- TUI 只持有「可見範圍」的狀態，事件用 ring buffer，避免長 transcript 吃記憶體。
+- TUI 只持有「渲染所需」的鏡像狀態；逐字稿以 ring buffer（`TRANSCRIPT_CAP`）上限，避免長對話吃記憶體。
 - 事件批次渲染（~30–60fps 上限），串流 delta 合併後再重繪。
-- 大量輸出時，transcript 以虛擬捲動（virtualized list）處理。
+- 逐字稿 Markdown 渲染結果以 `(session, seq, 寬度, 模式)` 為鍵快取，只有來源或寬度變動時才重算；大量輸出時只取可見視窗。
 
 ---
 
@@ -446,6 +455,8 @@ ade-rust/
 │  │   └─ ansi.rs            #   ANSI 控制碼剝除
 │  ├─ ade-daemon/            # supervisor、socket server、MCP server、worktree
 │  ├─ ade-tui/               # ratatui 前端
+│  │   ├─ lib.rs             #   三欄版面、事件迴圈、視圖切換
+│  │   └─ markdown.rs        #   零依賴 Markdown → Ratatui 行渲染器
 │  └─ ade-cli/               # `ade` binary（tui/daemon/mcp/send/spawn/...）
 └─ docs/
    ├─ DESIGN.md              # 本文件
@@ -523,6 +534,11 @@ worktree 管理（`ade worktrees` / `ade gc`）、彩色 diff 視圖（含未追
 **M4 — 打磨（已完成，見 `crates/ade-core`、`crates/ade-daemon`、`crates/ade-tui`）**
 命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、成本/用量追蹤（`ade cost` 與 TUI 標題列）、閒置休眠與自動喚醒（`SIGSTOP`/`SIGCONT`，`ade sleep`/`ade wake`/TUI `z` 鍵）、事件重播与增量同步（`ade replay`、`Hello.since`）、Policy 規則引擎（`policy.toml`）與秘密自動遮罩（`redact_secrets`）。
 
+**TUI 檢視區與 Markdown 渲染（已完成，見 `crates/ade-tui/src/markdown.rs`）**
+零依賴 Markdown 渲染器（標題／粗體／斜體／刪除線／行內程式碼／連結／清單／引言／分隔線／圍籬程式碼／GFM 表格）、
+語意前綴分色（`💭`／`▸`／`💬`）、逐字稿翻頁捲動 + 跟隨最新 + 捲軸 + `t` 原始／渲染切換、
+Diff 視圖舊新行號邊欄與 `+N -M` 統計與 `{`/`}` hunk 跳轉、響應式三欄寬度與兩行標題列。
+
 **M5 — 遠端（已完成，見 `crates/ade-daemon` 與 `crates/ade-cli`）**
 daemon 支援 `--listen <host:port> --token <secret>`（TCP + token 驗證），client 支援 `--remote <host:port> --token <secret>`（或 `ADE_REMOTE` / `ADE_TOKEN` 環境變數）與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
 
@@ -538,7 +554,8 @@ M3–M5 已驗證（實機）：
 | 成本統計 | `ade cost` | 逐 session 與總計顯示 USD 與 input/output tokens |
 | 事件重播與秘密遮罩 | `ade replay` | 完整重播 `events.jsonl`；`sk-...` / `ghp_...` 自動遮罩為 `<REDACTED>` |
 | 遠端 TCP + Token 連線 | `ade daemon --listen 127.0.0.1:17429 --token ...` | 透過 `--remote` + `--token` 建立任務與查詢狀態成功 |
-| 測試 / lint | `cargo test` / `cargo clippy --all-targets -- -D warnings` | 23 passed / 無警告 |
+| TUI Markdown 渲染與捲動 | `cargo test -p ade-tui`（TestBackend 全畫面渲染） | 標題／粗體／程式碼／表格正確渲染、`t` 切換原始文字、Diff 邊欄與 `+N -M` 統計、翻頁後恢復跟隨 |
+| 測試 / lint | `cargo test` / `cargo clippy --all-targets -- -D warnings` | 32 passed / 無警告 |
 
 ---
 

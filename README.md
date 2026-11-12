@@ -48,6 +48,8 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 - **打磨與資源控制（M4）**：命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、即時成本與 token 統計（`ade cost`）、
   閒置休眠與自動喚醒（`SIGSTOP` / `SIGCONT`、`ade sleep` / `ade wake` / TUI `z` 鍵）、權限規則引擎（`.ade/policy.toml` 或 `~/.config/ade/policy.toml`）。
 - **TUI**：三種中央視圖（Overview / Diff / Worktrees）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
+  逐字稿會即時渲染 Markdown（標題、粗體／斜體、行內程式碼、清單、引言、分隔線、圍籬程式碼區塊與 GFM 表格），
+  並可用 `t` 在渲染後與原始文字之間切換；輸出可翻頁捲動並自動跟隨最新。
 - **檔案信箱後備**：自動同步寫入 `<cwd>/.ade/mailbox/<session>.jsonl`。
 
 ### 權限政策
@@ -93,6 +95,10 @@ cargo test                     # 19 個單元測試
 | `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標） |
 | `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
 | `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
+| `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字（方便複製） |
+| `PgUp` / `PgDn`（或 `Ctrl-U` / `Ctrl-D`） | 逐字稿 / diff 翻頁捲動（捲動後暫停跟隨，狀態列會顯示 `⏸ paused`） |
+| `Home` / `End` | 跳到最前 / 回到跟隨最新輸出（`▼ follow`） |
+| `{` / `}` | （Diff 視圖）跳到上一個 / 下一個 hunk（`@@`） |
 | `i` / `Enter` | 對選取 session 送 prompt（支援 `@peer 訊息`、`#channel 訊息`、`/命令`） |
 | `n` | 建立 session：`<agent> <prompt>`（`Ctrl-W` 切換是否開 worktree） |
 | `m` | 送訊息到匯流排（agent 之間溝通） |

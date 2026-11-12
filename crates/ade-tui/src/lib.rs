@@ -2,6 +2,11 @@
 //!
 //! 它是 daemon 的一個 client：接收事件流、送出請求。因為狀態都在 daemon，
 //! 這裡只保留「渲染所需」的鏡像狀態，關掉重開不會影響任何 agent。
+//!
+//! 逐字稿區支援 Markdown 渲染（見 [`markdown`]）、翻頁捲動與「跟隨最新」，
+//! 並可用 `t` 在渲染後與原始文字之間切換。
+
+mod markdown;
 
 use ade_core::{
     AgentKind, Decision, MsgKind, Role, SessionId, SessionStatus, State, Target, WorktreeInfo,
@@ -18,7 +23,10 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{
+    Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+    ScrollbarState, Wrap,
+};
 use ratatui::{Frame as TuiFrame, Terminal};
 use std::io::{self, Write};
 use std::sync::mpsc::{self, Receiver};
@@ -45,6 +53,15 @@ enum CenterView {
     Worktrees,
 }
 
+/// 逐字稿渲染快取：只有來源／寬度／模式改變時才重算 Markdown。
+struct MdCache {
+    session: SessionId,
+    seq: u64,
+    raw: bool,
+    width: u16,
+    lines: Vec<Line<'static>>,
+}
+
 struct App {
     state: State,
     selected: usize,
@@ -57,8 +74,20 @@ struct App {
     diff_session: Option<SessionId>,
     diff_lines: Vec<String>,
     diff_cursor: usize,
+    /// 每行對應的（舊檔行號, 新檔行號）邊欄。
+    diff_gutter: Vec<(Option<u64>, Option<u64>)>,
+    diff_added: usize,
+    diff_removed: usize,
     /// M3：受管 worktrees 快照。
     worktrees: Vec<WorktreeInfo>,
+    /// 逐字稿捲動位置（渲染後行索引）；`None` = 跟隨最新輸出。
+    transcript_scroll: Option<usize>,
+    /// 最近一次繪製時可見的行數與總行數（供翻頁與捲軸使用）。
+    transcript_viewport: usize,
+    transcript_total: usize,
+    /// 逐字稿是否以原始文字（不做 Markdown 渲染）顯示。
+    raw_md: bool,
+    md_cache: Option<MdCache>,
     should_quit: bool,
 }
 
@@ -75,7 +104,15 @@ impl App {
             diff_session: None,
             diff_lines: Vec::new(),
             diff_cursor: 0,
+            diff_gutter: Vec::new(),
+            diff_added: 0,
+            diff_removed: 0,
             worktrees: Vec::new(),
+            transcript_scroll: None,
+            transcript_viewport: 0,
+            transcript_total: 0,
+            raw_md: false,
+            md_cache: None,
             should_quit: false,
         }
     }
@@ -222,6 +259,10 @@ fn apply_frame(app: &mut App, frame: Frame) {
         Frame::Diff { session, diff, .. } => {
             app.diff_session = Some(session);
             app.diff_lines = diff.lines().map(|l| l.to_string()).collect();
+            app.diff_gutter = build_gutter(&app.diff_lines);
+            let (added, removed) = diff_stat(&app.diff_lines);
+            app.diff_added = added;
+            app.diff_removed = removed;
             app.diff_cursor = 0;
         }
         Frame::Worktrees { worktrees } => {
@@ -269,6 +310,14 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
                 app.mode = Mode::Jump;
                 app.input.clear();
                 app.status = "輸入關鍵字跳轉至匹配的 session（label / id / branch）".into();
+                return Ok(());
+            }
+            KeyCode::Char('d') => {
+                scroll_transcript(app, 1);
+                return Ok(());
+            }
+            KeyCode::Char('u') => {
+                scroll_transcript(app, -1);
                 return Ok(());
             }
             _ => {}
@@ -402,6 +451,38 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             }
             app.status = "已要求重整".into();
         }
+        KeyCode::Char('t') => {
+            app.raw_md = !app.raw_md;
+            app.md_cache = None;
+            app.status = format!(
+                "逐字稿顯示：{}",
+                if app.raw_md {
+                    "原始文字"
+                } else {
+                    "Markdown 渲染"
+                }
+            );
+        }
+        KeyCode::PageUp => scroll_transcript(app, -1),
+        KeyCode::PageDown => scroll_transcript(app, 1),
+        KeyCode::Home => {
+            if app.view == CenterView::Diff {
+                app.diff_cursor = 0;
+            } else {
+                app.transcript_scroll = Some(0);
+                app.status = "逐字稿：已到最前".into();
+            }
+        }
+        KeyCode::End => {
+            if app.view == CenterView::Diff {
+                app.diff_cursor = app.diff_lines.len().saturating_sub(1);
+            } else {
+                app.transcript_scroll = None;
+                app.status = "逐字稿：跟隨最新".into();
+            }
+        }
+        KeyCode::Char('{') => jump_hunk(app, false),
+        KeyCode::Char('}') => jump_hunk(app, true),
         _ => {}
     }
     Ok(())
@@ -684,7 +765,7 @@ fn draw(f: &mut TuiFrame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // 標題與成本
+            Constraint::Length(2), // 標題、頁籤與成本
             Constraint::Min(6),    // 主區
             Constraint::Length(3), // 輸入
             Constraint::Length(1), // 狀態
@@ -693,12 +774,23 @@ fn draw(f: &mut TuiFrame, app: &mut App) {
 
     draw_header(f, chunks[0], app);
 
+    // 依終端寬度調整三欄比例：寬螢幕給側欄多一點，窄螢幕留給中央。
+    let w = f.area().width;
+    let (side_l, side_r) = if w >= 140 {
+        (34, 42)
+    } else if w >= 110 {
+        (30, 36)
+    } else if w >= 84 {
+        (26, 30)
+    } else {
+        (22, 24)
+    };
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(32),
+            Constraint::Length(side_l),
             Constraint::Min(20),
-            Constraint::Length(36),
+            Constraint::Length(side_r),
         ])
         .split(chunks[1]);
 
@@ -713,41 +805,25 @@ fn draw(f: &mut TuiFrame, app: &mut App) {
     draw_status(f, chunks[3], app);
 }
 
+fn tab(label: &str, active: bool) -> Span<'static> {
+    if active {
+        Span::styled(
+            format!(" [{label}] "),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(format!("  {label}  "), Style::default().fg(Color::DarkGray))
+    }
+}
+
 fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
     let live = app.state.live_sessions().count();
     let cost = app.state.total_cost();
-    let tab_overview = if app.view == CenterView::Transcript {
-        Span::styled(
-            " [Overview] ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-    } else {
-        Span::styled("  Overview  ", Style::default().fg(Color::DarkGray))
-    };
-    let tab_diff = if app.view == CenterView::Diff {
-        Span::styled(
-            " [Diff (g)] ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-    } else {
-        Span::styled("  Diff (g)  ", Style::default().fg(Color::DarkGray))
-    };
-    let tab_wt = if app.view == CenterView::Worktrees {
-        Span::styled(
-            " [Worktrees] ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-    } else {
-        Span::styled("  Worktrees  ", Style::default().fg(Color::DarkGray))
-    };
 
-    let text = Line::from(vec![
+    let tabs = Line::from(vec![
         Span::styled(
             " ade ",
             Style::default()
@@ -755,20 +831,58 @@ fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
                 .bg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        tab_overview,
-        tab_diff,
-        tab_wt,
-        Span::raw(format!(
-            "  sessions: {}/{}   tasks: {}   cost: ${:.4} ({} in / {} out)",
-            live,
-            app.state.sessions.len(),
-            app.state.tasks.len(),
-            cost.usd,
-            cost.input_tokens,
-            cost.output_tokens
-        )),
+        tab("Overview", app.view == CenterView::Transcript),
+        tab("Diff (g)", app.view == CenterView::Diff),
+        tab("Worktrees", app.view == CenterView::Worktrees),
+        Span::raw("   "),
+        Span::styled(
+            format!("{} sessions", live),
+            Style::default().fg(Color::Green),
+        ),
+        Span::styled(
+            format!("  · {} tasks", app.state.tasks.len()),
+            Style::default().fg(Color::Gray),
+        ),
     ]);
-    f.render_widget(Paragraph::new(text), area);
+
+    let md_mode = if app.raw_md { "raw" } else { "md" };
+    let follow = if app.view == CenterView::Transcript {
+        match app.transcript_scroll {
+            None => "▼ follow",
+            Some(_) => "⏸ paused",
+        }
+    } else {
+        ""
+    };
+    let stats = Line::from(vec![
+        Span::styled("  cost ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("${:.4}", cost.usd),
+            Style::default().fg(Color::Yellow),
+        ),
+        Span::styled(
+            format!("  ({} in / {} out)", cost.input_tokens, cost.output_tokens),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            format!("   md:{md_mode}"),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            if follow.is_empty() {
+                String::new()
+            } else {
+                format!("   {follow}")
+            },
+            Style::default().fg(if app.transcript_scroll.is_none() {
+                Color::Green
+            } else {
+                Color::Yellow
+            }),
+        ),
+    ]);
+
+    f.render_widget(Paragraph::new(vec![tabs, stats]), area);
 }
 
 fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &App) {
@@ -826,12 +940,80 @@ fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &App) {
     f.render_stateful_widget(list, area, &mut list_state);
 }
 
-fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &App) {
-    let title = match app.selected_id() {
+/// 依目前模式（Markdown / 原始）與寬度，把逐字稿建成樣式化且已換行的行。
+fn build_transcript_lines(app: &App, id: &SessionId, width: usize) -> Vec<Line<'static>> {
+    let buf = match app.state.transcripts.get(id) {
+        Some(b) => b,
+        None => return Vec::new(),
+    };
+    let src: Vec<String> = buf.iter().cloned().collect();
+    let lines: Vec<Line<'static>> = if app.raw_md {
+        src.iter().map(|l| Line::raw(l.clone())).collect()
+    } else {
+        markdown::Renderer::new().render(&src, width)
+    };
+    markdown::wrap_lines(lines, width)
+}
+
+fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
+    let selected = app.selected_id();
+    // 保留右側一行給捲軸。
+    let inner_w = area.width.saturating_sub(3).max(8) as usize;
+
+    let need_rebuild = match (&app.md_cache, &selected) {
+        (Some(c), Some(id)) => {
+            c.session != *id
+                || c.seq != app.state.seq
+                || c.raw != app.raw_md
+                || c.width != area.width
+        }
+        _ => true,
+    };
+    if need_rebuild {
+        match &selected {
+            Some(id) => {
+                if app.md_cache.as_ref().map(|c| &c.session) != Some(id) {
+                    app.transcript_scroll = None; // 換 session 時回到跟隨
+                }
+                let lines = build_transcript_lines(app, id, inner_w);
+                app.md_cache = Some(MdCache {
+                    session: id.clone(),
+                    seq: app.state.seq,
+                    raw: app.raw_md,
+                    width: area.width,
+                    lines,
+                });
+            }
+            None => app.md_cache = None,
+        }
+    }
+
+    let viewport = area.height.saturating_sub(2) as usize;
+    let total = app.md_cache.as_ref().map_or(0, |c| c.lines.len());
+    app.transcript_viewport = viewport;
+    app.transcript_total = total;
+
+    let max_off = total.saturating_sub(viewport);
+    let off = match app.transcript_scroll {
+        Some(o) => {
+            let o = o.min(max_off);
+            if o >= max_off {
+                app.transcript_scroll = None;
+            }
+            o
+        }
+        None => max_off,
+    };
+
+    let pct = (off * 100)
+        .checked_div(max_off)
+        .map(|p| p.min(100))
+        .unwrap_or(100);
+    let title = match &selected {
         Some(id) => {
-            let s = &app.state.sessions[&id];
+            let s = &app.state.sessions[id];
             format!(
-                " Transcript: {} · {} · {} (${:.4}) ",
+                " Transcript: {} · {} · {} (${:.4}) · {}% · {} ",
                 s.label,
                 s.kind.id(),
                 if s.transport.is_empty() {
@@ -839,33 +1021,65 @@ fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &App) {
                 } else {
                     &s.transport
                 },
-                s.cost.usd
+                s.cost.usd,
+                pct,
+                if app.raw_md { "raw" } else { "md" },
             )
         }
         None => " (尚無 session：按 n 建立) ".into(),
     };
 
-    let mut lines: Vec<Line> = Vec::new();
-    if let Some(id) = app.selected_id() {
-        if let Some(buf) = app.state.transcripts.get(&id) {
-            let h = area.height.saturating_sub(2) as usize;
-            let start = buf.len().saturating_sub(h.max(1));
-            for l in buf.iter().skip(start) {
-                lines.push(Line::raw(l.clone()));
-            }
-        }
-    }
-    if lines.is_empty() {
-        lines.push(Line::styled(
+    let mut visible: Vec<Line> = app
+        .md_cache
+        .as_ref()
+        .map(|c| c.lines.iter().skip(off).take(viewport).cloned().collect())
+        .unwrap_or_default();
+    if visible.is_empty() {
+        visible.push(Line::styled(
             "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。",
             Style::default().fg(Color::DarkGray),
         ));
     }
 
-    let para = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(title))
-        .wrap(Wrap { trim: false });
+    let para = Paragraph::new(visible).block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(para, area);
+
+    if total > viewport {
+        let mut sb_state = ScrollbarState::new(max_off).position(off);
+        let sb_area = Rect {
+            x: area.x + area.width.saturating_sub(1),
+            y: area.y + 1,
+            width: 1,
+            height: area.height.saturating_sub(2),
+        };
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            sb_area,
+            &mut sb_state,
+        );
+    }
+}
+
+fn diff_line_style(l: &str) -> Style {
+    if l.starts_with("+++")
+        || l.starts_with("---")
+        || l.starts_with("diff ")
+        || l.starts_with("index ")
+    {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    } else if l.starts_with("@@") {
+        Style::default().fg(Color::Cyan)
+    } else if l.starts_with('+') {
+        Style::default().fg(Color::Green)
+    } else if l.starts_with('-') {
+        Style::default().fg(Color::Red)
+    } else {
+        Style::default()
+    }
 }
 
 fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
@@ -873,9 +1087,11 @@ fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
         Some(id) => {
             let s = &app.state.sessions[&id];
             format!(
-                " Diff: {} ({}) — j/k 選行 · c 留註解送回 agent · M 合併 · [ / ] 換 session ",
+                " Diff: {} ({})  +{} -{}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session ",
                 s.label,
-                s.branch.as_deref().unwrap_or("main")
+                s.branch.as_deref().unwrap_or("main"),
+                app.diff_added,
+                app.diff_removed,
             )
         }
         None => " Diff ".into(),
@@ -889,22 +1105,28 @@ fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
     } else {
         app.diff_lines
             .iter()
-            .map(|l| {
-                let style = if l.starts_with("+++") || l.starts_with("---") || l.starts_with("diff ")
-                {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
-                } else if l.starts_with("@@") {
-                    Style::default().fg(Color::Cyan)
-                } else if l.starts_with('+') {
-                    Style::default().fg(Color::Green)
-                } else if l.starts_with('-') {
-                    Style::default().fg(Color::Red)
-                } else {
-                    Style::default()
-                };
-                ListItem::new(Line::styled(l.clone(), style))
+            .enumerate()
+            .map(|(i, l)| {
+                let (old, new) = app.diff_gutter.get(i).copied().unwrap_or((None, None));
+                let g_old = old
+                    .map(|n| format!("{n:>4}"))
+                    .unwrap_or_else(|| "    ".into());
+                let g_new = new
+                    .map(|n| format!("{n:>4}"))
+                    .unwrap_or_else(|| "    ".into());
+                let spans = vec![
+                    Span::styled(
+                        format!("{g_old} "),
+                        Style::default().fg(Color::Rgb(150, 100, 100)),
+                    ),
+                    Span::styled(
+                        format!("{g_new} "),
+                        Style::default().fg(Color::Rgb(100, 150, 100)),
+                    ),
+                    Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(l.clone(), diff_line_style(l)),
+                ];
+                ListItem::new(Line::from(spans))
             })
             .collect()
     };
@@ -918,6 +1140,27 @@ fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("▸ ");
     f.render_stateful_widget(list, area, &mut list_state);
+
+    let viewport = area.height.saturating_sub(2) as usize;
+    let total = app.diff_lines.len();
+    if total > viewport {
+        let max_off = total - viewport;
+        let pos = app.diff_cursor.saturating_sub(viewport / 2).min(max_off);
+        let mut sb_state = ScrollbarState::new(max_off).position(pos);
+        let sb_area = Rect {
+            x: area.x + area.width.saturating_sub(1),
+            y: area.y + 1,
+            width: 1,
+            height: area.height.saturating_sub(2),
+        };
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            sb_area,
+            &mut sb_state,
+        );
+    }
 }
 
 fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
@@ -1030,7 +1273,7 @@ fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
         Mode::Normal => {
-            " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令面板, Ctrl-K=跳轉, g=Diff, z=休眠） "
+            " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令, Ctrl-K=跳轉, g=Diff, z=休眠, t=原始/渲染, PgUp/PgDn=捲動） "
         }
         Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、/命令，Enter 送出） ",
         Mode::Spawn => " spawn：<agent> <prompt>（Ctrl-W 切換 worktree, Enter 送出） ",
@@ -1054,16 +1297,133 @@ fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
 }
 
 fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
+    let hints = match app.view {
+        CenterView::Transcript => {
+            "  q 離開  Tab 切換  i prompt  n spawn  m 訊息  t 原始/渲染  PgUp/PgDn 捲動  End 跟隨  / 命令"
+        }
+        CenterView::Diff => {
+            "  q 離開  Tab 切換  j/k 選行  {/} hunk  c 審查註解  M 合併  [ ] 換 session  r 重整"
+        }
+        CenterView::Worktrees => "  q 離開  Tab 切換  M 合併選取  G 清理已結束  r 重整",
+    };
     let text = Line::from(vec![
         Span::styled(
             format!(" {} ", app.status),
             Style::default().fg(Color::Black).bg(Color::DarkGray),
         ),
-        Span::raw(
-            "  q 離開  Tab/g 切換視圖  c 審查註解  M 合併  G 清理  z 休眠  / 命令  Ctrl-K 跳轉",
-        ),
+        Span::raw(hints),
     ]);
     f.render_widget(Paragraph::new(text), area);
+}
+
+/// 逐字稿翻頁捲動：`dir < 0` 往上、`dir > 0` 往下；到底時恢復跟隨最新。
+fn scroll_transcript(app: &mut App, dir: i32) {
+    let page = app.transcript_viewport.max(1);
+    let max_off = app.transcript_total.saturating_sub(app.transcript_viewport);
+    let cur = match app.transcript_scroll {
+        Some(o) => o.min(max_off),
+        None => max_off,
+    };
+    let next = if dir < 0 {
+        cur.saturating_sub(page)
+    } else {
+        (cur + page).min(max_off)
+    };
+    if next >= max_off {
+        app.transcript_scroll = None;
+        app.status = "逐字稿：跟隨最新".into();
+    } else {
+        app.transcript_scroll = Some(next);
+        app.status = format!("逐字稿：第 {next} 行（End 回到最新）");
+    }
+}
+
+/// 在 Diff 視圖跳到上一個／下一個 hunk（`@@` 行）。
+fn jump_hunk(app: &mut App, forward: bool) {
+    if app.view != CenterView::Diff || app.diff_lines.is_empty() {
+        return;
+    }
+    let n = app.diff_lines.len();
+    let cur = app.diff_cursor.min(n - 1);
+    let is_hunk = |i: usize| app.diff_lines[i].starts_with("@@");
+    if forward {
+        if let Some(i) = ((cur + 1)..n).find(|&i| is_hunk(i)) {
+            app.diff_cursor = i;
+            return;
+        }
+    } else if let Some(i) = (0..cur).rev().find(|&i| is_hunk(i)) {
+        app.diff_cursor = i;
+        return;
+    }
+    app.status = "沒有更多 hunk".into();
+}
+
+/// 從 `@@ -a,b +c,d @@` 解析新舊檔起始行號。
+fn parse_hunk(line: &str) -> Option<(u64, u64)> {
+    let rest = line.strip_prefix("@@")?;
+    let mut old = None;
+    let mut new = None;
+    for tok in rest.split_whitespace() {
+        if let Some(v) = tok.strip_prefix('-') {
+            old = v.split(',').next().and_then(|s| s.parse::<u64>().ok());
+        } else if let Some(v) = tok.strip_prefix('+') {
+            new = v.split(',').next().and_then(|s| s.parse::<u64>().ok());
+        }
+        if old.is_some() && new.is_some() {
+            break;
+        }
+    }
+    Some((old?, new?))
+}
+
+/// 為每行 diff 標上（舊檔行號, 新檔行號）；非內容行則為 `None`。
+fn build_gutter(lines: &[String]) -> Vec<(Option<u64>, Option<u64>)> {
+    let mut out = Vec::with_capacity(lines.len());
+    let (mut old, mut new) = (0u64, 0u64);
+    for l in lines {
+        if l.starts_with("@@") {
+            if let Some((o, n)) = parse_hunk(l) {
+                old = o;
+                new = n;
+            }
+            out.push((None, None));
+        } else if l.starts_with("+++")
+            || l.starts_with("---")
+            || l.starts_with("diff ")
+            || l.starts_with("index ")
+            || l.starts_with('\\')
+        {
+            out.push((None, None));
+        } else if l.starts_with('+') {
+            out.push((None, Some(new)));
+            new += 1;
+        } else if l.starts_with('-') {
+            out.push((Some(old), None));
+            old += 1;
+        } else {
+            out.push((Some(old), Some(new)));
+            old += 1;
+            new += 1;
+        }
+    }
+    out
+}
+
+/// 統計 diff 的新增／刪除行數。
+fn diff_stat(lines: &[String]) -> (usize, usize) {
+    let mut added = 0;
+    let mut removed = 0;
+    for l in lines {
+        if l.starts_with("+++") || l.starts_with("---") {
+            continue;
+        }
+        if l.starts_with('+') {
+            added += 1;
+        } else if l.starts_with('-') {
+            removed += 1;
+        }
+    }
+    (added, removed)
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -1084,4 +1444,118 @@ fn short(id: &str) -> String {
         .chars()
         .take(6)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ade_core::{Cost, Role, Session};
+    use ratatui::backend::TestBackend;
+    use std::collections::VecDeque;
+
+    fn sample_app(lines: &[&str]) -> App {
+        let mut app = App::new();
+        let s = Session {
+            id: "ses_test".into(),
+            kind: AgentKind::OpenCode,
+            label: "worker".into(),
+            cwd: "/tmp".into(),
+            branch: Some("ade/x".into()),
+            role: Role::Worker,
+            status: SessionStatus::Busy,
+            model: None,
+            cost: Cost::default(),
+            parent: None,
+            created_ms: 1,
+            transport: "acp".into(),
+            status_note: None,
+        };
+        app.state.sessions.insert(s.id.clone(), s);
+        let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();
+        app.state.transcripts.insert("ses_test".into(), deque);
+        app
+    }
+
+    fn buffer_text(terminal: &Terminal<TestBackend>) -> String {
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|c| c.symbol())
+            .collect()
+    }
+
+    fn render(app: &mut App) -> String {
+        let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        term.draw(|f| draw(f, app)).unwrap();
+        buffer_text(&term)
+    }
+
+    #[test]
+    fn transcript_renders_markdown_and_toggles_raw() {
+        let mut app = sample_app(&[
+            "# Title",
+            "a **bold** word",
+            "```rust",
+            "let x = 1;",
+            "```",
+            "| a | b |",
+            "|---|---|",
+            "| 1 | 2 |",
+        ]);
+
+        let rendered = render(&mut app);
+        assert!(rendered.contains("Title"), "heading text missing");
+        assert!(rendered.contains("bold"), "bold text missing");
+        assert!(!rendered.contains("**bold**"), "markdown not stripped");
+        assert!(rendered.contains("let x = 1;"), "code block missing");
+        assert!(rendered.contains("md"), "mode indicator missing");
+
+        app.raw_md = true;
+        let raw = render(&mut app);
+        assert!(raw.contains("**bold**"), "raw mode should show markup");
+    }
+
+    #[test]
+    fn diff_view_shows_gutter_and_stats() {
+        let mut app = sample_app(&[]);
+        app.view = CenterView::Diff;
+        app.diff_lines = vec![
+            "diff --git a/f b/f".into(),
+            "--- a/f".into(),
+            "+++ b/f".into(),
+            "@@ -1,2 +1,3 @@".into(),
+            " ctx".into(),
+            "-old".into(),
+            "+new".into(),
+            "+extra".into(),
+        ];
+        app.diff_gutter = build_gutter(&app.diff_lines);
+        let (added, removed) = diff_stat(&app.diff_lines);
+        app.diff_added = added;
+        app.diff_removed = removed;
+        assert_eq!((added, removed), (2, 1));
+
+        let text = render(&mut app);
+        assert!(text.contains("+2 -1"), "diff stat missing");
+        assert!(text.contains("new"), "added line missing");
+    }
+
+    #[test]
+    fn scroll_transcript_pages_and_resumes_follow() {
+        let mut app = sample_app(&[]);
+        app.transcript_total = 100;
+        app.transcript_viewport = 10; // 跟隨時 offset = 90
+
+        scroll_transcript(&mut app, -1);
+        assert_eq!(app.transcript_scroll, Some(80));
+
+        scroll_transcript(&mut app, 1);
+        assert_eq!(app.transcript_scroll, None, "到底應恢復跟隨");
+
+        app.transcript_scroll = Some(0);
+        scroll_transcript(&mut app, -1);
+        assert_eq!(app.transcript_scroll, Some(0), "不應低於 0");
+    }
 }
