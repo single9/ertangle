@@ -71,6 +71,9 @@ pub enum Request {
         since: Option<Seq>,
         #[serde(default)]
         token: Option<String>,
+        /// client 上次連線時 daemon 回報的 epoch；不符時 daemon 忽略 `since`、改送完整快照。
+        #[serde(default)]
+        epoch: Option<String>,
     },
     /// 要一份完整狀態快照。
     Snapshot,
@@ -206,6 +209,9 @@ pub enum Frame {
     Ready {
         pid: u32,
         version: String,
+        /// daemon 啟動世代 id；log 被換掉或刪除時 client 可據此丟棄本地狀態。
+        #[serde(default)]
+        epoch: String,
     },
     /// 完整狀態（初次連線或要求 Snapshot 時）。
     Snapshot {

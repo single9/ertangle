@@ -110,15 +110,25 @@ pub fn replay_log(path: &Path) -> Result<(State, Vec<Record>)> {
         return Ok((state, records));
     }
     let file = File::open(path).with_context(|| format!("開啟 {path:?} 失敗"))?;
+    let mut bad = 0usize;
     for line in BufReader::new(file).lines() {
-        let Ok(line) = line else { continue };
+        let Ok(line) = line else {
+            bad += 1;
+            continue;
+        };
         if line.trim().is_empty() {
             continue;
         }
-        if let Ok(rec) = serde_json::from_str::<Record>(line.trim()) {
-            state.apply(&rec);
-            records.push(rec);
+        match serde_json::from_str::<Record>(line.trim()) {
+            Ok(rec) => {
+                state.apply(&rec);
+                records.push(rec);
+            }
+            Err(_) => bad += 1,
         }
+    }
+    if bad > 0 {
+        tracing::warn!("replay_log：略過 {bad} 行無法解析的紀錄（{path:?}）");
     }
     Ok((state, records))
 }
@@ -193,6 +203,7 @@ impl Client {
         if let Ok(token) = std::env::var("ADE_TOKEN") {
             if !token.is_empty() {
                 client.send(&Request::Hello {
+                    epoch: None,
                     client: "auth".into(),
                     since: None,
                     token: Some(token),
@@ -393,9 +404,63 @@ struct Shared {
     inner: Mutex<Inner>,
     log: Mutex<File>,
     auth_token: Option<String>,
+    /// 本次 daemon 啟動的世代 id。
+    epoch: String,
 }
 
 impl Shared {
+    /// 從既有 log 重播還原狀態，建立 `Shared`；log 內仍 live 的 session 視為遺失。
+    fn restore(
+        log_file: &Path,
+        policy: PolicyEngine,
+        default_cwd: PathBuf,
+        auth_token: Option<String>,
+    ) -> Result<Arc<Shared>> {
+        let (state, records) = replay_log(log_file)?;
+        let log = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_file)?;
+        let seq = records.last().map_or(0, |r| r.seq);
+        let skip = records.len().saturating_sub(BACKLOG_CAP);
+        let backlog: VecDeque<Record> = records.into_iter().skip(skip).collect();
+        let shared = Arc::new(Shared {
+            inner: Mutex::new(Inner {
+                state,
+                seq,
+                backlog,
+                sessions: HashMap::new(),
+                inbox_cursors: HashMap::new(),
+                waiters: Vec::new(),
+                bus_guard: BusGuard::default(),
+                policy,
+                default_cwd,
+                clients: Vec::new(),
+            }),
+            log: Mutex::new(log),
+            auth_token,
+            epoch: new_id("ep"),
+        });
+        // 重啟後子程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
+        let orphans: Vec<SessionId> = {
+            let inner = shared.inner.lock().unwrap();
+            inner
+                .state
+                .sessions
+                .values()
+                .filter(|s| s.status.is_live())
+                .map(|s| s.id.clone())
+                .collect()
+        };
+        for sid in orphans {
+            shared.emit(Event::SessionStatus {
+                session: sid,
+                status: SessionStatus::Failed,
+            });
+        }
+        Ok(shared)
+    }
+
     /// 廣播一個事件：更新狀態、寫 log（先遮罩憑證）、推給所有 client。
     fn emit(&self, event: Event) {
         let mut inner = self.inner.lock().unwrap();
@@ -552,6 +617,7 @@ impl Shared {
                 client,
                 since,
                 token,
+                epoch,
             } => {
                 if let Some(expected) = &self.auth_token {
                     if token.as_deref() != Some(expected.as_str()) {
@@ -565,7 +631,10 @@ impl Shared {
                 let _ = reply.send(Frame::Ready {
                     pid: std::process::id(),
                     version: VERSION.to_string(),
+                    epoch: self.epoch.clone(),
                 });
+                // epoch 不符（或未帶）表示 client 的 seq 屬於別的 log，不能增量。
+                let since = since.filter(|_| epoch.as_deref() == Some(self.epoch.as_str()));
 
                 // M4 增量事件同步：若 `since` 在 backlog 範圍內，只補齊差異事件。
                 let mut inner = self.inner.lock().unwrap();
@@ -1816,31 +1885,11 @@ pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Re
     let listener = UnixListener::bind(&sock).with_context(|| format!("綁定 {sock:?} 失敗"))?;
 
     fs::create_dir_all(state_dir())?;
-    let log = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path())?;
 
     let default_cwd = std::env::current_dir()?;
     let policy = load_policy(&default_cwd);
     let auth_token = token.or_else(|| std::env::var("ADE_TOKEN").ok().filter(|t| !t.is_empty()));
-
-    let shared = Arc::new(Shared {
-        inner: Mutex::new(Inner {
-            state: State::new(),
-            seq: 0,
-            backlog: VecDeque::new(),
-            sessions: HashMap::new(),
-            inbox_cursors: HashMap::new(),
-            waiters: Vec::new(),
-            bus_guard: BusGuard::default(),
-            policy,
-            default_cwd,
-            clients: Vec::new(),
-        }),
-        log: Mutex::new(log),
-        auth_token,
-    });
+    let shared = Shared::restore(&log_path(), policy, default_cwd, auth_token)?;
 
     // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽（M5 遠端模式）。
     if let Some(addr) = listen_tcp {
@@ -1939,26 +1988,13 @@ mod tests {
     }
 
     fn test_shared() -> Arc<Shared> {
-        let log = OpenOptions::new()
-            .append(true)
-            .open("/dev/null")
-            .expect("開啟 /dev/null");
-        Arc::new(Shared {
-            inner: Mutex::new(Inner {
-                state: State::new(),
-                seq: 0,
-                backlog: VecDeque::new(),
-                sessions: HashMap::new(),
-                inbox_cursors: HashMap::new(),
-                waiters: Vec::new(),
-                bus_guard: BusGuard::default(),
-                policy: PolicyEngine::default(),
-                default_cwd: std::env::temp_dir(),
-                clients: Vec::new(),
-            }),
-            log: Mutex::new(log),
-            auth_token: None,
-        })
+        Shared::restore(
+            Path::new("/dev/null"),
+            PolicyEngine::default(),
+            std::env::temp_dir(),
+            None,
+        )
+        .expect("建立測試 Shared")
     }
 
     fn temp_cwd() -> PathBuf {
@@ -2324,5 +2360,91 @@ mod tests {
         assert!(is_ade_status_line("?? .ade/wt/x"));
         assert!(!is_ade_status_line("?? sub.ade/f"));
         assert!(!is_ade_status_line(" M src/.ade/f"));
+    }
+
+    // ---- 重啟還原（T01）----
+
+    fn restart_session(id: &str, status: SessionStatus) -> Session {
+        Session {
+            id: id.into(),
+            kind: AgentKind::ClaudeCode,
+            label: id.into(),
+            cwd: "/tmp".into(),
+            branch: None,
+            role: Role::Worker,
+            status,
+            model: None,
+            cost: Default::default(),
+            parent: None,
+            created_ms: 0,
+            transport: String::new(),
+            status_note: None,
+            repo_root: None,
+        }
+    }
+
+    #[test]
+    fn restart_restores_state_and_continues_seq() {
+        let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ade-log")));
+        let first =
+            Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+        first.emit(Event::SessionStarted {
+            session: restart_session("ses-live", SessionStatus::Idle),
+        });
+        first.emit(Event::SessionStarted {
+            session: restart_session("ses-done", SessionStatus::Exited),
+        });
+        let n = first.inner.lock().unwrap().seq;
+        drop(first);
+
+        let second =
+            Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+        let inner = second.inner.lock().unwrap();
+        assert!(inner.state.sessions.contains_key("ses-live"));
+        assert!(inner.state.sessions.contains_key("ses-done"));
+        // 原本 live 的 session 被收斂為已結束（多一筆事件）。
+        assert!(!inner.state.sessions["ses-live"].status.is_live());
+        assert_eq!(inner.seq, n + 1);
+        drop(inner);
+        second.emit(Event::SessionStatus {
+            session: "ses-done".into(),
+            status: SessionStatus::Exited,
+        });
+        drop(second);
+
+        let (_, recs) = replay_log(&log).unwrap();
+        assert!(recs.windows(2).all(|w| w[1].seq == w[0].seq + 1));
+        assert_eq!(recs.len() as u64, n + 2);
+    }
+
+    #[test]
+    fn hello_with_wrong_epoch_gets_snapshot() {
+        let shared = test_shared();
+        shared.emit(Event::SessionStarted {
+            session: restart_session("ses-a", SessionStatus::Idle),
+        });
+        let (tx, rx) = mpsc::channel::<Frame>();
+        shared.handle(
+            &tx,
+            Request::Hello {
+                client: "t".into(),
+                since: Some(1),
+                token: None,
+                epoch: Some("old".into()),
+            },
+        );
+        let frames: Vec<Frame> = rx.try_iter().collect();
+        assert!(frames.iter().any(|f| matches!(f, Frame::Snapshot { .. })));
+        let (tx2, rx2) = mpsc::channel::<Frame>();
+        shared.handle(
+            &tx2,
+            Request::Hello {
+                client: "t".into(),
+                since: Some(1),
+                token: None,
+                epoch: Some(shared.epoch.clone()),
+            },
+        );
+        assert!(!rx2.try_iter().any(|f| matches!(f, Frame::Snapshot { .. })));
     }
 }

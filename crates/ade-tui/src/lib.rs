@@ -218,6 +218,7 @@ pub fn run() -> Result<()> {
         client: "tui".into(),
         since: None,
         token: std::env::var("ADE_TOKEN").ok(),
+        epoch: None,
     })?;
     let mut writer = client.try_clone_stream()?;
 
@@ -328,7 +329,7 @@ fn event_loop(
 
 fn apply_frame(app: &mut App, frame: Frame) {
     match frame {
-        Frame::Ready { pid, version } => {
+        Frame::Ready { pid, version, .. } => {
             app.status = format!("daemon pid={pid} v{version}");
         }
         Frame::Snapshot { state } => {
