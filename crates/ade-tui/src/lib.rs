@@ -1166,7 +1166,7 @@ fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()
             prompt,
             worktree: app.spawn_worktree,
             transport: Transport::Auto,
-            permission: Default::default(),
+            permission: None,
             parent: None,
             model,
             args: vec![],
@@ -2100,6 +2100,7 @@ mod tests {
             transport: "acp".into(),
             status_note: None,
             repo_root: None,
+            permission: Default::default(),
         };
         app.state.sessions.insert(s.id.clone(), s);
         let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();

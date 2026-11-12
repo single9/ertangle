@@ -48,7 +48,7 @@ fn spawn_prompt_output_shutdown() {
         prompt: Some("ping".into()),
         worktree: false,
         transport: Transport::Structured,
-        permission: Default::default(),
+        permission: None,
         parent: None,
         model: None,
         args: vec![],
@@ -65,6 +65,52 @@ fn spawn_prompt_output_shutdown() {
         }
     }
     assert!(got_output, "應收到假 agent 的輸出");
+
+    // T12：父 session 為 ask，帶 parent 的 bypass 請求會被調降；無 parent 的 bypass 則照給。
+    let spawn_with = |parent: Option<String>, perm| {
+        let mut cl = Client::connect().unwrap();
+        cl.send(&Request::Spawn(SpawnRequest {
+            kind: AgentKind::ClaudeCode,
+            cwd: Some(root.to_string_lossy().to_string()),
+            label: None,
+            role: Default::default(),
+            prompt: None,
+            worktree: false,
+            transport: Transport::Structured,
+            permission: Some(perm),
+            parent,
+            model: None,
+            args: vec![],
+        }))
+        .unwrap();
+        loop {
+            match cl.recv().unwrap() {
+                Frame::Ok { note } => return note.unwrap_or_default(),
+                Frame::Error { message } => panic!("spawn 失敗：{message}"),
+                _ => {}
+            }
+        }
+    };
+    let parent_note = spawn_with(None, ade_core::PermissionPolicy::Ask);
+    let parent_id = parent_note
+        .split_whitespace()
+        .find(|w| w.starts_with("ses_"))
+        .unwrap()
+        .to_string();
+    let child_note = spawn_with(Some(parent_id), ade_core::PermissionPolicy::Bypass);
+    assert!(child_note.contains("調降"), "{child_note}");
+    let top_note = spawn_with(None, ade_core::PermissionPolicy::Bypass);
+    assert!(!top_note.contains("調降"), "{top_note}");
+    let mut snap = Client::connect().unwrap();
+    snap.send(&Request::Snapshot).unwrap();
+    let state = loop {
+        if let Frame::Snapshot { state } = snap.recv().unwrap() {
+            break state;
+        }
+    };
+    let perms: Vec<_> = state.sessions.values().map(|s| s.permission).collect();
+    assert!(perms.contains(&ade_core::PermissionPolicy::Bypass));
+    assert!(perms.contains(&ade_core::PermissionPolicy::Ask));
 
     let mut s = Client::connect().unwrap();
     s.send(&Request::Shutdown).unwrap();

@@ -93,8 +93,8 @@ enum Cmd {
         #[arg(long, default_value = "auto")]
         transport: String,
         /// 權限政策：ask | auto | bypass
-        #[arg(long, default_value = "auto")]
-        permission: String,
+        #[arg(long)]
+        permission: Option<String>,
         /// 父 session id（未指定則讀 $ADE_SESSION）
         #[arg(long)]
         parent: Option<String>,
@@ -924,7 +924,7 @@ fn cmd_spawn(
     role: String,
     worktree: bool,
     transport: String,
-    permission: String,
+    permission: Option<String>,
     parent: Option<String>,
     model: Option<String>,
     extra: Vec<String>,
@@ -937,8 +937,13 @@ fn cmd_spawn(
         "pty" => Transport::Pty,
         other => bail!("未知的 transport：{other}（auto/structured/acp/pty）"),
     };
-    let permission = PermissionPolicy::parse(&permission)
-        .with_context(|| format!("未知的權限政策：{permission}（ask/auto/bypass）"))?;
+    let permission = match permission {
+        Some(p) => Some(
+            PermissionPolicy::parse(&p)
+                .with_context(|| format!("未知的權限政策：{p}（ask/auto/bypass）"))?,
+        ),
+        None => None,
+    };
     let parent = parent.or_else(|| std::env::var("ADE_SESSION").ok());
     let req = Request::Spawn(SpawnRequest {
         kind,

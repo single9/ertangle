@@ -305,7 +305,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "permission": {
                         "type": "string",
                         "enum": ["ask", "auto", "bypass"],
-                        "description": "Permission policy (default: auto)"
+                        "description": "Permission policy (default from config.toml; never higher than the parent's)"
                     },
                     "model": {
                         "type": "string",
@@ -616,8 +616,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             let worktree = args["worktree"].as_bool().unwrap_or(false);
             let permission = args["permission"]
                 .as_str()
-                .and_then(PermissionPolicy::parse)
-                .unwrap_or(PermissionPolicy::Auto);
+                .and_then(PermissionPolicy::parse);
 
             let frame = roundtrip(&Request::Spawn(SpawnRequest {
                 kind,

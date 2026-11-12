@@ -278,6 +278,30 @@ impl AgentControl for ClaudeControl {
 // 啟動
 // ---------------------------------------------------------------------------
 
+/// 權限相關的命令列參數（唯讀、放行／禁止工具，與固定放行的 ade MCP 工具合併）。
+fn permission_args(spec: &SessionSpec) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    if spec.read_only {
+        out.extend(["--permission-mode".into(), "plan".into()]);
+    } else {
+        out.extend(spec.permission.claude_flags().into_iter().map(String::from));
+    }
+    let mut allowed = spec.allowed_tools.clone();
+    if spec.mcp_exe.is_some() && spec.permission.auto_approves() {
+        allowed.push("mcp__ade__*".into());
+    }
+    if !allowed.is_empty() {
+        out.push(format!("--allowedTools={}", allowed.join(",")));
+    }
+    if !spec.disallowed_tools.is_empty() {
+        out.push(format!(
+            "--disallowedTools={}",
+            spec.disallowed_tools.join(",")
+        ));
+    }
+    out
+}
+
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     let prog = crate::agent_bin("claude", "ADE_CLAUDE_BIN").context("找不到 `claude`")?;
     let mut cmd = Command::new(prog);
@@ -293,7 +317,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if let Some(m) = &spec.model {
         cmd.args(["--model", m]);
     }
-    cmd.args(spec.permission.claude_flags());
+    cmd.args(permission_args(&spec));
     if let Some(exe) = &spec.mcp_exe {
         let mcp_cfg = json!({
             "mcpServers": {
@@ -304,9 +328,6 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             }
         });
         cmd.arg(format!("--mcp-config={mcp_cfg}"));
-        if spec.permission.auto_approves() {
-            cmd.arg("--allowedTools=mcp__ade__*");
-        }
     }
     cmd.args(&spec.args);
     cmd.current_dir(&spec.cwd)
@@ -387,6 +408,41 @@ mod tests {
         assert_eq!(c.input_tokens, 15);
         assert_eq!(c.output_tokens, 20);
         assert!((c.usd - 0.5).abs() < 1e-9);
+    }
+
+    fn spec_for_args() -> SessionSpec {
+        SessionSpec {
+            id: "s".into(),
+            kind: ade_core::AgentKind::ClaudeCode,
+            cwd: std::env::temp_dir(),
+            transport: ade_protocol::Transport::Structured,
+            args: vec![],
+            model: None,
+            allowed_tools: vec!["Read".into(), "Grep".into()],
+            disallowed_tools: vec!["Bash".into()],
+            read_only: false,
+            sandbox: None,
+            env: vec![],
+            permission: ade_core::PermissionPolicy::Auto,
+            mcp_exe: Some("/bin/ade".into()),
+            initial_prompt: None,
+            cols: 80,
+            rows: 24,
+        }
+    }
+
+    #[test]
+    fn permission_args_merge_allowed_tools_with_mcp() {
+        let a = permission_args(&spec_for_args());
+        assert!(
+            a.contains(&"--allowedTools=Read,Grep,mcp__ade__*".to_string()),
+            "{a:?}"
+        );
+        assert!(a.contains(&"--disallowedTools=Bash".to_string()));
+        let mut s = spec_for_args();
+        s.read_only = true;
+        let a = permission_args(&s);
+        assert!(a.windows(2).any(|w| w == ["--permission-mode", "plan"]));
     }
 
     #[test]

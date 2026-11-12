@@ -1389,7 +1389,32 @@ impl Shared {
             &role,
             spawn.model.as_deref(),
             &spawn.args,
+            spawn.permission,
         );
+        // 子 agent 的權限不得高於父 session 與設定的上限（防呆，不是安全邊界）。
+        let mut permission = resolved.permission;
+        let mut downgraded = None;
+        if let Some(pid) = &parent {
+            let parent_perm = self
+                .inner
+                .lock()
+                .unwrap()
+                .state
+                .sessions
+                .get(pid)
+                .map(|p| p.permission);
+            let mut cap = parent_perm;
+            if let Some(m) = resolved.max_agent_permission {
+                cap = Some(cap.map_or(m, |c| c.min_policy(m)));
+            }
+            if let Some(cap) = cap {
+                let clamped = permission.min_policy(cap);
+                if clamped != permission {
+                    downgraded = Some((permission, clamped));
+                    permission = clamped;
+                }
+            }
+        }
 
         let session = Session {
             id: id.clone(),
@@ -1406,6 +1431,7 @@ impl Shared {
             transport: String::new(),
             status_note: None,
             repo_root,
+            permission,
         };
         self.emit(Event::SessionStarted {
             session: session.clone(),
@@ -1440,7 +1466,11 @@ impl Shared {
             args: resolved.args.clone(),
             model: resolved.model.clone(),
             env,
-            permission: spawn.permission,
+            permission,
+            allowed_tools: resolved.allowed_tools.clone(),
+            disallowed_tools: resolved.disallowed_tools.clone(),
+            read_only: resolved.read_only,
+            sandbox: resolved.sandbox.clone(),
             mcp_exe,
             initial_prompt: spawn.prompt.clone(),
             cols: 120,
@@ -1482,7 +1512,15 @@ impl Shared {
                     }
                 });
 
-                let _ = reply.send(Frame::ok_note(format!("已建立 session {id}")));
+                let mut note = format!("已建立 session {id}");
+                if let Some((from, to)) = downgraded {
+                    note.push_str(&format!(
+                        "（權限由 {} 調降為 {}：不得高於父 session／設定上限）",
+                        from.id(),
+                        to.id()
+                    ));
+                }
+                let _ = reply.send(Frame::ok_note(note));
             }
             Err(e) => {
                 self.emit(Event::SessionExited {
@@ -2279,6 +2317,7 @@ mod tests {
                 transport: "mock".to_string(),
                 status_note: None,
                 repo_root: None,
+                permission: Default::default(),
             },
         );
         inner.sessions.insert(id.to_string(), SessionEntry { ctl });
@@ -2515,6 +2554,7 @@ mod tests {
             transport: String::new(),
             status_note: None,
             repo_root: Some(repo.to_string_lossy().to_string()),
+            permission: Default::default(),
         }
     }
 
@@ -2630,6 +2670,7 @@ mod tests {
             transport: String::new(),
             status_note: None,
             repo_root: None,
+            permission: Default::default(),
         }
     }
 

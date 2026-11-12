@@ -211,6 +211,9 @@ pub struct Session {
     /// 建立 worktree 時所屬的主 repo 根目錄（merge／gc／pr 用）。
     #[serde(default)]
     pub repo_root: Option<String>,
+    /// 此 session 的權限政策（舊 log 沒有此欄位時為 `auto`）。
+    #[serde(default)]
+    pub permission: PermissionPolicy,
 }
 
 // ---------------------------------------------------------------------------
@@ -444,6 +447,24 @@ pub enum PermissionPolicy {
 }
 
 impl PermissionPolicy {
+    /// 寬鬆程度：`ask` < `auto` < `bypass`。
+    pub fn rank(&self) -> u8 {
+        match self {
+            PermissionPolicy::Ask => 0,
+            PermissionPolicy::Auto => 1,
+            PermissionPolicy::Bypass => 2,
+        }
+    }
+
+    /// 取兩者中較嚴格的。
+    pub fn min_policy(self, other: PermissionPolicy) -> PermissionPolicy {
+        if other.rank() < self.rank() {
+            other
+        } else {
+            self
+        }
+    }
+
     pub fn id(&self) -> &'static str {
         match self {
             PermissionPolicy::Ask => "ask",
@@ -977,6 +998,7 @@ mod tests {
             transport: "acp".into(),
             status_note: None,
             repo_root: None,
+            permission: Default::default(),
         }
     }
 
@@ -1164,5 +1186,13 @@ mod tests {
             },
         });
         assert_eq!(st.sessions["s1"].model.as_deref(), Some("opus"));
+    }
+
+    #[test]
+    fn old_session_json_without_permission_parses() {
+        let mut v = serde_json::to_value(sample_session("s1")).unwrap();
+        v.as_object_mut().unwrap().remove("permission");
+        let s: Session = serde_json::from_value(v).unwrap();
+        assert_eq!(s.permission, PermissionPolicy::Auto);
     }
 }

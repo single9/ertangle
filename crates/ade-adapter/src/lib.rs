@@ -57,6 +57,13 @@ pub struct SessionSpec {
     pub args: Vec<String>,
     /// 要使用的 model（目前僅 Claude 結構化模式支援）。
     pub model: Option<String>,
+    /// Claude 專用：額外放行／禁止的工具。
+    pub allowed_tools: Vec<String>,
+    pub disallowed_tools: Vec<String>,
+    /// 唯讀模式（Claude 以 plan 模式達成）。
+    pub read_only: bool,
+    /// Codex 專用 sandbox 模式。
+    pub sandbox: Option<String>,
     /// 額外環境變數。
     pub env: Vec<(String, String)>,
     /// 統一權限政策。
@@ -132,6 +139,19 @@ pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
 /// 依 `spec.transport` 決定用原生結構化協定還是 PTY 直通。
 /// `Auto` 會挑該 agent 最適合的原生協定；若原生協定啟動失敗則退回 PTY。
 pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
+    // 不支援的細部權限選項要明確報錯，不能靜默忽略。
+    let is_claude = matches!(spec.kind, AgentKind::ClaudeCode);
+    if !is_claude
+        && (spec.read_only || !spec.allowed_tools.is_empty() || !spec.disallowed_tools.is_empty())
+    {
+        bail!(
+            "{} 尚不支援 read_only／allowed_tools／disallowed_tools；請改用 claude",
+            spec.kind
+        );
+    }
+    if spec.sandbox.is_some() {
+        bail!("sandbox 選項尚未實作（Codex 欄位名稱待確認）");
+    }
     let want_structured = match spec.transport {
         Transport::Pty => false,
         Transport::Structured => true,

@@ -54,7 +54,7 @@ pub struct SpawnRequest {
     pub transport: Transport,
     /// 統一權限政策。
     #[serde(default)]
-    pub permission: PermissionPolicy,
+    pub permission: Option<PermissionPolicy>,
     /// 由哪個 session 產生（人類產生則為 `None`）。
     #[serde(default)]
     pub parent: Option<SessionId>,
@@ -297,7 +297,7 @@ mod tests {
             prompt: Some("hi".into()),
             worktree: false,
             transport: Transport::Auto,
-            permission: PermissionPolicy::default(),
+            permission: None,
             parent: None,
             model: None,
             args: vec![],

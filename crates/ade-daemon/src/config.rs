@@ -3,7 +3,7 @@
 //! 位置：`~/.config/ade/config.toml`，repo 的 `.ade/config.toml` 逐欄覆寫。
 //! 解析順序：spawn 請求的明確值 → `roles.<role>` → `agents.<kind>` → `defaults`。
 
-use ade_core::{AgentKind, Role};
+use ade_core::{AgentKind, PermissionPolicy, Role};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -13,6 +13,8 @@ use std::path::Path;
 pub struct Defaults {
     pub agent: Option<String>,
     pub permission: Option<String>,
+    /// agent 經 MCP／帶 `parent` spawn 時的權限上限。
+    pub max_agent_permission: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -22,6 +24,9 @@ pub struct AgentCfg {
     pub model: Option<String>,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
+    pub allowed_tools: Vec<String>,
+    pub disallowed_tools: Vec<String>,
+    pub sandbox: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -29,6 +34,8 @@ pub struct AgentCfg {
 pub struct RoleCfg {
     pub agent: Option<String>,
     pub model: Option<String>,
+    pub permission: Option<String>,
+    pub read_only: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -46,6 +53,13 @@ pub struct Resolved {
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
     pub bin: Option<String>,
+    pub permission: PermissionPolicy,
+    /// 有 parent 時的上限；`None` 表示不額外限制（仍受父 session 限制）。
+    pub max_agent_permission: Option<PermissionPolicy>,
+    pub allowed_tools: Vec<String>,
+    pub disallowed_tools: Vec<String>,
+    pub read_only: bool,
+    pub sandbox: Option<String>,
 }
 
 fn kind_key(kind: &AgentKind) -> String {
@@ -80,6 +94,9 @@ impl Config {
         if local.defaults.permission.is_some() {
             out.defaults.permission = local.defaults.permission;
         }
+        if local.defaults.max_agent_permission.is_some() {
+            out.defaults.max_agent_permission = local.defaults.max_agent_permission;
+        }
         for (k, v) in local.agents {
             let e = out.agents.entry(k).or_default();
             if v.bin.is_some() {
@@ -92,6 +109,15 @@ impl Config {
                 e.args = v.args;
             }
             e.env.extend(v.env);
+            if !v.allowed_tools.is_empty() {
+                e.allowed_tools = v.allowed_tools;
+            }
+            if !v.disallowed_tools.is_empty() {
+                e.disallowed_tools = v.disallowed_tools;
+            }
+            if v.sandbox.is_some() {
+                e.sandbox = v.sandbox;
+            }
         }
         for (k, v) in local.roles {
             let e = out.roles.entry(k).or_default();
@@ -100,6 +126,12 @@ impl Config {
             }
             if v.model.is_some() {
                 e.model = v.model;
+            }
+            if v.permission.is_some() {
+                e.permission = v.permission;
+            }
+            if v.read_only.is_some() {
+                e.read_only = v.read_only;
             }
         }
         out
@@ -120,6 +152,7 @@ impl Config {
         role: &Role,
         req_model: Option<&str>,
         req_args: &[String],
+        req_permission: Option<PermissionPolicy>,
     ) -> Resolved {
         let agent = self.agents.get(&kind_key(kind));
         let role_cfg = self.roles.get(role.id());
@@ -132,7 +165,32 @@ impl Config {
         let env = agent
             .map(|a| a.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
             .unwrap_or_default();
+        let permission = req_permission
+            .or_else(|| {
+                role_cfg
+                    .and_then(|r| r.permission.as_deref())
+                    .and_then(PermissionPolicy::parse)
+            })
+            .or_else(|| {
+                self.defaults
+                    .permission
+                    .as_deref()
+                    .and_then(PermissionPolicy::parse)
+            })
+            .unwrap_or_default();
         Resolved {
+            permission,
+            max_agent_permission: self
+                .defaults
+                .max_agent_permission
+                .as_deref()
+                .and_then(PermissionPolicy::parse),
+            allowed_tools: agent.map(|a| a.allowed_tools.clone()).unwrap_or_default(),
+            disallowed_tools: agent
+                .map(|a| a.disallowed_tools.clone())
+                .unwrap_or_default(),
+            read_only: role_cfg.and_then(|r| r.read_only).unwrap_or(false),
+            sandbox: agent.and_then(|a| a.sandbox.clone()),
             model,
             args,
             env,
@@ -162,15 +220,15 @@ model = "haiku"
     fn precedence_request_role_agent() {
         let c = Config::parse(SRC).unwrap();
         let k = AgentKind::ClaudeCode;
-        let r = c.resolve(&k, &Role::Coordinator, None, &[]);
+        let r = c.resolve(&k, &Role::Coordinator, None, &[], None);
         assert_eq!(r.model.as_deref(), Some("sonnet")); // agent 層
-        let r = c.resolve(&k, &Role::Worker, None, &[]);
+        let r = c.resolve(&k, &Role::Worker, None, &[], None);
         assert_eq!(r.model.as_deref(), Some("haiku")); // role 蓋過 agent
-        let r = c.resolve(&k, &Role::Worker, Some("opus"), &["--bar".into()]);
+        let r = c.resolve(&k, &Role::Worker, Some("opus"), &["--bar".into()], None);
         assert_eq!(r.model.as_deref(), Some("opus")); // 請求最優先
         assert_eq!(r.args, vec!["--foo", "--bar"]);
         assert_eq!(r.env, vec![("A".to_string(), "1".to_string())]);
-        let r = c.resolve(&AgentKind::Codex, &Role::Coordinator, None, &[]);
+        let r = c.resolve(&AgentKind::Codex, &Role::Coordinator, None, &[], None);
         assert_eq!(r.model, None);
     }
 
@@ -183,6 +241,29 @@ model = "haiku"
         assert_eq!(a.model.as_deref(), Some("opus"));
         assert_eq!(a.args, vec!["--foo"]);
         assert_eq!(c.defaults.agent.as_deref(), Some("claude"));
+    }
+
+    #[test]
+    fn role_permission_applies_and_request_overrides() {
+        let c = Config::parse(
+            "[defaults]\npermission = \"auto\"\nmax_agent_permission = \"auto\"\n[roles.reviewer]\npermission = \"ask\"\nread_only = true\n",
+        )
+        .unwrap();
+        let k = AgentKind::ClaudeCode;
+        let r = c.resolve(&k, &Role::Reviewer, None, &[], None);
+        assert_eq!(r.permission, PermissionPolicy::Ask);
+        assert!(r.read_only);
+        assert_eq!(r.max_agent_permission, Some(PermissionPolicy::Auto));
+        let r = c.resolve(
+            &k,
+            &Role::Reviewer,
+            None,
+            &[],
+            Some(PermissionPolicy::Bypass),
+        );
+        assert_eq!(r.permission, PermissionPolicy::Bypass);
+        let r = c.resolve(&k, &Role::Worker, None, &[], None);
+        assert_eq!(r.permission, PermissionPolicy::Auto);
     }
 
     #[test]
