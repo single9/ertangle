@@ -13,6 +13,11 @@
 >   - Antigravity：原生 `agy acp`（與 OpenCode 同 ACP 方言）
 > - M0 先做骨架，且 daemon / adapter 以 **std thread + blocking IO** 實作（暫不引入 async runtime）。
 
+> **閱讀須知（現況 vs. 原始設計）**
+> 本文件前半段原寫於動工前。第 4.3、4.4、5（機制 C）、9、11、12 節已依實作改寫為「現況」；
+> 仍保留的原始構想會明確標示「未實作」，彙整於文末「附錄 A：原始設計與未實作項目」。
+> 各里程碑的實機驗證紀錄移至 [`VERIFICATION.md`](VERIFICATION.md)。
+
 ---
 
 ## 0. 一句話定義
@@ -153,53 +158,45 @@ struct Session {
 ```
 
 ### 4.3 `Event`（append-only log 的元素）
+定義於 `crates/ade-core/src/lib.rs`，序列化為 `{"kind": "snake_case", ...}`，外層 `Record { seq, ts, event }`：
 ```rust
 enum Event {
-    SessionStarted { id, kind, cwd },
-    SessionStatusChanged { id, status },
-    MessageDelta { id, text },                 // 串流輸出
-    ToolCallStarted { id, name, input },
-    ToolCallFinished { id, name, output, ok },
-    PermissionRequested { id, req },
-    PermissionResolved { id, decision },
-    BusMessage { from, to: Target, body },     // agent 之間的訊息
+    SessionStarted { session },
+    SessionStatus { session, status },
+    SessionLabel { session, label },
+    SessionNote { session, note },
+    UserPrompt { session, text },
+    Output { session, text },                  // 串流輸出
+    ToolCall { session, name, input, ok, output },
+    PermissionRequested { request },
+    PermissionResolved { session, req, decision },
+    BusMessage { message },                    // agent 之間的訊息
     TaskChanged { task },
-    Artifact { id, path, kind },               // 產出的檔案/分支/diff
-    SessionExited { id, code },
-    CostUpdated { id, cost },
+    ArtifactShared { artifact },               // 產出的檔案/分支/diff
+    ReviewCommented { review },
+    SessionExited { session, code },
+    Cost { session, cost },
 }
 ```
-所有狀態都是 fold(Event) 的結果 → 保證 TUI 重連時能重建畫面。
+所有狀態都是 fold(Event) 的結果（`State`）→ TUI 重連時能重建畫面。
 
-### 4.4 `Adapter` trait（每個 agent 一種實作）
+### 4.4 Adapter 與 `AgentControl`（現況：同步、std thread）
+`crates/ade-adapter/src/lib.rs` 以**同步 trait** 實作，沒有 async runtime：
+
 ```rust
-#[async_trait]
-trait Adapter: Send + Sync {
-    fn kind(&self) -> AgentKind;
-    /// 探測環境：binary 在不在、版本、是否支援 ACP
-    async fn probe(&self) -> ProbeResult;
-
-    /// 啟動一個 session，回傳一個事件流 + 控制把手
-    async fn start(&self, spec: SessionSpec) -> Result<AgentHandle>;
-
-    /// 送一段 prompt / 使用者輸入
-    async fn prompt(&self, h: &AgentHandle, text: &str) -> Result<()>;
-
-    /// 回應 permission request
-    async fn resolve_permission(&self, h: &AgentHandle, id: ReqId, d: Decision) -> Result<()>;
-
-    async fn cancel(&self, h: &AgentHandle) -> Result<()>;
-}
-
-struct AgentHandle {
-    id: SessionId,
-    events: mpsc::Receiver<AgentEvent>,   // adapter 正規化後的事件
-    ctl: AdapterCtl,                      // prompt / cancel / permission / mcp 設定
+trait AgentControl: Send + Sync {
+    fn send_input(&self, text: &str) -> Result<()>;
+    fn cancel(&self) -> Result<()>;
+    fn kill(&self) -> Result<()>;
+    fn sleep(&self) -> Result<()>;   // SIGSTOP，預設空實作
+    fn wake(&self) -> Result<()>;    // SIGCONT，預設空實作
+    fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
+    fn transport(&self) -> &'static str;
 }
 ```
-
-`Adapter` 把各家協定（ACP、stream-json、app-server…）**正規化成同一組 `AgentEvent`**，
-daemon 之上完全不需要知道底下是哪一家。
+啟動時由 adapter 以 `SessionSpec`（kind、cwd、權限政策、`mcp_exe`、初始 prompt…）建立子程序與讀取執行緒，
+把各家協定（ACP、stream-json、app-server、PTY）**正規化成同一組 `AgentEvent`**，經 channel 送給 daemon。
+daemon 之上完全不需要知道底下是哪一家。實作位於 `acp.rs`、`claude.rs`、`codex.rs`、`pty.rs`。
 
 ### 4.5 訊息與任務
 ```rust
@@ -270,27 +267,24 @@ ade spawn --kind codex --worktree --role worker "實作 X，完成後 ade send -
 CLI 內部直接打 daemon 的 control socket，零額外成本。
 
 ### 機制 C（最低共同標準）：檔案信箱
-對於不支援 MCP 又不方便跑 CLI 的 agent，daemon 在每個 worktree 放：
+對於不支援 MCP 又不方便跑 CLI 的 agent，daemon 會把收到的訊息同步寫到：
 
 ```
-.ade/
-  mailbox/<session>.jsonl   # 收到的訊息
-  tasks.json                # 共用任務快照
-  AGENTS.md 片段            # 指示 agent「定期讀 mailbox、用檔案寫回覆」
-  outbox/<session>.jsonl    # agent 寫入 → daemon 監看後轉發到 bus
+<cwd>/.ade/mailbox/<session>.jsonl   # 收到的訊息（daemon 單向寫入，append_mailbox）
 ```
 
-搭配 system prompt 注入，agent 用自己的檔案工具讀寫即可參與（`notify` 監看 outbox）。
+**未實作**：原設計的 `outbox/<session>.jsonl`（agent 寫入、daemon 以 `notify` 監看後轉發到 bus）、
+`tasks.json` 快照與 `AGENTS.md` 片段注入。目前 agent 若要回覆，仍須透過 MCP 或 `ade` CLI。
 
 ### 協作模式（由 config 定義 role）
 - **Hub-and-spoke**：Coordinator 收需求 → 拆任務 → `ade_spawn` 多個 worker（各自 worktree）→ worker 回報 → Coordinator 整合。
 - **Peer-to-peer**：實作者 ↔ 審查者直接對話（`ade_ask` / `ade_send`），人類只旁觀。
 - **Channels**：`#build`、`#review`、`#alerts` 廣播。
-- **Handoff**：一個 agent 把 session 連同 worktree 交給另一個（換模型/換工具續做）。
+- **Handoff**（僅有 `kind=handoff` 訊息類型，會喚醒對方；**未實作**連同 worktree 轉交 session）：一個 agent 把 session 連同 worktree 交給另一個（換模型/換工具續做）。
 
 ### 防呆（避免 agent 無限互傳）
 - 每對 session 的訊息速率限制 + 迴圈偵測（相同 body 連續出現 N 次即斷路）。
-- 每個 task 的訊息預算（token/回合上限）。
+- 每個 task 的訊息預算（token/回合上限）：**未實作**。
 - `ade_wait` 有 timeout，預設不會永久阻塞。
 
 ---
@@ -347,26 +341,36 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 - **Diff 視圖**：每個 worktree 的 `git diff`，可對行下註解並送回該 agent（借用 Antigravity/Orca 的 review 迴圈概念）。
 
 ### 7.2 關鍵按鍵
+（與 `README.md`「TUI 按鍵」同步；以 README 為準。）
+
 | 鍵 | 動作 |
 | --- | --- |
-| `Ctrl-P` / `Ctrl-K` | 命令面板 / 跳轉任何 session（jump anywhere） |
-| `n` | 新 session（精靈：agent、worktree、role、prompt） |
-| `Tab` / `g` | 切換 pane / 視圖 |
-| `t` | 切換逐字稿顯示（Markdown 渲染 ↔ 原始文字） |
-| `T` / `/thoughts` | 顯示 / 隱藏 agent 思考行（預設隱藏） |
-| `Y` / `/copy` | 以 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees） |
-| 滑鼠 | 滾輪捲動逐字稿或 diff；拖曳選取逐字稿（只含中央區塊）並以 OSC 52 複製；`F2` 關閉擷取改用原生選取 |
-| `PgUp` / `PgDn`（`Ctrl-U` / `Ctrl-D`） | 捲動逐字稿 / diff（捲動即暫停跟隨） |
-| `←` / `→`、`Home` / `End`、`Delete` | 輸入框游標移動 / 跳至頭尾 / 刪除（支援中文與 bracketed paste） |
-| `Home` / `End` | 跳到最前 / 回到跟隨最新 |
-| `{` / `}` | （Diff）上一個 / 下一個 hunk |
-| `Enter` | 送 prompt 給當前 session |
-| `a` / `d` | 對待審批按 allow / deny |
-| `m` | 開 bus 訊息面板（寄訊息給任一 session/channel） |
-| `g` | git/worktree 面板（diff、merge、PR） |
-| `x` | 取消當前 session 的回合（cancel） |
-| `q` | 離開 TUI（**不**殺 daemon） |
-| `Q` | 關閉 daemon（結束所有 agent 並移除 socket） |
+| `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標） |
+| 滑鼠拖曳 | 在逐字稿上選取（只含中央區塊，不含側欄與邊框），放開即以 OSC 52 複製 |
+| 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標） |
+| `F2` | 切換滑鼠擷取（預設開啟；關閉後可用終端原生拖曳選取，`Shift`+拖曳在開啟時也可原生選取） |
+| `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
+| `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
+| `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
+| `T`（或 `/thoughts`） | 顯示 / 隱藏 agent 的思考行（`💭`；預設隱藏以減少渲染量） |
+| `Y` 或 `/copy` | 用 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees），不含側欄與邊框 |
+| `PgUp` / `PgDn`（或 `Ctrl-U` / `Ctrl-D`） | 逐字稿 / diff 翻頁捲動（捲動後暫停跟隨，狀態列會顯示 `⏸ paused`） |
+| `Home` / `End` | 跳到最前 / 回到跟隨最新輸出（`▼ follow`） |
+| `{` / `}` | （Diff 視圖）跳到上一個 / 下一個 hunk（`@@`） |
+| `i` / `Enter` | 對選取 session 送 prompt（支援 `@peer 訊息`、`#channel 訊息`、`/命令`） |
+| `←` / `→`、`Home` / `End`、`Delete` | 在輸入框移動游標 / 跳到頭尾 / 刪除字元（支援中文等寬字元與 bracketed paste） |
+| `n` | 建立 session：`<agent> <prompt>`（`Ctrl-W` 切換是否開 worktree） |
+| `m` | 送訊息到匯流排（agent 之間溝通） |
+| `c` | （Diff 視圖）對目前選取的 diff 行下審查註解並送回 agent 修改 |
+| `M` / `G` | 合併選取 session 的 worktree 分支回主工作區 / 清理已結束 worktree |
+| `z` | 切換選取 session 的休眠（`SIGSTOP`）/ 喚醒（`SIGCONT`） |
+| `/` 或 `Ctrl-P` | 開啟命令面板（`spawn` / `merge` / `diff` / `gc` / `sleep` / `wake` / `task` / `copy` / `shutdown`） |
+| `Ctrl-K` | Jump-Anywhere：關鍵字快速跳轉至任何 session |
+| `a` / `A` / `d` | 允許 / 一律允許 / 拒絕待審批請求 |
+| `x` / `K` | 中斷當前回合 / 結束 session |
+| `r` | 向 daemon 重新要快照与重整當前視圖 |
+| `q` | 離開 TUI（daemon 與 agent 續跑） |
+| `Q` | 關閉 daemon：結束所有 agent、移除 socket（等同 `/shutdown`） |
 
 ### 7.3 效能策略
 - TUI 只持有「渲染所需」的鏡像狀態；逐字稿以 ring buffer（`TRANSCRIPT_CAP`）上限，避免長對話吃記憶體。
@@ -397,13 +401,13 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
   | `Ask` | 轉發 `session/request_permission` | `--permission-mode manual` | `approvalPolicy: untrusted` |
   | `Auto`（預設） | adapter 代核准（`allow_once`） | `--permission-mode acceptEdits` | `approvalPolicy: on-request` |
   | `Bypass` | adapter 代核准（`allow_always`） | `--dangerously-skip-permissions` | `approvalPolicy: never` |
-- **Policy engine**（`~/.config/ade/policy.toml`，M4）：
+- **Policy engine**（`.ade/policy.toml` 或 `~/.config/ade/policy.toml`；生效範圍與缺口見 T04）：
   - 允許：`Read`、`Grep`、`Glob`、`git status`
   - 詢問：檔案寫入、`Bash`、網路
   - 拒絕：`rm -rf`、`git push --force`、讀取 `~/.ssh`、外洩風險樣式
 - **預設最小權限**：Claude 用 `--permission-mode` + `--allowedTools`；Codex 用 sandbox + approval policy；
   對「不受信任的 repo」走 `--bare`（不載入 hooks/plugins/CLAUDE.md）。
-- **秘密保護**：事件 log 對憑證樣式遮罩；MCP 工具回傳內容做敏感樣式過濾。
+- **秘密保護**：`redact_secrets` 目前只套用在寫入事件 log 與 `ade_diff` 的回傳；**其他 MCP 工具的回傳尚未做敏感樣式過濾**（原設計項目，未實作）。
 - **審計**：所有事件落地成 jsonl，可事後重建「誰在何時批准了什麼」。
 
 ---
@@ -424,24 +428,27 @@ daemon 可選擇性讓閒置 session 進入休眠（保留狀態、暫停子程�
 
 ---
 
-## 11. 技術選型（crates）
+## 11. 技術選型（現況）
 
-| 用途 | crate |
-| --- | --- |
-| TUI | `ratatui` + `crossterm` |
-| async runtime | `tokio` |
-| ACP client | `agent-client-protocol`（runtime）/ `agent-client-protocol-schema` |
-| MCP server | `rmcp`（官方 Rust MCP SDK）或手寫 stdio JSON-RPC |
-| 序列化 | `serde` / `serde_json` |
-| 本地 socket | `tokio::net::UnixListener`（或 `interprocess` 跨平台） |
-| PTY fallback | `portable-pty`（wezterm）或 `nix`/`tokio::process` |
-| git | `git2`（或直接 shell out `git`；worktree 用 CLI 較穩） |
-| CLI | `clap` |
-| 設定路徑 | `etcetera` / `directories` |
-| 日誌 | `tracing` + `tracing-subscriber` |
-| 檔案監看（mailbox） | `notify` |
-| id / 時間 | `uuid` / `jiff`（或 `chrono`） |
-| 錯誤 | `anyhow`（應用層）/ `thiserror`（library 層） |
+實際依賴（`Cargo.toml` workspace）：
+
+| 用途 | crate / 做法 | 備註 |
+| --- | --- | --- |
+| TUI | `ratatui` + `crossterm`、`unicode-width` | Markdown 渲染器自寫（`markdown.rs`） |
+| 並行模型 | `std::thread` + `std::sync::mpsc`，blocking IO | 不使用 `tokio`：連線數少、避免 async 傳染 adapter |
+| ACP client | 手寫 JSON-RPC（`acp.rs`） | 不用 `agent-client-protocol`：只需子集，且避免跟著 schema 升版 |
+| MCP server | 手寫 stdio JSON-RPC（`mcp.rs`） | 不用 `rmcp`：只需 `initialize`／`tools/list`／`tools/call` |
+| 序列化 | `serde` / `serde_json` | |
+| 本地 socket | `std::os::unix::net::UnixListener` | 遠端為 `std::net::TcpListener` + token |
+| PTY fallback | `portable-pty` | |
+| git | 以子程序呼叫 `git`（worktree 用 CLI 較穩） | 不用 `git2` |
+| CLI | `clap`（derive） | |
+| 日誌 | `tracing` + `tracing-subscriber` | |
+| id | `uuid` | 時間戳直接用 `SystemTime`，不用 `jiff`／`chrono` |
+| 路徑 | 自行解析 `XDG_*` 環境變數 | 不用 `etcetera`／`directories` |
+| 錯誤 | `anyhow`／`thiserror` | |
+
+未採用且無對應程式碼：`notify`（見 5 的機制 C）、`tokio`、`rmcp`、`git2`、`jiff`、`etcetera`。
 
 ---
 
@@ -453,22 +460,23 @@ ade-rust/
 ├─ crates/
 │  ├─ ade-core/              # 領域型別、Event、fold/state、bus、task
 │  ├─ ade-protocol/          # control API 與 bus 的 wire 型別
-│  ├─ ade-adapter/           # Adapter trait + 各 agent 實作
+│  ├─ ade-adapter/           # AgentControl trait + 各 agent 實作
 │  │   ├─ acp.rs             #   ACP client（opencode / agy）
 │  │   ├─ claude.rs          #   Claude stream-json
 │  │   ├─ codex.rs           #   Codex app-server
 │  │   ├─ stream.rs          #   共用 token→行 串流緩衝（StreamBuf）
 │  │   ├─ pty.rs             #   PTY 直通萬用後備
 │  │   └─ ansi.rs            #   ANSI 控制碼剝除
-│  ├─ ade-daemon/            # supervisor、socket server、MCP server、worktree
+│  ├─ ade-daemon/            # supervisor、socket server、worktree（lib.rs）、MCP server（mcp.rs）
 │  └─ ade-tui/               # ratatui 前端
-│      ├─ lib.rs             #   三欄版面、事件迴圈、視圖切換
+│      ├─ lib.rs             #   版面、事件迴圈、視圖切換
 │      └─ markdown.rs        #   零依賴 Markdown → Ratatui 行渲染器
 ├─ src/                      # `ade` binary（tui/daemon/mcp/send/spawn/...）
 │  └─ main.rs                #   根目錄 package 入口，支援 `cargo install --path .`
 └─ docs/
    ├─ DESIGN.md              # 本文件
-   └─ PROTOCOL.md            # control API + MCP tools 規格（後續）
+   ├─ VERIFICATION.md        # 各里程碑的實機驗證紀錄
+   └─ tickets/               # 改善計畫票
 ```
 
 單一 binary `ade`，子命令分派到各 crate；`ade mcp` 也可獨立當 MCP server 執行檔。
@@ -482,37 +490,13 @@ Cargo workspace + `ade-core` 型別 + `ade-protocol` 控制 API + daemon（Unix 
 + `ade-tui`（attach、即時事件、輸入）+ `ade` CLI；
 adapter 實作 **PTY 直通**（對任何 agent 都有效）與 **OpenCode ACP**（原生結構化）。
 
-M0 已驗證（實機）：
-
-| 驗證項 | 指令 | 結果 |
-| --- | --- | --- |
-| daemon 常駐 + socket | `ade daemon` / `ade sessions` | OK |
-| OpenCode ACP 結構化 | `ade spawn --kind opencode --prompt "..." --transport acp` | transcript 收到 `hello from ade` |
-| PTY 萬用後備 | `ade spawn --kind opencode --transport pty` | 逐段剝除 ANSI 後可讀 |
-| 訊息匯流排 | `ade send --to <id>` / `--channel review` | 訊息進 `State.messages` |
-| 任務板 | `ade task "..."` / `ade tasks` | 任務進 `State.tasks` |
-| TUI attach | `ade` | 三欄（Sessions / Transcript / Bus）即時更新、`q` 離線不影響 agent |
-| 中斷 / 結束 | `ade cancel <id>` / `ade kill <id>` | ACP `session/cancel`、程序 kill；狀態轉 `exited` |
-| 關閉 | `ade shutdown` | 先結束所有 agent 子程序、移除 socket 再離開 |
-| 測試 | `cargo test` | 14 passed |
+M0 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 **M1 — 四家 agent 都能跑（原生，零 Node）（已完成，見 `crates/`）**
 Claude（`claude -p` stream-json 雙向）、Codex（`codex app-server`）、Antigravity（`agy acp`）。
 統一審批通道與權限政策（`PermissionPolicy`）。共用的串流行緩衝抽到 `ade-adapter::stream`。
 
-M1 已驗證（實機）：
-
-| 驗證項 | 指令 | 結果 |
-| --- | --- | --- |
-| OpenCode ACP | `ade spawn --kind opencode --prompt "..."` | 收到 `ade-ok-opencode`，狀態 busy→idle |
-| Antigravity ACP | `ade spawn --kind agy --prompt "..."` | 收到 `ade-ok-agy`（與 OpenCode 同 ACP 方言） |
-| Antigravity 工具 | `ade spawn --kind agy --prompt "建立 agy-write.txt"` | 檔案寫入成功、transcript 可讀 |
-| Claude stream-json | `ade spawn --kind claude --prompt "..."` | 收到 `ade-ok-claude`、`transport=stream-json`、成本解析正確 |
-| Claude 工具 | `ade spawn --kind claude --permission bypass --prompt "跑 echo"` | ToolCall `Bash` + tool_result `ade-tool-ok` |
-| Codex app-server 握手 | `ade spawn --kind codex --prompt "..."` | `initialize` + `thread/start` 成功、`transport=app-server`；回合因無授權回 401 |
-| 權限政策 | `--permission ask/auto/bypass` | ACP 由 adapter 代核准；Claude 對應 `--permission-mode` / `--dangerously-skip-permissions` |
-| transport 別名 | `--transport acp` / `structured` / `pty` | `acp` 與 `structured` 等價（serde alias） |
-| 測試 / lint | `cargo test` / `cargo clippy --all-targets` | 19 passed / 無警告 |
+M1 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 M1 未完成項（受環境限制，程式路徑已就緒）：
 - **Codex 回合**：本機無 OpenAI 授權，`turn/start` 回 401；授權後應可直接運作。
@@ -524,17 +508,7 @@ M1 未完成項（受環境限制，程式路徑已就緒）：
 Message bus + task board + **`ade mcp` server** + `ade` CLI；agent 可 `send/inbox/wait/ask/task/spawn/artifact/status`。
 端到端 demo：coordinator 用 `ade_spawn` 產生兩個 worker，各自 worktree，完成後回報並整合。
 
-M2 已驗證（實機）：
-
-| 驗證項 | 指令 / 工具 | 結果 |
-| --- | --- | --- |
-| MCP stdio 協定 | `ade mcp --session <id>` | `initialize`、`tools/list`（12 個 `ade_*` 工具）、`tools/call` 正常 |
-| 自動注入 MCP | `ade spawn --kind claude/opencode/agy` | ACP 透過 `session/new.mcpServers`、Claude 透過 `--mcp-config`、Codex 透過 `-c mcp_servers.ade.*` 自動掛載 |
-| 收件匣與等待 | `ade inbox` / `ade wait` / `ade ask` | 以 label 或 session id 定址、游標去重、阻塞等待與 request/response 交握正常 |
-| 閒置喚醒 | 對 `Idle` session 送 `Question` / `Handoff` | daemon 自動將匯流排訊息轉成 prompt 喚醒對方處理 |
-| 防呆斷路 | `BusGuard` | 連續重複訊息達上限（3 次）觸發迴圈斷路；每分鐘超過 30 則觸發速率限制 |
-| 端到端多 Agent 協作 | `coord` 呼叫 `ade_task_create` + 2×`ade_spawn(worktree=true)` + 2×`ade_wait` | `worker/a` 與 `worker/b` 各自於獨立 worktree 寫檔並 `ade_send(kind=handoff)` 回報，`coord` 收齊後將兩任務標為 `done` 並更新 `status_note` |
-| 測試 / lint | `cargo test` / `cargo clippy --all-targets -- -D warnings` | 22 passed / 無警告 |
+M2 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 **M3 — 工作區與 review（已完成，見 `crates/ade-daemon` 與 `crates/ade-tui`）**
 worktree 管理（`ade worktrees` / `ade gc`）、彩色 diff 視圖（含未追蹤新檔預覽，`ade diff` / TUI `g` 鍵）、行內註解送回 agent（`ade review` / TUI `c` 鍵）、自動 commit 並 merge 回主工作區（`ade merge` / TUI `M` 鍵）/ 開 PR（`ade pr`）。
@@ -550,20 +524,7 @@ Diff 視圖舊新行號邊欄與 `+N -M` 統計與 `{`/`}` hunk 跳轉、響應�
 **M5 — 遠端（已完成，見 `crates/ade-daemon` 與 `src/main.rs`）**
 daemon 支援 `--listen <host:port> --token <secret>`（TCP + token 驗證），client 支援 `--remote <host:port> --token <secret>`（或 `ADE_REMOTE` / `ADE_TOKEN` 環境變數）與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
 
-M3–M5 已驗證（實機）：
-
-| 驗證項 | 指令 / 功能 | 結果 |
-| --- | --- | --- |
-| Worktree 清單與 Diff | `ade worktrees` / `ade diff worker/feat` | 正確列出變更檔案數與統一格式 diff（含新增未追蹤檔案） |
-| Worktree 自動 Commit + Merge | `ade merge worker/feat` | 自動將 worktree 內未 commit 的變更打包 commit 並 merge 回主分支 |
-| Worktree 清理 | `ade gc` | 自動移除已結束 session 的 `.ade/wt/<id>` 與 `ade/<id>` 分支 |
-| 行內審查註解（Review 迴圈） | `ade review <session> --location ...` / TUI `c` | 記錄 `ReviewCommented` 事件並向該 agent 送出定位修正 prompt |
-| 閒置休眠與喚醒 | `ade sleep <id>` / `ade wake <id>` | 送出 `SIGSTOP` / `SIGCONT`，狀態切換 `sleeping` ↔ `idle`；收到新 prompt 時自動喚醒 |
-| 成本統計 | `ade cost` | 逐 session 與總計顯示 USD 與 input/output tokens |
-| 事件重播與秘密遮罩 | `ade replay` | 完整重播 `events.jsonl`；`sk-...` / `ghp_...` 自動遮罩為 `<REDACTED>` |
-| 遠端 TCP + Token 連線 | `ade daemon --listen 127.0.0.1:17429 --token ...` | 透過 `--remote` + `--token` 建立任務與查詢狀態成功 |
-| TUI Markdown 渲染與捲動 | `cargo test -p ade-tui`（TestBackend 全畫面渲染） | 標題／粗體／程式碼／表格正確渲染、`t` 切換原始文字、Diff 邊欄與 `+N -M` 統計、翻頁後恢復跟隨 |
-| 測試 / lint | `cargo test` / `cargo clippy --all-targets -- -D warnings` | 32 passed / 無警告 |
+M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 ---
 
@@ -587,7 +548,7 @@ M3–M5 已驗證（實機）：
 4. **MCP 還是 CLI 優先**：M2 先做 MCP（`ade mcp`），CLI 與檔案信箱作為退路。
 5. **是否要 agent 自主 `ade_spawn`**：M2 開啟，但加上速率限制與迴圈偵測（見風險表）。
 6. **預設權限政策**：`Auto`（不中斷流程）；需要逐項審批時用 `Ask`，全開用 `Bypass`。
-   M2 再以 MCP 權限工具補上 Claude / Codex 的逐項轉發。
+   M2 再以 MCP 權限工具補上 Claude / Codex 的逐項轉發（**Claude 仍未實作**，Codex 有轉發路徑但未實機驗證）。
 
 ---
 
@@ -607,3 +568,19 @@ M3–M5 已驗證（實機）：
 8. 使用者在 TUI 的 Diff 視圖審查、留一行註解 → 送回 coordinator → coordinator 修掉 → `ade merge` / 開 PR。
 
 整個過程：人只按了幾個鍵；agent 之間的溝通、分工、交接全走 bus；所有事件可回溯。
+
+---
+
+## 附錄 A：原始設計與未實作項目
+
+| 項目 | 原設計 | 現況 |
+| --- | --- | --- |
+| async runtime | `tokio`、`async_trait Adapter` | 未採用；同步 `AgentControl` + std thread（4.4、11） |
+| `outbox/` 監看 | daemon 以 `notify` 監看 agent 寫入並轉發 | 未實作；只有 `mailbox/` 單向寫入 |
+| MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 僅 log 與 `ade_diff` 套用 `redact_secrets` |
+| 每任務訊息預算 | token／回合上限 | 未實作；只有速率限制與重複迴圈斷路 |
+| Handoff | 連同 worktree 交給另一個 agent | 只有 `handoff` 訊息類型 |
+| `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | 未實作 |
+| Claude 逐項審批 | 轉成 `PermissionRequested` | 未實作（`claude.rs` 不轉發） |
+| Codex 回合、ACP 逐項審批 | 實機驗證 | 程式路徑就緒，未實機驗證 |
+| `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `ade-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |

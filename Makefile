@@ -1,8 +1,9 @@
 # ade — Agent Development Environment Makefile
 
 CARGO       ?= $(shell PATH="$(HOME)/.cargo/bin:$(PATH)" which cargo 2>/dev/null || echo cargo)
-ZIG_DIR     ?= $(HOME)/.local/lib/python3.10/site-packages/ziglang
-BUILD_PATH  := $(ZIG_DIR):$(HOME)/.cargo/bin:$(HOME)/.local/bin:$(PATH)
+# 自動偵測 pip 安裝的 ziglang；找不到時留空（可用 ZIG_DIR=... 覆寫）
+ZIG_DIR     ?= $(shell python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))' 2>/dev/null)
+BUILD_PATH  := $(if $(ZIG_DIR),$(ZIG_DIR):)$(HOME)/.cargo/bin:$(HOME)/.local/bin:$(PATH)
 
 PREFIX      ?= $(HOME)/.local
 BINDIR      ?= $(PREFIX)/bin
@@ -13,10 +14,18 @@ BIN_MACOS_ARM64     := target/aarch64-apple-darwin/release/ade
 BIN_MACOS_X86_64    := target/x86_64-apple-darwin/release/ade
 BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/ade
 
-.PHONY: all build dev run tui daemon shutdown test clippy lint fmt \
+.PHONY: check-zigbuild all build dev run tui daemon shutdown test clippy lint fmt \
         macos macos-arm64 macos-x86_64 macos-universal dist install clean help
 
 all: build
+
+## 檢查 cargo-zigbuild 是否可用（macOS 交叉編譯前置）
+check-zigbuild:
+	@PATH="$(BUILD_PATH)" $(CARGO) zigbuild --help >/dev/null 2>&1 || { \
+	  echo "找不到 cargo-zigbuild。請先安裝："; \
+	  echo "  cargo install cargo-zigbuild"; \
+	  echo "  pip install ziglang   # 或自行安裝 zig 並設定 ZIG_DIR=<zig 所在目錄>"; \
+	  exit 1; }
 
 ## 建置本機 (Linux/macOS) release 執行檔
 build:
@@ -51,15 +60,15 @@ fmt:
 	PATH="$(BUILD_PATH)" $(CARGO) fmt
 
 ## 交叉編譯 macOS Apple Silicon (aarch64-apple-darwin)
-macos-arm64:
+macos-arm64: check-zigbuild
 	PATH="$(BUILD_PATH)" $(CARGO) zigbuild --release --target aarch64-apple-darwin
 
 ## 交叉編譯 macOS Intel (x86_64-apple-darwin)
-macos-x86_64:
+macos-x86_64: check-zigbuild
 	PATH="$(BUILD_PATH)" $(CARGO) zigbuild --release --target x86_64-apple-darwin
 
 ## 交叉編譯 macOS Universal 2 (arm64 + x86_64 雙架構通用執行檔)
-macos-universal:
+macos-universal: check-zigbuild
 	PATH="$(BUILD_PATH)" $(CARGO) zigbuild --release --target universal2-apple-darwin
 
 ## 一次建置所有 macOS 版本 (arm64 / x86_64 / universal2)
