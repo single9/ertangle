@@ -37,12 +37,18 @@ enum Cmd {
     Tui,
     /// 以前景方式執行 daemon
     Daemon {
-        /// 同時綁定 TCP 位址供遠端連線（例如 0.0.0.0:7420）
+        /// 同時綁定 TCP 位址供遠端連線（例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token）
         #[arg(long)]
         listen: Option<String>,
-        /// 遠端 TCP 連線所需的認證 token
+        /// （已棄用，會出現在 ps）遠端認證 token；請改用 ADE_TOKEN 或 --token-file
         #[arg(long)]
         token: Option<String>,
+        /// 從檔案讀取認證 token（檔案權限須為 0600）
+        #[arg(long)]
+        token_file: Option<std::path::PathBuf>,
+        /// 允許在非 loopback 位址上以明文 TCP 監聽（不建議）
+        #[arg(long)]
+        insecure_listen_public: bool,
     },
     /// 以 stdio 執行內建的 MCP 協作伺服器
     Mcp {
@@ -283,13 +289,26 @@ fn main() -> Result<()> {
     if let Some(r) = &cli.remote {
         std::env::set_var("ADE_REMOTE", r);
     }
+    // daemon 子命令自己處理 --token（含棄用警告），避免與全域 --token 混淆。
     if let Some(t) = &cli.token {
-        std::env::set_var("ADE_TOKEN", t);
+        if !matches!(cli.cmd, Some(Cmd::Daemon { .. })) {
+            std::env::set_var("ADE_TOKEN", t);
+        }
     }
 
     match cli.cmd.unwrap_or(Cmd::Tui) {
         Cmd::Tui => ade_tui::run(),
-        Cmd::Daemon { listen, token } => ade_daemon::run_with_options(listen, token),
+        Cmd::Daemon {
+            listen,
+            token,
+            token_file,
+            insecure_listen_public,
+        } => ade_daemon::run_remote(ade_daemon::RemoteOptions {
+            listen,
+            token,
+            token_file,
+            insecure_listen_public,
+        }),
         Cmd::Mcp { session } => ade_daemon::mcp::run(session),
         Cmd::Whoami { session, json } => cmd_whoami(session, json),
         Cmd::Sessions { json } => cmd_sessions(json),

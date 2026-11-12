@@ -37,7 +37,7 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 
 已完成並實機驗證（M0–M5）：
 
-- **daemon（M0/M2/M4/M5）**：Unix domain socket + 選配 TCP 遠端監聽（`--listen host:port --token secret`）、
+- **daemon（M0/M2/M4/M5）**：Unix domain socket + 選配 TCP 遠端監聽（`--listen 127.0.0.1:port`，需 `ADE_TOKEN` 或 `--token-file`，建議搭配 SSH 轉發）、
   增量事件同步（`since`）、事件重播（`ade replay`）與秘密遮罩（`sk-...` / `ghp_...` 自動轉 `<REDACTED>`）、
   訊息匯流排、收件匣游標與阻塞等待（`BusInbox` / `BusWait`）、防呆斷路器（速率限制 + 連續重複迴圈偵測）、任務板。
   `ade_send` 直接訊息與廣播（`*`）都會喚醒狀態為 `idle` 或休眠中的收件者；指派任務（`ade_task_create` / 改派負責人）也會自動喚醒對方。
@@ -160,8 +160,10 @@ ade gc [--session <id>]                     # 清理已結束 session 的 worktr
 ade sleep <session> ; ade wake <session>    # 暫停 / 喚醒閒置 agent 子程序
 ade cost [--json]                           # 查看各 session 與總計的成本與 token 用量
 ade replay [--since <seq>] [--json]         # 重播與審計 events.jsonl
-ade daemon --listen 0.0.0.0:7420 --token <secret> # 啟動含遠端 TCP 監聽的 daemon
-ade --remote <host:port> --token <secret> ...     # 連線至遠端 daemon
+# 遠端：建議只綁 loopback，再用 SSH 轉發（TCP 為明文）
+ADE_TOKEN=<secret> ade daemon --listen 127.0.0.1:7420   # 或 --token-file <path>（0600）
+ssh -L 7420:127.0.0.1:7420 host                         # 本機端轉發
+ADE_TOKEN=<secret> ade --remote 127.0.0.1:7420 ...      # 連線至遠端 daemon
 ade mcp [--session <id>]                    # stdio MCP 協作伺服器（由 adapter 自動注入）
 ade cancel <session-id> ; ade kill <session-id>
 ade shutdown

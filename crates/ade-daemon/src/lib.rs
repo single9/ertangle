@@ -620,7 +620,7 @@ impl Shared {
                 epoch,
             } => {
                 if let Some(expected) = &self.auth_token {
-                    if token.as_deref() != Some(expected.as_str()) {
+                    if !token_matches(token.as_deref(), expected) {
                         let _ = reply.send(Frame::error("遠端認證失敗：token 不符"));
                         return;
                     }
@@ -1833,7 +1833,8 @@ fn handle_conn(shared: Arc<Shared>, stream: ConnStream, require_auth: bool) -> R
         }
     });
 
-    let mut authenticated = !require_auth || shared.auth_token.is_none();
+    // 遠端連線一律需要認證；沒有設定 token 時 fail closed（不再靜默放行）。
+    let mut authenticated = !require_auth;
 
     for line in reader.lines() {
         let line = line?;
@@ -1844,13 +1845,20 @@ fn handle_conn(shared: Arc<Shared>, stream: ConnStream, require_auth: bool) -> R
             Ok(req) => {
                 if !authenticated {
                     if let Request::Hello { ref token, .. } = req {
-                        if token.as_deref() == shared.auth_token.as_deref() {
+                        let ok = shared
+                            .auth_token
+                            .as_deref()
+                            .is_some_and(|expected| token_matches(token.as_deref(), expected));
+                        if ok {
                             authenticated = true;
                         } else {
+                            // 失敗後延遲回覆再關閉連線，拖慢暴力嘗試。
+                            std::thread::sleep(AUTH_FAIL_DELAY);
                             let _ = tx.send(Frame::error("遠端認證失敗：請設定正確的 ADE_TOKEN"));
                             break;
                         }
                     } else {
+                        std::thread::sleep(AUTH_FAIL_DELAY);
                         let _ = tx.send(Frame::error("未認證的遠端連線：請先送 Hello 帶 token"));
                         break;
                     }
@@ -1865,16 +1873,148 @@ fn handle_conn(shared: Arc<Shared>, stream: ConnStream, require_auth: bool) -> R
     Ok(())
 }
 
+/// 認證失敗後、回覆並關閉連線前的延遲。
+const AUTH_FAIL_DELAY: Duration = Duration::from_millis(500);
+
+/// 常數時間比對 token（逐位元組 XOR 累加；長度不同仍走完整比較再判定）。
+fn token_matches(given: Option<&str>, expected: &str) -> bool {
+    let Some(given) = given else { return false };
+    let (a, b) = (given.as_bytes(), expected.as_bytes());
+    let mut diff = (a.len() ^ b.len()) as u8;
+    for i in 0..a.len().max(b.len()) {
+        diff |= a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0);
+    }
+    diff == 0
+}
+
+/// 遠端監聽的安全選項。
+#[derive(Debug, Default, Clone)]
+pub struct RemoteOptions {
+    /// `--listen host:port`
+    pub listen: Option<String>,
+    /// 已棄用的 `--token`
+    pub token: Option<String>,
+    /// `--token-file <path>`（權限須為 0600）
+    pub token_file: Option<PathBuf>,
+    /// 允許綁定非 loopback 位址
+    pub insecure_listen_public: bool,
+}
+
+/// 讀取 token 檔；要求不對 group/other 開放權限。
+fn read_token_file(path: &Path) -> Result<String> {
+    use std::os::unix::fs::PermissionsExt;
+    let meta = fs::metadata(path).with_context(|| format!("讀取 token 檔 {path:?} 失敗"))?;
+    if meta.permissions().mode() & 0o077 != 0 {
+        bail!("token 檔 {path:?} 權限過寬，請執行 chmod 600");
+    }
+    let t = fs::read_to_string(path)?.trim().to_string();
+    if t.is_empty() {
+        bail!("token 檔 {path:?} 是空的");
+    }
+    Ok(t)
+}
+
+/// 決定 token 來源：`--token-file` > `--token`（棄用）> `ADE_TOKEN`。
+fn resolve_token(opts: &RemoteOptions) -> Result<Option<String>> {
+    if let Some(p) = &opts.token_file {
+        return read_token_file(p).map(Some);
+    }
+    if let Some(t) = opts.token.clone().filter(|t| !t.is_empty()) {
+        tracing::warn!("--token 已棄用（會出現在 ps 輸出）；請改用 ADE_TOKEN 或 --token-file");
+        eprintln!("警告：--token 已棄用（會出現在 ps 輸出）；請改用 ADE_TOKEN 或 --token-file");
+        return Ok(Some(t));
+    }
+    Ok(std::env::var("ADE_TOKEN").ok().filter(|t| !t.is_empty()))
+}
+
+/// 檢查 `--listen` 設定：必須有 token；非 loopback 需 `insecure_listen_public`。
+fn validate_listen(addr: &str, has_token: bool, insecure_public: bool) -> Result<()> {
+    use std::net::ToSocketAddrs;
+    if !has_token {
+        bail!("--listen 需要認證 token：請設定 ADE_TOKEN 或 --token-file <path>");
+    }
+    let addrs: Vec<_> = addr
+        .to_socket_addrs()
+        .with_context(|| format!("無法解析監聽位址 {addr}"))?
+        .collect();
+    let all_loopback = !addrs.is_empty() && addrs.iter().all(|a| a.ip().is_loopback());
+    if !all_loopback {
+        if !insecure_public {
+            bail!(
+                "--listen {addr} 不是 loopback 位址；TCP 為明文傳輸。\
+                 建議綁 127.0.0.1 並用 SSH 轉發；若確定要公開，加上 --insecure-listen-public"
+            );
+        }
+        eprintln!("警告：daemon 以明文 TCP 對非 loopback 位址 {addr} 開放，token 與內容可被側錄");
+        tracing::warn!("明文 TCP 監聽於非 loopback 位址：{addr}");
+    }
+    Ok(())
+}
+
+/// 確保 socket 目錄存在、為自己所有且不對其他人開放（新建為 0700）。
+fn ensure_private_dir(dir: &Path) -> Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+    match fs::symlink_metadata(dir) {
+        Ok(meta) => {
+            if !meta.is_dir() {
+                bail!("{dir:?} 不是目錄");
+            }
+            // SAFETY: geteuid 無前置條件、無副作用。
+            let me = unsafe { libc_geteuid() };
+            if meta.uid() != me {
+                bail!("{dir:?} 不屬於目前使用者（uid {}），拒絕啟動", meta.uid());
+            }
+            if meta.permissions().mode() & 0o077 != 0 {
+                bail!("{dir:?} 權限過寬（需 0700），請 chmod 700 後重試");
+            }
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if let Some(parent) = dir.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::DirBuilder::new()
+                .mode(0o700)
+                .create(dir)
+                .with_context(|| format!("建立 {dir:?} 失敗"))
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+extern "C" {
+    #[link_name = "geteuid"]
+    fn libc_geteuid() -> u32;
+}
+
 /// 以前景方式跑 daemon（預設只綁本地 Unix socket）。
 pub fn run() -> Result<()> {
     run_with_options(None, None)
 }
 
-/// 以前景方式跑 daemon，可選同時開放 TCP 遠端監聽與認證 token（M5）。
+/// 相容入口：等同 [`run_remote`]，不允許公開監聽。
 pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Result<()> {
+    run_remote(RemoteOptions {
+        listen: listen_tcp,
+        token,
+        ..Default::default()
+    })
+}
+
+/// 以前景方式跑 daemon，可選同時開放 TCP 遠端監聽（M5，含安全檢查）。
+pub fn run_remote(opts: RemoteOptions) -> Result<()> {
+    let auth_token = resolve_token(&opts)?;
+    if let Some(addr) = &opts.listen {
+        validate_listen(addr, auth_token.is_some(), opts.insecure_listen_public)?;
+    }
+    let listen_tcp = opts.listen.clone();
     let sock = socket_path();
     if let Some(dir) = sock.parent() {
-        fs::create_dir_all(dir).with_context(|| format!("建立 {dir:?} 失敗"))?;
+        if dir == runtime_dir() {
+            ensure_private_dir(dir)?;
+        } else {
+            fs::create_dir_all(dir).with_context(|| format!("建立 {dir:?} 失敗"))?;
+        }
     }
     if sock.exists() {
         if is_running() {
@@ -1888,7 +2028,6 @@ pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Re
 
     let default_cwd = std::env::current_dir()?;
     let policy = load_policy(&default_cwd);
-    let auth_token = token.or_else(|| std::env::var("ADE_TOKEN").ok().filter(|t| !t.is_empty()));
     let shared = Shared::restore(&log_path(), policy, default_cwd, auth_token)?;
 
     // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽（M5 遠端模式）。
@@ -1935,6 +2074,103 @@ pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Re
 mod tests {
     use super::*;
     use ade_core::{AgentKind, Cost, Decision, Role};
+
+    // -----------------------------------------------------------------------
+    // T05：遠端與 socket 安全
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn token_compare_is_exact() {
+        assert!(token_matches(Some("abc"), "abc"));
+        assert!(!token_matches(Some("abd"), "abc"));
+        assert!(!token_matches(Some("abcd"), "abc"));
+        assert!(!token_matches(Some(""), "abc"));
+        assert!(!token_matches(None, "abc"));
+    }
+
+    #[test]
+    fn listen_requires_token_and_loopback() {
+        assert!(validate_listen("127.0.0.1:0", false, false).is_err());
+        assert!(validate_listen("127.0.0.1:0", true, false).is_ok());
+        assert!(validate_listen("0.0.0.0:7420", true, false).is_err());
+        assert!(validate_listen("0.0.0.0:7420", true, true).is_ok());
+    }
+
+    #[test]
+    fn run_remote_refuses_listen_without_token() {
+        std::env::remove_var("ADE_TOKEN");
+        let err = run_remote(RemoteOptions {
+            listen: Some("127.0.0.1:0".into()),
+            ..Default::default()
+        })
+        .unwrap_err();
+        assert!(err.to_string().contains("token"));
+    }
+
+    #[test]
+    fn token_file_must_be_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = temp_cwd();
+        let f = dir.join("tok");
+        fs::write(&f, "secret\n").unwrap();
+        fs::set_permissions(&f, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(read_token_file(&f).is_err());
+        fs::set_permissions(&f, fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(read_token_file(&f).unwrap(), "secret");
+    }
+
+    #[test]
+    fn socket_dir_is_0700_and_loose_dir_rejected() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = temp_cwd();
+        let d = base.join("ade");
+        ensure_private_dir(&d).unwrap();
+        assert_eq!(
+            fs::metadata(&d).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        // 已存在且 0700：通過
+        ensure_private_dir(&d).unwrap();
+        let loose = base.join("loose");
+        fs::create_dir(&loose).unwrap();
+        fs::set_permissions(&loose, fs::Permissions::from_mode(0o777)).unwrap();
+        assert!(ensure_private_dir(&loose).is_err());
+    }
+
+    #[test]
+    fn wrong_token_tcp_connection_is_closed() {
+        use std::io::{BufRead, Write};
+        let shared = Shared::restore(
+            Path::new("/dev/null"),
+            PolicyEngine::default(),
+            std::env::temp_dir(),
+            Some("right".into()),
+        )
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let (s, _) = listener.accept().unwrap();
+            let _ = handle_conn(shared, ConnStream::Tcp(s), true);
+        });
+        let mut c = TcpStream::connect(addr).unwrap();
+        let hello = Request::Hello {
+            client: "t".into(),
+            since: None,
+            token: Some("wrong".into()),
+            epoch: None,
+        };
+        c.write_all(encode_line(&hello).unwrap().as_bytes())
+            .unwrap();
+        let mut r = BufReader::new(c.try_clone().unwrap());
+        let mut line = String::new();
+        r.read_line(&mut line).unwrap();
+        assert!(line.contains("認證失敗"));
+        // 之後的請求不被處理：連線已關閉，讀到 EOF
+        let _ = c.write_all(encode_line(&Request::Snapshot).unwrap().as_bytes());
+        line.clear();
+        assert_eq!(r.read_line(&mut line).unwrap_or(0), 0);
+    }
 
     #[test]
     fn paths_are_under_expected_dirs() {
