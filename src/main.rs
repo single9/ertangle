@@ -92,6 +92,12 @@ enum Cmd {
         /// 父 session id（未指定則讀 $ADE_SESSION）
         #[arg(long)]
         parent: Option<String>,
+        /// 指定 model（省略則依 config.toml）
+        #[arg(long)]
+        model: Option<String>,
+        /// 額外傳給 agent 的參數（寫在 `--` 之後）
+        #[arg(last = true)]
+        extra: Vec<String>,
     },
     /// 送 prompt 給某個 session（可用 id 或 label）
     Prompt {
@@ -303,8 +309,10 @@ fn main() -> Result<()> {
             transport,
             permission,
             parent,
+            model,
+            extra,
         } => cmd_spawn(
-            kind, prompt, cwd, label, role, worktree, transport, permission, parent,
+            kind, prompt, cwd, label, role, worktree, transport, permission, parent, model, extra,
         ),
         Cmd::Prompt { session, text } => {
             roundtrip(&Request::Prompt {
@@ -613,7 +621,10 @@ fn cmd_sessions(json: bool) -> Result<()> {
             "{}  {:<22} {:<11} {:<9} {:<4} {} @{}{}",
             s.id,
             s.label,
-            s.kind.id(),
+            match &s.model {
+                Some(m) => format!("{}:{m}", s.kind.id()),
+                None => s.kind.id().to_string(),
+            },
             status,
             transport,
             s.cwd,
@@ -896,6 +907,8 @@ fn cmd_spawn(
     transport: String,
     permission: String,
     parent: Option<String>,
+    model: Option<String>,
+    extra: Vec<String>,
 ) -> Result<()> {
     let kind = AgentKind::parse(&kind)
         .with_context(|| format!("未知的 agent：{kind}（opencode/claude/codex/antigravity）"))?;
@@ -918,6 +931,8 @@ fn cmd_spawn(
         transport,
         permission,
         parent,
+        model,
+        args: extra,
     });
     match roundtrip(&req)? {
         Frame::Ok { note } => {

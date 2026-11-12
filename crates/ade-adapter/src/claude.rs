@@ -290,6 +290,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         "--verbose",
         "--include-partial-messages",
     ]);
+    if let Some(m) = &spec.model {
+        cmd.args(["--model", m]);
+    }
     cmd.args(spec.permission.claude_flags());
     if let Some(exe) = &spec.mcp_exe {
         let mcp_cfg = json!({

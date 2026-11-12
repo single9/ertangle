@@ -58,6 +58,12 @@ pub struct SpawnRequest {
     /// 由哪個 session 產生（人類產生則為 `None`）。
     #[serde(default)]
     pub parent: Option<SessionId>,
+    /// 指定 model；省略時依 `config.toml` 決定。
+    #[serde(default)]
+    pub model: Option<String>,
+    /// 一次性額外命令列參數（附加在設定檔的 args 之後）。
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 /// client → daemon。
@@ -293,6 +299,8 @@ mod tests {
             transport: Transport::Auto,
             permission: PermissionPolicy::default(),
             parent: None,
+            model: None,
+            args: vec![],
         });
         let line = encode_line(&req).unwrap();
         assert!(line.ends_with('\n'));
@@ -321,5 +329,12 @@ mod tests {
             serde_json::to_string(&Transport::Structured).unwrap(),
             "\"structured\""
         );
+    }
+
+    #[test]
+    fn old_spawn_json_without_model_still_parses() {
+        let req: Request = serde_json::from_str(r#"{"op":"spawn","kind":"claude_code"}"#).unwrap();
+        let Request::Spawn(s) = req else { panic!() };
+        assert!(s.model.is_none() && s.args.is_empty());
     }
 }

@@ -20,6 +20,7 @@ fn claude_roundtrip_output_cost_and_exit() {
         cwd: std::env::temp_dir(),
         transport: Transport::Structured,
         args: vec![],
+        model: None,
         env: vec![],
         permission: PermissionPolicy::default(),
         mcp_exe: None,

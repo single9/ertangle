@@ -9,6 +9,7 @@
 //! * 提供權限規則引擎（`policy.toml`）與閒置休眠/喚醒（M4）；
 //! * 提供內建的 stdio MCP server（[`mcp`]）。
 
+pub mod config;
 pub mod mcp;
 
 use ade_adapter::{spawn as spawn_adapter, AgentControl, AgentEvent, SessionSpec};
@@ -537,7 +538,10 @@ impl Shared {
                 session: sid.clone(),
                 cost: c,
             },
-            AgentEvent::Model(_) => return,
+            AgentEvent::Model(m) => Event::SessionModel {
+                session: sid.clone(),
+                model: m,
+            },
             AgentEvent::Exited(code) => Event::SessionExited {
                 session: sid.clone(),
                 code,
@@ -1379,6 +1383,14 @@ impl Shared {
             .clone()
             .unwrap_or_else(|| format!("{}/{}", role.id(), &id[4..8]));
 
+        let global_dir = config_dir();
+        let resolved = config::Config::load(&global_dir, &cwd).resolve(
+            &spawn.kind,
+            &role,
+            spawn.model.as_deref(),
+            &spawn.args,
+        );
+
         let session = Session {
             id: id.clone(),
             kind: spawn.kind.clone(),
@@ -1387,7 +1399,7 @@ impl Shared {
             branch,
             role,
             status: SessionStatus::Starting,
-            model: None,
+            model: resolved.model.clone(),
             cost: Default::default(),
             parent,
             created_ms: now_millis(),
@@ -1418,13 +1430,15 @@ impl Shared {
             }
         }
 
+        env.extend(resolved.env.iter().cloned());
         let (tx, rx) = mpsc::channel();
         let spec = SessionSpec {
             id: id.clone(),
             kind: spawn.kind.clone(),
             cwd: cwd.clone(),
             transport: spawn.transport,
-            args: vec![],
+            args: resolved.args.clone(),
+            model: resolved.model.clone(),
             env,
             permission: spawn.permission,
             mcp_exe,

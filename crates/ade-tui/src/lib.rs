@@ -1143,7 +1143,12 @@ fn execute_jump(app: &mut App, writer: &mut ConnStream, query: &str) -> Result<(
 
 fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
     let mut parts = text.splitn(2, char::is_whitespace);
-    let kind_str = parts.next().unwrap_or("");
+    let head = parts.next().unwrap_or("");
+    // `claude:opus` 形式可同時指定 model。
+    let (kind_str, model) = match head.split_once(':') {
+        Some((k, m)) if !m.is_empty() => (k, Some(m.to_string())),
+        _ => (head, None),
+    };
     let prompt = parts.next().map(|s| s.trim().to_string());
 
     let Some(kind) = AgentKind::parse(kind_str) else {
@@ -1163,6 +1168,8 @@ fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()
             transport: Transport::Auto,
             permission: Default::default(),
             parent: None,
+            model,
+            args: vec![],
         }),
     )?;
     app.status = format!("已要求啟動 {kind}");
@@ -1359,8 +1366,12 @@ fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 Span::raw(s.label.clone()),
                 Span::styled(
                     format!(
-                        "  [{}]{}",
+                        "  [{}{}]{}",
                         s.kind.id(),
+                        s.model
+                            .as_deref()
+                            .map(|m| format!(":{m}"))
+                            .unwrap_or_default(),
                         if branch.is_empty() {
                             String::new()
                         } else {

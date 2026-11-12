@@ -50,6 +50,8 @@ fn spawn_prompt_output_shutdown() {
         transport: Transport::Structured,
         permission: Default::default(),
         parent: None,
+        model: None,
+        args: vec![],
     }))
     .unwrap();
 

@@ -55,6 +55,8 @@ pub struct SessionSpec {
     pub transport: Transport,
     /// 額外命令列參數。
     pub args: Vec<String>,
+    /// 要使用的 model（目前僅 Claude 結構化模式支援）。
+    pub model: Option<String>,
     /// 額外環境變數。
     pub env: Vec<(String, String)>,
     /// 統一權限政策。
@@ -146,6 +148,14 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         }
     }
 
+    if let Some(m) = &spec.model {
+        if spec.transport != Transport::Pty {
+            bail!(
+                "{} 尚不支援以結構化模式指定 model（{m}）；請改用 --transport pty 並以參數傳入",
+                spec.kind
+            );
+        }
+    }
     let (prog, _) = spec.kind.pty_command();
     if which(prog).is_none() {
         bail!("找不到 `{prog}`，請先安裝");
@@ -165,6 +175,9 @@ pub fn supports_structured(kind: &AgentKind) -> bool {
 
 /// 依 agent 種類啟動對應的原生結構化 adapter。
 fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
+    if let (Some(m), false) = (&spec.model, matches!(spec.kind, AgentKind::ClaudeCode)) {
+        bail!("{} 尚不支援指定 model（{m}）", spec.kind);
+    }
     match spec.kind {
         AgentKind::OpenCode | AgentKind::Antigravity => {
             let (prog, _) = spec.kind.acp_command().context("此 agent 不支援 ACP")?;

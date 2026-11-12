@@ -306,6 +306,10 @@ pub fn tool_definitions() -> Vec<Value> {
                         "type": "string",
                         "enum": ["ask", "auto", "bypass"],
                         "description": "Permission policy (default: auto)"
+                    },
+                    "model": {
+                        "type": "string",
+                        "description": "Model for the child agent (e.g. a cheaper model for workers). Defaults to config.toml"
                     }
                 },
                 "required": ["prompt"]
@@ -625,6 +629,8 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 transport: Transport::Auto,
                 permission,
                 parent: Some(session.to_string()),
+                model: args["model"].as_str().map(|s| s.to_string()),
+                args: vec![],
             }))?;
             let note = match frame {
                 Frame::Ok { note } => note.unwrap_or_default(),

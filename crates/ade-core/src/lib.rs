@@ -535,6 +535,11 @@ pub enum Event {
         session: SessionId,
         status: SessionStatus,
     },
+    /// agent 回報（或設定指定）的實際 model。
+    SessionModel {
+        session: SessionId,
+        model: String,
+    },
     SessionLabel {
         session: SessionId,
         label: String,
@@ -653,6 +658,11 @@ impl State {
             Event::SessionStatus { session, status } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = *status;
+                }
+            }
+            Event::SessionModel { session, model } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.model = Some(model.clone());
                 }
             }
             Event::SessionLabel { session, label } => {
@@ -1133,5 +1143,26 @@ mod tests {
         assert!(scrubbed.contains("sk-<REDACTED>"));
         assert!(scrubbed.contains("ghp_<REDACTED>"));
         assert!(!scrubbed.contains("1234567890abcdefghij"));
+    }
+
+    #[test]
+    fn session_model_event_updates_state() {
+        let mut st = State::new();
+        st.apply(&Record {
+            seq: 1,
+            ts: 0,
+            event: Event::SessionStarted {
+                session: sample_session("s1"),
+            },
+        });
+        st.apply(&Record {
+            seq: 2,
+            ts: 0,
+            event: Event::SessionModel {
+                session: "s1".into(),
+                model: "opus".into(),
+            },
+        });
+        assert_eq!(st.sessions["s1"].model.as_deref(), Some("opus"));
     }
 }
