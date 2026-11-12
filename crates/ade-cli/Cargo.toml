@@ -1,0 +1,20 @@
+[package]
+name = "ade-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ade"
+path = "src/main.rs"
+
+[dependencies]
+ade-core.workspace = true
+ade-protocol.workspace = true
+ade-daemon.workspace = true
+ade-tui.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

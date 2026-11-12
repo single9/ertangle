@@ -1,0 +1,171 @@
+//! `ade-adapter` — 把各家 agent 的正規化層。
+//!
+//! 每個 agent 的協定（ACP、stream-json、app-server、PTY）都在這裡被翻譯成
+//! 同一組 [`AgentEvent`]，所以 daemon 之上完全不需要知道底下是哪一家。
+//!
+//! 結構化 adapter（原生、零額外依賴）：
+//! * [`acp`]：Agent Client Protocol — OpenCode（`opencode acp`）、Antigravity（`agy acp`）。
+//! * [`claude`]：Claude Code 的 `--input-format/--output-format stream-json`。
+//! * [`codex`]：Codex 的 `codex app-server`（stdio JSON-RPC）。
+//!
+//! 萬用後備：
+//! * [`pty`]：PTY 直通，**對任何 CLI agent 都有效**。
+
+pub mod acp;
+pub mod ansi;
+pub mod claude;
+pub mod codex;
+pub mod pty;
+pub mod stream;
+
+use ade_core::{
+    AgentKind, Cost, Decision, PermissionPolicy, PermissionRequest, SessionId, SessionStatus,
+};
+use ade_protocol::Transport;
+use anyhow::{bail, Context, Result};
+use std::path::PathBuf;
+use std::sync::mpsc::Sender;
+
+/// adapter 正規化後、往上送的事件。
+#[derive(Debug, Clone)]
+pub enum AgentEvent {
+    Status(SessionStatus),
+    /// agent 的文字輸出（可含換行）。
+    Output(String),
+    ToolCall {
+        name: String,
+        input: String,
+        /// `None` = 進行中。
+        ok: Option<bool>,
+        output: Option<String>,
+    },
+    Permission(PermissionRequest),
+    Cost(Cost),
+    Model(String),
+    /// 程序結束。
+    Exited(Option<i32>),
+}
+
+/// 啟動一個 session 所需的全部資訊。
+#[derive(Debug, Clone)]
+pub struct SessionSpec {
+    pub id: SessionId,
+    pub kind: AgentKind,
+    pub cwd: PathBuf,
+    pub transport: Transport,
+    /// 額外命令列參數。
+    pub args: Vec<String>,
+    /// 額外環境變數。
+    pub env: Vec<(String, String)>,
+    /// 統一權限政策。
+    pub permission: PermissionPolicy,
+    /// 啟動後立刻送出的第一個 prompt。
+    pub initial_prompt: Option<String>,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+/// 對一個執行中 session 的控制把手。
+pub trait AgentControl: Send + Sync {
+    /// 送一段使用者輸入 / prompt。
+    fn send_input(&self, text: &str) -> Result<()>;
+    /// 中斷當前回合（不殺程序）。
+    fn cancel(&self) -> Result<()>;
+    /// 結束並殺掉程序。
+    fn kill(&self) -> Result<()>;
+    /// 回覆審批請求。
+    fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
+    /// 這個 session 實際使用的傳輸方式（顯示用）。
+    fn transport(&self) -> &'static str;
+}
+
+/// 探測某個可執行程式是否存在，回傳絕對路徑。
+pub fn which(prog: &str) -> Option<PathBuf> {
+    if prog.contains('/') {
+        let p = PathBuf::from(prog);
+        return p.is_file().then_some(p);
+    }
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let cand = dir.join(prog);
+        if cand.is_file() {
+            return Some(cand);
+        }
+    }
+    None
+}
+
+/// 啟動一個 session，回傳控制把手；事件會從 `tx` 流出。
+///
+/// 依 `spec.transport` 決定用原生結構化協定還是 PTY 直通。
+/// `Auto` 會挑該 agent 最適合的原生協定；若原生協定啟動失敗則退回 PTY。
+pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
+    let want_structured = match spec.transport {
+        Transport::Pty => false,
+        Transport::Structured => true,
+        Transport::Auto => supports_structured(&spec.kind),
+    };
+
+    if want_structured {
+        match structured_start(spec.clone(), tx.clone()) {
+            Ok(ctl) => return Ok(ctl),
+            Err(e) if spec.transport == Transport::Auto => {
+                tracing::warn!("{} 原生協定啟動失敗，退回 PTY：{e}", spec.kind);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    let (prog, _) = spec.kind.pty_command();
+    if which(prog).is_none() {
+        bail!("找不到 `{prog}`，請先安裝");
+    }
+    pty::start(spec, tx)
+}
+
+/// 這個 agent 是否有原生結構化協定可用。
+pub fn supports_structured(kind: &AgentKind) -> bool {
+    match kind {
+        AgentKind::OpenCode | AgentKind::Antigravity => kind.acp_command().is_some(),
+        AgentKind::ClaudeCode => which("claude").is_some(),
+        AgentKind::Codex => which("codex").is_some(),
+        AgentKind::Custom(_) => false,
+    }
+}
+
+/// 依 agent 種類啟動對應的原生結構化 adapter。
+fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
+    match spec.kind {
+        AgentKind::OpenCode | AgentKind::Antigravity => {
+            let (prog, _) = spec.kind.acp_command().context("此 agent 不支援 ACP")?;
+            if which(prog).is_none() {
+                bail!("找不到 `{prog}`，請先安裝或改用 --transport pty");
+            }
+            acp::start(spec, tx)
+        }
+        AgentKind::ClaudeCode => {
+            if which("claude").is_none() {
+                bail!("找不到 `claude`，請先安裝或改用 --transport pty");
+            }
+            claude::start(spec, tx)
+        }
+        AgentKind::Codex => {
+            if which("codex").is_none() {
+                bail!("找不到 `codex`，請先安裝或改用 --transport pty");
+            }
+            codex::start(spec, tx)
+        }
+        AgentKind::Custom(_) => bail!("自訂 agent 沒有原生結構化協定，請用 --transport pty"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn which_finds_sh_and_misses_nonsense() {
+        assert!(which("sh").is_some());
+        assert!(which("definitely-not-a-real-binary-xyz").is_none());
+    }
+}
