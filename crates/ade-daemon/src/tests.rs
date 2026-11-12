@@ -888,3 +888,31 @@ fn approval_ask_waits_for_human_decision() {
     assert!(matches!(reply, Some(Frame::Ok { note: Some(n) }) if n == "deny"));
     assert!(lock(&shared.inner).state.pending_permissions.is_empty());
 }
+
+#[test]
+fn restore_prunes_old_ended_sessions_but_keeps_branches_and_recent() {
+    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ade-prune")));
+    let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    let now = now_millis();
+    let day = 24 * 3600 * 1000;
+    let mk = |id: &str, age: u64, branch: Option<&str>| {
+        let mut s = restart_session(id, SessionStatus::Exited);
+        s.created_ms = now - age;
+        s.branch = branch.map(str::to_string);
+        s
+    };
+    for s in [
+        mk("ses-old", 3 * day, None),
+        mk("ses-old-branch", 3 * day, Some("ade/x")),
+        mk("ses-recent", 1000, None),
+    ] {
+        first.emit(Event::SessionStarted { session: s });
+    }
+    drop(first);
+    let second =
+        Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    let inner = lock(&second.inner);
+    assert!(!inner.state.sessions.contains_key("ses-old"));
+    assert!(inner.state.sessions.contains_key("ses-old-branch"));
+    assert!(inner.state.sessions.contains_key("ses-recent"));
+}

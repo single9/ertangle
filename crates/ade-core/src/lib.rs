@@ -771,14 +771,36 @@ impl State {
                 name,
                 input,
                 ok,
-                ..
+                output,
             } => {
                 if ok.is_none() && !name.is_empty() {
-                    let short_in: String = input.replace('\n', " ").chars().take(80).collect();
-                    let line = if short_in.is_empty() || short_in == "null" {
-                        format!("▸ {name}")
-                    } else {
-                        format!("▸ {name} {short_in}")
+                    let line = match tool_summary(input) {
+                        Some(sum) => format!("▸ {name}: {sum}"),
+                        None => format!("▸ {name}"),
+                    };
+                    self.push_transcript_line(session, line);
+                } else if let Some(ok) = ok {
+                    // 工具結果：成功只顯示第一行摘要，失敗要看得到原因。
+                    let out = output.as_deref().unwrap_or("");
+                    let first = out.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+                    let extra = out
+                        .lines()
+                        .filter(|l| !l.trim().is_empty())
+                        .count()
+                        .saturating_sub(1);
+                    let mut text: String = first.trim().chars().take(100).collect();
+                    if first.trim().chars().count() > 100 || extra > 0 {
+                        text.push_str(&if extra > 0 {
+                            format!(" …(+{extra} 行)")
+                        } else {
+                            "…".into()
+                        });
+                    }
+                    let line = match (ok, text.is_empty()) {
+                        (true, true) => "  ✓".to_string(),
+                        (true, false) => format!("  ✓ {text}"),
+                        (false, true) => "  ✗ 失敗".to_string(),
+                        (false, false) => format!("  ✗ {text}"),
                     };
                     self.push_transcript_line(session, line);
                 }
@@ -1035,6 +1057,48 @@ fn parse_string_array(s: &str) -> Vec<String> {
         .map(|item| item.trim().trim_matches('"').trim_matches('\'').to_string())
         .filter(|item| !item.is_empty())
         .collect()
+}
+
+/// 把工具輸入（JSON 字串）濃縮成一行人看得懂的摘要：優先 command／file_path／pattern 等欄位。
+pub fn tool_summary(input: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(input).ok()?;
+    let one_line = |s: &str| -> String {
+        let t: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
+        if t.chars().count() > 100 {
+            format!("{}…", t.chars().take(100).collect::<String>())
+        } else {
+            t
+        }
+    };
+    match &v {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(s) if !s.trim().is_empty() => Some(one_line(s)),
+        serde_json::Value::Object(m) => {
+            for k in [
+                "command",
+                "cmd",
+                "file_path",
+                "path",
+                "pattern",
+                "url",
+                "query",
+                "description",
+                "prompt",
+            ] {
+                if let Some(x) = m.get(k).and_then(|x| x.as_str()) {
+                    if !x.trim().is_empty() {
+                        return Some(one_line(x));
+                    }
+                }
+            }
+            if m.is_empty() {
+                None
+            } else {
+                Some(one_line(&v.to_string()))
+            }
+        }
+        _ => None,
+    }
 }
 
 /// 遮罩文字中的常見金鑰與憑證樣式（寫入 event log 前保護秘密）。
@@ -1327,5 +1391,39 @@ mod tests {
         let m = p.merged_with(&local);
         assert!(m.deny.contains(&"git push --force".to_string()));
         assert!(m.deny.contains(&"curl".to_string()));
+    }
+
+    #[test]
+    fn tool_calls_render_readable_summary_and_results() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::SessionStarted {
+                session: sample_session("s1"),
+            },
+        ));
+        st.apply(&rec(
+            2,
+            Event::ToolCall {
+                session: "s1".into(),
+                name: "Bash".into(),
+                input: r#"{"command":"git status\n  -s","description":"x"}"#.into(),
+                ok: None,
+                output: None,
+            },
+        ));
+        st.apply(&rec(
+            3,
+            Event::ToolCall {
+                session: "s1".into(),
+                name: String::new(),
+                input: String::new(),
+                ok: Some(false),
+                output: Some("fatal: not a repo\nmore".into()),
+            },
+        ));
+        let t: Vec<_> = st.transcripts["s1"].iter().cloned().collect();
+        assert_eq!(t[0], "▸ Bash: git status -s");
+        assert_eq!(t[1], "  ✗ fatal: not a repo …(+1 行)");
     }
 }

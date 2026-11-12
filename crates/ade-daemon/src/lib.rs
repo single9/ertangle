@@ -364,7 +364,30 @@ impl Shared {
                 status: SessionStatus::Failed,
             });
         }
+        shared.prune_ended_sessions(now_millis());
         Ok(shared)
+    }
+
+    /// 重啟還原後，清掉太舊且已結束、又沒有 worktree 分支的 session（log 仍完整保留）。
+    /// 否則歷史上所有 session 都會一直堆在清單裡。
+    pub(crate) fn prune_ended_sessions(&self, now_ms: u64) {
+        const KEEP_ENDED_MS: u64 = 24 * 3600 * 1000;
+        let mut inner = lock(&self.inner);
+        let stale: Vec<SessionId> = inner
+            .state
+            .sessions
+            .values()
+            .filter(|s| {
+                !s.status.is_live()
+                    && s.branch.is_none()
+                    && now_ms.saturating_sub(s.created_ms) > KEEP_ENDED_MS
+            })
+            .map(|s| s.id.clone())
+            .collect();
+        for id in stale {
+            inner.state.sessions.remove(&id);
+            inner.state.transcripts.remove(&id);
+        }
     }
 
     pub(crate) fn set_log_health(&self, ok: bool) {
