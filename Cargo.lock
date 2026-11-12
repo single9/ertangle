@@ -3,20 +3,7 @@
 version = 4
 
 [[package]]
-name = "ade-adapter"
-version = "0.1.0"
-dependencies = [
- "ade-core",
- "ade-protocol",
- "anyhow",
- "portable-pty",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "ade-cli"
+name = "ade"
 version = "0.1.0"
 dependencies = [
  "ade-core",
@@ -28,6 +15,19 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "ade-adapter"
+version = "0.1.0"
+dependencies = [
+ "ade-core",
+ "ade-protocol",
+ "anyhow",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

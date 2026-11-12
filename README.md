@@ -122,6 +122,19 @@ cargo test                     # 全部單元測試
 
 > 預設啟用滑鼠擷取：可直接在逐字稿上拖曳選取，放開即以 OSC 52 複製（只含中央區塊）；滾輪捲動逐字稿。需要終端原生選取時按 `F2` 關閉擷取，或直接 `Shift`+拖曳。任何時候都可用 `Y` / `/copy` 複製整個主要區塊。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。
 
+## 安裝方式
+
+```bash
+# 本地安裝（在專案根目錄執行，編譯並安裝 ade 到 ~/.cargo/bin）
+cargo install --path .
+
+# 或直接透過 Git 安裝
+cargo install --git https://github.com/duyechen/ade-rust
+
+# 亦可使用 Makefile 安裝至 ~/.local/bin/ade
+make install
+```
+
 ### CLI
 
 ```bash

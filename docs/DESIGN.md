@@ -461,10 +461,11 @@ ade-rust/
 │  │   ├─ pty.rs             #   PTY 直通萬用後備
 │  │   └─ ansi.rs            #   ANSI 控制碼剝除
 │  ├─ ade-daemon/            # supervisor、socket server、MCP server、worktree
-│  ├─ ade-tui/               # ratatui 前端
-│  │   ├─ lib.rs             #   三欄版面、事件迴圈、視圖切換
-│  │   └─ markdown.rs        #   零依賴 Markdown → Ratatui 行渲染器
-│  └─ ade-cli/               # `ade` binary（tui/daemon/mcp/send/spawn/...）
+│  └─ ade-tui/               # ratatui 前端
+│      ├─ lib.rs             #   三欄版面、事件迴圈、視圖切換
+│      └─ markdown.rs        #   零依賴 Markdown → Ratatui 行渲染器
+├─ src/                      # `ade` binary（tui/daemon/mcp/send/spawn/...）
+│  └─ main.rs                #   根目錄 package 入口，支援 `cargo install --path .`
 └─ docs/
    ├─ DESIGN.md              # 本文件
    └─ PROTOCOL.md            # control API + MCP tools 規格（後續）
@@ -546,7 +547,7 @@ worktree 管理（`ade worktrees` / `ade gc`）、彩色 diff 視圖（含未追
 語意前綴分色（`💭`／`▸`／`💬`）、逐字稿翻頁捲動 + 跟隨最新 + 捲軸 + `t` 原始／渲染切換、
 Diff 視圖舊新行號邊欄與 `+N -M` 統計與 `{`/`}` hunk 跳轉、響應式三欄寬度與兩行標題列。
 
-**M5 — 遠端（已完成，見 `crates/ade-daemon` 與 `crates/ade-cli`）**
+**M5 — 遠端（已完成，見 `crates/ade-daemon` 與 `src/main.rs`）**
 daemon 支援 `--listen <host:port> --token <secret>`（TCP + token 驗證），client 支援 `--remote <host:port> --token <secret>`（或 `ADE_REMOTE` / `ADE_TOKEN` 環境變數）與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
 
 M3–M5 已驗證（實機）：
