@@ -49,8 +49,8 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 - **打磨與資源控制（M4）**：命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、即時成本與 token 統計（`ade cost`）、
   閒置休眠與自動喚醒（`SIGSTOP` / `SIGCONT`、`ade sleep` / `ade wake` / TUI `z` 鍵）、權限規則引擎（`.ade/policy.toml` 或 `~/.config/ade/policy.toml`）。
 - **TUI**：三種中央視圖（Overview / Diff / Worktrees）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
-  逐字稿會即時渲染 Markdown（標題、粗體／斜體、行內程式碼、清單、引言、分隔線、圍籬程式碼區塊與 GFM 表格），
-  並可用 `t` 在渲染後與原始文字之間切換；輸出可翻頁捲動並自動跟隨最新。
+  逐字稿會顯示使用者送出的 prompt（`❯` 前綴）並即時渲染 Markdown（標題、粗體／斜體、行內程式碼、清單、引言、分隔線、圍籬程式碼區塊與 GFM 表格），
+  可用 `t` 在渲染後與原始文字之間切換；支援滑鼠滾輪／點選、OSC 52 複製主要區塊，以及帶可見游標與中文 IME 的輸入框。
 - **檔案信箱後備**：自動同步寫入 `<cwd>/.ade/mailbox/<session>.jsonl`。
 
 ### 權限政策
@@ -81,7 +81,7 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 
 ```bash
 cargo build --release          # 產出單一執行檔 target/release/ade
-cargo test                     # 19 個單元測試
+cargo test                     # 全部單元測試
 
 ./target/release/ade           # 啟動 TUI（會自動確保 daemon 在跑）
 ./target/release/ade daemon    # 或前景跑 daemon
@@ -94,25 +94,31 @@ cargo test                     # 19 個單元測試
 | 鍵 | 動作 |
 | --- | --- |
 | `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標） |
+| 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標）；預設不擷取滑鼠，可直接拖曳選取複製 |
+| `F2` | 切換完整滑鼠擷取（開啟後可點選 Sessions；`Shift`+拖曳仍可原生選取） |
 | `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
 | `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
-| `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字（方便複製） |
+| `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
+| `Y` 或 `/copy` | 用 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees），不含側欄與邊框 |
 | `PgUp` / `PgDn`（或 `Ctrl-U` / `Ctrl-D`） | 逐字稿 / diff 翻頁捲動（捲動後暫停跟隨，狀態列會顯示 `⏸ paused`） |
 | `Home` / `End` | 跳到最前 / 回到跟隨最新輸出（`▼ follow`） |
 | `{` / `}` | （Diff 視圖）跳到上一個 / 下一個 hunk（`@@`） |
 | `i` / `Enter` | 對選取 session 送 prompt（支援 `@peer 訊息`、`#channel 訊息`、`/命令`） |
+| `←` / `→`、`Home` / `End`、`Delete` | 在輸入框移動游標 / 跳到頭尾 / 刪除字元（支援中文等寬字元與 bracketed paste） |
 | `n` | 建立 session：`<agent> <prompt>`（`Ctrl-W` 切換是否開 worktree） |
 | `m` | 送訊息到匯流排（agent 之間溝通） |
 | `c` | （Diff 視圖）對目前選取的 diff 行下審查註解並送回 agent 修改 |
 | `M` / `G` | 合併選取 session 的 worktree 分支回主工作區 / 清理已結束 worktree |
 | `z` | 切換選取 session 的休眠（`SIGSTOP`）/ 喚醒（`SIGCONT`） |
-| `/` 或 `Ctrl-P` | 開啟命令面板（`spawn` / `merge` / `diff` / `gc` / `sleep` / `wake` / `task` / `shutdown`） |
+| `/` 或 `Ctrl-P` | 開啟命令面板（`spawn` / `merge` / `diff` / `gc` / `sleep` / `wake` / `task` / `copy` / `shutdown`） |
 | `Ctrl-K` | Jump-Anywhere：關鍵字快速跳轉至任何 session |
 | `a` / `A` / `d` | 允許 / 一律允許 / 拒絕待審批請求 |
 | `x` / `K` | 中斷當前回合 / 結束 session |
 | `r` | 向 daemon 重新要快照与重整當前視圖 |
 | `q` | 離開 TUI（daemon 與 agent 續跑） |
 | `Q` | 關閉 daemon：結束所有 agent、移除 socket（等同 `/shutdown`） |
+
+> 預設不啟用滑鼠擷取，終端原生拖曳選取／複製可直接使用；滾輪透過 alternate scroll 捲動。需要點選 Sessions 時按 `F2` 開啟滑鼠擷取，再按一次關閉。任何時候都可用 `Y` / `/copy` 複製主要區塊（OSC 52）。
 
 ### CLI
 

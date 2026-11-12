@@ -603,6 +603,20 @@ impl Shared {
             Request::Prompt { session, text } => match self.control(&session) {
                 Some((sid, ctl)) => {
                     self.wake_if_sleeping(&sid, &ctl);
+                    let is_pty = self
+                        .inner
+                        .lock()
+                        .unwrap()
+                        .state
+                        .sessions
+                        .get(&sid)
+                        .is_some_and(|s| s.transport == "pty");
+                    if !is_pty {
+                        self.emit(Event::UserPrompt {
+                            session: sid.clone(),
+                            text: text.clone(),
+                        });
+                    }
                     match ctl.send_input(&text) {
                         Ok(()) => {
                             let _ = reply.send(Frame::ok());
@@ -1336,6 +1350,14 @@ impl Shared {
                     session: id.clone(),
                     status: SessionStatus::Idle,
                 });
+                if transport != "pty" {
+                    if let Some(prompt) = spawn.prompt.as_deref().filter(|p| !p.trim().is_empty()) {
+                        self.emit(Event::UserPrompt {
+                            session: id.clone(),
+                            text: prompt.to_string(),
+                        });
+                    }
+                }
                 let mut inner = self.inner.lock().unwrap();
                 if let Some(s) = inner.state.sessions.get_mut(&id) {
                     s.transport = transport;

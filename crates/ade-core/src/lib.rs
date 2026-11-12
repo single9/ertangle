@@ -541,6 +541,11 @@ pub enum Event {
         session: SessionId,
         note: String,
     },
+    /// 使用者送出的 prompt（顯示在逐字稿，讓對話有上下文）。
+    UserPrompt {
+        session: SessionId,
+        text: String,
+    },
     /// agent 的文字輸出（串流 chunk 或整行）。
     Output {
         session: SessionId,
@@ -659,6 +664,23 @@ impl State {
                     } else {
                         Some(note.clone())
                     };
+                }
+            }
+            Event::UserPrompt { session, text } => {
+                let buf = self.transcripts.entry(session.clone()).or_default();
+                // 第一行加上 `❯ ` 前綴；多行 prompt 的後續行縮排對齊。
+                let text = text.trim_end_matches('\n');
+                if !text.is_empty() {
+                    for (i, line) in text.split('\n').enumerate() {
+                        if i == 0 {
+                            buf.push_back(format!("❯ {line}"));
+                        } else {
+                            buf.push_back(format!("  {line}"));
+                        }
+                    }
+                }
+                while buf.len() > TRANSCRIPT_CAP {
+                    buf.pop_front();
                 }
             }
             Event::Output { session, text } => {

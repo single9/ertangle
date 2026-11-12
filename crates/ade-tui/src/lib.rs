@@ -14,7 +14,11 @@ use ade_core::{
 use ade_daemon::{Client, ConnStream};
 use ade_protocol::{Frame, Request, SpawnRequest, Transport};
 use anyhow::Result;
-use crossterm::event::{self, Event as CtEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    Event as CtEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
+};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -31,6 +35,7 @@ use ratatui::{Frame as TuiFrame, Terminal};
 use std::io::{self, Write};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Mode {
@@ -68,6 +73,8 @@ struct App {
     view: CenterView,
     mode: Mode,
     input: String,
+    /// 輸入游標位置（以 Unicode 字元計，0 = 最前面）。
+    input_cursor: usize,
     status: String,
     spawn_worktree: bool,
     /// M3：目前顯示的 worktree diff 內容與游標行。
@@ -88,6 +95,12 @@ struct App {
     /// 逐字稿是否以原始文字（不做 Markdown 渲染）顯示。
     raw_md: bool,
     md_cache: Option<MdCache>,
+    /// 最近一次繪製時 Sessions 清單的區域（供滑鼠點選）。
+    sessions_area: Rect,
+    /// Sessions 清單目前捲動的起始索引（滑鼠點選需加此偏移）。
+    sessions_offset: usize,
+    /// 是否擷取滑鼠（預設關閉，保留終端原生選取／複製；`F2` 切換）。
+    mouse_capture: bool,
     should_quit: bool,
 }
 
@@ -99,6 +112,7 @@ impl App {
             view: CenterView::Transcript,
             mode: Mode::Normal,
             input: String::new(),
+            input_cursor: 0,
             status: "已連線 daemon".into(),
             spawn_worktree: false,
             diff_session: None,
@@ -113,6 +127,9 @@ impl App {
             transcript_total: 0,
             raw_md: false,
             md_cache: None,
+            sessions_area: Rect::default(),
+            sessions_offset: 0,
+            mouse_capture: false,
             should_quit: false,
         }
     }
@@ -197,15 +214,37 @@ pub fn run() -> Result<()> {
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableBracketedPaste)?;
+    // 不擷取滑鼠：保留終端原生拖曳選取／複製。改用 alternate scroll（DECSET 1007）
+    // 讓滾輪在 alternate screen 裡變成 Up/Down，仍然可以捲動逐字稿。
+    write!(stdout, "\x1b[?1007h")?;
+    stdout.flush()?;
     let backend = CrosstermBackend::new(stdout);
     Ok(Terminal::new(backend)?)
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    let backend = terminal.backend_mut();
+    write!(backend, "\x1b[?1007l")?;
+    execute!(
+        backend,
+        DisableBracketedPaste,
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
+    Ok(())
+}
+
+/// 切換完整滑鼠擷取（滾輪事件與點選 session）；關閉時回到原生選取。
+fn set_mouse_capture(on: bool) -> Result<()> {
+    let mut out = io::stdout();
+    if on {
+        execute!(out, EnableMouseCapture)?;
+    } else {
+        execute!(out, DisableMouseCapture)?;
+    }
     Ok(())
 }
 
@@ -228,10 +267,13 @@ fn event_loop(
         terminal.draw(|f| draw(f, &mut app))?;
 
         if event::poll(Duration::from_millis(60))? {
-            if let CtEvent::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
+            match event::read()? {
+                CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
                     handle_key(&mut app, writer, key)?;
                 }
+                CtEvent::Mouse(mouse) => handle_mouse(&mut app, writer, mouse)?,
+                CtEvent::Paste(text) => handle_paste(&mut app, &text),
+                _ => {}
             }
         }
 
@@ -301,14 +343,16 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             KeyCode::Char('p') => {
                 app.mode = Mode::Command;
                 app.input.clear();
+                app.input_cursor = 0;
                 app.status =
-                    "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / shutdown"
+                    "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown"
                         .into();
                 return Ok(());
             }
             KeyCode::Char('k') => {
                 app.mode = Mode::Jump;
                 app.input.clear();
+                app.input_cursor = 0;
                 app.status = "輸入關鍵字跳轉至匹配的 session（label / id / branch）".into();
                 return Ok(());
             }
@@ -352,7 +396,21 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
                 request_selected_diff(app, writer)?;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Down => match app.view {
+            CenterView::Diff => {
+                if app.diff_cursor + 1 < app.diff_lines.len() {
+                    app.diff_cursor += 1;
+                }
+            }
+            CenterView::Transcript => scroll_transcript_lines(app, 1),
+            CenterView::Worktrees => {}
+        },
+        KeyCode::Up => match app.view {
+            CenterView::Diff => app.diff_cursor = app.diff_cursor.saturating_sub(1),
+            CenterView::Transcript => scroll_transcript_lines(app, -1),
+            CenterView::Worktrees => {}
+        },
+        KeyCode::Char('j') => {
             if app.view == CenterView::Diff {
                 if app.diff_cursor + 1 < app.diff_lines.len() {
                     app.diff_cursor += 1;
@@ -361,7 +419,7 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
                 app.selected += 1;
             }
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Char('k') => {
             if app.view == CenterView::Diff {
                 app.diff_cursor = app.diff_cursor.saturating_sub(1);
             } else {
@@ -385,6 +443,7 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
         KeyCode::Char('c') if app.view == CenterView::Diff => {
             app.mode = Mode::Review;
             app.input.clear();
+            app.input_cursor = 0;
             let loc = app.current_diff_location();
             app.status = format!("對 `{loc}` 留下審查註解（Enter 送回 agent）");
         }
@@ -413,23 +472,27 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
         KeyCode::Char('/') => {
             app.mode = Mode::Command;
             app.input.clear();
+            app.input_cursor = 0;
             app.status =
-                "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / shutdown"
+                "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown"
                     .into();
         }
         KeyCode::Enter | KeyCode::Char('i') => {
             app.mode = Mode::Prompt;
             app.input.clear();
+            app.input_cursor = 0;
         }
         KeyCode::Char('n') => {
             app.mode = Mode::Spawn;
             app.input.clear();
+            app.input_cursor = 0;
             app.spawn_worktree = false;
             app.status = "輸入：<agent> <prompt>（Ctrl-W 切換 worktree）".into();
         }
         KeyCode::Char('m') => {
             app.mode = Mode::Message;
             app.input.clear();
+            app.input_cursor = 0;
             app.status = "輸入要送給選取 session 的訊息".into();
         }
         KeyCode::Char('a') => respond_permission(app, writer, Decision::Allow)?,
@@ -468,6 +531,16 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
                 }
             );
         }
+        KeyCode::F(2) => {
+            app.mouse_capture = !app.mouse_capture;
+            set_mouse_capture(app.mouse_capture)?;
+            app.status = if app.mouse_capture {
+                "滑鼠擷取：開（滾輪／點選 session；Shift+拖曳可原生選取）".into()
+            } else {
+                "滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端 alternate scroll）".into()
+            };
+        }
+        KeyCode::Char('Y') => copy_main_pane(app),
         KeyCode::PageUp => scroll_transcript(app, -1),
         KeyCode::PageDown => scroll_transcript(app, 1),
         KeyCode::Home => {
@@ -498,6 +571,7 @@ fn handle_input_mode(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         KeyCode::Esc => {
             app.mode = Mode::Normal;
             app.input.clear();
+            app.input_cursor = 0;
         }
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.spawn_worktree = !app.spawn_worktree;
@@ -506,12 +580,32 @@ fn handle_input_mode(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 if app.spawn_worktree { "on" } else { "off" }
             );
         }
-        KeyCode::Backspace => {
-            app.input.pop();
+        KeyCode::Backspace => backspace_input(app),
+        KeyCode::Delete => delete_input(app),
+        KeyCode::Left => app.input_cursor = app.input_cursor.saturating_sub(1),
+        KeyCode::Right => {
+            let n = app.input.chars().count();
+            app.input_cursor = (app.input_cursor + 1).min(n);
         }
-        KeyCode::Char(c) => app.input.push(c),
+        KeyCode::Home => app.input_cursor = 0,
+        KeyCode::End => app.input_cursor = app.input.chars().count(),
+        KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input_cursor = 0;
+        }
+        KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input_cursor = app.input.chars().count();
+        }
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let b = byte_index(&app.input, app.input_cursor);
+            app.input.truncate(b);
+            app.input_cursor = app.input.chars().count();
+        }
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            insert_input(app, c);
+        }
         KeyCode::Enter => {
             let text = std::mem::take(&mut app.input);
+            app.input_cursor = 0;
             let mode = app.mode;
             app.mode = Mode::Normal;
             match mode {
@@ -553,6 +647,100 @@ fn handle_input_mode(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         _ => {}
     }
     Ok(())
+}
+
+/// 以 Unicode 字元索引取得對應的 byte offset（超出長度時回傳字串長度）。
+fn byte_index(s: &str, char_idx: usize) -> usize {
+    s.char_indices()
+        .nth(char_idx)
+        .map(|(b, _)| b)
+        .unwrap_or(s.len())
+}
+
+fn insert_input(app: &mut App, c: char) {
+    let b = byte_index(&app.input, app.input_cursor);
+    app.input.insert(b, c);
+    app.input_cursor += 1;
+}
+
+fn insert_str_input(app: &mut App, s: &str) {
+    if s.is_empty() {
+        return;
+    }
+    let b = byte_index(&app.input, app.input_cursor);
+    app.input.insert_str(b, s);
+    app.input_cursor += s.chars().count();
+}
+
+fn backspace_input(app: &mut App) {
+    if app.input_cursor == 0 {
+        return;
+    }
+    let b = byte_index(&app.input, app.input_cursor - 1);
+    app.input.remove(b);
+    app.input_cursor -= 1;
+}
+
+fn delete_input(app: &mut App) {
+    let n = app.input.chars().count();
+    if app.input_cursor >= n {
+        return;
+    }
+    let b = byte_index(&app.input, app.input_cursor);
+    app.input.remove(b);
+}
+
+/// 滑鼠事件：滾輪捲動中央視圖，左鍵點 Sessions 清單可選取 session。
+fn handle_mouse(app: &mut App, writer: &mut ConnStream, mouse: MouseEvent) -> Result<()> {
+    match mouse.kind {
+        MouseEventKind::ScrollUp => {
+            if app.view == CenterView::Diff {
+                app.diff_cursor = app.diff_cursor.saturating_sub(3);
+            } else {
+                scroll_transcript_lines(app, -3);
+            }
+        }
+        MouseEventKind::ScrollDown => {
+            if app.view == CenterView::Diff {
+                let max = app.diff_lines.len().saturating_sub(1);
+                app.diff_cursor = (app.diff_cursor + 3).min(max);
+            } else {
+                scroll_transcript_lines(app, 3);
+            }
+        }
+        MouseEventKind::Down(MouseButton::Left) => {
+            let area = app.sessions_area;
+            let pos = ratatui::layout::Position::new(mouse.column, mouse.row);
+            if area.width > 0
+                && area.height > 2
+                && mouse.row < area.y + area.height - 1
+                && area.contains(pos)
+            {
+                let idx = app.sessions_offset + mouse.row.saturating_sub(area.y + 1) as usize;
+                if idx < app.session_ids().len() {
+                    app.selected = idx;
+                    if app.view == CenterView::Diff {
+                        request_selected_diff(app, writer)?;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// 貼上（bracketed paste）：只插入目前輸入框；換行轉成空白以維持單行輸入。
+fn handle_paste(app: &mut App, text: &str) {
+    if app.mode == Mode::Normal {
+        return;
+    }
+    let cleaned: String = text
+        .chars()
+        .map(|c| if c == '\r' || c == '\n' { ' ' } else { c })
+        .filter(|c| !c.is_control())
+        .collect();
+    insert_str_input(app, &cleaned);
 }
 
 /// 在輸入框支援 `@session 訊息`、`#channel 訊息`、`/command` 或直接送 prompt 給當前 session。
@@ -669,6 +857,7 @@ fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<
                 },
             )?;
         }
+        "copy" | "yank" => copy_main_pane(app),
         "shutdown" => {
             send(writer, &Request::Shutdown)?;
             app.should_quit = true;
@@ -874,6 +1063,14 @@ fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
+            format!("   mouse:{}", if app.mouse_capture { "on" } else { "off" }),
+            Style::default().fg(if app.mouse_capture {
+                Color::Yellow
+            } else {
+                Color::DarkGray
+            }),
+        ),
+        Span::styled(
             if follow.is_empty() {
                 String::new()
             } else {
@@ -890,7 +1087,8 @@ fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
     f.render_widget(Paragraph::new(vec![tabs, stats]), area);
 }
 
-fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &App) {
+fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
+    app.sessions_area = area;
     let ids = app.session_ids();
     let items: Vec<ListItem> = ids
         .iter()
@@ -943,6 +1141,7 @@ fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &App) {
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("▸ ");
     f.render_stateful_widget(list, area, &mut list_state);
+    app.sessions_offset = list_state.offset();
 }
 
 /// 依目前模式（Markdown / 原始）與寬度，把逐字稿建成樣式化且已換行的行。
@@ -1278,13 +1477,13 @@ fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
         Mode::Normal => {
-            " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令, Ctrl-K=跳轉, g=Diff, z=休眠, t=原始/渲染, PgUp/PgDn=捲動） "
+            " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令, Ctrl-K=跳轉, g=Diff, z=休眠, t=原始/渲染, PgUp/PgDn=捲動, Y=複製, F2=滑鼠） "
         }
         Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、/命令，Enter 送出） ",
         Mode::Spawn => " spawn：<agent> <prompt>（Ctrl-W 切換 worktree, Enter 送出） ",
         Mode::Message => " message → 選取的 session（Enter 送出） ",
         Mode::Review => " review 註解 → 送回選取的 session 修改（Enter 送出） ",
-        Mode::Command => " 命令面板（spawn / merge / diff / gc / sleep / wake / task / shutdown） ",
+        Mode::Command => " 命令面板（spawn / merge / diff / gc / sleep / wake / task / copy / shutdown） ",
         Mode::Jump => " Jump Anywhere：輸入關鍵字跳轉 session（Enter 確認） ",
     };
     let style = if app.mode == Mode::Normal {
@@ -1292,12 +1491,34 @@ fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     } else {
         Style::default().fg(Color::Cyan)
     };
-    let para = Paragraph::new(app.input.clone())
+
+    // 水平捲動：讓游標永遠留在可見範圍內（支援中文等寬字元）。
+    let inner_w = area.width.saturating_sub(2) as usize;
+    let chars: Vec<char> = app.input.chars().collect();
+    let cursor = app.input_cursor.min(chars.len());
+    let before: String = chars[..cursor].iter().collect();
+    let mut cursor_col = UnicodeWidthStr::width(before.as_str());
+    let mut start = 0usize;
+    while inner_w > 0 && cursor_col >= inner_w && start < cursor {
+        let w = chars[start].width().unwrap_or(0).max(1);
+        cursor_col = cursor_col.saturating_sub(w);
+        start += 1;
+    }
+    let visible: String = chars[start..].iter().collect();
+
+    let para = Paragraph::new(visible)
         .style(style)
         .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(para, area);
-    if app.mode != Mode::Normal {
-        let _ = io::stdout().flush();
+
+    // 把終端游標放到輸入框內，IME 的 preedit 就會錨定在這裡。
+    if area.width > 2 && area.height > 2 {
+        let x = area
+            .x
+            .saturating_add(1)
+            .saturating_add(cursor_col as u16)
+            .min(area.x + area.width.saturating_sub(2));
+        f.set_cursor_position((x, area.y + 1));
     }
 }
 
@@ -1321,6 +1542,80 @@ fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     f.render_widget(Paragraph::new(text), area);
 }
 
+/// 取得中央主要區塊的純文字內容（不含 Sessions / Bus 側欄與邊框）。
+fn main_pane_text(app: &App) -> String {
+    match app.view {
+        CenterView::Transcript => app
+            .selected_id()
+            .and_then(|id| app.state.transcripts.get(&id))
+            .map(|buf| buf.iter().cloned().collect::<Vec<_>>().join("\n"))
+            .unwrap_or_default(),
+        CenterView::Diff => app.diff_lines.join("\n"),
+        CenterView::Worktrees => app
+            .worktrees
+            .iter()
+            .map(|w| {
+                format!(
+                    "{} @{} {} {} ({})",
+                    w.label,
+                    w.branch,
+                    if w.live { "live" } else { "exited" },
+                    w.summary,
+                    w.path
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    }
+}
+
+/// 用 OSC 52 把文字寫進終端剪貼簿（SSH / tmux 下也可用，不需終端原生選取）。
+fn write_clipboard(text: &str) -> io::Result<()> {
+    let mut out = io::stdout().lock();
+    write!(out, "\x1b]52;c;{}\x07", base64_encode(text.as_bytes()))?;
+    out.flush()
+}
+
+/// 最小 base64 編碼器（OSC 52 需要；避免多拉一個依賴）。
+fn base64_encode(data: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let b1 = chunk.get(1).copied().unwrap_or(0);
+        let b2 = chunk.get(2).copied().unwrap_or(0);
+        let n = ((chunk[0] as u32) << 16) | ((b1 as u32) << 8) | b2 as u32;
+        out.push(TABLE[(n >> 18) as usize & 63] as char);
+        out.push(TABLE[(n >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[n as usize & 63] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+/// 複製中央主要區塊（`Y` 或 `/copy`），成功後在狀態列回報行數。
+fn copy_main_pane(app: &mut App) {
+    let text = main_pane_text(app);
+    if text.is_empty() {
+        app.status = "沒有可複製的內容".into();
+        return;
+    }
+    match write_clipboard(&text) {
+        Ok(()) => {
+            let lines = text.lines().count().max(1);
+            app.status = format!("已複製主要區塊 {lines} 行（OSC 52；失敗時可用 Shift+拖曳選取）");
+        }
+        Err(e) => app.status = format!("複製失敗：{e}"),
+    }
+}
+
 /// 逐字稿翻頁捲動：`dir < 0` 往上、`dir > 0` 往下；到底時恢復跟隨最新。
 fn scroll_transcript(app: &mut App, dir: i32) {
     let page = app.transcript_viewport.max(1);
@@ -1340,6 +1635,22 @@ fn scroll_transcript(app: &mut App, dir: i32) {
     } else {
         app.transcript_scroll = Some(next);
         app.status = format!("逐字稿：第 {next} 行（End 回到最新）");
+    }
+}
+
+/// 以「行」為單位捲動（滑鼠滾輪用），到底時恢復跟隨最新。
+fn scroll_transcript_lines(app: &mut App, delta: i32) {
+    let max_off = app.transcript_total.saturating_sub(app.transcript_viewport);
+    let cur = app.transcript_scroll.unwrap_or(max_off).min(max_off);
+    let next = if delta < 0 {
+        cur.saturating_sub(delta.unsigned_abs() as usize)
+    } else {
+        (cur + delta as usize).min(max_off)
+    };
+    if next >= max_off {
+        app.transcript_scroll = None;
+    } else {
+        app.transcript_scroll = Some(next);
     }
 }
 
@@ -1562,5 +1873,99 @@ mod tests {
         app.transcript_scroll = Some(0);
         scroll_transcript(&mut app, -1);
         assert_eq!(app.transcript_scroll, Some(0), "不應低於 0");
+    }
+
+    #[test]
+    fn scroll_transcript_lines_moves_by_rows() {
+        let mut app = sample_app(&[]);
+        app.transcript_total = 100;
+        app.transcript_viewport = 10;
+
+        scroll_transcript_lines(&mut app, -3);
+        assert_eq!(app.transcript_scroll, Some(87));
+        scroll_transcript_lines(&mut app, 3);
+        assert_eq!(app.transcript_scroll, None, "回到最新應恢復跟隨");
+        scroll_transcript_lines(&mut app, -1000);
+        assert_eq!(app.transcript_scroll, Some(0), "不應低於 0");
+    }
+
+    #[test]
+    fn user_prompt_is_echoed_in_transcript() {
+        let mut app = sample_app(&[]);
+        app.state.apply(&ade_core::Record {
+            seq: 1,
+            ts: 1,
+            event: ade_core::Event::UserPrompt {
+                session: "ses_test".into(),
+                text: "fix the tests\nsecond line 中文".into(),
+            },
+        });
+
+        // CJK 是雙寬字元，TestBackend 會在中間留下空白格，因此用 ASCII 檢查版面。
+        let text = render(&mut app);
+        assert!(text.contains("❯ fix the tests"), "prompt marker missing");
+        assert!(text.contains("second line"), "continuation line missing");
+
+        let buf = &app.state.transcripts["ses_test"];
+        assert_eq!(buf[0], "❯ fix the tests");
+        assert_eq!(buf[1], "  second line 中文");
+    }
+
+    #[test]
+    fn base64_matches_known_vectors() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode("註".as_bytes()), "6Ki7");
+    }
+
+    #[test]
+    fn main_pane_text_excludes_sidebars() {
+        let mut app = sample_app(&["hello", "world"]);
+        assert_eq!(main_pane_text(&app), "hello\nworld");
+
+        app.view = CenterView::Diff;
+        app.diff_lines = vec!["+added".into(), "-removed".into()];
+        assert_eq!(main_pane_text(&app), "+added\n-removed");
+    }
+
+    #[test]
+    fn input_editing_respects_unicode_cursor() {
+        let mut app = App::new();
+        app.mode = Mode::Prompt;
+        insert_str_input(&mut app, "你好");
+        assert_eq!(app.input, "你好");
+        assert_eq!(app.input_cursor, 2);
+
+        app.input_cursor = 1;
+        insert_input(&mut app, 'X');
+        assert_eq!(app.input, "你X好");
+        assert_eq!(app.input_cursor, 2);
+
+        backspace_input(&mut app);
+        assert_eq!(app.input, "你好");
+        assert_eq!(app.input_cursor, 1);
+
+        delete_input(&mut app);
+        assert_eq!(app.input, "你");
+
+        app.input_cursor = 0;
+        backspace_input(&mut app);
+        assert_eq!(app.input, "你", "最前面按退格不應改動");
+    }
+
+    #[test]
+    fn input_cursor_is_placed_inside_the_box() {
+        let mut app = sample_app(&[]);
+        app.mode = Mode::Prompt;
+        app.input = "你好".into();
+        app.input_cursor = 2;
+
+        let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        term.draw(|f| draw(f, &mut app)).unwrap();
+        let pos = term.get_cursor_position().unwrap();
+        // 輸入框在倒數第二列；內框起點為 (1, 37)，游標應落在「你好」之後。
+        assert_eq!((pos.x, pos.y), (5, 37));
     }
 }
