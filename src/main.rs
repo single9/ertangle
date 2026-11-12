@@ -282,6 +282,9 @@ enum Cmd {
         /// 選填：指定自訂 events.jsonl 路徑
         #[arg(long)]
         file: Option<PathBuf>,
+        /// 連同輪替過的舊檔（events.jsonl.N）一起讀取
+        #[arg(long)]
+        all: bool,
         #[arg(long)]
         json: bool,
     },
@@ -532,7 +535,12 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Cost { json } => cmd_cost(json),
-        Cmd::Replay { since, file, json } => cmd_replay(since, file, json),
+        Cmd::Replay {
+            since,
+            file,
+            all,
+            json,
+        } => cmd_replay(since, file, all, json),
         Cmd::Shutdown => {
             roundtrip(&Request::Shutdown)?;
             println!("已要求 daemon 關閉");
@@ -884,10 +892,24 @@ fn cmd_cost(json: bool) -> Result<()> {
     Ok(())
 }
 
-fn cmd_replay(since: u64, file: Option<PathBuf>, json: bool) -> Result<()> {
+fn cmd_replay(since: u64, file: Option<PathBuf>, all: bool, json: bool) -> Result<()> {
     let path = file.unwrap_or_else(ade_daemon::log_path);
-    let (state, records) = ade_daemon::replay_log(&path)?;
-    let filtered: Vec<_> = records.into_iter().filter(|r| r.seq > since).collect();
+    let (state, records) = if all {
+        ade_daemon::replay_log_all(&path)?
+    } else {
+        let older = ade_daemon::rotated_logs(&path);
+        if !older.is_empty() {
+            eprintln!(
+                "提示：另有 {} 份較舊的輪替檔，加 --all 可一併讀取",
+                older.len()
+            );
+        }
+        ade_daemon::replay_log(&path)?
+    };
+    let filtered: Vec<_> = records
+        .into_iter()
+        .filter(|r| r.seq > since && !matches!(r.event, ade_core::Event::Snapshot { .. }))
+        .collect();
     if json {
         println!(
             "{}",
