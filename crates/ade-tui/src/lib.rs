@@ -174,6 +174,7 @@ fn apply_frame(app: &mut App, frame: Frame) {
             app.state.apply(&record);
             app.clamp_selection();
         }
+        Frame::Messages { .. } => {}
         Frame::Ok { note } => {
             if let Some(n) = note {
                 app.status = n;
@@ -279,6 +280,7 @@ fn handle_input_mode(app: &mut App, writer: &mut UnixStream, key: KeyEvent) -> R
                                 to: Target::Direct(id),
                                 kind: MsgKind::Chat,
                                 body: text,
+                                reply_to: None,
                             },
                         )?;
                         app.status = "已送出訊息".into();
@@ -412,7 +414,8 @@ fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &App) {
                 _ => Color::DarkGray,
             };
             let branch = s.branch.as_deref().unwrap_or("");
-            let line = Line::from(vec![
+            let note = s.status_note.as_deref().unwrap_or("");
+            let mut spans = vec![
                 Span::styled(format!("{} ", s.status.glyph()), Style::default().fg(color)),
                 Span::raw(s.label.clone()),
                 Span::styled(
@@ -427,7 +430,14 @@ fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &App) {
                     ),
                     Style::default().fg(Color::DarkGray),
                 ),
-            ]);
+            ];
+            if !note.is_empty() {
+                spans.push(Span::styled(
+                    format!(" · {}", truncate(note, 16)),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+            let line = Line::from(spans);
             ListItem::new(line)
         })
         .collect();
@@ -507,7 +517,26 @@ fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
         ));
     }
 
-    let h = area.height.saturating_sub(2) as usize;
+    if !app.state.tasks.is_empty() {
+        for t in app.state.tasks.values() {
+            let color = match t.status {
+                ade_core::TaskStatus::Done => Color::Green,
+                ade_core::TaskStatus::Doing | ade_core::TaskStatus::Review => Color::Cyan,
+                ade_core::TaskStatus::Blocked => Color::Red,
+                ade_core::TaskStatus::Todo => Color::Gray,
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("[{}] ", t.status.id()), Style::default().fg(color)),
+                Span::raw(truncate(&t.title, 26)),
+            ]));
+        }
+        lines.push(Line::styled(
+            "────────────────────────",
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+
+    let h = area.height.saturating_sub(2 + lines.len() as u16) as usize;
     let msgs = &app.state.messages;
     let start = msgs.len().saturating_sub(h);
     for m in msgs.iter().skip(start) {

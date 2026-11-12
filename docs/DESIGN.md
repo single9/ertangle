@@ -501,9 +501,21 @@ M1 未完成項（受環境限制，程式路徑已就緒）：
   `session/request_permission`；轉發程式路徑已完成但少有机会實測。
 - **Claude 逐項審批**：`-p` 模式不會穩定發出可轉發的審批請求，留待 M2 以 MCP 權限工具處理。
 
-**M2 — 協作核心**
-Message bus + task board + **`ade mcp` server** + `ade` CLI；agent 可 `send/inbox/ask/task/spawn`。
+**M2 — 協作核心（已完成，見 `crates/ade-daemon/src/mcp.rs`）**
+Message bus + task board + **`ade mcp` server** + `ade` CLI；agent 可 `send/inbox/wait/ask/task/spawn/artifact/status`。
 端到端 demo：coordinator 用 `ade_spawn` 產生兩個 worker，各自 worktree，完成後回報並整合。
+
+M2 已驗證（實機）：
+
+| 驗證項 | 指令 / 工具 | 結果 |
+| --- | --- | --- |
+| MCP stdio 協定 | `ade mcp --session <id>` | `initialize`、`tools/list`（12 個 `ade_*` 工具）、`tools/call` 正常 |
+| 自動注入 MCP | `ade spawn --kind claude/opencode/agy` | ACP 透過 `session/new.mcpServers`、Claude 透過 `--mcp-config`、Codex 透過 `-c mcp_servers.ade.*` 自動掛載 |
+| 收件匣與等待 | `ade inbox` / `ade wait` / `ade ask` | 以 label 或 session id 定址、游標去重、阻塞等待與 request/response 交握正常 |
+| 閒置喚醒 | 對 `Idle` session 送 `Question` / `Handoff` | daemon 自動將匯流排訊息轉成 prompt 喚醒對方處理 |
+| 防呆斷路 | `BusGuard` | 連續重複訊息達上限（3 次）觸發迴圈斷路；每分鐘超過 30 則觸發速率限制 |
+| 端到端多 Agent 協作 | `coord` 呼叫 `ade_task_create` + 2×`ade_spawn(worktree=true)` + 2×`ade_wait` | `worker/a` 與 `worker/b` 各自於獨立 worktree 寫檔並 `ade_send(kind=handoff)` 回報，`coord` 收齊後將兩任務標為 `done` 並更新 `status_note` |
+| 測試 / lint | `cargo test` / `cargo clippy --all-targets -- -D warnings` | 22 passed / 無警告 |
 
 **M3 — 工作區與 review**
 worktree 管理、diff 視圖、行內註解送回 agent、merge / PR。

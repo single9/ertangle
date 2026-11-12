@@ -330,6 +330,14 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let mut cmd = Command::new(prog);
     cmd.arg("app-server");
     cmd.args(spec.permission.codex_flags());
+    if let Some(exe) = &spec.mcp_exe {
+        cmd.args([
+            "-c",
+            &format!("mcp_servers.ade.command={:?}", exe.to_string_lossy()),
+            "-c",
+            &format!("mcp_servers.ade.args=[\"mcp\",\"--session\",{:?}]", spec.id),
+        ]);
+    }
     cmd.args(&spec.args);
     cmd.current_dir(&spec.cwd)
         .stdin(Stdio::piped())

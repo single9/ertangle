@@ -22,15 +22,15 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 | 平行不打架 | 每個 session 一個 `git worktree` + branch |
 | 支援多種 agent | Adapter 抽象層（ACP / stream-json / app-server / headless / PTY） |
 
-## 現況（M1：四家 agent 原生介面）
+## 現況（M1 原生介面 + M2 協作核心）
 
 四家 agent 都有**原生、零額外依賴**的結構化介面，並已實機驗證：
 
 | Agent | 原生協定 | 啟動方式 | 傳輸標記 | 實機狀態 |
 | --- | --- | --- | --- | --- |
-| **OpenCode** | ACP | `opencode acp` | `acp` | ✅ 雙向結構化（prompt / 串流 / 工具 / 審批） |
-| **Antigravity** | ACP | `agy acp` | `acp` | ✅ 雙向結構化（與 OpenCode 同方言） |
-| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 雙向結構化（逐字串流、工具、成本） |
+| **OpenCode** | ACP | `opencode acp` | `acp` | ✅ 雙向結構化（prompt / 串流 / 工具 / 審批 / MCP 注入） |
+| **Antigravity** | ACP | `agy acp` | `acp` | ✅ 雙向結構化（與 OpenCode 同方言 / MCP 注入） |
+| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 雙向結構化（逐字串流、工具、成本、MCP 注入） |
 | **Codex** | app-server | `codex app-server`（stdio JSON-RPC） | `app-server` | ⚠️ 握手與 thread 已驗證；回合需 OpenAI 授權 |
 
 > 找不到原生協定、或該 agent 未安裝時，`--transport auto` 會**自動退回 PTY 直通**。
@@ -38,13 +38,18 @@ Orca 這類 ADE 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Elec
 已完成並實機驗證：
 
 - **daemon**：Unix domain socket、newline-delimited JSON 控制 API、事件記錄（`events.jsonl`）、
-  訊息匯流排、任務板、`git worktree` 建立。
+  訊息匯流排、收件匣游標与阻塞等待（`BusInbox` / `BusWait`）、防呆斷路器（速率限制 + 連續重複迴圈偵測）、任務板、`git worktree` 建立。
+- **MCP 協作伺服器（`ade mcp`）**：spawn session 時自動注入每個 agent，提供 12 個協作工具
+  （`ade_whoami`、`ade_peers`、`ade_send`、`ade_inbox`、`ade_wait`、`ade_ask`、
+  `ade_task_list`、`ade_task_create`、`ade_task_update`、`ade_spawn`、`ade_artifact_share`、`ade_status`），
+  並支援端到端由 coordinator 自主 `ade_spawn` 多個 worktree worker 平行實作、交握與回報。
 - **adapter**：四家原生 adapter + PTY 萬用後備（輸出會剝除 ANSI 控制碼）。
 - **統一權限政策**：`--permission ask|auto|bypass`，對應各 agent 的原生權限機制。
-- **TUI**：三欄（Sessions / Transcript / Bus）、輸入模式、審批、中斷/結束。
-- **CLI**：`ade spawn/prompt/send/task/sessions/...`，讓 shell 與 agent 也能驅動環境。
+- **TUI**：三欄（Sessions / Transcript / Bus & Tasks）、工具呼叫與進度備註呈現、輸入模式、審批、中斷/結束。
+- **CLI**：`ade whoami/peers/spawn/prompt/send/inbox/wait/ask/task/task-update/tasks/status/artifact/...`，讓 shell 與不走 MCP 的 agent 也能驅動環境。
+- **檔案信箱後備**：自動同步寫入 `<cwd>/.ade/mailbox/<session>.jsonl`。
 
-尚未實作（見里程碑）：`ade mcp` 協作工具、worktree diff/review 視圖、Claude/Codex 的逐項審批轉發。
+尚未實作（見里程碑）：M3 worktree diff/review 視圖與 merge/PR、Claude/Codex 的逐項審批轉發。
 
 ### 權限政策
 
@@ -98,12 +103,20 @@ cargo test                     # 19 個單元測試
 ### CLI
 
 ```bash
-ade sessions [--json]                       # 列出 sessions（含 transport）
+ade sessions [--json]                       # 列出 sessions（別名 ade peers）
+ade whoami [--session <id>] [--json]        # 查詢當前 session 資訊
 ade spawn --kind claude --permission auto --label worker/a --worktree --prompt "..."
-ade prompt <session-id> "再跑一次測試"
-ade send --to <session-id> "請先跑測試"     # 或 --channel review / --broadcast
-ade task "修正 EU 郵遞區號驗證" --detail "..."
-ade tasks
+ade prompt <session-or-label> "再跑一次測試"
+ade send --to <session-or-label> "請先跑測試" # 或 --channel review / --broadcast / --kind handoff
+ade inbox [--session <id>] [--all] [--json] # 讀取未讀訊息並推進游標
+ade wait [--from <peer>] [--timeout-ms 30000]
+ade ask <peer> "請問驗證函式的簽名？"        # 送出問題並阻塞等待回覆
+ade task "修正 EU 郵遞區號驗證" --detail "..." --assignee worker/a
+ade task-update <task-id> --status done
+ade tasks [--json]
+ade status "正在跑整合測試"
+ade artifact src/zip.rs --kind file --note "新增驗證模組"
+ade mcp [--session <id>]                    # stdio MCP 協作伺服器（由 adapter 自動注入）
 ade cancel <session-id> ; ade kill <session-id>
 ade shutdown
 ```

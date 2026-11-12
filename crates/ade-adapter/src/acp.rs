@@ -298,12 +298,17 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .acp_command()
         .context("此 agent 不支援原生結構化協定")?;
 
-    let mut child = Command::new(prog)
-        .args(args)
+    let mut cmd = Command::new(prog);
+    cmd.args(args)
+        .args(&spec.args)
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    for (k, v) in &spec.env {
+        cmd.env(k, v);
+    }
+    let mut child = cmd
         .spawn()
         .with_context(|| format!("無法啟動 `{prog} acp`"))?;
 
@@ -360,9 +365,18 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     )?;
     tracing::debug!("ACP initialize: {init}");
 
+    let mcp_servers = match &spec.mcp_exe {
+        Some(exe) => json!([{
+            "name": "ade",
+            "command": exe.to_string_lossy(),
+            "args": ["mcp", "--session", &spec.id],
+            "env": []
+        }]),
+        None => json!([]),
+    };
     let new = conn.call(
         "session/new",
-        json!({ "cwd": spec.cwd.to_string_lossy(), "mcpServers": [] }),
+        json!({ "cwd": spec.cwd.to_string_lossy(), "mcpServers": mcp_servers }),
         CALL_TIMEOUT,
     )?;
     let sid = new["sessionId"]

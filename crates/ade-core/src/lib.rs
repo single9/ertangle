@@ -202,10 +202,13 @@ pub struct Session {
     pub created_ms: u64,
     /// adapter 用的傳輸方式（顯示用）。
     pub transport: String,
+    /// agent 透過 `ade_status` 回報的簡短進度說明。
+    #[serde(default)]
+    pub status_note: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
-// Bus / Task
+// Bus / Task / Artifact
 // ---------------------------------------------------------------------------
 
 /// 訊息的收件者。
@@ -215,6 +218,25 @@ pub enum Target {
     Direct(SessionId),
     Channel(String),
     Broadcast,
+}
+
+impl Target {
+    /// 從字串解析收件目標：
+    /// * `*` 或 `broadcast` → [`Target::Broadcast`]
+    /// * `#name` 或 `channel:name` → [`Target::Channel`]
+    /// * `@id` 或其他字串 → [`Target::Direct`]
+    pub fn parse(s: &str) -> Target {
+        let s = s.trim();
+        if s == "*" || s.eq_ignore_ascii_case("broadcast") {
+            Target::Broadcast
+        } else if let Some(ch) = s.strip_prefix('#').or_else(|| s.strip_prefix("channel:")) {
+            Target::Channel(ch.to_string())
+        } else if let Some(d) = s.strip_prefix('@') {
+            Target::Direct(d.to_string())
+        } else {
+            Target::Direct(s.to_string())
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -231,6 +253,31 @@ pub enum MsgKind {
     Artifact,
 }
 
+impl MsgKind {
+    pub fn id(self) -> &'static str {
+        match self {
+            MsgKind::Chat => "chat",
+            MsgKind::Handoff => "handoff",
+            MsgKind::Question => "question",
+            MsgKind::Answer => "answer",
+            MsgKind::Status => "status",
+            MsgKind::Artifact => "artifact",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<MsgKind> {
+        Some(match s.to_ascii_lowercase().as_str() {
+            "chat" | "message" => MsgKind::Chat,
+            "handoff" => MsgKind::Handoff,
+            "question" | "ask" => MsgKind::Question,
+            "answer" | "reply" => MsgKind::Answer,
+            "status" => MsgKind::Status,
+            "artifact" => MsgKind::Artifact,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusMessage {
     pub id: MsgId,
@@ -243,6 +290,21 @@ pub struct BusMessage {
     pub ts: u64,
 }
 
+impl BusMessage {
+    /// 這則訊息是否應該進某個 session 的收件匣。
+    ///
+    /// * 自己發出的廣播/頻道訊息不會退回自己收件匣。
+    /// * `Direct` 同時比對 `session_id` 與人類可讀 `label`。
+    pub fn matches_recipient(&self, session_id: &str, label: Option<&str>) -> bool {
+        match &self.to {
+            Target::Broadcast | Target::Channel(_) => self.from != session_id,
+            Target::Direct(target) => {
+                target == session_id || label.is_some_and(|l| l == target)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
@@ -251,6 +313,29 @@ pub enum TaskStatus {
     Blocked,
     Review,
     Done,
+}
+
+impl TaskStatus {
+    pub fn id(self) -> &'static str {
+        match self {
+            TaskStatus::Todo => "todo",
+            TaskStatus::Doing => "doing",
+            TaskStatus::Blocked => "blocked",
+            TaskStatus::Review => "review",
+            TaskStatus::Done => "done",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<TaskStatus> {
+        Some(match s.to_ascii_lowercase().as_str() {
+            "todo" | "open" => TaskStatus::Todo,
+            "doing" | "in_progress" | "in-progress" | "working" => TaskStatus::Doing,
+            "blocked" => TaskStatus::Blocked,
+            "review" => TaskStatus::Review,
+            "done" | "completed" | "closed" => TaskStatus::Done,
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,7 +348,49 @@ pub struct Task {
     pub assignee: Option<SessionId>,
     #[serde(default)]
     pub created_by: Option<SessionId>,
+    #[serde(default)]
+    pub depends_on: Vec<TaskId>,
     pub updated_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactKind {
+    #[default]
+    File,
+    Branch,
+    Diff,
+}
+
+impl ArtifactKind {
+    pub fn id(self) -> &'static str {
+        match self {
+            ArtifactKind::File => "file",
+            ArtifactKind::Branch => "branch",
+            ArtifactKind::Diff => "diff",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<ArtifactKind> {
+        Some(match s.to_ascii_lowercase().as_str() {
+            "file" | "path" => ArtifactKind::File,
+            "branch" => ArtifactKind::Branch,
+            "diff" | "patch" => ArtifactKind::Diff,
+            _ => return None,
+        })
+    }
+}
+
+/// agent 分享的產出物（檔案、分支或 diff）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Artifact {
+    pub id: String,
+    pub session: SessionId,
+    pub kind: ArtifactKind,
+    pub path: String,
+    #[serde(default)]
+    pub note: String,
+    pub ts: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +512,11 @@ pub enum Event {
         session: SessionId,
         label: String,
     },
+    /// agent 透過 `ade_status` 更新的簡短狀態說明。
+    SessionNote {
+        session: SessionId,
+        note: String,
+    },
     /// agent 的文字輸出（串流 chunk 或整行）。
     Output {
         session: SessionId,
@@ -414,6 +546,9 @@ pub enum Event {
     TaskChanged {
         task: Task,
     },
+    ArtifactShared {
+        artifact: Artifact,
+    },
     SessionExited {
         session: SessionId,
         code: Option<i32>,
@@ -441,6 +576,8 @@ pub struct Record {
 pub const TRANSCRIPT_CAP: usize = 4000;
 /// bus 訊息保留上限。
 pub const MESSAGE_CAP: usize = 1000;
+/// artifact 保留上限。
+pub const ARTIFACT_CAP: usize = 500;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct State {
@@ -448,6 +585,8 @@ pub struct State {
     pub sessions: BTreeMap<SessionId, Session>,
     pub tasks: BTreeMap<TaskId, Task>,
     pub messages: Vec<BusMessage>,
+    #[serde(default)]
+    pub artifacts: Vec<Artifact>,
     /// 尚未回覆的審批請求。
     pub pending_permissions: BTreeMap<String, PermissionRequest>,
     /// session id → 輸出文字行。
@@ -457,6 +596,14 @@ pub struct State {
 impl State {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn push_transcript_line(&mut self, session: &str, line: String) {
+        let buf = self.transcripts.entry(session.to_string()).or_default();
+        buf.push_back(line);
+        while buf.len() > TRANSCRIPT_CAP {
+            buf.pop_front();
+        }
     }
 
     /// 把一個事件套用到狀態上。`rec.seq` 會更新 `self.seq`。
@@ -476,6 +623,15 @@ impl State {
                     s.label = label.clone();
                 }
             }
+            Event::SessionNote { session, note } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.status_note = if note.is_empty() {
+                        None
+                    } else {
+                        Some(note.clone())
+                    };
+                }
+            }
             Event::Output { session, text } => {
                 let buf = self.transcripts.entry(session.clone()).or_default();
                 // 尾端換行不該產生一個空行；中間的空行則保留。
@@ -490,7 +646,23 @@ impl State {
                     buf.pop_front();
                 }
             }
-            Event::ToolCall { .. } => { /* 由 TUI 從事件流即時呈現 */ }
+            Event::ToolCall {
+                session,
+                name,
+                input,
+                ok,
+                ..
+            } => {
+                if ok.is_none() && !name.is_empty() {
+                    let short_in: String = input.replace('\n', " ").chars().take(80).collect();
+                    let line = if short_in.is_empty() || short_in == "null" {
+                        format!("▸ {name}")
+                    } else {
+                        format!("▸ {name} {short_in}")
+                    };
+                    self.push_transcript_line(session, line);
+                }
+            }
             Event::PermissionRequested { request } => {
                 self.pending_permissions
                     .insert(request.req.clone(), request.clone());
@@ -510,6 +682,12 @@ impl State {
             Event::TaskChanged { task } => {
                 self.tasks.insert(task.id.clone(), task.clone());
             }
+            Event::ArtifactShared { artifact } => {
+                self.artifacts.push(artifact.clone());
+                while self.artifacts.len() > ARTIFACT_CAP {
+                    self.artifacts.remove(0);
+                }
+            }
             Event::SessionExited { session, .. } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     if s.status.is_live() {
@@ -525,7 +703,7 @@ impl State {
         }
     }
 
-    /// 方便 TUI 依 label 排序取得 session 清單。
+    /// 方便 TUI 依建立時間排序取得 session 清單。
     pub fn sessions_sorted(&self) -> Vec<&Session> {
         let mut v: Vec<&Session> = self.sessions.values().collect();
         v.sort_by_key(|s| s.created_ms);
@@ -534,6 +712,42 @@ impl State {
 
     pub fn live_sessions(&self) -> impl Iterator<Item = &Session> {
         self.sessions.values().filter(|s| s.status.is_live())
+    }
+
+    /// 以 `id` 或 `label` 解析 session id（優先回傳完全匹配的 id，其次為存活中的同 label session）。
+    pub fn resolve_session_id(&self, id_or_label: &str) -> Option<SessionId> {
+        let needle = id_or_label.trim().trim_start_matches('@');
+        if self.sessions.contains_key(needle) {
+            return Some(needle.to_string());
+        }
+        self.sessions
+            .values()
+            .filter(|s| s.label == needle && s.status.is_live())
+            .max_by_key(|s| s.created_ms)
+            .or_else(|| {
+                self.sessions
+                    .values()
+                    .filter(|s| s.label == needle)
+                    .max_by_key(|s| s.created_ms)
+            })
+            .map(|s| s.id.clone())
+    }
+
+    /// 取得某個 session 在 `after_msg_id` 之後收到的訊息。
+    pub fn inbox_for(&self, session_id: &str, after_msg_id: Option<&str>) -> Vec<BusMessage> {
+        let resolved = self
+            .resolve_session_id(session_id)
+            .unwrap_or_else(|| session_id.to_string());
+        let label = self.sessions.get(&resolved).map(|s| s.label.as_str());
+        let start = after_msg_id
+            .and_then(|id| self.messages.iter().position(|m| m.id == id))
+            .map(|idx| idx + 1)
+            .unwrap_or(0);
+        self.messages[start..]
+            .iter()
+            .filter(|m| m.matches_recipient(&resolved, label))
+            .cloned()
+            .collect()
     }
 }
 
@@ -559,6 +773,7 @@ mod tests {
             parent: None,
             created_ms: 1,
             transport: "acp".into(),
+            status_note: None,
         }
     }
 
@@ -633,5 +848,65 @@ mod tests {
         }
         assert_eq!(AgentKind::OpenCode.acp_command().unwrap().0, "opencode");
         assert!(AgentKind::Codex.acp_command().is_none());
+    }
+
+    #[test]
+    fn resolve_session_by_label_and_filter_inbox() {
+        let mut st = State::new();
+        let mut s1 = sample_session("ses_1");
+        s1.label = "worker/impl".into();
+        let mut s2 = sample_session("ses_2");
+        s2.label = "worker/test".into();
+        st.apply(&rec(1, Event::SessionStarted { session: s1 }));
+        st.apply(&rec(2, Event::SessionStarted { session: s2 }));
+
+        assert_eq!(
+            st.resolve_session_id("worker/impl"),
+            Some("ses_1".to_string())
+        );
+        assert_eq!(
+            st.resolve_session_id("@worker/test"),
+            Some("ses_2".to_string())
+        );
+
+        st.apply(&rec(
+            3,
+            Event::BusMessage {
+                message: BusMessage {
+                    id: "m1".into(),
+                    from: "ses_2".into(),
+                    to: Target::Direct("worker/impl".into()),
+                    kind: MsgKind::Question,
+                    body: "API shape?".into(),
+                    reply_to: None,
+                    ts: 10,
+                },
+            },
+        ));
+        st.apply(&rec(
+            4,
+            Event::BusMessage {
+                message: BusMessage {
+                    id: "m2".into(),
+                    from: "ses_1".into(),
+                    to: Target::Broadcast,
+                    kind: MsgKind::Chat,
+                    body: "ready".into(),
+                    reply_to: None,
+                    ts: 11,
+                },
+            },
+        ));
+
+        let inbox1 = st.inbox_for("ses_1", None);
+        assert_eq!(inbox1.len(), 1);
+        assert_eq!(inbox1[0].id, "m1");
+
+        let inbox1_after = st.inbox_for("ses_1", Some("m1"));
+        assert!(inbox1_after.is_empty());
+
+        let inbox2 = st.inbox_for("ses_2", None);
+        assert_eq!(inbox2.len(), 1);
+        assert_eq!(inbox2[0].id, "m2");
     }
 }

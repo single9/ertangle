@@ -6,10 +6,18 @@
 //! 這個 crate 只有 wire 型別與編解碼，不含任何 IO，方便日後換成 TCP / JSON-RPC。
 
 use ade_core::{
-    AgentKind, Decision, MsgKind, PermissionPolicy, Record, Role, Seq, SessionId, State, Target,
-    TaskId, TaskStatus,
+    AgentKind, ArtifactKind, BusMessage, Decision, MsgId, MsgKind, PermissionPolicy, Record, Role,
+    Seq, SessionId, State, Target, TaskId, TaskStatus,
 };
 use serde::{Deserialize, Serialize};
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_wait_timeout() -> u64 {
+    30_000
+}
 
 /// 一個 session 要用哪種傳輸方式跑。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -92,6 +100,24 @@ pub enum Request {
         #[serde(default)]
         kind: MsgKind,
         body: String,
+        #[serde(default)]
+        reply_to: Option<MsgId>,
+    },
+    /// 讀取某個 session 的收件匣（預設只讀未讀並推進游標）。
+    BusInbox {
+        session: SessionId,
+        #[serde(default = "default_true")]
+        unread_only: bool,
+    },
+    /// 阻塞等待下一則進收件匣的訊息（可選篩選發送者或 `reply_to`）。
+    BusWait {
+        session: SessionId,
+        #[serde(default)]
+        from: Option<SessionId>,
+        #[serde(default)]
+        reply_to: Option<MsgId>,
+        #[serde(default = "default_wait_timeout")]
+        timeout_ms: u64,
     },
     TaskCreate {
         title: String,
@@ -99,10 +125,33 @@ pub enum Request {
         detail: String,
         #[serde(default)]
         assignee: Option<SessionId>,
+        #[serde(default)]
+        created_by: Option<SessionId>,
+        #[serde(default)]
+        depends_on: Vec<TaskId>,
     },
     TaskUpdate {
         id: TaskId,
-        status: TaskStatus,
+        #[serde(default)]
+        status: Option<TaskStatus>,
+        #[serde(default)]
+        assignee: Option<SessionId>,
+        #[serde(default)]
+        detail: Option<String>,
+    },
+    /// 更新某個 session 的簡短狀態字串（對應 `ade_status`）。
+    SessionNote {
+        session: SessionId,
+        note: String,
+    },
+    /// 分享產出（檔案、分支或 diff）。
+    ArtifactShare {
+        session: SessionId,
+        #[serde(default)]
+        kind: ArtifactKind,
+        path: String,
+        #[serde(default)]
+        note: String,
     },
     /// 要 daemon 關閉。
     Shutdown,
@@ -124,6 +173,12 @@ pub enum Frame {
     /// 單一事件。
     Record {
         record: Box<Record>,
+    },
+    /// 收件匣或等待結果。
+    Messages {
+        messages: Vec<BusMessage>,
+        #[serde(default)]
+        timed_out: bool,
     },
     /// 操作成功（可帶說明）。
     Ok {

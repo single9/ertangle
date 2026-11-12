@@ -59,6 +59,8 @@ pub struct SessionSpec {
     pub env: Vec<(String, String)>,
     /// 統一權限政策。
     pub permission: PermissionPolicy,
+    /// 若提供 `ade` 執行檔路徑，adapter 會在啟動時將 `ade mcp` 注入該 agent。
+    pub mcp_exe: Option<PathBuf>,
     /// 啟動後立刻送出的第一個 prompt。
     pub initial_prompt: Option<String>,
     pub cols: u16,

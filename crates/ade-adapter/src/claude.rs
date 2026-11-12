@@ -281,8 +281,23 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         "--include-partial-messages",
     ]);
     cmd.args(spec.permission.claude_flags());
+    if let Some(exe) = &spec.mcp_exe {
+        let mcp_cfg = json!({
+            "mcpServers": {
+                "ade": {
+                    "command": exe.to_string_lossy(),
+                    "args": ["mcp", "--session", &spec.id]
+                }
+            }
+        });
+        cmd.arg(format!("--mcp-config={mcp_cfg}"));
+        if spec.permission.auto_approves() {
+            cmd.arg("--allowedTools=mcp__ade__*");
+        }
+    }
     cmd.args(&spec.args);
     cmd.current_dir(&spec.cwd)
+        .env_remove("CLAUDECODE")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
