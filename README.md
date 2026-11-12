@@ -111,6 +111,7 @@ cargo test                     # 19 個單元測試
 | `x` / `K` | 中斷當前回合 / 結束 session |
 | `r` | 向 daemon 重新要快照与重整當前視圖 |
 | `q` | 離開 TUI（daemon 與 agent 續跑） |
+| `Q` | 關閉 daemon：結束所有 agent、移除 socket（等同 `/shutdown`） |
 
 ### CLI
 

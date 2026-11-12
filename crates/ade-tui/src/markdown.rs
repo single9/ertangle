@@ -352,7 +352,7 @@ fn render_table(rows: &[String], sep: &str, width: usize) -> Vec<Line<'static>> 
         }
     }
 
-    // 收斂到可用寬度：每欄至少 3，超出的從最寬的欄扣。
+    // 收斂到可用寬度：每欄至少 1，超出的從最寬的欄扣。
     let overhead = 3 * n + 1;
     let avail = width.saturating_sub(overhead).max(n);
     let mut total: usize = widths.iter().sum();
@@ -363,7 +363,7 @@ fn render_table(rows: &[String], sep: &str, width: usize) -> Vec<Line<'static>> 
             .max_by_key(|(_, w)| **w)
             .map(|(i, _)| i);
         match widest {
-            Some(idx) if widths[idx] > 3 => {
+            Some(idx) if widths[idx] > 1 => {
                 widths[idx] -= 1;
                 total -= 1;
             }
@@ -372,13 +372,42 @@ fn render_table(rows: &[String], sep: &str, width: usize) -> Vec<Line<'static>> 
     }
 
     let mut out = vec![
-        table_row(&header, &widths, &aligns, true),
-        table_sep(&widths),
+        clip(table_row(&header, &widths, &aligns, true), width),
+        clip(table_sep(&widths), width),
     ];
     for row in &body {
-        out.push(table_row(row, &widths, &aligns, false));
+        out.push(clip(table_row(row, &widths, &aligns, false), width));
     }
     out
+}
+
+/// 硬裁切一行到 `width` 個字元（超出時以 `…` 收尾），保留各 span 樣式。
+fn clip(line: Line<'static>, width: usize) -> Line<'static> {
+    let total: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
+    if total <= width {
+        return line;
+    }
+    let budget = width.saturating_sub(1);
+    let mut out: Vec<Span<'static>> = Vec::new();
+    let mut used = 0usize;
+    for span in line.spans {
+        if used >= budget {
+            break;
+        }
+        let mut buf = String::new();
+        for ch in span.content.chars() {
+            if used >= budget {
+                break;
+            }
+            buf.push(ch);
+            used += 1;
+        }
+        if !buf.is_empty() {
+            out.push(Span::styled(buf, span.style));
+        }
+    }
+    out.push(Span::styled("…".to_string(), Style::default().fg(RULE)));
+    Line::from(out)
 }
 
 fn fit(s: &str, w: usize) -> String {
@@ -662,6 +691,90 @@ mod tests {
         // right-aligned column pads on the left
         let row = contents(&out[2]).join("");
         assert!(row.ends_with("│"));
+    }
+
+    #[test]
+    fn table_alignment_left_center_right() {
+        let mut r = Renderer::new();
+        let src = plain("| left | mid | right |\n|:-----|:---:|------:|\n| x | y | z |");
+        let out = r.render(&src, 80);
+        assert_eq!(out.len(), 3);
+
+        // 欄寬由最寬的儲存格決定：left=4, mid=3, right=5。
+        assert_eq!(contents(&out[1]).join(""), "├──────┼─────┼───────┤");
+        // 左靠、置中、右靠的補白各不相同。
+        assert_eq!(contents(&out[2]).join(""), "│ x    │  y  │     z │");
+    }
+
+    #[test]
+    fn table_header_is_bold() {
+        let mut r = Renderer::new();
+        let src = plain("| h |\n|---|\n| b |");
+        let out = r.render(&src, 80);
+        let header = out[0]
+            .spans
+            .iter()
+            .find(|s| s.content == "h")
+            .expect("header cell");
+        assert!(header.style.add_modifier.contains(Modifier::BOLD));
+        let body = out[2]
+            .spans
+            .iter()
+            .find(|s| s.content == "b")
+            .expect("body cell");
+        assert!(!body.style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn table_shrinks_to_width() {
+        let mut r = Renderer::new();
+        let src = plain("| aaaaaaaaaa | bbbbbbbbbb |\n|---|---|\n| 1 | 2 |");
+        // 極窄寬度時仍應每行都不超過可用寬度。
+        let out = r.render(&src, 12);
+        for line in &out {
+            let w: usize = contents(line).join("").chars().count();
+            assert!(
+                w <= 12,
+                "line too wide ({w}): {:?}",
+                contents(line).join("")
+            );
+        }
+    }
+
+    #[test]
+    fn table_ignored_inside_code_fence() {
+        let mut r = Renderer::new();
+        let src = plain("```\n| a | b |\n|---|---|\n```");
+        let out = r.render(&src, 80);
+        assert_eq!(out.len(), 4, "fence open + 2 code lines + close");
+        let all: String = out.iter().map(|l| contents(l).join("")).collect();
+        assert!(!all.contains('┼'), "table should not be parsed in a fence");
+    }
+
+    #[test]
+    fn link_shows_label_only() {
+        let spans = inline("see [docs](https://example.com/x) now", Style::default());
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(text, "see docs now");
+        assert!(!text.contains("http"), "url should be hidden");
+        let link = spans
+            .iter()
+            .find(|s| s.content == "docs")
+            .expect("link span");
+        assert_eq!(link.style.fg, Some(LINK));
+        assert!(link.style.add_modifier.contains(Modifier::UNDERLINED));
+    }
+
+    #[test]
+    fn strike_and_escapes() {
+        let spans = inline("~~gone~~ and \\*literal\\*", Style::default());
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(text, "gone and *literal*");
+        let gone = spans
+            .iter()
+            .find(|s| s.content == "gone")
+            .expect("strike span");
+        assert!(gone.style.add_modifier.contains(Modifier::CROSSED_OUT));
     }
 
     #[test]

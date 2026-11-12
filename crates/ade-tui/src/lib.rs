@@ -326,6 +326,11 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
 
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Char('Q') => {
+            send(writer, &Request::Shutdown)?;
+            app.status = "已關閉 daemon（所有 agent 已結束）".into();
+            app.should_quit = true;
+        }
         KeyCode::Tab => {
             app.view = match app.view {
                 CenterView::Transcript => {
@@ -1299,12 +1304,12 @@ fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
 fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     let hints = match app.view {
         CenterView::Transcript => {
-            "  q 離開  Tab 切換  i prompt  n spawn  m 訊息  t 原始/渲染  PgUp/PgDn 捲動  End 跟隨  / 命令"
+            "  q 離開(保留 daemon)  Q 關閉 daemon  Tab 切換  i prompt  n spawn  t 原始/渲染  PgUp/PgDn 捲動  / 命令"
         }
         CenterView::Diff => {
-            "  q 離開  Tab 切換  j/k 選行  {/} hunk  c 審查註解  M 合併  [ ] 換 session  r 重整"
+            "  q 離開  Q 關閉 daemon  j/k 選行  {/} hunk  c 審查註解  M 合併  [ ] 換 session  r 重整"
         }
-        CenterView::Worktrees => "  q 離開  Tab 切換  M 合併選取  G 清理已結束  r 重整",
+        CenterView::Worktrees => "  q 離開  Q 關閉 daemon  M 合併選取  G 清理已結束  r 重整",
     };
     let text = Line::from(vec![
         Span::styled(

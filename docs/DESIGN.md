@@ -360,6 +360,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | `g` | git/worktree 面板（diff、merge、PR） |
 | `x` | 取消當前 session 的回合（cancel） |
 | `q` | 離開 TUI（**不**殺 daemon） |
+| `Q` | 關閉 daemon（結束所有 agent 並移除 socket） |
 
 ### 7.3 效能策略
 - TUI 只持有「渲染所需」的鏡像狀態；逐字稿以 ring buffer（`TRANSCRIPT_CAP`）上限，避免長對話吃記憶體。
