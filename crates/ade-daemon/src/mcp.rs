@@ -94,12 +94,12 @@ pub fn handle_rpc(session: &str, msg: &Value) -> Option<Value> {
                     }))
                 }
                 Err(e) => Ok(json!({
-                    "content": [{ "type": "text", "text": format!("錯誤：{e}") }],
+                    "content": [{ "type": "text", "text": format!("Error: {e}") }],
                     "isError": true
                 })),
             }
         }
-        other => Err((-32601, format!("不支援的 MCP 方法：{other}"))),
+        other => Err((-32601, format!("Unsupported MCP method: {other}"))),
     };
 
     Some(match result {
@@ -121,7 +121,7 @@ pub fn tool_definitions() -> Vec<Value> {
     vec![
         json!({
             "name": "ade_whoami",
-            "description": "查詢自己目前的 session 資訊（id、label、role、cwd、branch、status）。",
+            "description": "Return your own session info (id, label, role, cwd, branch, status).",
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -129,7 +129,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_peers",
-            "description": "列出環境中所有 agent sessions（含 id、label、role、status、cwd、branch、status_note）。",
+            "description": "List all agent sessions in the environment (id, label, role, status, cwd, branch, status_note).",
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -137,26 +137,26 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_send",
-            "description": "傳送訊息給另一個 session（可用 id 或 label）、頻道（#channel）或全體廣播（*）。閒置（idle）或休眠中的收件者會被自動喚醒；status/artifact 訊息只進收件匣，不主動喚醒。",
+            "description": "Send a message to another session (by id or label), a channel (#channel), or broadcast to everyone (*). Idle or sleeping recipients are woken automatically; status and artifact messages only land in the inbox without waking them.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "to": {
                         "type": "string",
-                        "description": "收件目標：session id（如 ses_...）、label（如 worker/impl）、#channel 或 *"
+                        "description": "Recipient: session id (e.g. ses_...), label (e.g. worker/impl), #channel, or *"
                     },
                     "body": {
                         "type": "string",
-                        "description": "訊息內容"
+                        "description": "Message body"
                     },
                     "kind": {
                         "type": "string",
                         "enum": ["chat", "handoff", "question", "answer", "status", "artifact"],
-                        "description": "訊息種類（預設 chat）"
+                        "description": "Message kind (default: chat)"
                     },
                     "reply_to": {
                         "type": "string",
-                        "description": "選填：回覆的訊息 id（msg_...）"
+                        "description": "Optional: id of the message being replied to (msg_...)"
                     }
                 },
                 "required": ["to", "body"]
@@ -164,51 +164,51 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_inbox",
-            "description": "讀取寄給自己的訊息（預設只取尚未讀取的訊息並推進已讀游標）。",
+            "description": "Read messages addressed to you (by default only unread ones, advancing the read cursor).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "unread_only": {
                         "type": "boolean",
-                        "description": "是否只取未讀訊息（預設 true）"
+                        "description": "Only fetch unread messages (default: true)"
                     }
                 }
             }
         }),
         json!({
             "name": "ade_wait",
-            "description": "阻塞等待下一則寄給自己的訊息（有 timeout 上限，不會永久卡住）。",
+            "description": "Block until the next message addressed to you arrives (bounded by a timeout, never blocks forever).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "timeout_ms": {
                         "type": "integer",
-                        "description": "等待毫秒數（預設 30000，最大 300000）"
+                        "description": "Timeout in milliseconds (default 30000, max 300000)"
                     },
                     "from": {
                         "type": "string",
-                        "description": "選填：只等待來自特定 peer（id 或 label）的訊息"
+                        "description": "Optional: only wait for messages from this peer (id or label)"
                     }
                 }
             }
         }),
         json!({
             "name": "ade_ask",
-            "description": "向某個 peer 送出問題並阻塞等待其回覆（request/response 協作交握）。若對方處於閒置，daemon 會自動喚醒對方處理問題。",
+            "description": "Ask a peer a question and block until it replies (request/response handshake). If the peer is idle, the daemon wakes it automatically.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "peer": {
                         "type": "string",
-                        "description": "對象的 session id 或 label"
+                        "description": "Session id or label of the peer"
                     },
                     "question": {
                         "type": "string",
-                        "description": "要詢問的問題內容"
+                        "description": "Question to ask"
                     },
                     "timeout_ms": {
                         "type": "integer",
-                        "description": "等待回覆的毫秒數（預設 60000）"
+                        "description": "Timeout for the reply in milliseconds (default 60000)"
                     }
                 },
                 "required": ["peer", "question"]
@@ -216,7 +216,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_task_list",
-            "description": "列出共用任務看板上的所有任務。",
+            "description": "List every task on the shared task board.",
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -224,26 +224,26 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_task_create",
-            "description": "在共用任務看板建立新任務。指定 assignee 時會自動投遞 handoff 訊息並喚醒閒置中的負責人。",
+            "description": "Create a task on the shared task board. When an assignee is given, a handoff message is delivered and an idle assignee is woken.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "任務標題"
+                        "description": "Task title"
                     },
                     "detail": {
                         "type": "string",
-                        "description": "任務細節說明"
+                        "description": "Task details"
                     },
                     "assignee": {
                         "type": "string",
-                        "description": "指派對象（session id 或 label）"
+                        "description": "Assignee (session id or label)"
                     },
                     "depends_on": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "前置任務 id 清單"
+                        "description": "Ids of prerequisite tasks"
                     }
                 },
                 "required": ["title"]
@@ -251,26 +251,26 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_task_update",
-            "description": "更新共用任務看板上的任務狀態、負責人或說明。改派負責人時會喚醒新的負責人。",
+            "description": "Update a task's status, assignee, or details. Reassigning wakes the new assignee.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "任務 id（task_...）"
+                        "description": "Task id (task_...)"
                     },
                     "status": {
                         "type": "string",
                         "enum": ["todo", "doing", "blocked", "review", "done"],
-                        "description": "更新後的任務狀態"
+                        "description": "New task status"
                     },
                     "assignee": {
                         "type": "string",
-                        "description": "更新指派對象"
+                        "description": "New assignee"
                     },
                     "detail": {
                         "type": "string",
-                        "description": "更新任務細節"
+                        "description": "New task details"
                     }
                 },
                 "required": ["id"]
@@ -278,34 +278,34 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_spawn",
-            "description": "產生一個新的子 agent session（例如 coordinator 派生 worker 到獨立 git worktree 平行實作）。",
+            "description": "Spawn a new child agent session (e.g. a coordinator spawning a worker into its own git worktree to implement in parallel).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "kind": {
                         "type": "string",
-                        "description": "agent 種類：opencode | claude | codex | antigravity（預設 opencode）"
+                        "description": "Agent kind: opencode | claude | codex | antigravity (default: opencode)"
                     },
                     "prompt": {
                         "type": "string",
-                        "description": "啟動後立即執行的任務提示"
+                        "description": "Task prompt to run immediately after startup"
                     },
                     "label": {
                         "type": "string",
-                        "description": "人類可讀標籤，例如 worker/impl"
+                        "description": "Human-readable label, e.g. worker/impl"
                     },
                     "role": {
                         "type": "string",
-                        "description": "角色：coordinator | worker | reviewer（預設 worker）"
+                        "description": "Role: coordinator | worker | reviewer (default: worker)"
                     },
                     "worktree": {
                         "type": "boolean",
-                        "description": "是否建立獨立 git worktree（預設 false）"
+                        "description": "Create a dedicated git worktree (default: false)"
                     },
                     "permission": {
                         "type": "string",
                         "enum": ["ask", "auto", "bypass"],
-                        "description": "權限政策（預設 auto）"
+                        "description": "Permission policy (default: auto)"
                     }
                 },
                 "required": ["prompt"]
@@ -313,22 +313,22 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_artifact_share",
-            "description": "分享產出物（檔案路徑、git 分支或 diff）到匯流排與看板。",
+            "description": "Share an artifact (file path, git branch, or diff) on the bus and task board.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "檔案路徑、分支名稱或 diff 摘要"
+                        "description": "File path, branch name, or diff summary"
                     },
                     "kind": {
                         "type": "string",
                         "enum": ["file", "branch", "diff"],
-                        "description": "產出物類型（預設 file）"
+                        "description": "Artifact kind (default: file)"
                     },
                     "note": {
                         "type": "string",
-                        "description": "補充說明"
+                        "description": "Additional note"
                     }
                 },
                 "required": ["path"]
@@ -336,13 +336,13 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_status",
-            "description": "更新自己在 TUI 上的簡短進度狀態文字。",
+            "description": "Update your short progress status shown in the TUI.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "簡短進度文字，例如「正在跑單元測試」"
+                        "description": "Short progress text, e.g. \"running unit tests\""
                     }
                 },
                 "required": ["text"]
@@ -350,26 +350,26 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ade_diff",
-            "description": "取得某個 session 工作區的 git diff（供 coordinator 或 reviewer 審查變更）。",
+            "description": "Get the git diff of a session's workspace (for a coordinator or reviewer to inspect changes).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "session": {
                         "type": "string",
-                        "description": "目標 session id 或 label（未填則查自己）"
+                        "description": "Target session id or label (defaults to yourself)"
                     }
                 }
             }
         }),
         json!({
             "name": "ade_merge",
-            "description": "將某個 worker session 的 worktree 分支合併回主工作區。",
+            "description": "Merge a worker session's worktree branch back into the main workspace.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "session": {
                         "type": "string",
-                        "description": "要合併的 worker session id 或 label"
+                        "description": "Worker session id or label to merge"
                     }
                 },
                 "required": ["session"]
@@ -395,7 +395,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "ade_whoami" => {
             let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
-                bail!("無法取得狀態快照");
+                bail!("failed to fetch state snapshot");
             };
             let resolved: SessionId = state
                 .resolve_session_id(session)
@@ -409,7 +409,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
 
         "ade_peers" => {
             let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
-                bail!("無法取得狀態快照");
+                bail!("failed to fetch state snapshot");
             };
             let peers: Vec<Value> = state
                 .sessions_sorted()
@@ -432,10 +432,12 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "ade_send" => {
-            let to_str = args["to"].as_str().context("缺少 `to` 參數")?;
+            let to_str = args["to"]
+                .as_str()
+                .context("missing required parameter `to`")?;
             let body = args["body"]
                 .as_str()
-                .context("缺少 `body` 參數")?
+                .context("missing required parameter `body`")?
                 .to_string();
             let kind = args["kind"]
                 .as_str()
@@ -464,7 +466,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 unread_only,
             })? {
                 Frame::Messages { messages, .. } => Ok(json!({ "messages": messages })),
-                other => bail!("未預期的回應：{other:?}"),
+                other => bail!("unexpected response: {other:?}"),
             }
         }
 
@@ -481,15 +483,17 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                     messages,
                     timed_out,
                 } => Ok(json!({ "messages": messages, "timed_out": timed_out })),
-                other => bail!("未預期的回應：{other:?}"),
+                other => bail!("unexpected response: {other:?}"),
             }
         }
 
         "ade_ask" => {
-            let peer = args["peer"].as_str().context("缺少 `peer` 參數")?;
+            let peer = args["peer"]
+                .as_str()
+                .context("missing required parameter `peer`")?;
             let question = args["question"]
                 .as_str()
-                .context("缺少 `question` 參數")?
+                .context("missing required parameter `question`")?
                 .to_string();
             let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(60_000);
 
@@ -526,13 +530,13 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                     "reply": messages.pop(),
                     "timed_out": timed_out
                 })),
-                other => bail!("未預期的回應：{other:?}"),
+                other => bail!("unexpected response: {other:?}"),
             }
         }
 
         "ade_task_list" => {
             let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
-                bail!("無法取得狀態快照");
+                bail!("failed to fetch state snapshot");
             };
             let tasks: Vec<_> = state.tasks.values().cloned().collect();
             Ok(json!({ "tasks": tasks }))
@@ -541,7 +545,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         "ade_task_create" => {
             let title = args["title"]
                 .as_str()
-                .context("缺少 `title` 參數")?
+                .context("missing required parameter `title`")?
                 .to_string();
             let detail = args["detail"].as_str().unwrap_or("").to_string();
             let assignee = args["assignee"].as_str().map(|s| s.to_string());
@@ -570,10 +574,13 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "ade_task_update" => {
-            let id = args["id"].as_str().context("缺少 `id` 參數")?.to_string();
+            let id = args["id"]
+                .as_str()
+                .context("missing required parameter `id`")?
+                .to_string();
             let status = match args.get("status").and_then(|v| v.as_str()) {
                 Some(s) => Some(TaskStatus::parse(s).with_context(|| {
-                    format!("未知的任務狀態：{s}（todo/doing/blocked/review/done）")
+                    format!("unknown task status: {s} (todo/doing/blocked/review/done)")
                 })?),
                 None => None,
             };
@@ -591,11 +598,11 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
 
         "ade_spawn" => {
             let kind_str = args["kind"].as_str().unwrap_or("opencode");
-            let kind =
-                AgentKind::parse(kind_str).with_context(|| format!("未知的 agent：{kind_str}"))?;
+            let kind = AgentKind::parse(kind_str)
+                .with_context(|| format!("unknown agent kind: {kind_str}"))?;
             let prompt = args["prompt"]
                 .as_str()
-                .context("缺少 `prompt` 參數")?
+                .context("missing required parameter `prompt`")?
                 .to_string();
             let label = args["label"].as_str().map(|s| s.to_string());
             let role = args["role"]
@@ -630,7 +637,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         "ade_artifact_share" => {
             let path = args["path"]
                 .as_str()
-                .context("缺少 `path` 參數")?
+                .context("missing required parameter `path`")?
                 .to_string();
             let kind = args["kind"]
                 .as_str()
@@ -653,7 +660,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         "ade_status" => {
             let text = args["text"]
                 .as_str()
-                .context("缺少 `text` 參數")?
+                .context("missing required parameter `text`")?
                 .to_string();
             roundtrip(&Request::SessionNote {
                 session: session.to_string(),
@@ -676,22 +683,22 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                     "cwd": cwd,
                     "diff": ade_core::redact_secrets(&diff),
                 })),
-                other => bail!("未預期的回應：{other:?}"),
+                other => bail!("unexpected response: {other:?}"),
             }
         }
 
         "ade_merge" => {
             let target = args["session"]
                 .as_str()
-                .context("缺少 `session` 參數")?
+                .context("missing required parameter `session`")?
                 .to_string();
             match roundtrip(&Request::WorktreeMerge { session: target })? {
                 Frame::Ok { note } => Ok(json!({ "ok": true, "note": note })),
-                other => bail!("未預期的回應：{other:?}"),
+                other => bail!("unexpected response: {other:?}"),
             }
         }
 
-        other => bail!("未知的 MCP 工具：{other}"),
+        other => bail!("unknown MCP tool: {other}"),
     }
 }
 
