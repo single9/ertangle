@@ -4,14 +4,15 @@
 //! 標題、粗體／斜體／刪除線、行內程式碼、連結、無序／有序／工作清單、
 //! 引言、分隔線、圍籬程式碼區塊（含語言標籤與底色）、GFM 表格。
 //!
-//! 也認得 ade 自己在逐字稿裡加的語意前綴：`💭 `（思考）、`▸ `（工具呼叫）、
-//! `💬 `（審查註解），各自用不同顏色呈現。
+//! 也認得 ade 自己在逐字稿裡加的語意前綴：`❯ `（使用者 prompt）、
+//! `💭 `（思考）、`▸ `（工具呼叫）、`💬 `（審查註解），各自用不同顏色呈現。
 //!
 //! 設計上刻意保持「行導向」：一次 `render` 會把整段來源重新渲染，
 //! 因此圍籬／表格狀態不需要跨次呼叫保存。
 
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub const CODE_FG: Color = Color::Rgb(214, 216, 228);
 pub const CODE_BG: Color = Color::Rgb(30, 30, 40);
@@ -19,6 +20,7 @@ pub const CODE_BAR: Color = Color::Rgb(86, 122, 186);
 pub const THOUGHT: Color = Color::Rgb(128, 132, 152);
 pub const TOOL: Color = Color::Rgb(224, 184, 96);
 pub const REVIEW: Color = Color::Rgb(198, 122, 206);
+pub const PROMPT: Color = Color::Rgb(126, 222, 160);
 pub const LINK: Color = Color::Rgb(112, 172, 255);
 pub const HEADING: Color = Color::Rgb(122, 202, 255);
 pub const BULLET: Color = Color::Rgb(122, 202, 255);
@@ -99,6 +101,9 @@ impl Renderer {
 fn render_line(line: &str, width: usize) -> Line<'static> {
     if line.trim().is_empty() {
         return Line::raw(String::new());
+    }
+    if let Some(rest) = line.strip_prefix("❯ ") {
+        return prefixed("❯ ", rest, PROMPT, false);
     }
     if let Some(rest) = line.strip_prefix("💭 ") {
         return prefixed("💭 ", rest, THOUGHT, true);
@@ -267,21 +272,38 @@ fn fence(line: &str) -> Option<String> {
 
 fn code_line(line: &str, width: usize) -> Vec<Line<'static>> {
     let budget = width.saturating_sub(4).max(8);
-    let chars: Vec<char> = if line.is_empty() {
-        vec![' ']
-    } else {
-        line.chars().collect()
-    };
+    let chunks = split_display_width(if line.is_empty() { " " } else { line }, budget);
+    chunks
+        .into_iter()
+        .map(|s| {
+            let pad = budget.saturating_sub(UnicodeWidthStr::width(s.as_str()));
+            Line::from(vec![
+                Span::styled("  ▌ ", Style::default().fg(CODE_BAR)),
+                Span::styled(
+                    format!("{s}{}", " ".repeat(pad)),
+                    Style::default().fg(CODE_FG).bg(CODE_BG),
+                ),
+            ])
+        })
+        .collect()
+}
+
+/// 依顯示寬度把字串切成多段（用於程式碼區塊）。
+fn split_display_width(s: &str, budget: usize) -> Vec<String> {
     let mut out = Vec::new();
-    for chunk in chars.chunks(budget) {
-        let s: String = chunk.iter().collect();
-        out.push(Line::from(vec![
-            Span::styled("  ▌ ", Style::default().fg(CODE_BAR)),
-            Span::styled(
-                format!("{s:<budget$}"),
-                Style::default().fg(CODE_FG).bg(CODE_BG),
-            ),
-        ]));
+    let mut cur = String::new();
+    let mut w = 0usize;
+    for ch in s.chars() {
+        let cw = ch.width().unwrap_or(0);
+        if w > 0 && w + cw > budget {
+            out.push(std::mem::take(&mut cur));
+            w = 0;
+        }
+        cur.push(ch);
+        w += cw;
+    }
+    if !cur.is_empty() || out.is_empty() {
+        out.push(cur);
     }
     out
 }
@@ -308,15 +330,50 @@ fn is_table_sep(line: &str) -> bool {
         && cells.iter().all(|c| {
             let c = c.trim();
             let c = c.trim_start_matches(':').trim_end_matches(':');
-            c.len() >= 2 && c.chars().all(|ch| ch == '-')
+            !c.is_empty() && c.chars().all(|ch| ch == '-')
         })
 }
 
 fn split_row(line: &str) -> Vec<String> {
     let t = line.trim();
-    let t = t.strip_prefix('|').unwrap_or(t);
-    let t = t.strip_suffix('|').unwrap_or(t);
-    t.split('|').map(|c| c.trim().to_string()).collect()
+    let t = if t.starts_with("\\|") {
+        t
+    } else {
+        t.strip_prefix('|').unwrap_or(t)
+    };
+    let t = if t.ends_with("\\|") {
+        t
+    } else {
+        t.strip_suffix('|').unwrap_or(t)
+    };
+    let mut cells = Vec::new();
+    let mut cur = String::new();
+    let mut in_code = false;
+    let mut escaped = false;
+    for ch in t.chars() {
+        if escaped {
+            cur.push(ch);
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => {
+                cur.push(ch);
+                escaped = true;
+            }
+            '`' => {
+                in_code = !in_code;
+                cur.push(ch);
+            }
+            '|' if !in_code => {
+                cells.push(cur.trim().to_string());
+                cur.clear();
+            }
+            _ => cur.push(ch),
+        }
+    }
+    cells.push(cur.trim().to_string());
+    cells
 }
 
 fn parse_align(sep: &str, n: usize) -> Vec<Align> {
@@ -336,19 +393,61 @@ fn parse_align(sep: &str, n: usize) -> Vec<Align> {
     v
 }
 
+fn spans_width(spans: &[Span<'_>]) -> usize {
+    spans
+        .iter()
+        .map(|s| UnicodeWidthStr::width(s.content.as_ref()))
+        .sum()
+}
+
+/// 依顯示寬度裁切 spans（保留樣式），超出時以 `…` 收尾。
+fn truncate_spans(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
+    if spans_width(&spans) <= max {
+        return spans;
+    }
+    if max == 0 {
+        return Vec::new();
+    }
+    let budget = max - 1;
+    let mut out: Vec<Span<'static>> = Vec::new();
+    let mut used = 0usize;
+    for span in spans {
+        let mut buf = String::new();
+        let mut full = false;
+        for ch in span.content.chars() {
+            let cw = ch.width().unwrap_or(0);
+            if used + cw > budget {
+                full = true;
+                break;
+            }
+            buf.push(ch);
+            used += cw;
+        }
+        if !buf.is_empty() {
+            out.push(Span::styled(buf, span.style));
+        }
+        if full || used >= budget {
+            break;
+        }
+    }
+    out.push(Span::styled("…".to_string(), Style::default().fg(RULE)));
+    out
+}
+
 fn render_table(rows: &[String], sep: &str, width: usize) -> Vec<Line<'static>> {
     let header = split_row(&rows[0]);
     let n = header.len().max(1);
     let aligns = parse_align(sep, n);
     let body: Vec<Vec<String>> = rows[1..].iter().map(|r| split_row(r)).collect();
+    let header_style = Style::default().fg(HEADING).add_modifier(Modifier::BOLD);
 
     let mut widths = vec![1usize; n];
     for (c, cell) in header.iter().enumerate().take(n) {
-        widths[c] = widths[c].max(cell.chars().count());
+        widths[c] = widths[c].max(spans_width(&inline(cell, header_style)));
     }
     for row in &body {
         for (c, cell) in row.iter().enumerate().take(n) {
-            widths[c] = widths[c].max(cell.chars().count());
+            widths[c] = widths[c].max(spans_width(&inline(cell, Style::default())));
         }
     }
 
@@ -381,63 +480,12 @@ fn render_table(rows: &[String], sep: &str, width: usize) -> Vec<Line<'static>> 
     out
 }
 
-/// 硬裁切一行到 `width` 個字元（超出時以 `…` 收尾），保留各 span 樣式。
+/// 硬裁切一行到 `width` 個顯示欄位（超出時以 `…` 收尾），保留各 span 樣式。
 fn clip(line: Line<'static>, width: usize) -> Line<'static> {
-    let total: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
-    if total <= width {
-        return line;
-    }
-    let budget = width.saturating_sub(1);
-    let mut out: Vec<Span<'static>> = Vec::new();
-    let mut used = 0usize;
-    for span in line.spans {
-        if used >= budget {
-            break;
-        }
-        let mut buf = String::new();
-        for ch in span.content.chars() {
-            if used >= budget {
-                break;
-            }
-            buf.push(ch);
-            used += 1;
-        }
-        if !buf.is_empty() {
-            out.push(Span::styled(buf, span.style));
-        }
-    }
-    out.push(Span::styled("…".to_string(), Style::default().fg(RULE)));
-    Line::from(out)
-}
-
-fn fit(s: &str, w: usize) -> String {
-    let count = s.chars().count();
-    if count == w {
-        return s.to_string();
-    }
-    if count > w {
-        if w == 0 {
-            return String::new();
-        }
-        let mut out: String = s.chars().take(w.saturating_sub(1)).collect();
-        out.push('…');
-        return out;
-    }
-    s.to_string()
-}
-
-fn pad(s: &str, w: usize, align: Align) -> String {
-    let s = fit(s, w);
-    let len = s.chars().count();
-    let pad = w.saturating_sub(len);
-    match align {
-        Align::Left => format!("{s}{}", " ".repeat(pad)),
-        Align::Right => format!("{}{s}", " ".repeat(pad)),
-        Align::Center => {
-            let l = pad / 2;
-            let r = pad - l;
-            format!("{}{s}{}", " ".repeat(l), " ".repeat(r))
-        }
+    if spans_width(&line.spans) <= width {
+        line
+    } else {
+        Line::from(truncate_spans(line.spans, width))
     }
 }
 
@@ -447,14 +495,29 @@ fn table_row(cells: &[String], widths: &[usize], aligns: &[Align], header: bool)
     } else {
         Style::default()
     };
+    let rule = Style::default().fg(RULE);
     let mut spans = Vec::new();
     for (c, w) in widths.iter().enumerate() {
         let cell = cells.get(c).map(String::as_str).unwrap_or("");
-        spans.push(Span::styled("│ ", Style::default().fg(RULE)));
-        spans.push(Span::styled(pad(cell, *w, aligns[c]), style));
-        spans.push(Span::styled(" ", Style::default().fg(RULE)));
+        let cell_spans = truncate_spans(inline(cell, style), *w);
+        let cw = spans_width(&cell_spans);
+        let pad = w.saturating_sub(cw);
+        let (left, right) = match aligns[c] {
+            Align::Left => (0, pad),
+            Align::Right => (pad, 0),
+            Align::Center => (pad / 2, pad - pad / 2),
+        };
+        spans.push(Span::styled("│ ", rule));
+        if left > 0 {
+            spans.push(Span::raw(" ".repeat(left)));
+        }
+        spans.extend(cell_spans);
+        if right > 0 {
+            spans.push(Span::raw(" ".repeat(right)));
+        }
+        spans.push(Span::styled(" ", rule));
     }
-    spans.push(Span::styled("│", Style::default().fg(RULE)));
+    spans.push(Span::styled("│", rule));
     Line::from(spans)
 }
 
@@ -577,7 +640,7 @@ fn flush(spans: &mut Vec<Span<'static>>, buf: &mut String, base: Style) {
 // 換行（把已渲染的行依顯示寬度硬切）
 // ---------------------------------------------------------------------------
 
-/// 把單一樣式化行依寬度切成多行，保留樣式。
+/// 把單一樣式化行依顯示寬度切成多行，保留樣式。
 pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
     if width == 0 {
         return vec![line];
@@ -589,7 +652,8 @@ pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
         let style = span.style;
         let mut buf = String::new();
         for ch in span.content.chars() {
-            if cur_w >= width {
+            let cw = ch.width().unwrap_or(0);
+            if cur_w > 0 && cur_w + cw > width {
                 if !buf.is_empty() {
                     cur.push(Span::styled(std::mem::take(&mut buf), style));
                 }
@@ -597,7 +661,7 @@ pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
                 cur_w = 0;
             }
             buf.push(ch);
-            cur_w += 1;
+            cur_w += cw;
         }
         if !buf.is_empty() {
             cur.push(Span::styled(buf, style));
@@ -732,12 +796,65 @@ mod tests {
         // 極窄寬度時仍應每行都不超過可用寬度。
         let out = r.render(&src, 12);
         for line in &out {
-            let w: usize = contents(line).join("").chars().count();
+            let w = UnicodeWidthStr::width(contents(line).join("").as_str());
             assert!(
                 w <= 12,
                 "line too wide ({w}): {:?}",
                 contents(line).join("")
             );
+        }
+    }
+
+    fn line_width(line: &Line<'_>) -> usize {
+        UnicodeWidthStr::width(contents(line).join("").as_str())
+    }
+
+    #[test]
+    fn table_cjk_uses_display_width() {
+        let mut r = Renderer::new();
+        let src = plain("| 名稱 | 值 |\n|---|---|\n| 測試 | 1 |");
+        let out = r.render(&src, 80);
+        assert_eq!(out.len(), 3);
+        assert_eq!(contents(&out[1]).join(""), "├──────┼────┤");
+        assert_eq!(contents(&out[0]).join(""), "│ 名稱 │ 值 │");
+        assert_eq!(contents(&out[2]).join(""), "│ 測試 │ 1  │");
+        for line in &out {
+            assert!(line_width(line) <= 80);
+        }
+    }
+
+    #[test]
+    fn table_cell_inline_markup_is_rendered() {
+        let mut r = Renderer::new();
+        let src = plain("| **b** | `c` |\n|---|---|\n| [x](http://e) | y |");
+        let out = r.render(&src, 80);
+        let all: String = out.iter().map(|l| contents(l).join("")).collect();
+        assert!(!all.contains("**"), "bold markup leaked: {all}");
+        assert!(!all.contains('`'), "code markup leaked: {all}");
+        assert!(all.contains('b'));
+        assert!(all.contains('c'));
+        assert!(all.contains('x'));
+        assert!(!all.contains("http://e"));
+    }
+
+    #[test]
+    fn table_pipe_inside_code_cell() {
+        let mut r = Renderer::new();
+        let src = plain("| a | b |\n|---|---|\n| `x|y` | z |");
+        let out = r.render(&src, 80);
+        let row = contents(&out[2]).join("");
+        assert!(row.contains("x|y"), "code cell split wrongly: {row}");
+        assert!(row.contains('z'));
+    }
+
+    #[test]
+    fn wrap_uses_display_width_for_cjk() {
+        let out = wrap_line(Line::raw("你好世界"), 4);
+        assert_eq!(out.len(), 2);
+        assert_eq!(contents(&out[0]).join(""), "你好");
+        assert_eq!(contents(&out[1]).join(""), "世界");
+        for line in &out {
+            assert_eq!(line_width(line), 4);
         }
     }
 
