@@ -40,10 +40,17 @@ pub struct RoleCfg {
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
+pub struct TuiCfg {
+    pub layout: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Config {
     pub defaults: Defaults,
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
+    pub tui: TuiCfg,
 }
 
 /// 解析後、可直接餵給 `SessionSpec` 的結果。
@@ -133,6 +140,9 @@ impl Config {
             if v.read_only.is_some() {
                 e.read_only = v.read_only;
             }
+        }
+        if local.tui.layout.is_some() {
+            out.tui.layout = local.tui.layout;
         }
         out
     }
@@ -282,5 +292,26 @@ bin = "/opt/custom/claude"
         .unwrap();
         let r = c.resolve(&AgentKind::ClaudeCode, &Role::Worker, None, &[], None);
         assert_eq!(r.bin.as_deref(), Some("/opt/custom/claude"));
+    }
+
+    #[test]
+    fn tui_layout_config_parsing_and_layered() {
+        let g = Config::parse(
+            r#"
+[tui]
+layout = "two"
+"#,
+        )
+        .unwrap();
+        assert_eq!(g.tui.layout.as_deref(), Some("two"));
+        let l = Config::parse(
+            r#"
+[tui]
+layout = "tabs"
+"#,
+        )
+        .unwrap();
+        let layered = Config::layered(g, l);
+        assert_eq!(layered.tui.layout.as_deref(), Some("tabs"));
     }
 }

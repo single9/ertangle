@@ -154,6 +154,15 @@ pub(crate) struct App {
 
 impl App {
     pub(crate) fn new() -> Self {
+        let global_dir = ade_daemon::config_dir();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let cfg = ade_daemon::config::Config::load(&global_dir, &cwd);
+        let layout = cfg
+            .tui
+            .layout
+            .as_deref()
+            .and_then(LayoutMode::parse)
+            .unwrap_or(LayoutMode::Three);
         App {
             state: State::new(),
             selected: 0,
@@ -187,7 +196,7 @@ impl App {
             transcript_inner_w: 0,
             selection: None,
             mouse_capture: true,
-            layout: LayoutMode::Three,
+            layout,
             bus_overlay: false,
             bus_visible: true,
             bus_seen: 0,
