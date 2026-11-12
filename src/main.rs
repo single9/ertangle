@@ -7,12 +7,12 @@
 //! * M3 工作區與審查：`worktrees`、`diff`、`review`、`merge`、`pr`、`gc`
 //! * M4 打磨：`sleep`、`wake`、`cost`、`replay`
 
-use ade_core::{AgentKind, ArtifactKind, MsgKind, PermissionPolicy, Role, Target, TaskStatus};
-use ade_daemon::Client;
-use ade_protocol::{Frame, Request, SpawnRequest, Transport};
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+
+mod cmd;
+use cmd::{bus::*, cost::*, daemon::*, session::*, task::*, worktree::*};
 
 #[derive(Parser)]
 #[command(
@@ -40,167 +40,162 @@ enum Cmd {
         /// 同時綁定 TCP 位址供遠端連線（例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token）
         #[arg(long)]
         listen: Option<String>,
-        /// （已棄用，會出現在 ps）遠端認證 token；請改用 ADE_TOKEN 或 --token-file
+        /// 遠端連線認證用的 token（未指定則讀環境變數 ADE_TOKEN；為安全建議搭配 SSH 轉發）
         #[arg(long)]
         token: Option<String>,
-        /// 從檔案讀取認證 token（檔案權限須為 0600）
+        /// 從檔案讀取 token（權限需為 0600 或 0400；避免 token 出現在 process list）
         #[arg(long)]
         token_file: Option<std::path::PathBuf>,
-        /// 允許在非 loopback 位址上以明文 TCP 監聽（不建議）
+        /// 允許在未走 SSH 轉發下綁定非 loopback 位址（危險：傳輸為明文，僅供專用私有網路）
         #[arg(long)]
         insecure_listen_public: bool,
     },
-    /// 以 stdio 執行內建的 MCP 協作伺服器
+    /// stdio MCP server 模式（供 agent 子程序設定為 MCP 工具）
     Mcp {
-        /// 此 MCP 伺服器所代表的 session id（未指定則讀 $ADE_SESSION）
+        /// 此 MCP server 代表的 session id（預設讀 ADE_SESSION 環境變數）
         #[arg(long)]
         session: Option<String>,
     },
-    /// 查詢自己目前的 session 資訊（讀取 $ADE_SESSION 或 --session）
+    /// 顯示目前環境變數指定的 session 資訊
     Whoami {
         #[arg(long)]
         session: Option<String>,
         #[arg(long)]
         json: bool,
     },
-    /// 列出所有並行中的 agent sessions（別名 peers）
-    #[command(visible_alias = "peers")]
+    /// 列出所有 session
+    #[command(alias = "peers")]
     Sessions {
         #[arg(long)]
         json: bool,
     },
-    /// 建立一個 agent session
+    /// 建立新的 agent session
     Spawn {
-        /// agent 種類：opencode | claude | codex | antigravity
-        #[arg(long, default_value = "opencode")]
+        /// Agent 種類：opencode / claude / codex / antigravity；可加 `:model`（例如 claude:opus）
         kind: String,
-        /// 啟動後立刻送出的 prompt
-        #[arg(long)]
+        /// 初始 prompt
         prompt: Option<String>,
-        /// 工作目錄
+        /// 工作目錄（預設為目前目錄）
         #[arg(long)]
         cwd: Option<String>,
-        /// 人類可讀標籤
+        /// 易讀標籤（例如 worker/backend；未指定時自動產生）
         #[arg(long)]
         label: Option<String>,
-        /// 角色：coordinator | worker | reviewer
+        /// 角色：coordinator / worker / reviewer / tester（預設 worker）
         #[arg(long, default_value = "worker")]
         role: String,
-        /// 建立 git worktree 並在其中工作
+        /// 在獨立的 git worktree 中執行（M3）
         #[arg(long)]
         worktree: bool,
-        /// 傳輸方式：auto | structured（別名 acp）| pty
+        /// 傳輸通道：auto（預設）/ structured / pty
         #[arg(long, default_value = "auto")]
         transport: String,
-        /// 權限政策：ask | auto | bypass
+        /// 權限政策：ask（預設）/ auto / bypass
         #[arg(long)]
         permission: Option<String>,
-        /// 父 session id（未指定則讀 $ADE_SESSION）
+        /// 父 session id 或標籤（未指定時若有 ADE_SESSION 則自動繼承）
         #[arg(long)]
         parent: Option<String>,
-        /// 指定 model（省略則依 config.toml）
+        /// 明確指定 model（覆蓋 kind 後贅與設定檔）
         #[arg(long)]
         model: Option<String>,
-        /// 額外傳給 agent 的參數（寫在 `--` 之後）
+        /// 附加給底層 agent 的命令列參數
         #[arg(last = true)]
         extra: Vec<String>,
     },
-    /// 送 prompt 給某個 session（可用 id 或 label）
+    /// 送出 prompt 給指定 session
     Prompt {
         session: String,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(required = true)]
         text: Vec<String>,
     },
-    /// 中斷某個 session 的當前回合
+    /// 中斷正在執行的 turn
     Cancel { session: String },
-    /// 結束某個 session
+    /// 強制結束 agent 子程序
     Kill { session: String },
-    /// 暫停某個閒置 session 子程序（SIGSTOP）
+    /// 讓 session 休眠（停止程序但保留對話紀錄，可隨時喚醒）
     Sleep { session: String },
-    /// 喚醒某個休眠中的 session 子程序（SIGCONT）
+    /// 喚醒已休眠的 session
     Wake { session: String },
-    /// 送訊息到匯流排（agent 之間溝通；會喚醒閒置或休眠中的收件者）
+    /// 透過匯流排傳送訊息給其他 session
     Send {
-        /// 收件 session（id 或 label；亦可用 #channel 或 *）
-        #[arg(long)]
+        /// 收件者：session id、標籤（例如 worker/b）、或 @id / @label
+        #[arg(long, conflicts_with_all = ["channel", "broadcast"])]
         to: Option<String>,
-        /// 收件頻道名稱
-        #[arg(long)]
+        /// 頻道名稱（例如 backend；會廣播給所有同角色或訂閱者）
+        #[arg(long, conflicts_with_all = ["to", "broadcast"])]
         channel: Option<String>,
         /// 廣播給所有 session
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["to", "channel"])]
         broadcast: bool,
-        /// 發送者（未指定則讀 $ADE_SESSION，否則為 human）
+        /// 寄件者 session id（預設讀 ADE_SESSION 環境變數）
         #[arg(long)]
         from: Option<String>,
-        /// 訊息種類：chat | handoff | question | answer | status | artifact
+        /// 訊息種類：chat（預設）/ handoff / question / answer / status / artifact
         #[arg(long, default_value = "chat")]
         kind: String,
-        /// 回覆哪一則訊息 id（msg_...）
+        /// 回覆的訊息 id（形成對話線程）
         #[arg(long)]
         reply_to: Option<String>,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(required = true)]
         body: Vec<String>,
     },
-    /// 讀取收件匣訊息
+    /// 查看目前 session 的收件匣
     Inbox {
-        /// 目標 session（未指定則讀 $ADE_SESSION）
         #[arg(long)]
         session: Option<String>,
-        /// 讀取全部歷史訊息（預設只取未讀並推進游標）
+        /// 包含已讀訊息（預設只顯示新進未讀）
         #[arg(long)]
         all: bool,
         #[arg(long)]
         json: bool,
     },
-    /// 阻塞等待下一則訊息
+    /// 阻塞等待下一則發給自己的訊息
     Wait {
-        /// 目標 session（未指定則讀 $ADE_SESSION）
         #[arg(long)]
         session: Option<String>,
-        /// 只等特定發送者（id 或 label）
+        /// 只等待來自特定寄件者的訊息
         #[arg(long)]
         from: Option<String>,
-        /// 等待逾時毫秒數
-        #[arg(long, default_value_t = 30_000)]
+        /// 逾時毫秒數（預設 60000 = 60 秒）
+        #[arg(long, default_value = "60000")]
         timeout_ms: u64,
         #[arg(long)]
         json: bool,
     },
-    /// 向某個 peer 發問並等待回覆（request/response 交握）
+    /// 同步問答：送出 question 訊息並阻塞等待對方回覆 answer
     Ask {
-        /// 對象 session（id 或 label）
+        /// 對象 session id 或標籤
         peer: String,
-        /// 發送者（未指定則讀 $ADE_SESSION）
         #[arg(long)]
         session: Option<String>,
-        /// 等待逾時毫秒數
-        #[arg(long, default_value_t = 60_000)]
+        /// 逾時毫秒數（預設 120000 = 2 分鐘）
+        #[arg(long, default_value = "120000")]
         timeout_ms: u64,
         #[arg(long)]
         json: bool,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(required = true)]
         question: Vec<String>,
     },
-    /// 列出任務
+    /// 列出所有協作任務
     Tasks {
         #[arg(long)]
         json: bool,
     },
-    /// 建立任務（指定 --assignee 時會喚醒對方）
+    /// 建立新任務（M2 看板）
     Task {
         title: String,
         #[arg(long)]
         detail: Option<String>,
         #[arg(long)]
         assignee: Option<String>,
-        #[arg(long = "depends-on")]
+        #[arg(long)]
         depends_on: Vec<String>,
     },
-    /// 更新任務狀態、指派對象或細節
+    /// 更新任務狀態或指派對象
     TaskUpdate {
         id: String,
-        /// 狀態：todo | doing | blocked | review | done
+        /// 新狀態：todo / doing / done / blocked
         #[arg(long)]
         status: Option<String>,
         #[arg(long)]
@@ -208,87 +203,80 @@ enum Cmd {
         #[arg(long)]
         detail: Option<String>,
     },
-    /// 更新自己在 TUI 上的簡短進度狀態
+    /// 廣播自己的最新狀態摘要
     Status {
         #[arg(long)]
         session: Option<String>,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(required = true)]
         text: Vec<String>,
     },
-    /// 分享產出物（檔案、分支或 diff）到匯流排
+    /// 分享重要產出物（檔案、PR 連結、測試報告等）
     Artifact {
         path: String,
-        /// 類型：file | branch | diff
-        #[arg(long, default_value = "file")]
+        /// 種類：code / pr / doc / test / run（預設 code）
+        #[arg(long, default_value = "code")]
         kind: String,
+        /// 說明備註
         #[arg(long)]
         note: Option<String>,
         #[arg(long)]
         session: Option<String>,
     },
-    /// 列出所有受管 git worktrees（M3）
+    /// 列出所有由 ade 管理的 git worktree（M3）
     Worktrees {
         #[arg(long)]
         json: bool,
     },
-    /// 查看某個 session 工作區的 git diff（M3）
-    Diff {
-        /// 目標 session（id 或 label）
-        session: String,
-    },
-    /// 對某個 session 的程式碼位置留下審查註解並要求修正（M3 review 迴圈）
+    /// 檢視指定 session 的 worktree git diff（M3）
+    Diff { session: String },
+    /// 對指定 session 的程式碼留下審查註解並送回該 agent（M3）
     Review {
-        /// 目標 session（id 或 label）
         session: String,
-        /// 檔案與行號位置，例如 src/lib.rs:42
-        #[arg(long, default_value = "diff")]
+        /// 檔案與行號位置（例如 `src/lib.rs:42`）
+        #[arg(long)]
         location: String,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(required = true)]
         comment: Vec<String>,
     },
-    /// 將某個 session 的 worktree 分支合併回主工作區（M3）
-    Merge {
-        /// 目標 session（id 或 label）
-        session: String,
-    },
-    /// 為某個 session 的 worktree 分支建立 Pull Request（M3，需安裝 gh）
+    /// 將指定 session 的 worktree 合併回主分支（M3）
+    Merge { session: String },
+    /// 為指定 session 的 worktree 建立 GitHub PR（M3）
     Pr {
-        /// 目標 session（id 或 label）
         session: String,
         #[arg(long)]
         title: String,
-        #[arg(long, default_value = "")]
+        #[arg(long)]
         body: String,
     },
-    /// 清理已結束 session 的 git worktree（M3）
+    /// 清理已結束或指定的 worktree（M3）
     Gc {
-        /// 若指定，僅清理該 session 的 worktree
+        /// 只清理特定 session 的 worktree；未指定則清理所有已結束者
         #[arg(long)]
         session: Option<String>,
-        /// 連未合併或有未 commit 變更的 worktree 也一併移除（會遺失成果）
+        /// 強制刪除（即使有未 commit 變更或未合併分支）
         #[arg(long)]
         force: bool,
     },
-    /// 統計各 session 與總計的成本與 token 用量（M4）
+    /// 查看各 session 與整體 token / USD 成本統計
     Cost {
         #[arg(long)]
         json: bool,
     },
-    /// 重播並檢視事件記錄檔 events.jsonl（M4 審計與回溯）
+    /// 重播 event log 並印出歷史事件
     Replay {
-        /// 只顯示 seq 大於此值的事件
-        #[arg(long, default_value_t = 0)]
+        /// 只重播序號大於此值的事件
+        #[arg(long, default_value = "0")]
         since: u64,
-        /// 選填：指定自訂 events.jsonl 路徑
+        /// 指定 events.jsonl 路徑（預設為 ade 自己的 log）
         #[arg(long)]
         file: Option<PathBuf>,
-        /// 連同輪替過的舊檔（events.jsonl.N）一起讀取
+        /// 包含已輪替的舊紀錄檔（events.jsonl.1 等；預設只讀目前活躍檔）
         #[arg(long)]
         all: bool,
         #[arg(long)]
         json: bool,
     },
-    /// 關閉 daemon
+    /// 關閉常駐的 daemon 與所有受管 agent 子程序
     Shutdown,
 }
 
@@ -312,12 +300,7 @@ fn main() -> Result<()> {
             token,
             token_file,
             insecure_listen_public,
-        } => ade_daemon::run_remote(ade_daemon::RemoteOptions {
-            listen,
-            token,
-            token_file,
-            insecure_listen_public,
-        }),
+        } => cmd_daemon(listen, token, token_file, insecure_listen_public),
         Cmd::Mcp { session } => ade_daemon::mcp::run(session),
         Cmd::Whoami { session, json } => cmd_whoami(session, json),
         Cmd::Sessions { json } => cmd_sessions(json),
@@ -336,38 +319,11 @@ fn main() -> Result<()> {
         } => cmd_spawn(
             kind, prompt, cwd, label, role, worktree, transport, permission, parent, model, extra,
         ),
-        Cmd::Prompt { session, text } => {
-            roundtrip(&Request::Prompt {
-                session,
-                text: join(text),
-            })?;
-            println!("已送出");
-            Ok(())
-        }
-        Cmd::Cancel { session } => {
-            roundtrip(&Request::Cancel { session })?;
-            println!("已送出中斷");
-            Ok(())
-        }
-        Cmd::Kill { session } => {
-            roundtrip(&Request::Kill { session })?;
-            println!("已送出結束");
-            Ok(())
-        }
-        Cmd::Sleep { session } => {
-            match roundtrip(&Request::Sleep { session })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已休眠"),
-            }
-            Ok(())
-        }
-        Cmd::Wake { session } => {
-            match roundtrip(&Request::Wake { session })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已喚醒"),
-            }
-            Ok(())
-        }
+        Cmd::Prompt { session, text } => cmd_prompt(session, text),
+        Cmd::Cancel { session } => cmd_cancel(session),
+        Cmd::Kill { session } => cmd_kill(session),
+        Cmd::Sleep { session } => cmd_sleep(session),
+        Cmd::Wake { session } => cmd_wake(session),
         Cmd::Send {
             to,
             channel,
@@ -376,32 +332,7 @@ fn main() -> Result<()> {
             kind,
             reply_to,
             body,
-        } => {
-            let target = if broadcast {
-                Target::Broadcast
-            } else if let Some(c) = channel {
-                Target::Channel(c)
-            } else if let Some(t) = to {
-                Target::parse(&t)
-            } else {
-                bail!("請指定 --to、--channel 或 --broadcast");
-            };
-            let kind = MsgKind::parse(&kind).with_context(|| {
-                format!("未知的訊息種類：{kind}（chat/handoff/question/answer/status/artifact）")
-            })?;
-            let from = from.or_else(|| std::env::var("ADE_SESSION").ok());
-            match roundtrip(&Request::BusSend {
-                from,
-                to: target,
-                kind,
-                body: join(body),
-                reply_to,
-            })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已送出訊息"),
-            }
-            Ok(())
-        }
+        } => cmd_send(to, channel, broadcast, from, kind, reply_to, body),
         Cmd::Inbox { session, all, json } => cmd_inbox(session, !all, json),
         Cmd::Wait {
             session,
@@ -415,125 +346,41 @@ fn main() -> Result<()> {
             timeout_ms,
             json,
             question,
-        } => cmd_ask(peer, session, timeout_ms, json, join(question)),
+        } => cmd_ask(peer, session, timeout_ms, json, question),
         Cmd::Tasks { json } => cmd_tasks(json),
         Cmd::Task {
             title,
             detail,
             assignee,
             depends_on,
-        } => {
-            let created_by = std::env::var("ADE_SESSION").ok();
-            match roundtrip(&Request::TaskCreate {
-                title,
-                detail: detail.unwrap_or_default(),
-                assignee,
-                created_by,
-                depends_on,
-            })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已建立任務"),
-            }
-            Ok(())
-        }
+        } => cmd_task_create(title, detail, assignee, depends_on),
         Cmd::TaskUpdate {
             id,
             status,
             assignee,
             detail,
-        } => {
-            let status = match status {
-                Some(s) => Some(TaskStatus::parse(&s).with_context(|| {
-                    format!("未知的任務狀態：{s}（todo/doing/blocked/review/done）")
-                })?),
-                None => None,
-            };
-            match roundtrip(&Request::TaskUpdate {
-                id,
-                status,
-                assignee,
-                detail,
-            })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已更新任務"),
-            }
-            Ok(())
-        }
-        Cmd::Status { session, text } => {
-            let session = resolve_self_session(session)?;
-            roundtrip(&Request::SessionNote {
-                session,
-                note: join(text),
-            })?;
-            println!("已更新狀態");
-            Ok(())
-        }
+        } => cmd_task_update(id, status, assignee, detail),
+        Cmd::Status { session, text } => cmd_status(session, text),
         Cmd::Artifact {
             path,
             kind,
             note,
             session,
-        } => {
-            let session = resolve_self_session(session)?;
-            let kind = ArtifactKind::parse(&kind)
-                .with_context(|| format!("未知的產出物類型：{kind}（file/branch/diff）"))?;
-            match roundtrip(&Request::ArtifactShare {
-                session,
-                kind,
-                path,
-                note: note.unwrap_or_default(),
-            })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已分享產出"),
-            }
-            Ok(())
-        }
+        } => cmd_artifact(path, kind, note, session),
         Cmd::Worktrees { json } => cmd_worktrees(json),
         Cmd::Diff { session } => cmd_diff(session),
         Cmd::Review {
             session,
             location,
             comment,
-        } => {
-            match roundtrip(&Request::ReviewComment {
-                session,
-                location,
-                comment: join(comment),
-            })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已送出審查註解"),
-            }
-            Ok(())
-        }
-        Cmd::Merge { session } => {
-            match roundtrip(&Request::WorktreeMerge { session })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已合併"),
-            }
-            Ok(())
-        }
+        } => cmd_review(session, location, comment),
+        Cmd::Merge { session } => cmd_merge(session),
         Cmd::Pr {
             session,
             title,
             body,
-        } => {
-            match roundtrip(&Request::WorktreePr {
-                session,
-                title,
-                body,
-            })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已建立 PR"),
-            }
-            Ok(())
-        }
-        Cmd::Gc { session, force } => {
-            match roundtrip(&Request::WorktreeGc { session, force })? {
-                Frame::Ok { note: Some(n) } => println!("{n}"),
-                _ => println!("已清理 worktree"),
-            }
-            Ok(())
-        }
+        } => cmd_pr(session, title, body),
+        Cmd::Gc { session, force } => cmd_gc(session, force),
         Cmd::Cost { json } => cmd_cost(json),
         Cmd::Replay {
             since,
@@ -541,11 +388,7 @@ fn main() -> Result<()> {
             all,
             json,
         } => cmd_replay(since, file, all, json),
-        Cmd::Shutdown => {
-            roundtrip(&Request::Shutdown)?;
-            println!("已要求 daemon 關閉");
-            Ok(())
-        }
+        Cmd::Shutdown => cmd_shutdown(),
     }
 }
 
@@ -556,436 +399,4 @@ fn init_tracing() {
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
         .try_init();
-}
-
-fn join(parts: Vec<String>) -> String {
-    parts.join(" ")
-}
-
-fn resolve_self_session(explicit: Option<String>) -> Result<String> {
-    explicit
-        .or_else(|| std::env::var("ADE_SESSION").ok())
-        .context("請指定 --session <id> 或設定環境變數 ADE_SESSION")
-}
-
-fn connect() -> Result<Client> {
-    Client::connect().context("無法連線 daemon（先執行 `ade daemon` 或用 `ade` 啟動）")
-}
-
-/// 送一個請求並等待第一個非 Ready 的回覆。
-fn roundtrip(req: &Request) -> Result<Frame> {
-    let mut c = connect()?;
-    c.send(req)?;
-    loop {
-        match c.recv()? {
-            Frame::Ready { .. } => continue,
-            Frame::Error { message } => bail!("{message}"),
-            other => return Ok(other),
-        }
-    }
-}
-
-fn cmd_whoami(session: Option<String>, json: bool) -> Result<()> {
-    let sid = session
-        .or_else(|| std::env::var("ADE_SESSION").ok())
-        .unwrap_or_else(|| "human".into());
-    let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
-        bail!("未取得快照");
-    };
-    let resolved = state
-        .resolve_session_id(&sid)
-        .unwrap_or_else(|| sid.clone());
-    if let Some(s) = state.sessions.get(&resolved) {
-        if json {
-            println!("{}", serde_json::to_string_pretty(s)?);
-        } else {
-            println!(
-                "{}  label={}  kind={}  role={}  status={:?}  cwd={}  branch={}",
-                s.id,
-                s.label,
-                s.kind.id(),
-                s.role.id(),
-                s.status,
-                s.cwd,
-                s.branch.as_deref().unwrap_or("-")
-            );
-        }
-    } else if json {
-        println!("{}", serde_json::json!({ "id": sid, "role": "human" }));
-    } else {
-        println!("{sid}  (非受管 session)");
-    }
-    Ok(())
-}
-
-fn cmd_sessions(json: bool) -> Result<()> {
-    let frame = roundtrip(&Request::Snapshot)?;
-    let Frame::Snapshot { state } = frame else {
-        bail!("未取得快照");
-    };
-    if json {
-        println!("{}", serde_json::to_string_pretty(&*state)?);
-        return Ok(());
-    }
-    if state.sessions.is_empty() {
-        println!("(沒有 session)");
-        return Ok(());
-    }
-    for s in state.sessions_sorted() {
-        let branch = s.branch.as_deref().unwrap_or("-");
-        let status = format!("{:?}", s.status).to_lowercase();
-        let transport = if s.transport.is_empty() {
-            "-"
-        } else {
-            s.transport.as_str()
-        };
-        let note = s
-            .status_note
-            .as_deref()
-            .map(|n| format!("  ({n})"))
-            .unwrap_or_default();
-        println!(
-            "{}  {:<22} {:<11} {:<9} {:<4} {} @{}{}",
-            s.id,
-            s.label,
-            match &s.model {
-                Some(m) => format!("{}:{m}", s.kind.id()),
-                None => s.kind.id().to_string(),
-            },
-            status,
-            transport,
-            s.cwd,
-            branch,
-            note
-        );
-    }
-    Ok(())
-}
-
-fn cmd_inbox(session: Option<String>, unread_only: bool, json: bool) -> Result<()> {
-    let session = resolve_self_session(session)?;
-    let Frame::Messages { messages, .. } = roundtrip(&Request::BusInbox {
-        session,
-        unread_only,
-    })?
-    else {
-        bail!("未取得訊息清單");
-    };
-    if json {
-        println!("{}", serde_json::to_string_pretty(&messages)?);
-        return Ok(());
-    }
-    if messages.is_empty() {
-        println!("(收件匣為空)");
-        return Ok(());
-    }
-    for m in messages {
-        println!(
-            "{}  [{}] {} → {:?}: {}",
-            m.id,
-            m.kind.id(),
-            m.from,
-            m.to,
-            m.body
-        );
-    }
-    Ok(())
-}
-
-fn cmd_wait(
-    session: Option<String>,
-    from: Option<String>,
-    timeout_ms: u64,
-    json: bool,
-) -> Result<()> {
-    let session = resolve_self_session(session)?;
-    let Frame::Messages {
-        messages,
-        timed_out,
-    } = roundtrip(&Request::BusWait {
-        session,
-        from,
-        reply_to: None,
-        timeout_ms,
-    })?
-    else {
-        bail!("等待訊息失敗");
-    };
-    if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
-                "messages": messages,
-                "timed_out": timed_out,
-            }))?
-        );
-        return Ok(());
-    }
-    if timed_out || messages.is_empty() {
-        println!("(等待逾時)");
-        return Ok(());
-    }
-    for m in messages {
-        println!("{}  [{}] {}: {}", m.id, m.kind.id(), m.from, m.body);
-    }
-    Ok(())
-}
-
-fn cmd_ask(
-    peer: String,
-    session: Option<String>,
-    timeout_ms: u64,
-    json: bool,
-    question: String,
-) -> Result<()> {
-    let session = resolve_self_session(session)?;
-    let send_frame = roundtrip(&Request::BusSend {
-        from: Some(session.clone()),
-        to: Target::Direct(peer.clone()),
-        kind: MsgKind::Question,
-        body: question,
-        reply_to: None,
-    })?;
-    let qid = match send_frame {
-        Frame::Ok { note: Some(n) } => n
-            .rsplit_once(' ')
-            .map(|(_, id)| id.to_string())
-            .unwrap_or(n),
-        _ => String::new(),
-    };
-    let Frame::Messages {
-        mut messages,
-        timed_out,
-    } = roundtrip(&Request::BusWait {
-        session,
-        from: Some(peer),
-        reply_to: if qid.is_empty() {
-            None
-        } else {
-            Some(qid.clone())
-        },
-        timeout_ms,
-    })?
-    else {
-        bail!("等待回覆失敗");
-    };
-    let reply = messages.pop();
-    if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
-                "question_id": qid,
-                "reply": reply,
-                "timed_out": timed_out,
-            }))?
-        );
-        return Ok(());
-    }
-    match reply {
-        Some(m) => println!("{}", m.body),
-        None => println!("(等待回覆逾時)"),
-    }
-    Ok(())
-}
-
-fn cmd_tasks(json: bool) -> Result<()> {
-    let frame = roundtrip(&Request::Snapshot)?;
-    let Frame::Snapshot { state } = frame else {
-        bail!("未取得快照");
-    };
-    if json {
-        let tasks: Vec<_> = state.tasks.values().collect();
-        println!("{}", serde_json::to_string_pretty(&tasks)?);
-        return Ok(());
-    }
-    if state.tasks.is_empty() {
-        println!("(沒有任務)");
-        return Ok(());
-    }
-    for t in state.tasks.values() {
-        let assignee = t.assignee.as_deref().unwrap_or("-");
-        println!(
-            "{}  {:<9} {:<16} {}",
-            t.id,
-            t.status.id(),
-            assignee,
-            t.title
-        );
-    }
-    Ok(())
-}
-
-fn cmd_worktrees(json: bool) -> Result<()> {
-    let Frame::Worktrees { worktrees } = roundtrip(&Request::WorktreeList)? else {
-        bail!("未取得 worktree 清單");
-    };
-    if json {
-        println!("{}", serde_json::to_string_pretty(&worktrees)?);
-        return Ok(());
-    }
-    if worktrees.is_empty() {
-        println!("(沒有受管 worktree)");
-        return Ok(());
-    }
-    for w in worktrees {
-        let state_str = if w.live { "live" } else { "exited" };
-        println!(
-            "{}  {:<18} {:<24} {:<6} {:<24} {}",
-            w.session, w.label, w.branch, state_str, w.summary, w.path
-        );
-    }
-    Ok(())
-}
-
-fn cmd_diff(session: String) -> Result<()> {
-    let Frame::Diff { diff, .. } = roundtrip(&Request::WorktreeDiff { session })? else {
-        bail!("未取得 diff");
-    };
-    print!("{diff}");
-    Ok(())
-}
-
-fn cmd_cost(json: bool) -> Result<()> {
-    let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
-        bail!("未取得快照");
-    };
-    let total = state.total_cost();
-    if json {
-        let per_session: Vec<_> = state
-            .sessions_sorted()
-            .into_iter()
-            .map(|s| {
-                serde_json::json!({
-                    "id": s.id,
-                    "label": s.label,
-                    "kind": s.kind.id(),
-                    "usd": s.cost.usd,
-                    "input_tokens": s.cost.input_tokens,
-                    "output_tokens": s.cost.output_tokens,
-                })
-            })
-            .collect();
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
-                "total": total,
-                "sessions": per_session,
-            }))?
-        );
-        return Ok(());
-    }
-    for s in state.sessions_sorted() {
-        println!(
-            "{}  {:<20} {:<10} ${:.4}  ({} in / {} out)",
-            s.id,
-            s.label,
-            s.kind.id(),
-            s.cost.usd,
-            s.cost.input_tokens,
-            s.cost.output_tokens
-        );
-    }
-    println!(
-        "total: ${:.4}  ({} input tokens / {} output tokens)",
-        total.usd, total.input_tokens, total.output_tokens
-    );
-    Ok(())
-}
-
-fn cmd_replay(since: u64, file: Option<PathBuf>, all: bool, json: bool) -> Result<()> {
-    let path = file.unwrap_or_else(ade_daemon::log_path);
-    let (state, records) = if all {
-        ade_daemon::replay_log_all(&path)?
-    } else {
-        let older = ade_daemon::rotated_logs(&path);
-        if !older.is_empty() {
-            eprintln!(
-                "提示：另有 {} 份較舊的輪替檔，加 --all 可一併讀取",
-                older.len()
-            );
-        }
-        ade_daemon::replay_log(&path)?
-    };
-    let filtered: Vec<_> = records
-        .into_iter()
-        .filter(|r| r.seq > since && !matches!(r.event, ade_core::Event::Snapshot { .. }))
-        .collect();
-    if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
-                "log_path": path,
-                "records_count": filtered.len(),
-                "last_seq": state.seq,
-                "records": filtered,
-            }))?
-        );
-        return Ok(());
-    }
-    println!(
-        "重播 {:?}：共 {} 筆事件（最新 seq={}，sessions={}，tasks={}，messages={}）",
-        path,
-        filtered.len(),
-        state.seq,
-        state.sessions.len(),
-        state.tasks.len(),
-        state.messages.len()
-    );
-    for r in filtered.iter().rev().take(30).rev() {
-        println!("#{:>5}  ts={}  {:?}", r.seq, r.ts, r.event);
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn cmd_spawn(
-    kind: String,
-    prompt: Option<String>,
-    cwd: Option<String>,
-    label: Option<String>,
-    role: String,
-    worktree: bool,
-    transport: String,
-    permission: Option<String>,
-    parent: Option<String>,
-    model: Option<String>,
-    extra: Vec<String>,
-) -> Result<()> {
-    let kind = AgentKind::parse(&kind)
-        .with_context(|| format!("未知的 agent：{kind}（opencode/claude/codex/antigravity）"))?;
-    let transport = match transport.as_str() {
-        "auto" => Transport::Auto,
-        "structured" | "acp" => Transport::Structured,
-        "pty" => Transport::Pty,
-        other => bail!("未知的 transport：{other}（auto/structured/acp/pty）"),
-    };
-    let permission = match permission {
-        Some(p) => Some(
-            PermissionPolicy::parse(&p)
-                .with_context(|| format!("未知的權限政策：{p}（ask/auto/bypass）"))?,
-        ),
-        None => None,
-    };
-    let parent = parent.or_else(|| std::env::var("ADE_SESSION").ok());
-    let req = Request::Spawn(SpawnRequest {
-        kind,
-        cwd,
-        label,
-        role: Role::parse(&role),
-        prompt,
-        worktree,
-        transport,
-        permission,
-        parent,
-        model,
-        args: extra,
-    });
-    match roundtrip(&req)? {
-        Frame::Ok { note } => {
-            println!("{}", note.unwrap_or_else(|| "已建立 session".into()));
-            Ok(())
-        }
-        Frame::Error { message } => bail!("{message}"),
-        _ => Ok(()),
-    }
 }

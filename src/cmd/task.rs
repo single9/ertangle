@@ -1,0 +1,79 @@
+//! 任務看板子命令（tasks、task、task-update）。
+
+use ade_core::TaskStatus;
+use ade_protocol::{Frame, Request};
+use anyhow::{bail, Context, Result};
+
+use super::roundtrip;
+
+pub(crate) fn cmd_tasks(json: bool) -> Result<()> {
+    let frame = roundtrip(&Request::Snapshot)?;
+    let Frame::Snapshot { state } = frame else {
+        bail!("未取得快照");
+    };
+    if json {
+        let tasks: Vec<_> = state.tasks.values().collect();
+        println!("{}", serde_json::to_string_pretty(&tasks)?);
+        return Ok(());
+    }
+    if state.tasks.is_empty() {
+        println!("(沒有任務)");
+        return Ok(());
+    }
+    for t in state.tasks.values() {
+        let assignee = t.assignee.as_deref().unwrap_or("-");
+        println!(
+            "{}  {:<9} {:<16} {}",
+            t.id,
+            t.status.id(),
+            assignee,
+            t.title
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn cmd_task_create(
+    title: String,
+    detail: Option<String>,
+    assignee: Option<String>,
+    depends_on: Vec<String>,
+) -> Result<()> {
+    let created_by = std::env::var("ADE_SESSION").ok();
+    let frame = roundtrip(&Request::TaskCreate {
+        title,
+        detail: detail.unwrap_or_default(),
+        assignee,
+        created_by,
+        depends_on,
+    })?;
+    if let Frame::Ok { note: Some(n) } = frame {
+        println!("{n}");
+    }
+    Ok(())
+}
+
+pub(crate) fn cmd_task_update(
+    id: String,
+    status: Option<String>,
+    assignee: Option<String>,
+    detail: Option<String>,
+) -> Result<()> {
+    let status = match status.as_deref() {
+        Some(s) => Some(
+            TaskStatus::parse(s)
+                .with_context(|| format!("未知的狀態：{s}（todo/doing/done/blocked）"))?,
+        ),
+        None => None,
+    };
+    let frame = roundtrip(&Request::TaskUpdate {
+        id,
+        status,
+        assignee,
+        detail,
+    })?;
+    if let Frame::Ok { note: Some(n) } = frame {
+        println!("{n}");
+    }
+    Ok(())
+}
