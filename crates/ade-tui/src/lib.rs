@@ -28,7 +28,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+    Block, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
     ScrollbarState, Wrap,
 };
 use ratatui::{Frame as TuiFrame, Terminal};
@@ -56,6 +56,55 @@ enum CenterView {
     Transcript,
     Diff,
     Worktrees,
+}
+
+/// 主區版面模式。
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum LayoutMode {
+    /// Sessions／中央／Bus 三欄。
+    Three,
+    /// Sessions／中央兩欄，隱藏 Bus。
+    Two,
+    /// 上方 session 分頁列，中央佔滿整個寬度。
+    Tabs,
+}
+
+impl LayoutMode {
+    fn next(self) -> Self {
+        match self {
+            LayoutMode::Three => LayoutMode::Two,
+            LayoutMode::Two => LayoutMode::Tabs,
+            LayoutMode::Tabs => LayoutMode::Three,
+        }
+    }
+
+    fn id(self) -> &'static str {
+        match self {
+            LayoutMode::Three => "three",
+            LayoutMode::Two => "two",
+            LayoutMode::Tabs => "tabs",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "three" | "3" => Some(LayoutMode::Three),
+            "two" | "2" => Some(LayoutMode::Two),
+            "tabs" | "tab" => Some(LayoutMode::Tabs),
+            _ => None,
+        }
+    }
+}
+
+/// 窄終端自動降級：寬度不足以容納所選版面時改用較省空間的版面。
+/// `Tabs` 是使用者的明確選擇，不會被改動。
+fn effective_layout(mode: LayoutMode, width: u16) -> LayoutMode {
+    match mode {
+        LayoutMode::Three if width >= 84 => LayoutMode::Three,
+        LayoutMode::Three | LayoutMode::Two if width >= 64 => LayoutMode::Two,
+        LayoutMode::Three | LayoutMode::Two => LayoutMode::Tabs,
+        LayoutMode::Tabs => LayoutMode::Tabs,
+    }
 }
 
 /// 串流期間逐字稿最短重算間隔；其餘變動（換 session／寬度／模式）立即重算。
@@ -119,6 +168,15 @@ struct App {
     selection: Option<((usize, usize), (usize, usize))>,
     /// 是否擷取滑鼠（預設開啟，支援應用內拖曳選取；`F2` 關閉以使用終端原生選取）。
     mouse_capture: bool,
+    /// 使用者選擇的版面模式（僅執行期；T11 的 config.toml 完成後再持久化）。
+    layout: LayoutMode,
+    /// Bus 欄被隱藏時，是否以浮層暫時顯示。
+    bus_overlay: bool,
+    /// 最近一次繪製時 Bus 是否可見，以及當時已看過的訊息數（供未讀計數）。
+    bus_visible: bool,
+    bus_seen: usize,
+    /// 分頁模式下每個分頁的區域與對應 session 索引（供滑鼠點選）。
+    tab_areas: Vec<(Rect, usize)>,
     should_quit: bool,
 }
 
@@ -155,6 +213,11 @@ impl App {
             transcript_inner_w: 0,
             selection: None,
             mouse_capture: true,
+            layout: LayoutMode::Three,
+            bus_overlay: false,
+            bus_visible: true,
+            bus_seen: 0,
+            tab_areas: Vec::new(),
             should_quit: false,
         }
     }
@@ -179,6 +242,24 @@ impl App {
             .values()
             .find(|p| p.session == id)
             .map(|p| p.req.clone())
+    }
+
+    fn unread_bus(&self) -> usize {
+        if self.bus_visible {
+            0
+        } else {
+            self.state.messages.len().saturating_sub(self.bus_seen)
+        }
+    }
+
+    fn cycle_layout(&mut self) {
+        self.set_layout(self.layout.next());
+    }
+
+    fn set_layout(&mut self, mode: LayoutMode) {
+        self.layout = mode;
+        self.selection = None;
+        self.status = format!("版面：{}", mode.id());
     }
 
     fn clamp_selection(&mut self) {
@@ -593,8 +674,18 @@ fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<(
             };
         }
         KeyCode::Char('T') => toggle_thoughts(app),
+        KeyCode::Char('L') => app.cycle_layout(),
+        KeyCode::Char('b') => {
+            app.bus_overlay = !app.bus_overlay;
+            app.status = if app.bus_overlay {
+                "Bus：顯示（b 或 Esc 關閉；僅在兩欄／分頁模式有浮層）".into()
+            } else {
+                "Bus：隱藏".into()
+            };
+        }
         KeyCode::Esc => {
             app.selection = None;
+            app.bus_overlay = false;
             app.status = "已清除選取".into();
         }
         KeyCode::Char('Y') => copy_main_pane(app),
@@ -768,6 +859,16 @@ fn handle_mouse(app: &mut App, writer: &mut ConnStream, mouse: MouseEvent) -> Re
         MouseEventKind::Down(MouseButton::Left) => {
             let area = app.sessions_area;
             let pos = ratatui::layout::Position::new(mouse.column, mouse.row);
+            if let Some(&(_, idx)) = app.tab_areas.iter().find(|(r, _)| r.contains(pos)) {
+                if idx < app.session_ids().len() {
+                    app.selected = idx;
+                    app.selection = None;
+                    if app.view == CenterView::Diff {
+                        request_selected_diff(app, writer)?;
+                    }
+                }
+                return Ok(());
+            }
             if area.width > 0
                 && area.height > 2
                 && mouse.row < area.y + area.height - 1
@@ -1051,6 +1152,15 @@ fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<
             send(writer, &Request::WorktreeList)?;
         }
         "thoughts" | "think" => toggle_thoughts(app),
+        "layout" => {
+            if rest.is_empty() {
+                app.cycle_layout();
+            } else if let Some(mode) = LayoutMode::parse(rest) {
+                app.set_layout(mode);
+            } else {
+                app.status = "用法：/layout three|two|tabs".into();
+            }
+        }
         "gc" => {
             let session = if rest.is_empty() {
                 None
@@ -1215,10 +1325,19 @@ fn draw(f: &mut TuiFrame, app: &mut App) {
         ])
         .split(f.area());
 
-    draw_header(f, chunks[0], app);
-
     // 依終端寬度調整三欄比例：寬螢幕給側欄多一點，窄螢幕留給中央。
     let w = f.area().width;
+    let layout = effective_layout(app.layout, w);
+    app.bus_visible = layout == LayoutMode::Three || app.bus_overlay;
+    if app.bus_visible {
+        app.bus_seen = app.state.messages.len();
+    }
+    // 隱藏的欄位要清掉區域，避免滑鼠命中上一次的位置。
+    app.sessions_area = Rect::default();
+    app.tab_areas.clear();
+
+    draw_header(f, chunks[0], app);
+
     let (side_l, side_r) = if w >= 140 {
         (34, 42)
     } else if w >= 110 {
@@ -1228,24 +1347,206 @@ fn draw(f: &mut TuiFrame, app: &mut App) {
     } else {
         (22, 24)
     };
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(side_l),
-            Constraint::Min(20),
-            Constraint::Length(side_r),
-        ])
-        .split(chunks[1]);
+    let main = chunks[1];
+    let mut bus_area = None;
+    let center = match layout {
+        LayoutMode::Three => {
+            let cols = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Length(side_l),
+                    Constraint::Min(20),
+                    Constraint::Length(side_r),
+                ])
+                .split(main);
+            draw_sessions(f, cols[0], app);
+            bus_area = Some(cols[2]);
+            cols[1]
+        }
+        LayoutMode::Two => {
+            let cols = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(side_l), Constraint::Min(20)])
+                .split(main);
+            draw_sessions(f, cols[0], app);
+            cols[1]
+        }
+        LayoutMode::Tabs => {
+            let rows = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(1)])
+                .split(main);
+            draw_session_tabs(f, rows[0], app);
+            rows[1]
+        }
+    };
 
-    draw_sessions(f, cols[0], app);
+    // Bus 被隱藏時，待審批請求必須在別處看得到。
+    let center = if layout != LayoutMode::Three && !app.state.pending_permissions.is_empty() {
+        let rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(1)])
+            .split(center);
+        draw_pending_banner(f, rows[0], app);
+        rows[1]
+    } else {
+        center
+    };
+
     match app.view {
-        CenterView::Transcript => draw_transcript(f, cols[1], app),
-        CenterView::Diff => draw_diff(f, cols[1], app),
-        CenterView::Worktrees => draw_worktrees(f, cols[1], app),
+        CenterView::Transcript => draw_transcript(f, center, app),
+        CenterView::Diff => draw_diff(f, center, app),
+        CenterView::Worktrees => draw_worktrees(f, center, app),
     }
-    draw_bus(f, cols[2], app);
+    if let Some(a) = bus_area {
+        draw_bus(f, a, app);
+    } else if app.bus_overlay {
+        let ow = (main.width * 2 / 5).max(30).min(main.width);
+        let r = Rect::new(main.x + main.width - ow, main.y, ow, main.height);
+        f.render_widget(Clear, r);
+        draw_bus(f, r, app);
+    }
     draw_input(f, chunks[2], app);
     draw_status(f, chunks[3], app);
+}
+
+/// 一行待審批提示（Bus 隱藏時使用）：優先顯示目前選取 session 的請求。
+fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
+    let selected = app.selected_id();
+    let pending = &app.state.pending_permissions;
+    let p = pending
+        .values()
+        .find(|p| Some(&p.session) == selected.as_ref())
+        .or_else(|| pending.values().next());
+    let Some(p) = p else { return };
+    let label = app
+        .state
+        .sessions
+        .get(&p.session)
+        .map_or_else(|| short(&p.session), |s| s.label.clone());
+    let mine = Some(&p.session) == selected.as_ref();
+    let more = if pending.len() > 1 {
+        format!(" (+{})", pending.len() - 1)
+    } else {
+        String::new()
+    };
+    let keys = if mine {
+        "[a]llow [A]lways [d]eny"
+    } else {
+        "(j/k 選取該 session 後 a/d)"
+    };
+    let text = format!(
+        "⏸ {label} 要求 {}：{}{more} {keys}",
+        p.title,
+        truncate(&p.detail, 40)
+    );
+    f.render_widget(
+        Paragraph::new(Line::styled(
+            text,
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        area,
+    );
+}
+
+/// 上方 session 分頁列：寬度不夠時以選取項為中心水平捲動，兩端顯示 `‹` `›`。
+fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
+    let ids = app.session_ids();
+    if ids.is_empty() || area.width == 0 {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                " （尚無 session，按 n 建立）",
+                Style::default().fg(Color::DarkGray),
+            )),
+            area,
+        );
+        return;
+    }
+    let sel = app.selected.min(ids.len() - 1);
+    let waiting: Vec<&SessionId> = app
+        .state
+        .pending_permissions
+        .values()
+        .map(|p| &p.session)
+        .collect();
+    // (文字, 樣式)
+    let mut items: Vec<(String, Style)> = Vec::new();
+    for (i, id) in ids.iter().enumerate() {
+        let Some(s) = app.state.sessions.get(id) else {
+            items.push((String::new(), Style::default()));
+            continue;
+        };
+        let mut style = Style::default().fg(match s.status {
+            SessionStatus::Failed => Color::Red,
+            SessionStatus::Busy => Color::Green,
+            SessionStatus::Sleeping => Color::Blue,
+            SessionStatus::Idle => Color::Gray,
+            _ => Color::DarkGray,
+        });
+        if s.status == SessionStatus::WaitingApproval || waiting.contains(&id) {
+            style = Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD);
+        }
+        if i == sel {
+            style = style.add_modifier(Modifier::REVERSED | Modifier::BOLD);
+        }
+        items.push((format!(" {} {} ", s.status.glyph(), s.label), style));
+    }
+    let widths: Vec<usize> = items.iter().map(|(t, _)| t.width()).collect();
+    let total = area.width as usize;
+    let (lo, hi) = if widths.iter().sum::<usize>() <= total {
+        (0, ids.len() - 1)
+    } else {
+        let avail = total.saturating_sub(2);
+        let (mut lo, mut hi) = (sel, sel);
+        let mut used = widths[sel];
+        loop {
+            if hi + 1 < widths.len() && used + widths[hi + 1] <= avail {
+                hi += 1;
+                used += widths[hi];
+            } else if lo > 0 && used + widths[lo - 1] <= avail {
+                lo -= 1;
+                used += widths[lo];
+            } else {
+                break;
+            }
+        }
+        (lo, hi)
+    };
+    let overflow = lo > 0 || hi + 1 < ids.len();
+    let mut spans: Vec<Span> = Vec::new();
+    let mut x = area.x;
+    let end = area.x + area.width;
+    if overflow {
+        spans.push(Span::raw(if lo > 0 { "‹" } else { " " }));
+        x += 1;
+    }
+    let limit = if overflow { end - 1 } else { end };
+    for (i, item) in items.iter().enumerate().take(hi + 1).skip(lo) {
+        if x >= limit {
+            break;
+        }
+        let mut text = item.0.clone();
+        let room = (limit - x) as usize;
+        if text.width() > room {
+            text = truncate(&text, room);
+        }
+        let tw = text.width() as u16;
+        app.tab_areas.push((Rect::new(x, area.y, tw, 1), i));
+        spans.push(Span::styled(text, item.1));
+        x += tw;
+    }
+    if overflow {
+        let pad = limit.saturating_sub(x) as usize;
+        spans.push(Span::raw(" ".repeat(pad)));
+        spans.push(Span::raw(if hi + 1 < ids.len() { "›" } else { " " }));
+    }
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn tab(label: &str, active: bool) -> Span<'static> {
@@ -1306,6 +1607,18 @@ fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         Span::styled(
             format!("  ({} in / {} out)", cost.input_tokens, cost.output_tokens),
             Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            format!("   layout:{}", app.layout.id()),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            if app.unread_bus() > 0 {
+                format!("  bus:{} 未讀", app.unread_bus())
+            } else {
+                String::new()
+            },
+            Style::default().fg(Color::Magenta),
         ),
         Span::styled(
             format!("   md:{md_mode}"),
@@ -2416,5 +2729,202 @@ mod tests {
         // 拖曳出界時夾在可見範圍。
         assert_eq!(transcript_pos(&app, 3, 99, true), Some((12, 2)));
         assert_eq!(transcript_pos(&app, 0, 2, true), Some((6, 0)));
+    }
+
+    // ---- T13：版面模式 ----
+
+    fn add_session(app: &mut App, id: &str, label: &str, created: u64) {
+        let mut s = app.state.sessions["ses_test"].clone();
+        s.id = id.into();
+        s.label = label.into();
+        s.created_ms = created;
+        app.state.sessions.insert(s.id.clone(), s);
+    }
+
+    fn render_size(app: &mut App, w: u16, h: u16) -> (Terminal<TestBackend>, String) {
+        let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
+        term.draw(|f| draw(f, app)).unwrap();
+        let text = buffer_text(&term);
+        (term, text)
+    }
+
+    fn row_text(term: &Terminal<TestBackend>, y: u16) -> String {
+        let buf = term.backend().buffer();
+        (0..buf.area.width)
+            .map(|x| buf[(x, y)].symbol().to_string())
+            .collect()
+    }
+
+    /// 寬字元後面會跟一個空白填充格，比對時先去掉全部空白。
+    fn squash(s: &str) -> String {
+        s.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+
+    fn pair_writer() -> (ConnStream, std::os::unix::net::UnixStream) {
+        let (a, b) = std::os::unix::net::UnixStream::pair().unwrap();
+        b.set_nonblocking(true).unwrap();
+        (ConnStream::Unix(a), b)
+    }
+
+    fn add_pending(app: &mut App) {
+        app.state.pending_permissions.insert(
+            "r1".into(),
+            ade_core::PermissionRequest {
+                req: "r1".into(),
+                session: "ses_test".into(),
+                title: "Bash".into(),
+                detail: "rm -rf x".into(),
+            },
+        );
+    }
+
+    #[test]
+    fn layout_modes_render_expected_panes() {
+        let mut app = sample_app(&["hi"]);
+        let (_, three) = render_size(&mut app, 120, 40);
+        assert!(three.contains("Sessions") && three.contains("Bus / Tasks"));
+
+        app.layout = LayoutMode::Two;
+        let (_, two) = render_size(&mut app, 120, 40);
+        assert!(two.contains("Sessions") && !two.contains("Bus / Tasks"));
+
+        app.layout = LayoutMode::Tabs;
+        let (term, tabs) = render_size(&mut app, 120, 40);
+        assert!(!tabs.contains("Sessions") && !tabs.contains("Bus / Tasks"));
+        assert!(row_text(&term, 2).contains("worker"));
+        // 中央區塊佔滿整個寬度。
+        assert_eq!(app.transcript_area.width, 120);
+        assert_eq!(app.sessions_area, Rect::default());
+    }
+
+    #[test]
+    fn tabs_keep_selected_visible_when_overflowing() {
+        let mut app = sample_app(&["hi"]);
+        for i in 0..12 {
+            add_session(
+                &mut app,
+                &format!("ses_{i:02}"),
+                &format!("label-{i:02}"),
+                10 + i,
+            );
+        }
+        app.layout = LayoutMode::Tabs;
+        let last = app.session_ids().len() - 1;
+        for sel in [0, 5, last] {
+            app.selected = sel;
+            let (term, _) = render_size(&mut app, 50, 20);
+            let label = app
+                .state
+                .sessions
+                .get(&app.session_ids()[sel])
+                .unwrap()
+                .label
+                .clone();
+            assert!(row_text(&term, 2).contains(&label), "sel {sel} hidden");
+            assert!(app.tab_areas.iter().any(|(_, i)| *i == sel));
+        }
+        let (term, _) = render_size(&mut app, 50, 20);
+        assert!(row_text(&term, 2).contains('‹'));
+    }
+
+    #[test]
+    fn hidden_bus_shows_pending_banner_and_allows() {
+        use std::io::Read;
+        let mut app = sample_app(&["hi"]);
+        add_pending(&mut app);
+        app.layout = LayoutMode::Two;
+        let (_, text) = render_size(&mut app, 120, 40);
+        assert!(squash(&text).contains("要求Bash"), "banner missing");
+
+        let (mut w, mut peer) = pair_writer();
+        handle_key(
+            &mut app,
+            &mut w,
+            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE),
+        )
+        .unwrap();
+        let mut bytes = [0u8; 1024];
+        let n = peer.read(&mut bytes).unwrap();
+        let buf = String::from_utf8_lossy(&bytes[..n]).to_string();
+        assert!(
+            buf.contains("Permission") && buf.contains("r1"),
+            "got {buf}"
+        );
+    }
+
+    #[test]
+    fn switching_layout_clears_stale_click_areas() {
+        let mut app = sample_app(&["hi"]);
+        add_session(&mut app, "ses_b", "second", 5);
+        let _ = render_size(&mut app, 120, 40);
+        let click = (app.sessions_area.x + 2, app.sessions_area.y + 2);
+        app.layout = LayoutMode::Tabs;
+        let _ = render_size(&mut app, 120, 40);
+        app.selected = 0;
+        let (mut w, _peer) = pair_writer();
+        let ev = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: click.0,
+            row: click.1,
+            modifiers: KeyModifiers::NONE,
+        };
+        handle_mouse(&mut app, &mut w, ev).unwrap();
+        assert_eq!(app.selected, 0);
+
+        // 點分頁可切換 session。
+        let (rect, idx) = *app.tab_areas.iter().find(|(_, i)| *i == 1).unwrap();
+        let ev = MouseEvent {
+            column: rect.x,
+            row: rect.y,
+            ..ev
+        };
+        handle_mouse(&mut app, &mut w, ev).unwrap();
+        assert_eq!(app.selected, idx);
+    }
+
+    #[test]
+    fn three_degrades_on_narrow_terminal() {
+        assert_eq!(effective_layout(LayoutMode::Three, 120), LayoutMode::Three);
+        assert_eq!(effective_layout(LayoutMode::Three, 70), LayoutMode::Two);
+        assert_eq!(effective_layout(LayoutMode::Three, 60), LayoutMode::Tabs);
+        assert_eq!(effective_layout(LayoutMode::Tabs, 200), LayoutMode::Tabs);
+        let mut app = sample_app(&["hi"]);
+        let (_, text) = render_size(&mut app, 60, 30);
+        assert!(!text.contains("Bus / Tasks"));
+        assert!(app.transcript_area.width >= 40);
+    }
+
+    #[test]
+    fn layout_key_command_and_unread_counter() {
+        let mut app = sample_app(&["hi"]);
+        let (mut w, _peer) = pair_writer();
+        handle_key(
+            &mut app,
+            &mut w,
+            KeyEvent::new(KeyCode::Char('L'), KeyModifiers::NONE),
+        )
+        .unwrap();
+        assert_eq!(app.layout, LayoutMode::Two);
+        execute_command(&mut app, &mut w, "/layout tabs").unwrap();
+        assert_eq!(app.layout, LayoutMode::Tabs);
+        execute_command(&mut app, &mut w, "/layout three").unwrap();
+        assert_eq!(app.layout, LayoutMode::Three);
+
+        app.layout = LayoutMode::Two;
+        let _ = render_size(&mut app, 120, 40);
+        app.state.messages.push(ade_core::BusMessage {
+            id: "m1".into(),
+            from: "a".into(),
+            to: Target::Broadcast,
+            kind: MsgKind::Chat,
+            body: "yo".into(),
+            reply_to: None,
+            ts: 1,
+        });
+        let (_, text) = render_size(&mut app, 120, 40);
+        assert!(squash(&text).contains("1未讀"));
+        app.bus_overlay = true;
+        let (_, text) = render_size(&mut app, 120, 40);
+        assert!(text.contains("Bus / Tasks") && !squash(&text).contains("未讀"));
     }
 }
