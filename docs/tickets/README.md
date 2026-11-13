@@ -28,7 +28,7 @@
 | [T20](T20-collab-instructions.md) | 把協作說明注入每個 agent（已完成） | P2 | — |
 | [T21](T21-shell-completions.md) | Shell 補全（已完成） | P3 | —（session 補全會用到 T14 的 `resume`） |
 | [T22](T22-shared-worktree-remove.md) | 共用 worktree 的 session 在分支刪掉後無法移除 | P2 | — |
-| [T23](T23-surface-agent-errors.md) | agent 回合失敗時把錯誤原因顯示出來 | P1 | — |
+| [T23](T23-surface-agent-errors.md) | agent 回合失敗時把錯誤原因顯示出來（已完成；TUI 目視未做，見 `docs/VERIFICATION.md`） | P1 | — |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

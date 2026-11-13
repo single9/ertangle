@@ -38,6 +38,7 @@
 | --- | --- |
 | 新增或調整某個 agent 的 model／effort 清單來源 | TUI 選擇器（`menu.rs` 的 `model_choices`／`query_models`）；Antigravity 的 id 尾巴會拆成 model + effort（`split_effort_suffix`） |
 | 新增額度或 context 的資料來源 | 對應 adapter 發 `AgentEvent::Quota`／`Context`；`README` 的說明；沒有來源的 agent 要在文件寫明「不顯示」 |
+| adapter 回報 agent 錯誤（`AgentEvent::Output` ＋ `Note`；stderr 尾巴由 `stderr.rs` 收集） | 新增 adapter 時 stderr 要 `Stdio::piped()` 並在結束執行緒呼叫 `report_exit`，不可 `Stdio::null()`，也不可不讀（pipe 滿會卡死 agent）；錯誤文字只送一次 |
 | 額度用完的偵測關鍵字（`termade_core::looks_like_limit`） | 補測試，同時確認不會誤判一般錯誤（例如檔名含 `limit`） |
 
 ## 文件
