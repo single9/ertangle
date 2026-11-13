@@ -559,3 +559,31 @@ fn tool_lines_are_not_mangled_by_markdown() {
     assert!(text.contains("mcp__ade__ade_peers"), "{text}");
     assert!(text.contains("timeout_ms"));
 }
+
+#[test]
+fn space_menu_tree_has_session_and_git_groups() {
+    let (_, root) = crate::menu::menu_items(&[]).unwrap();
+    assert!(root.iter().any(|i| i.key == 's') && root.iter().any(|i| i.key == 'g'));
+    let (_, s) = crate::menu::menu_items(&['s']).unwrap();
+    assert!(s.iter().any(|i| i.key == 'n') && s.iter().any(|i| i.key == 'x'));
+    assert!(crate::menu::menu_items(&['z']).is_none());
+}
+
+#[test]
+fn picker_filters_and_offers_default_model() {
+    let choices = crate::menu::model_choices(&AgentKind::ClaudeCode);
+    assert_eq!(choices[0].1, "");
+    assert!(choices.iter().any(|(_, v)| v == "opus"));
+    let p = crate::menu::Picker {
+        stage: crate::menu::PickStage::Agent,
+        title: "t".into(),
+        items: choices,
+        filter: "op".into(),
+        cursor: 0,
+    };
+    let vis = p.visible();
+    assert!(vis
+        .iter()
+        .all(|(l, v)| l.contains("op") || v.contains("op")));
+    assert!(!vis.is_empty());
+}

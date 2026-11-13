@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use ade_core::{PermissionPolicy, SessionId, State, WorktreeInfo};
+use ade_core::{AgentKind, PermissionPolicy, SessionId, State, WorktreeInfo};
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 
@@ -18,6 +18,10 @@ pub(crate) enum Mode {
     Command,
     /// M4：快速跳轉任何 session（`Ctrl-K`）。
     Jump,
+    /// Space 選單（which-key）。
+    Menu,
+    /// 清單選擇器（spawn 的 agent／model）。
+    Pick,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -103,6 +107,11 @@ pub(crate) struct App {
     /// 建立 session 的權限；`None` 依 config.toml。
     pub(crate) spawn_permission: Option<PermissionPolicy>,
     pub(crate) spawn_bypass_armed: bool,
+    /// 選擇器選好的 (agent, model)；Spawn 模式的輸入就只是 prompt。
+    pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
+    /// Space 選單目前走到的路徑。
+    pub(crate) menu_path: Vec<char>,
+    pub(crate) picker: Option<crate::menu::Picker>,
     /// M3：目前顯示的 worktree diff 內容與游標行。
     pub(crate) diff_session: Option<SessionId>,
     pub(crate) diff_lines: Vec<String>,
@@ -174,6 +183,9 @@ impl App {
             spawn_worktree: false,
             spawn_permission: None,
             spawn_bypass_armed: false,
+            spawn_target: None,
+            menu_path: Vec::new(),
+            picker: None,
             diff_session: None,
             diff_lines: Vec::new(),
             diff_cursor: 0,

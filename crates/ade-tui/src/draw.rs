@@ -96,6 +96,105 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     }
     draw_input(f, chunks[2], app);
     draw_status(f, chunks[3], app);
+    match app.mode {
+        Mode::Menu => draw_menu(f, chunks[2], app),
+        Mode::Pick => draw_picker(f, app),
+        _ => {}
+    }
+}
+
+/// Helix 風格 which-key 浮層：貼在輸入框上方右側，列出下一個可按的鍵。
+pub(crate) fn draw_menu(f: &mut TuiFrame, input_area: Rect, app: &App) {
+    let Some((title, items)) = crate::menu::menu_items(&app.menu_path) else {
+        return;
+    };
+    let label_w = items
+        .iter()
+        .map(|i| UnicodeWidthStr::width(i.label))
+        .max()
+        .unwrap_or(10);
+    let w = (label_w + 8)
+        .max(title.len() + 6)
+        .min(f.area().width as usize) as u16;
+    let h = (items.len() as u16 + 2).min(input_area.y);
+    let x = f.area().right().saturating_sub(w);
+    let area = Rect::new(x, input_area.y.saturating_sub(h), w, h);
+    let lines: Vec<Line> = items
+        .iter()
+        .map(|i| {
+            Line::from(vec![
+                Span::styled(
+                    format!(" {} ", i.key),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(i.label),
+            ])
+        })
+        .collect();
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(format!(" {title} · Backspace 返回 ")),
+        ),
+        area,
+    );
+}
+
+/// 置中的清單選擇器（agent／model），第一列是過濾輸入。
+pub(crate) fn draw_picker(f: &mut TuiFrame, app: &App) {
+    let Some(p) = &app.picker else { return };
+    let vis = p.visible();
+    let w = 56.min(f.area().width);
+    let h = (vis.len() as u16 + 4).clamp(6, 18).min(f.area().height);
+    let area = Rect::new(
+        f.area().x + (f.area().width.saturating_sub(w)) / 2,
+        f.area().y + (f.area().height.saturating_sub(h)) / 3,
+        w,
+        h,
+    );
+    let mut lines = vec![Line::from(vec![
+        Span::styled("> ", Style::default().fg(Color::Cyan)),
+        Span::raw(p.filter.clone()),
+        Span::styled("▏", Style::default().fg(Color::Cyan)),
+    ])];
+    let room = h.saturating_sub(3) as usize;
+    let start = p.cursor.saturating_sub(room.saturating_sub(1));
+    for (i, (label, _)) in vis.iter().enumerate().skip(start).take(room) {
+        let sel = i == p.cursor;
+        lines.push(Line::from(Span::styled(
+            format!("{} {label}", if sel { "▸" } else { " " }),
+            if sel {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else {
+                Style::default()
+            },
+        )));
+    }
+    if vis.is_empty() {
+        lines.push(Line::from(Span::styled(
+            if p.filter.is_empty() {
+                "（沒有選項）".to_string()
+            } else {
+                format!("Enter 使用自訂值：{}", p.filter)
+            },
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(format!(" {} ", p.title)),
+        ),
+        area,
+    );
 }
 
 /// 一行待審批提示（Bus 隱藏時使用）：優先顯示目前選取 session 的請求。
@@ -819,14 +918,27 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
         Mode::Normal => {
-            " 輸入（i=prompt/@peer/#ch, n=spawn, /=命令, Ctrl-K=跳轉, g=Diff, z=休眠, t=原始/渲染, T=思考, 拖曳=選取複製, PgUp/PgDn=捲動, Y=複製, F2=滑鼠） "
+            " 輸入（Space=選單, :=命令, i=prompt/@peer/#ch, n=新增 agent, Ctrl-K=跳轉, g=Diff, t=原始/渲染, T=思考, PgUp/PgDn=捲動, F2=滑鼠） "
+                .to_string()
         }
-        Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、/命令，Enter 送出） ",
-        Mode::Spawn => " spawn：<agent[:model]> <prompt>（Ctrl-W worktree, Ctrl-E 權限, Enter 送出） ",
-        Mode::Message => " message → 選取的 session（Enter 送出） ",
-        Mode::Review => " review 註解 → 送回選取的 session 修改（Enter 送出） ",
-        Mode::Command => " 命令面板（spawn / merge / diff / gc / sleep / wake / task / copy / shutdown） ",
-        Mode::Jump => " Jump Anywhere：輸入關鍵字跳轉 session（Enter 確認） ",
+        Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、:命令，Enter 送出） ".to_string(),
+        Mode::Spawn => match &app.spawn_target {
+            Some((kind, model)) => format!(
+                " spawn → {}{}：prompt（Ctrl-W worktree={}, Ctrl-E 權限={}, Enter 送出） ",
+                kind.id(),
+                model.as_deref().map(|m| format!(":{m}")).unwrap_or_default(),
+                if app.spawn_worktree { "on" } else { "off" },
+                app.spawn_permission.map_or("預設", |p| p.id()),
+            ),
+            None => " spawn：<agent[:model]> <prompt>（Ctrl-W worktree, Ctrl-E 權限, Enter 送出） "
+                .to_string(),
+        },
+        Mode::Menu => " Space 選單（Esc 關閉） ".to_string(),
+        Mode::Pick => " 選擇中（↑↓ 移動、輸入過濾、Enter 確認、Esc 取消） ".to_string(),
+        Mode::Message => " message → 選取的 session（Enter 送出） ".to_string(),
+        Mode::Review => " review 註解 → 送回選取的 session 修改（Enter 送出） ".to_string(),
+        Mode::Command => " : 命令（Tab 補全；spawn / rm / clean / kill / merge / diff / gc / task …） ".to_string(),
+        Mode::Jump => " Jump Anywhere：輸入關鍵字跳轉 session（Enter 確認） ".to_string(),
     };
     let style = if app.mode == Mode::Normal {
         Style::default()

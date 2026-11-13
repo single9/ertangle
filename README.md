@@ -180,3 +180,10 @@ ade shutdown
 - `XDG_RUNTIME_DIR`：socket 位置（預設 `$XDG_RUNTIME_DIR/ade/daemon.sock`，否則 `/tmp/ade-$USER/`）。
 - `XDG_STATE_HOME`：事件記錄位置（預設 `~/.local/state/ade/events.jsonl`）。
 - `ADE_LOG`：tracing 過濾（例如 `ADE_LOG=debug`）。
+
+### TUI 操作
+
+* `Space`：Helix 風格選單（which-key），按 `s` session、`g` git／worktree、`v` view、`m` message；`Backspace` 返回、`Esc` 關閉。
+* `n`（或 `Space s n`）：依序選 agent → model → 輸入 prompt。model 清單含預設、內建建議（Claude 的 sonnet／opus／haiku）與 `config.toml` 的 `[agents.<名稱>] models = [...]`；清單沒有符合時，Enter 會使用你輸入的值。
+* `:`（或 `/`）：命令列，`Tab` 補全。常用：`spawn claude:opus 做某事`、`rm [session] [--force]`、`clean`（清除所有已結束的 session）、`kill`、`merge --dry-run`、`gc`、`layout`。
+* 啟動失敗的 session 會自動移除（含剛建立的 worktree 與分支）；已結束的 session 可用 `:rm`／`Space s x` 或 `ade rm <session>` 移除。

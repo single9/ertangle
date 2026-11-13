@@ -56,6 +56,32 @@ pub(crate) fn submit_prompt_or_route(
     Ok(())
 }
 
+/// `:` 命令列可用的命令（Tab 補全用）。
+pub(crate) const COMMANDS: &[&str] = &[
+    "spawn",
+    "new",
+    "kill",
+    "cancel",
+    "sleep",
+    "wake",
+    "rm",
+    "clean",
+    "merge",
+    "diff",
+    "gc",
+    "worktrees",
+    "overview",
+    "layout",
+    "raw",
+    "thoughts",
+    "bus",
+    "task",
+    "broadcast",
+    "copy",
+    "quit",
+    "shutdown",
+];
+
 pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<()> {
     let raw = raw.trim().trim_start_matches('/');
     let mut parts = raw.splitn(2, char::is_whitespace);
@@ -63,7 +89,76 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
     let rest = parts.next().unwrap_or("").trim();
 
     match verb.as_str() {
+        "spawn" if rest.is_empty() => crate::menu::start_spawn_picker(app),
+        "new" => crate::menu::start_spawn_picker(app),
         "spawn" => submit_spawn(app, writer, rest)?,
+        "kill" => {
+            if let Some(id) = app.selected_id() {
+                send(writer, &Request::Kill { session: id })?;
+                app.status = "已送出結束".into();
+            }
+        }
+        "cancel" => {
+            if let Some(id) = app.selected_id() {
+                send(writer, &Request::Cancel { session: id })?;
+                app.status = "已送出中斷".into();
+            }
+        }
+        "rm" | "remove" => {
+            let force = rest.split_whitespace().any(|w| w == "--force" || w == "-f");
+            let target = rest
+                .split_whitespace()
+                .find(|w| !w.starts_with('-'))
+                .map(str::to_string)
+                .or_else(|| app.selected_id());
+            if let Some(session) = target {
+                send(writer, &Request::SessionRemove { session, force })?;
+            } else {
+                app.status = "沒有選取的 session".into();
+            }
+        }
+        "clean" => {
+            // 清除所有已結束且沒有 worktree 分支的 session。
+            let ids: Vec<String> = app
+                .state
+                .sessions
+                .values()
+                .filter(|s| !s.status.is_live() && s.branch.is_none())
+                .map(|s| s.id.clone())
+                .collect();
+            let n = ids.len();
+            for session in ids {
+                send(
+                    writer,
+                    &Request::SessionRemove {
+                        session,
+                        force: false,
+                    },
+                )?;
+            }
+            app.status = format!("已要求清除 {n} 個已結束的 session");
+        }
+        "raw" => {
+            app.raw_md = !app.raw_md;
+            app.md_cache = None;
+            app.selection = None;
+            app.status = format!(
+                "逐字稿顯示：{}",
+                if app.raw_md {
+                    "原始文字"
+                } else {
+                    "Markdown 渲染"
+                }
+            );
+        }
+        "bus" => {
+            app.bus_overlay = !app.bus_overlay;
+            app.status = if app.bus_overlay {
+                "Bus：顯示".into()
+            } else {
+                "Bus：隱藏".into()
+            };
+        }
         "merge" => {
             let parts = rest.split_whitespace();
             let mut dry_run = false;
@@ -201,18 +296,23 @@ pub(crate) fn execute_jump(app: &mut App, writer: &mut ConnStream, query: &str) 
 }
 
 pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
-    let mut parts = text.splitn(2, char::is_whitespace);
-    let head = parts.next().unwrap_or("");
-    // `claude:opus` 形式可同時指定 model。
-    let (kind_str, model) = match head.split_once(':') {
-        Some((k, m)) if !m.is_empty() => (k, Some(m.to_string())),
-        _ => (head, None),
-    };
-    let prompt = parts.next().map(|s| s.trim().to_string());
-
-    let Some(kind) = AgentKind::parse(kind_str) else {
-        app.status = format!("未知的 agent：{kind_str}（opencode/claude/codex/antigravity）");
-        return Ok(());
+    // 由選擇器選好 agent／model 時，輸入框的內容就是 prompt；
+    // 否則維持舊格式 `<agent[:model]> <prompt>`（`:spawn claude:opus …`）。
+    let (kind, model, prompt) = if let Some((kind, model)) = app.spawn_target.clone() {
+        (kind, model, Some(text.trim().to_string()))
+    } else {
+        let mut parts = text.splitn(2, char::is_whitespace);
+        let head = parts.next().unwrap_or("");
+        let (kind_str, model) = match head.split_once(':') {
+            Some((k, m)) if !m.is_empty() => (k, Some(m.to_string())),
+            _ => (head, None),
+        };
+        let prompt = parts.next().map(|s| s.trim().to_string());
+        let Some(kind) = AgentKind::parse(kind_str) else {
+            app.status = format!("未知的 agent：{kind_str}（opencode/claude/codex/antigravity）");
+            return Ok(());
+        };
+        (kind, model, prompt)
     };
     let prompt = prompt.filter(|p| !p.is_empty());
     // bypass 需要再按一次 Enter 確認。
@@ -224,6 +324,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         app.status = "⚠ bypass 會跳過所有權限檢查；再按一次 Enter 確認".into();
         return Ok(());
     }
+    app.spawn_target = None;
     send(
         writer,
         &Request::Spawn(SpawnRequest {

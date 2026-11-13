@@ -22,6 +22,8 @@ pub struct Defaults {
 pub struct AgentCfg {
     pub bin: Option<String>,
     pub model: Option<String>,
+    /// TUI 選擇 model 時額外列出的建議清單。
+    pub models: Vec<String>,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
     pub allowed_tools: Vec<String>,
@@ -116,6 +118,9 @@ impl Config {
                 e.args = v.args;
             }
             e.env.extend(v.env);
+            if !v.models.is_empty() {
+                e.models = v.models;
+            }
             if !v.allowed_tools.is_empty() {
                 e.allowed_tools = v.allowed_tools;
             }

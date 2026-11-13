@@ -17,8 +17,11 @@ use crate::diff::jump_hunk;
 use crate::{request_selected_diff, send, set_mouse_capture};
 
 pub(crate) fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<()> {
-    if app.mode != Mode::Normal {
-        return handle_input_mode(app, writer, key);
+    match app.mode {
+        Mode::Normal => {}
+        Mode::Menu => return crate::menu::handle_menu_key(app, writer, key),
+        Mode::Pick => return crate::menu::handle_pick_key(app, key),
+        _ => return handle_input_mode(app, writer, key),
     }
 
     if key.modifiers.contains(KeyModifiers::CONTROL) && handle_ctrl_key(app, key)? {
@@ -178,28 +181,19 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 }
             }
         }
-        KeyCode::Char('/') => {
+        KeyCode::Char(' ') => crate::menu::open_menu(app),
+        KeyCode::Char('/') | KeyCode::Char(':') => {
             app.mode = Mode::Command;
             app.input.clear();
             app.input_cursor = 0;
-            app.status =
-                "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown"
-                    .into();
+            app.status = "命令（Tab 補全）：spawn rm clean kill merge diff gc task …".into();
         }
         KeyCode::Enter | KeyCode::Char('i') => {
             app.mode = Mode::Prompt;
             app.input.clear();
             app.input_cursor = 0;
         }
-        KeyCode::Char('n') => {
-            app.mode = Mode::Spawn;
-            app.input.clear();
-            app.input_cursor = 0;
-            app.spawn_worktree = false;
-            app.spawn_permission = None;
-            app.spawn_bypass_armed = false;
-            app.status = "輸入：<agent> <prompt>（Ctrl-W 切換 worktree，Ctrl-E 切換權限）".into();
-        }
+        KeyCode::Char('n') => crate::menu::start_spawn_picker(app),
         KeyCode::Char('m') => {
             app.mode = Mode::Message;
             app.input.clear();
@@ -303,6 +297,7 @@ pub(crate) fn handle_input_mode(
             app.mode = Mode::Normal;
             app.input.clear();
             app.input_cursor = 0;
+            app.spawn_target = None;
         }
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.spawn_worktree = !app.spawn_worktree;
@@ -324,6 +319,7 @@ pub(crate) fn handle_input_mode(
                 app.spawn_permission.map_or("預設(config)", |p| p.id())
             );
         }
+        KeyCode::Tab if app.mode == Mode::Command => complete_command(app),
         KeyCode::Backspace => backspace_input(app),
         KeyCode::Delete => delete_input(app),
         KeyCode::Left => app.input_cursor = app.input_cursor.saturating_sub(1),
@@ -385,12 +381,47 @@ pub(crate) fn handle_input_mode(
                 }
                 Mode::Command => execute_command(app, writer, &text)?,
                 Mode::Jump => execute_jump(app, writer, &text)?,
-                Mode::Normal => {}
+                Mode::Normal | Mode::Menu | Mode::Pick => {}
             }
         }
         _ => {}
     }
     Ok(())
+}
+
+/// `:` 命令列的 Tab 補全：輸入的第一個字若只符合一個命令就補完；多個則補到共同前綴並列出候選。
+fn complete_command(app: &mut App) {
+    if app.input.contains(char::is_whitespace) {
+        return;
+    }
+    let cands: Vec<&str> = crate::commands::COMMANDS
+        .iter()
+        .copied()
+        .filter(|c| c.starts_with(app.input.as_str()))
+        .collect();
+    match cands.len() {
+        0 => {}
+        1 => {
+            app.input = format!("{} ", cands[0]);
+            app.input_cursor = app.input.chars().count();
+        }
+        _ => {
+            let first = cands[0];
+            let mut common = first.len();
+            for c in &cands {
+                common = common.min(
+                    first
+                        .bytes()
+                        .zip(c.bytes())
+                        .take_while(|(a, b)| a == b)
+                        .count(),
+                );
+            }
+            app.input = first[..common].to_string();
+            app.input_cursor = app.input.chars().count();
+            app.status = format!("候選：{}", cands.join(" "));
+        }
+    }
 }
 
 /// 以 Unicode 字元索引取得對應的 byte offset（超出長度時回傳字串長度）。

@@ -15,6 +15,7 @@ mod diff;
 mod draw;
 mod input;
 mod markdown;
+mod menu;
 mod mouse;
 
 #[allow(unused_imports)]
