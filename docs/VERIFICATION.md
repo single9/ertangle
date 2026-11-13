@@ -53,3 +53,14 @@
 | 遠端 TCP + Token 連線 | `termade daemon --listen 127.0.0.1:17429 --token ...` | 透過 `--remote` + `--token` 建立任務與查詢狀態成功 |
 | TUI Markdown 渲染與捲動 | `cargo test -p termade-tui`（TestBackend 全畫面渲染） | 標題／粗體／程式碼／表格正確渲染、`t` 切換原始文字、Diff 邊欄與 `+N -M` 統計、翻頁後恢復跟隨 |
 
+## T15 通知（實機，部分）
+
+環境：Linux、tmux 3.4（獨立的 tmux server 與獨立的 daemon／設定目錄）、`notify = ["bell", "osc9", "command"]`。
+
+| 驗證項 | 做法 | 結果 |
+| --- | --- | --- |
+| tmux 內 bell | TUI 在非目前視窗，送 `:notify test` | 該視窗的 `window_bell_flag` 變成 1 |
+| tmux 內 `notify_command` | 命令把 `TERMADE_NOTIFY_KIND`／`LABEL`／`TEXT` 寫進檔案 | 檔案內容 `done\|termade\|termade：測試通知` |
+| `:notify off`／`:notify` | 在 TUI 輸入 | 狀態列顯示 `通知：關（bell、osc9、command）` |
+
+沒有驗證：直接在終端模擬器（不經 tmux）的 bell 與 `notify_command`；各終端對 OSC 9 的實際顯示；tmux 是否把 OSC 9 轉給外層終端；焦點事件在實機終端的回報；由真實 agent 的回合結束／審批觸發（這些路徑只有單元測試）。

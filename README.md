@@ -198,6 +198,16 @@ termade shutdown
 * 交接（額度用完時）：Claude／ACP／Codex 回報額度用完或被限流時，session 會標成 failed 並註明「額度用完」。用 `termade handoff <session> --to codex[:model] [--note "補充"]`、TUI 的 `Space s h` 或 `:handoff` 交接：舊 session 若還在跑會先停掉，worktree 的未 commit 變更自動 commit，daemon 用事件紀錄產生簡報（原始任務、追加指示、指派的 task、最後輸出、git 現況）加上完整 diff 附件，新 agent 沿用**同一個工作目錄與分支**接手。兩個 session 共用 worktree 時，`gc`／`rm` 不會刪掉仍在使用中的那個。目前只有手動觸發，沒有自動 fallback。
 * 額度查詢：agent 自己回報帳號額度，termade 只是顯示（不估算）。Claude 在每個回合的串流裡帶 5 小時／7 天視窗用量與重置時間；Codex 在啟動時用 `account/rateLimits/read` 查、之後收更新通知。標題列顯示最吃緊的視窗（≥70% 黃、≥90% 或已滿紅），`:quota` 或 `termade quota [--json]` 看全部視窗與重置倒數。Claude 的資料要有一個回合跑過才有；OpenCode／Antigravity 目前沒有額度資訊來源。
 * 額度提醒與自動交接（`config.toml`）：`[handoff] warn_percent = 90` 時，agent 帳號額度越過門檻，該 agent 還在跑的 session 會留下「建議 :handoff」的備註（每次越線只提醒一次）。`auto = true` 加 `fallback = ["codex", "claude:sonnet"]` 則在額度用完時自動交接給第一個可用的候選（跳過同一個 agent、額度也滿了的、連續交接超過 3 次的）；預設關閉，因為會動用另一邊的額度。
+* 通知：TUI 開著時，session 回合結束（忙碌 → 閒置）、等待審批、失敗、額度用完會通知。方式在 `config.toml` 設定（repo 的 `.termade/config.toml` 逐欄覆寫全域）：
+  ```toml
+  [tui]
+  notify = ["bell"]                 # bell | osc9 | command，可多選；空陣列 = 關閉；省略 = ["bell"]
+  notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
+  notify_min_turn_secs = 10         # 回合短於這個秒數的「做完了」不通知
+  ```
+  `bell` 寫終端響鈴（`\x07`），`osc9` 寫 OSC 9 桌面通知序列（終端要支援才有效果），`command` 用 `sh -c` 執行 `notify_command`，內容由環境變數帶入：`TERMADE_NOTIFY_KIND`（`done`／`approval`／`failed`／`limited`）、`TERMADE_NOTIFY_SESSION`、`TERMADE_NOTIFY_LABEL`、`TERMADE_NOTIFY_TEXT`。`:notify on|off` 在執行期開關（只影響這個 TUI，不寫回設定），`:notify` 顯示目前狀態，`:notify test` 試發一則。
+  不通知的情況：終端有焦點且事件屬於目前選取的 session（終端不回報焦點時一律通知）；只看本專案（`:scope here`）時其他專案的 session；同一個 session 同一類 3 秒內的重複；連線時補送的歷史事件。審批、失敗、額度用完不受 `notify_min_turn_secs` 限制。
+  限制：通知由 TUI 發出，TUI 沒開就沒有通知；tmux 內要收到焦點事件需 `set -g focus-events on`，否則視為沒有焦點。
 * context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `termade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
 
 開發者：改動按鍵、命令、協定或設定檔時需要手動同步的清單見 [docs/MAINTAINING.md](docs/MAINTAINING.md)。

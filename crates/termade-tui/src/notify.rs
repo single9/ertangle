@@ -98,10 +98,7 @@ pub(crate) struct NotifyCtx<'a> {
 /// 「忙碌」：回合進行中。休眠、啟動中都不算，所以喚醒（`Sleeping` → `Idle`）
 /// 與啟動完成（`Starting` → `Idle`）不會被當成回合結束。
 pub(crate) fn is_busy(status: SessionStatus) -> bool {
-    matches!(
-        status,
-        SessionStatus::Busy | SessionStatus::WaitingApproval
-    )
+    matches!(status, SessionStatus::Busy | SessionStatus::WaitingApproval)
 }
 
 /// 這個事件（套用到 `before` 之前）該產生哪些通知。
@@ -244,10 +241,7 @@ impl Notifier {
             enabled: true,
             methods,
             unknown,
-            command: cfg
-                .notify_command
-                .clone()
-                .filter(|c| !c.trim().is_empty()),
+            command: cfg.notify_command.clone().filter(|c| !c.trim().is_empty()),
             min_turn: Duration::from_secs(
                 cfg.notify_min_turn_secs.unwrap_or(DEFAULT_MIN_TURN_SECS),
             ),
@@ -387,7 +381,10 @@ mod tests {
 
     fn state_with(status: SessionStatus) -> State {
         let mut st = State::new();
-        for (id, label, cwd) in [("s1", "worker/a", "/work/alpha"), ("s2", "w2", "/work/beta")] {
+        for (id, label, cwd) in [
+            ("s1", "worker/a", "/work/alpha"),
+            ("s2", "w2", "/work/beta"),
+        ] {
             st.sessions.insert(
                 id.into(),
                 Session {
@@ -641,7 +638,7 @@ mod tests {
     fn notifier_debounces_and_tracks_turns() {
         let mut n = bell_notifier();
         let mut st = state_with(SessionStatus::Idle);
-        let mut feed = |n: &mut Notifier, st: &mut State, r: Record| {
+        let feed = |n: &mut Notifier, st: &mut State, r: Record| {
             n.observe(st, &r, None, false, "/work/alpha", NOW_MS);
             st.apply(&r);
         };
