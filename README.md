@@ -146,7 +146,12 @@ cargo install --path .
 
 # 亦可使用 Makefile 安裝至 ~/.local/bin/termade
 make install
+
+# 依目前 SHELL（zsh / bash / fish）安裝補全腳本
+make install-completions
 ```
+
+Shell 補全也可直接由 `termade completions <zsh|bash|fish>` 產生（`make install-completions` 會依 `$SHELL` 寫入 `~/.local/share/zsh/site-functions/_termade`、`~/.local/share/bash-completion/completions/termade` 或 `~/.config/fish/completions/termade.fish`）。除了子命令與旗標值（`--kind`、`--transport`、`--permission`、`--effort`），zsh 與 bash 也會在需要填 session 的參數上動態補全目前專案的 session label（無 label 時為 session id）；daemon 未執行時不會自動啟動它。
 
 ### CLI
 
@@ -181,11 +186,13 @@ TERMADE_TOKEN=<secret> termade --remote 127.0.0.1:7420 ...      # 連線至遠�
 termade mcp [--session <id>]                    # stdio MCP 協作伺服器（由 adapter 自動注入）
 termade cancel <session-id> ; termade kill <session-id>
 termade shutdown
+termade completions <bash|zsh|fish>             # 輸出 shell 補全腳本至 stdout
 ```
 
-- `--kind`：`opencode` | `claude` | `codex` | `antigravity`（別名 `agy` / `gemini`）。
+- `--kind`：`opencode`（別名 `oc`）| `claude`（別名 `claude-code`）| `codex` | `antigravity`（別名 `agy` / `gemini`）。
 - `--transport`：`auto`（預設）/ `structured`（別名 `acp`）/ `pty`。
 - `--permission`：`ask` | `auto`（預設）| `bypass`。
+- `--effort`：`low` | `medium` | `high` | `xhigh` | `max`。
 
 ### 環境變數
 

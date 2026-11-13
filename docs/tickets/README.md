@@ -26,7 +26,7 @@
 | [T18](T18-task-board.md) | 任務板：依賴解鎖與獨立視圖（已完成） | P2 | — |
 | [T19](T19-daemon-prompt-queue.md) | 把 prompt 排隊移到 daemon | P2 | —（與 T17 有交互） |
 | [T20](T20-collab-instructions.md) | 把協作說明注入每個 agent | P2 | — |
-| [T21](T21-shell-completions.md) | Shell 補全 | P3 | —（session 補全會用到 T14 的 `resume`） |
+| [T21](T21-shell-completions.md) | Shell 補全（已完成） | P3 | —（session 補全會用到 T14 的 `resume`） |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

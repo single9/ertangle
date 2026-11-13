@@ -15,7 +15,7 @@ BIN_MACOS_X86_64    := target/x86_64-apple-darwin/release/termade
 BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/termade
 
 .PHONY: check-zigbuild all build dev run tui daemon shutdown test clippy lint fmt \
-        macos macos-arm64 macos-x86_64 macos-universal dist install clean help
+        macos macos-arm64 macos-x86_64 macos-universal dist install install-completions clean help
 
 all: build
 
@@ -90,6 +90,19 @@ install: build
 	install -m 755 $(BIN_LINUX) $(BINDIR)/termade
 	@echo "已安裝至 $(BINDIR)/termade"
 
+## 依目前 SHELL 安裝 shell 補全腳本（zsh / bash / fish）
+install-completions: build
+	@sh_name="$$(basename "$${SHELL:-}")"; \
+	case "$$sh_name" in \
+	  zsh)  dest="$(HOME)/.local/share/zsh/site-functions/_termade" ;; \
+	  bash) dest="$(HOME)/.local/share/bash-completion/completions/termade" ;; \
+	  fish) dest="$(HOME)/.config/fish/completions/termade.fish" ;; \
+	  *)    echo "無法從 SHELL='$${SHELL:-}' 判斷 shell（請指定 SHELL=zsh|bash|fish）" >&2; exit 1 ;; \
+	esac; \
+	mkdir -p "$$(dirname "$$dest")"; \
+	./$(BIN_LINUX) completions "$$sh_name" > "$$dest"; \
+	echo "已安裝 $$sh_name 補全至 $$dest"
+
 ## 清除編譯產物與暫存 worktree
 clean:
 	PATH="$(BUILD_PATH)" $(CARGO) clean
@@ -105,6 +118,7 @@ help:
 	@echo "  make test             執行單元測試"
 	@echo "  make lint             執行 cargo clippy --all-targets -- -D warnings"
 	@echo "  make install          安裝 termade 至 $(BINDIR)/termade"
+	@echo "  make install-completions  依目前 SHELL 安裝補全腳本 (zsh / bash / fish)"
 	@echo ""
 	@echo "macOS 交叉編譯目標:"
 	@echo "  make macos            建置全部 macOS 版本 (arm64 / x86_64 / universal2)"

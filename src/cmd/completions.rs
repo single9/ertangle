@@ -35,7 +35,9 @@ impl TypedValueParser for KindParser {
         if AgentKind::parse(kind).is_none() {
             return Err(clap::Error::raw(
                 clap::error::ErrorKind::InvalidValue,
-                format!("未知的 agent：{kind}（opencode/claude/codex/antigravity，可加 `:model`）\n"),
+                format!(
+                    "未知的 agent：{kind}（opencode/claude/codex/antigravity，可加 `:model`）\n"
+                ),
             )
             .with_cmd(cmd));
         }
@@ -91,7 +93,7 @@ pub(crate) fn cmd_completions(shell: Shell) -> Result<()> {
 
 /// clap 產生的靜態補全，加上（zsh／bash）查 session 名稱的片段。
 pub(crate) fn completion_script(shell: Shell) -> String {
-    let mut cmd = crate::Cli::command();
+    let mut cmd = command_for_completion();
     let mut buf = Vec::new();
     clap_complete::generate(shell, &mut cmd, "termade", &mut buf);
     let script = String::from_utf8_lossy(&buf).to_string();
@@ -100,6 +102,22 @@ pub(crate) fn completion_script(shell: Shell) -> String {
         Shell::Bash => bash_with_sessions(&script, &cmd),
         _ => script,
     }
+}
+
+/// 排除隱藏子命令（`__complete`）：`clap_complete` 預設仍會把 `hide = true` 的子命令列進腳本。
+fn command_for_completion() -> Command {
+    let base = crate::Cli::command();
+    let args: Vec<Arg> = base.get_arguments().cloned().collect();
+    let subcommands: Vec<Command> = base
+        .get_subcommands()
+        .filter(|s| !s.is_hide_set())
+        .cloned()
+        .collect();
+    let mut cmd = Command::new("termade").version(env!("CARGO_PKG_VERSION"));
+    if let Some(a) = base.get_about() {
+        cmd = cmd.about(a.clone());
+    }
+    cmd.args(args).subcommands(subcommands)
 }
 
 const ZSH_SESSIONS_FN: &str = r#"
