@@ -1038,3 +1038,15 @@ fn test_app() -> App {
     app.scope_here = false;
     app
 }
+
+#[test]
+fn all_scope_shows_project_chip_and_groups_by_project() {
+    let mut app = sample_app(&["hi"]);
+    app.home_project = "/work/alpha".into();
+    app.state.sessions.get_mut("ses_test").unwrap().cwd = "/work/beta".into();
+    app.scope_here = false;
+    let (_, text) = render_size(&mut app, 120, 40);
+    let squashed: String = text.split_whitespace().collect();
+    assert!(squashed.contains("beta"), "{text}");
+    assert!(squashed.contains("全部專案"), "{text}");
+}

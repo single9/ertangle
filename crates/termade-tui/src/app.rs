@@ -251,12 +251,17 @@ impl App {
     }
 
     pub(crate) fn session_ids(&self) -> Vec<SessionId> {
-        self.state
+        let mut v: Vec<&termade_core::Session> = self
+            .state
             .sessions_sorted()
-            .iter()
+            .into_iter()
             .filter(|s| !self.scope_here || s.project_root() == self.home_project)
-            .map(|s| s.id.clone())
-            .collect()
+            .collect();
+        // 顯示全部專案時依專案分組（本專案排最前），組內維持建立順序。
+        if !self.scope_here {
+            v.sort_by_key(|s| (s.project_root() != self.home_project, s.project_root()));
+        }
+        v.into_iter().map(|s| s.id.clone()).collect()
     }
 
     /// 目前有幾個不同的專案（含已結束的 session）。

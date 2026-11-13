@@ -640,6 +640,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         r
     };
     let multi_project = roots.len() > 1;
+    let show_project = multi_project || !app.scope_here;
     let hidden = app.state.sessions.len().saturating_sub(ids.len());
     let items: Vec<ListItem> = ids
         .iter()
@@ -655,17 +656,24 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             };
             let branch = s.branch.as_deref().unwrap_or("");
             let note = s.status_note.as_deref().unwrap_or("");
-            let mut spans = vec![Span::styled(
+            let mut spans: Vec<Span> = Vec::new();
+            // 顯示全部專案（或有多個專案）時，列首放專案色塊，同專案同色。
+            if show_project {
+                spans.push(Span::styled(
+                    format!(
+                        " {} ",
+                        truncate(&project_name(s.project_root(), &roots), 12)
+                    ),
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(project_color(s.project_root())),
+                ));
+                spans.push(Span::raw(" "));
+            }
+            spans.push(Span::styled(
                 format!("{} ", s.status.glyph()),
                 Style::default().fg(color),
-            )];
-            // 有多個專案時，每列標出所屬專案（同專案同色）。
-            if multi_project {
-                spans.push(Span::styled(
-                    format!("{} ", project_name(s.project_root(), &roots)),
-                    Style::default().fg(project_color(s.project_root())),
-                ));
-            }
+            ));
             spans.extend([
                 Span::raw(s.label.clone()),
                 Span::styled(
@@ -734,7 +742,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                         0 => " Sessions · 本專案 ".to_string(),
                         n => format!(" Sessions · 本專案（另 {n} 個在別處，P 顯示） "),
                     }
-                } else if multi_project {
+                } else if show_project {
                     " Sessions · 全部專案 ".to_string()
                 } else {
                     " Sessions ".to_string()
@@ -880,7 +888,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
             let s = &app.state.sessions[id];
             format!(
                 " Transcript: {}{} · {} · {}{} (${:.4}) · {}% · {} ",
-                if multi_project_state(app) {
+                if multi_project_state(app) || !app.scope_here {
                     format!("[{}] ", project_name(s.project_root(), &all_roots(app)))
                 } else {
                     String::new()
