@@ -189,9 +189,7 @@ impl Config {
         if local.tui.notify.is_some() {
             out.tui.notify = local.tui.notify;
         }
-        if local.tui.notify_command.is_some() {
-            out.tui.notify_command = local.tui.notify_command;
-        }
+        // notify_command 只認全域設定：repo 內的設定檔不可信，不能讓它決定要執行的命令。
         if local.tui.notify_min_turn_secs.is_some() {
             out.tui.notify_min_turn_secs = local.tui.notify_min_turn_secs;
         }
@@ -439,7 +437,11 @@ notify_min_turn_secs = 30
 
         let l = Config::parse("[tui]\nnotify_command = \"true\"\n").unwrap();
         let c = Config::layered(g, l);
-        assert_eq!(c.tui.notify_command.as_deref(), Some("true"));
+        assert_eq!(
+            c.tui.notify_command.as_deref(),
+            Some("notify-send termade \"$TERMADE_NOTIFY_TEXT\""),
+            "repo 不能覆寫 notify_command"
+        );
         assert_eq!(c.tui.notify.map(|v| v.len()), Some(2));
     }
 }

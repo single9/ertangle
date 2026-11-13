@@ -205,7 +205,7 @@ termade shutdown
   notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
   notify_min_turn_secs = 10         # 回合短於這個秒數的「做完了」不通知
   ```
-  `bell` 寫終端響鈴（`\x07`），`osc9` 寫 OSC 9 桌面通知序列（終端要支援才有效果），`command` 用 `sh -c` 執行 `notify_command`，內容由環境變數帶入：`TERMADE_NOTIFY_KIND`（`done`／`approval`／`failed`／`limited`）、`TERMADE_NOTIFY_SESSION`、`TERMADE_NOTIFY_LABEL`、`TERMADE_NOTIFY_TEXT`。`:notify on|off` 在執行期開關（只影響這個 TUI，不寫回設定），`:notify` 顯示目前狀態，`:notify test` 試發一則。
+  `bell` 寫終端響鈴（`\x07`），`osc9` 寫 OSC 9 桌面通知序列（終端要支援才有效果），`command` 用 `sh -c` 執行 `notify_command`，內容由環境變數帶入：`TERMADE_NOTIFY_KIND`（`done`／`approval`／`failed`／`limited`）、`TERMADE_NOTIFY_SESSION`、`TERMADE_NOTIFY_LABEL`、`TERMADE_NOTIFY_TEXT`。`notify_command` 只讀全域設定，repo 的 `.termade/config.toml` 不能覆寫（避免開啟不受信任的 repo 就執行它指定的命令）。`:notify on|off` 在執行期開關（只影響這個 TUI，不寫回設定），`:notify` 顯示目前狀態，`:notify test` 試發一則。
   不通知的情況：終端有焦點且事件屬於目前選取的 session（終端不回報焦點時一律通知）；只看本專案（`:scope here`）時其他專案的 session；同一個 session 同一類 3 秒內的重複；連線時補送的歷史事件。審批、失敗、額度用完不受 `notify_min_turn_secs` 限制。
   限制：通知由 TUI 發出，TUI 沒開就沒有通知；tmux 內要收到焦點事件需 `set -g focus-events on`，否則視為沒有焦點。
 * context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `termade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
