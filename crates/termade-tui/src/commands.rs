@@ -223,6 +223,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("tools", "展開／摺疊工具呼叫"),
     ("scope", "[here|all]  只看本專案／顯示全部專案的 session"),
     (
+        "notify",
+        "[on|off|test]  開關通知（回合結束／等待審批／失敗／額度用完）；不帶參數顯示狀態",
+    ),
+    (
         "queue",
         "[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出",
     ),
@@ -429,6 +433,23 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             "all" => toggle_scope(app, Some(false)),
             "" => toggle_scope(app, None),
             _ => app.status = "用法：:scope [here|all]".into(),
+        },
+        "notify" => match rest {
+            "on" | "off" => {
+                app.notify.enabled = rest == "on";
+                app.status = app.notify.describe();
+            }
+            "" => app.status = app.notify.describe(),
+            "test" => {
+                app.notify.pending.push(crate::notify::Notice {
+                    kind: crate::notify::NoticeKind::Done,
+                    session: app.selected_id().unwrap_or_default(),
+                    label: "termade".into(),
+                    text: "termade：測試通知".into(),
+                });
+                app.status = format!("已送出測試通知；{}", app.notify.describe());
+            }
+            _ => app.status = "用法：:notify [on|off|test]".into(),
         },
         "queue" => queue_command(app, writer, rest)?,
         "unqueue" => unqueue(app),

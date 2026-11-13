@@ -90,6 +90,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             (":kill :cancel", "結束／中斷選取的 session"),
             (":quota", "各 agent 帳號額度與重置時間"),
             (":layout", "切換版面；:raw、:thoughts、:bus 切換顯示"),
+            (
+                ":notify",
+                "on|off 開關通知（回合結束、等待審批、失敗、額度用完）；test 試發；方式在 config.toml [tui] notify",
+            ),
             (":task :broadcast", "新增任務／廣播訊息"),
         ],
     ),
