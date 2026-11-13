@@ -194,3 +194,5 @@ ade shutdown
 * 額度查詢：agent 自己回報帳號額度，ADE 只是顯示（不估算）。Claude 在每個回合的串流裡帶 5 小時／7 天視窗用量與重置時間；Codex 在啟動時用 `account/rateLimits/read` 查、之後收更新通知。標題列顯示最吃緊的視窗（≥70% 黃、≥90% 或已滿紅），`:quota` 或 `ade quota [--json]` 看全部視窗與重置倒數。Claude 的資料要有一個回合跑過才有；OpenCode／Antigravity 目前沒有額度資訊來源。
 * 額度提醒與自動交接（`config.toml`）：`[handoff] warn_percent = 90` 時，agent 帳號額度越過門檻，該 agent 還在跑的 session 會留下「建議 :handoff」的備註（每次越線只提醒一次）。`auto = true` 加 `fallback = ["codex", "claude:sonnet"]` 則在額度用完時自動交接給第一個可用的候選（跳過同一個 agent、額度也滿了的、連續交接超過 3 次的）；預設關閉，因為會動用另一邊的額度。
 * context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `ade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
+
+開發者：改動按鍵、命令、協定或設定檔時需要手動同步的清單見 [docs/MAINTAINING.md](docs/MAINTAINING.md)。
