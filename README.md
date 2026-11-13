@@ -209,6 +209,7 @@ termade completions <bash|zsh|fish>             # 輸出 shell 補全腳本至 s
 
 * `Space`：Helix 風格選單（which-key），按 `s` session、`g` git／worktree、`v` view、`m` message；`Backspace` 返回、`Esc` 關閉。
 * `n`（或 `Space s n`）：依序選 agent → model → 輸入 prompt。model 清單含預設、內建建議（Claude 的 sonnet／opus／haiku）與 `config.toml` 的 `[agents.<名稱>] models = [...]`；清單沒有符合時，Enter 會使用你輸入的值。
+* 版面：預設兩欄（Sessions／中央），Bus 欄不顯示；`L` 依序切換兩欄 → 分頁 → 三欄，`:layout three|two|tabs` 直接指定，`:bus` 暫時疊出 Bus。要固定用三欄，在 `config.toml` 寫 `[tui] layout = "three"`。終端太窄時會自動降級。
 * `:`（或 `/`）：命令列，`Tab` 補全。常用：`spawn claude:opus 做某事`、`rm [session] [--force]`、`clean`（清除所有已結束的 session）、`kill`、`merge --dry-run`、`gc`、`layout`。
 * 啟動失敗的 session 會自動移除（含剛建立的 worktree 與分支）；已結束的 session 可用 `:rm`／`Space s x` 或 `termade rm <session>` 移除。
 * effort（推理強度，low／medium／high／xhigh／max）：`termade spawn --effort high`、MCP `termade_spawn` 的 `effort`、TUI 選擇器（Claude、Codex 會多一步）。也可寫進 `config.toml` 的 `[agents.claude] effort = "medium"` 或 `[roles.reviewer] effort = "high"`（請求 > 角色 > agent）。Claude 對應 `--effort`，Codex 對應 `thread/start` 的 `config.model_reasoning_effort`；ACP agent 只有在 `session/new` 回報了 effort 選項時才能設，否則會明確報錯。

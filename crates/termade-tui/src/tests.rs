@@ -393,6 +393,8 @@ fn add_pending(app: &mut App) {
 #[test]
 fn layout_modes_render_expected_panes() {
     let mut app = sample_app(&["hi"]);
+    assert_eq!(app.layout, LayoutMode::Two, "預設是兩欄（不顯示 Bus）");
+    app.layout = LayoutMode::Three;
     let (_, three) = render_size(&mut app, 120, 40);
     assert!(three.contains("Sessions") && three.contains("Bus / Tasks"));
 
@@ -516,7 +518,8 @@ fn layout_key_command_and_unread_counter() {
         KeyEvent::new(KeyCode::Char('L'), KeyModifiers::NONE),
     )
     .unwrap();
-    assert_eq!(app.layout, LayoutMode::Two);
+    // 預設兩欄，L 依序切到分頁。
+    assert_eq!(app.layout, LayoutMode::Tabs);
     execute_command(&mut app, &mut w, "/layout tabs").unwrap();
     assert_eq!(app.layout, LayoutMode::Tabs);
     execute_command(&mut app, &mut w, "/layout three").unwrap();

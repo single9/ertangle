@@ -208,7 +208,7 @@ impl App {
             .layout
             .as_deref()
             .and_then(LayoutMode::parse)
-            .unwrap_or(LayoutMode::Three);
+            .unwrap_or(LayoutMode::Two);
         App {
             state: State::new(),
             selected: 0,
