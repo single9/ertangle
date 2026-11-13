@@ -1,6 +1,6 @@
 # T11 — 設定檔與每個 agent 的 model／參數設定
 
-優先度：P1　範圍：`ade-core`、`ade-protocol`、`ade-adapter`、`ade-daemon`、`ade-tui`、`src/main.rs`
+優先度：P1　範圍：`termade-core`、`termade-protocol`、`termade-adapter`、`termade-daemon`、`termade-tui`、`src/main.rs`
 
 ## 問題
 
@@ -15,17 +15,17 @@
 
 ## 證據
 
-- `crates/ade-protocol/src/lib.rs:38-61`：`SpawnRequest` 的欄位是 `kind`、`cwd`、`label`、`role`、`prompt`、`worktree`、`transport`、`permission`、`parent`，沒有 `model`。
-- `crates/ade-adapter/src/lib.rs:51-68`：`SessionSpec` 有 `args` 與 `env`，沒有 `model`。
-- `crates/ade-daemon/src/lib.rs:1337`：`args: vec![]`。
-- `crates/ade-daemon/src/lib.rs:475`：`AgentEvent::Model(_) => return`。
-- `crates/ade-daemon/src/lib.rs:1301`：`model: None`；之後沒有任何地方寫入。
-- `crates/ade-adapter/src/claude.rs:73-74`、`codex.rs:434-435`：adapter 有送出 `AgentEvent::Model`。
+- `crates/termade-protocol/src/lib.rs:38-61`：`SpawnRequest` 的欄位是 `kind`、`cwd`、`label`、`role`、`prompt`、`worktree`、`transport`、`permission`、`parent`，沒有 `model`。
+- `crates/termade-adapter/src/lib.rs:51-68`：`SessionSpec` 有 `args` 與 `env`，沒有 `model`。
+- `crates/termade-daemon/src/lib.rs:1337`：`args: vec![]`。
+- `crates/termade-daemon/src/lib.rs:475`：`AgentEvent::Model(_) => return`。
+- `crates/termade-daemon/src/lib.rs:1301`：`model: None`；之後沒有任何地方寫入。
+- `crates/termade-adapter/src/claude.rs:73-74`、`codex.rs:434-435`：adapter 有送出 `AgentEvent::Model`。
 - `grep '\.toml'`：只有 `policy.toml` 的讀取。
 
 ## 分析邏輯
 
-1. 從三個 spawn 入口（`src/main.rs` 的 `Spawn`、TUI 的 `submit_spawn`、MCP 的 `ade_spawn`）往下追到 `SpawnRequest`，確認沒有 model 欄位。
+1. 從三個 spawn 入口（`src/main.rs` 的 `Spawn`、TUI 的 `submit_spawn`、MCP 的 `termade_spawn`）往下追到 `SpawnRequest`，確認沒有 model 欄位。
 2. 再追到 `SessionSpec` 找有沒有其他通道；`args` 欄位存在且各 adapter 都有 `cmd.args(&spec.args)`，但 daemon 端寫死空陣列。
 3. 反方向追 `Session.model`：adapter 送出 → daemon `ingest` 直接 `return`。所以連顯示都沒有。
 4. 各 agent 指定 model 的方式，本機查到的：
@@ -36,7 +36,7 @@
 
 ## 實作方式
 
-1. **設定檔 `config.toml`**（`~/.config/ade/config.toml`，repo 的 `.ade/config.toml` 可覆寫）：
+1. **設定檔 `config.toml`**（`~/.config/termade/config.toml`，repo 的 `.termade/config.toml` 可覆寫）：
    ```toml
    [defaults]
    agent = "claude"
@@ -69,8 +69,8 @@
    - PTY：只透過 `args` 傳遞，不做轉換。
 4. **回報實際 model**：新增 `Event::SessionModel { session, model }`（或沿用既有的狀態事件），`ingest` 不再丟棄 `AgentEvent::Model`，`State::apply` 寫入 `Session.model`。
 5. **入口**：
-   - CLI：`ade spawn --model <m>`，以及 `-- <額外參數>`。
-   - MCP：`ade_spawn` 增加 `model`；`ade_peers`／`ade_whoami` 回傳 model。
+   - CLI：`termade spawn --model <m>`，以及 `-- <額外參數>`。
+   - MCP：`termade_spawn` 增加 `model`；`termade_peers`／`termade_whoami` 回傳 model。
    - TUI：`n` 的輸入支援 `claude:opus 幫我…` 或 `claude --model opus 幫我…`（擇一，建議前者，較短）；sessions 欄與標題列顯示 model。
 6. **執行期切換 model** 不在這張票：各家支援程度不同，先做啟動時指定。
 
@@ -81,4 +81,4 @@
 - 測試：收到 `AgentEvent::Model` 後 `State` 中該 session 的 `model` 有值。
 - 測試：舊格式的 `SpawnRequest` JSON（沒有 `model`、`args`）仍可解析。
 - 對尚未支援的 agent 指定 model 時得到明確錯誤。
-- `ade sessions` 與 TUI 顯示每個 session 的 model。
+- `termade sessions` 與 TUI 顯示每個 session 的 model。

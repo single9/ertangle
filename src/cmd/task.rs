@@ -1,8 +1,8 @@
 //! 任務看板子命令（tasks、task、task-update）。
 
-use ade_core::TaskStatus;
-use ade_protocol::{Frame, Request};
 use anyhow::{bail, Context, Result};
+use termade_core::TaskStatus;
+use termade_protocol::{Frame, Request};
 
 use super::roundtrip;
 
@@ -39,7 +39,7 @@ pub(crate) fn cmd_task_create(
     assignee: Option<String>,
     depends_on: Vec<String>,
 ) -> Result<()> {
-    let created_by = std::env::var("ADE_SESSION").ok();
+    let created_by = std::env::var("TERMADE_SESSION").ok();
     let frame = roundtrip(&Request::TaskCreate {
         title,
         detail: detail.unwrap_or_default(),

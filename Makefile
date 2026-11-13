@@ -1,4 +1,4 @@
-# ade — Agent Development Environment Makefile
+# termade — Agent Development Environment Makefile
 
 CARGO       ?= $(shell PATH="$(HOME)/.cargo/bin:$(PATH)" which cargo 2>/dev/null || echo cargo)
 # 自動偵測 pip 安裝的 ziglang；找不到時留空（可用 ZIG_DIR=... 覆寫）
@@ -9,10 +9,10 @@ PREFIX      ?= $(HOME)/.local
 BINDIR      ?= $(PREFIX)/bin
 DIST_DIR    ?= dist
 
-BIN_LINUX           := target/release/ade
-BIN_MACOS_ARM64     := target/aarch64-apple-darwin/release/ade
-BIN_MACOS_X86_64    := target/x86_64-apple-darwin/release/ade
-BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/ade
+BIN_LINUX           := target/release/termade
+BIN_MACOS_ARM64     := target/aarch64-apple-darwin/release/termade
+BIN_MACOS_X86_64    := target/x86_64-apple-darwin/release/termade
+BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/termade
 
 .PHONY: check-zigbuild all build dev run tui daemon shutdown test clippy lint fmt \
         macos macos-arm64 macos-x86_64 macos-universal dist install clean help
@@ -78,17 +78,17 @@ macos: macos-arm64 macos-x86_64 macos-universal
 ## 打包 Linux 與 macOS 執行檔至 dist/ 目錄
 dist: build macos
 	@mkdir -p $(DIST_DIR)
-	cp $(BIN_LINUX)           $(DIST_DIR)/ade-linux-x86_64
-	cp $(BIN_MACOS_ARM64)     $(DIST_DIR)/ade-macos-arm64
-	cp $(BIN_MACOS_X86_64)    $(DIST_DIR)/ade-macos-x86_64
-	cp $(BIN_MACOS_UNIVERSAL) $(DIST_DIR)/ade-macos-universal
+	cp $(BIN_LINUX)           $(DIST_DIR)/termade-linux-x86_64
+	cp $(BIN_MACOS_ARM64)     $(DIST_DIR)/termade-macos-arm64
+	cp $(BIN_MACOS_X86_64)    $(DIST_DIR)/termade-macos-x86_64
+	cp $(BIN_MACOS_UNIVERSAL) $(DIST_DIR)/termade-macos-universal
 	@ls -lh $(DIST_DIR)/
 
-## 安裝本機執行檔至 $(BINDIR)/ade（預設 ~/.local/bin/ade）
+## 安裝本機執行檔至 $(BINDIR)/termade（預設 ~/.local/bin/termade）
 install: build
 	@mkdir -p $(BINDIR)
-	install -m 755 $(BIN_LINUX) $(BINDIR)/ade
-	@echo "已安裝至 $(BINDIR)/ade"
+	install -m 755 $(BIN_LINUX) $(BINDIR)/termade
+	@echo "已安裝至 $(BINDIR)/termade"
 
 ## 清除編譯產物與暫存 worktree
 clean:
@@ -100,16 +100,16 @@ help:
 	@echo "用法: make <target>"
 	@echo ""
 	@echo "常用目標:"
-	@echo "  make build            建置本機 release 執行檔 (target/release/ade)"
+	@echo "  make build            建置本機 release 執行檔 (target/release/termade)"
 	@echo "  make run              建置並啟動 TUI"
 	@echo "  make test             執行單元測試"
 	@echo "  make lint             執行 cargo clippy --all-targets -- -D warnings"
-	@echo "  make install          安裝 ade 至 $(BINDIR)/ade"
+	@echo "  make install          安裝 termade 至 $(BINDIR)/termade"
 	@echo ""
 	@echo "macOS 交叉編譯目標:"
 	@echo "  make macos            建置全部 macOS 版本 (arm64 / x86_64 / universal2)"
-	@echo "  make macos-arm64      建置 target/aarch64-apple-darwin/release/ade"
-	@echo "  make macos-x86_64     建置 target/x86_64-apple-darwin/release/ade"
-	@echo "  make macos-universal  建置 target/universal2-apple-darwin/release/ade"
+	@echo "  make macos-arm64      建置 target/aarch64-apple-darwin/release/termade"
+	@echo "  make macos-x86_64     建置 target/x86_64-apple-darwin/release/termade"
+	@echo "  make macos-universal  建置 target/universal2-apple-darwin/release/termade"
 	@echo "  make dist             將 Linux 與 macOS 執行檔彙整至 dist/"
 	@echo "  make clean            清除 target/ 與 dist/"

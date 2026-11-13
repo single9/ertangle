@@ -1,6 +1,6 @@
 # T04 — 讓權限規則引擎在所有政策下都生效
 
-優先度：P1　範圍：`ade-core`、`ade-adapter`、`ade-daemon`
+優先度：P1　範圍：`termade-core`、`termade-adapter`、`termade-daemon`
 
 ## 問題
 
@@ -15,12 +15,12 @@ README 與設計文件把它描述成已完成的「權限規則引擎」，使�
 
 ## 證據
 
-- `crates/ade-adapter/src/acp.rs:159-167`：`auto_approves()` 時直接 `respond` 並 `return`，不送 `AgentEvent::Permission`。
-- `crates/ade-daemon/src/lib.rs:429-447`：`PolicyEngine::evaluate` 只在收到 `AgentEvent::Permission` 時被呼叫。
-- `crates/ade-adapter/src/claude.rs:267-269`：`resolve_permission` 直接 `bail!`。
-- `crates/ade-adapter/src/codex.rs:132`、`307`：Codex 有轉發與回覆路徑（README 註明未實機驗證）。
-- `crates/ade-core/src/lib.rs:891-904`：`combined.contains(pat)`；預設 `allow` 含 `"Read"`、`"Grep"`、`"Glob"`。
-- `crates/ade-daemon/src/lib.rs:93-103`、`1704`：`load_policy(&default_cwd)` 只在啟動時呼叫一次。
+- `crates/termade-adapter/src/acp.rs:159-167`：`auto_approves()` 時直接 `respond` 並 `return`，不送 `AgentEvent::Permission`。
+- `crates/termade-daemon/src/lib.rs:429-447`：`PolicyEngine::evaluate` 只在收到 `AgentEvent::Permission` 時被呼叫。
+- `crates/termade-adapter/src/claude.rs:267-269`：`resolve_permission` 直接 `bail!`。
+- `crates/termade-adapter/src/codex.rs:132`、`307`：Codex 有轉發與回覆路徑（README 註明未實機驗證）。
+- `crates/termade-core/src/lib.rs:891-904`：`combined.contains(pat)`；預設 `allow` 含 `"Read"`、`"Grep"`、`"Glob"`。
+- `crates/termade-daemon/src/lib.rs:93-103`、`1704`：`load_policy(&default_cwd)` 只在啟動時呼叫一次。
 
 ## 分析邏輯
 
@@ -43,8 +43,8 @@ README 與設計文件把它描述成已完成的「權限規則引擎」，使�
    - 分開 `tool`（比對工具名稱，完全相等）與 `pattern`（比對輸入內容）。
    - 內容比對至少做到以空白切詞後的前綴比對，避免 `Read` 命中 `README`。
    - 保留舊格式的解析，啟動時對舊格式印警告。
-3. **每個 repo 各自的規則**：以 session 的 repo 根目錄載入 `.ade/policy.toml`，疊在全域規則之上；`deny` 取聯集，repo 層級不能移除全域的 `deny`。
-4. **Claude**：研究以 `--permission-prompt-tool` 指向 `ade mcp` 的一個審批工具，讓 `-p` 模式的審批走到 daemon。本機 `claude --help` 確認有 `--permission-prompt-tool` 與 `--permission-prompts host`，但工具的輸入輸出格式仍要先查證再實作；若不可行，就在 spawn Claude 且 `deny` 非空時於 TUI 顯示「規則引擎不適用於此 session」。
+3. **每個 repo 各自的規則**：以 session 的 repo 根目錄載入 `.termade/policy.toml`，疊在全域規則之上；`deny` 取聯集，repo 層級不能移除全域的 `deny`。
+4. **Claude**：研究以 `--permission-prompt-tool` 指向 `termade mcp` 的一個審批工具，讓 `-p` 模式的審批走到 daemon。本機 `claude --help` 確認有 `--permission-prompt-tool` 與 `--permission-prompts host`，但工具的輸入輸出格式仍要先查證再實作；若不可行，就在 spawn Claude 且 `deny` 非空時於 TUI 顯示「規則引擎不適用於此 session」。
 5. **文件誠實**：README 說明規則引擎是防呆而非安全邊界，字串比對可以被改寫指令繞過；真正的隔離要靠 agent 自己的 sandbox。
 
 ## 驗收條件

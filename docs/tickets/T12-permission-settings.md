@@ -1,6 +1,6 @@
 # T12 — 權限的設定、顯示與子 agent 上限
 
-優先度：P1　範圍：`ade-core`、`ade-protocol`、`ade-adapter`、`ade-daemon`、`ade-tui`　相依：T11（設定檔）
+優先度：P1　範圍：`termade-core`、`termade-protocol`、`termade-adapter`、`termade-daemon`、`termade-tui`　相依：T11（設定檔）
 
 T04 處理的是「規則引擎有沒有被呼叫到」。這張票處理的是「權限能在哪裡設定、設定後看不看得到、agent 能不能自己放寬」。
 
@@ -8,19 +8,19 @@ T04 處理的是「規則引擎有沒有被呼叫到」。這張票處理的是�
 
 1. **TUI 不能選權限**：從 TUI 建立的 session 一律是預設的 `auto`。要用 `ask` 或 `bypass` 只能改用 CLI。
 2. **沒有預設值設定**：不能設定「這個 repo 一律 `ask`」或「reviewer 角色一律唯讀」。
-3. **權限不在狀態裡**：`Session` 沒有記錄它的權限政策，TUI 與 `ade sessions` 看不出哪個 session 是 `bypass`，事後審計也查不到。
-4. **agent 可以自行放寬權限**：MCP 的 `ade_spawn` 接受 `permission: "bypass"`。一個以 `ask` 啟動的 agent 可以 spawn 一個 `bypass` 的子 agent，讓它去做自己不被允許的事。
+3. **權限不在狀態裡**：`Session` 沒有記錄它的權限政策，TUI 與 `termade sessions` 看不出哪個 session 是 `bypass`，事後審計也查不到。
+4. **agent 可以自行放寬權限**：MCP 的 `termade_spawn` 接受 `permission: "bypass"`。一個以 `ask` 啟動的 agent 可以 spawn 一個 `bypass` 的子 agent，讓它去做自己不被允許的事。
 5. **只有三段式旋鈕**：沒有辦法限制可用工具、sandbox 範圍或唯讀模式。設計文件第 9 節提到的 `--allowedTools`、sandbox、`--bare` 都沒有做成可設定的選項。
 
 ## 證據
 
-- `crates/ade-tui/src/lib.rs:1151`：`permission: Default::default()`；`submit_spawn` 只解析 `<agent> <prompt>`。
-- `crates/ade-core/src/lib.rs` 的 `Session`：欄位有 `cwd`、`branch`、`role`、`model` 等，沒有 `permission`。
-- `crates/ade-daemon/src/mcp.rs:305-309`：`ade_spawn` 的 schema 列出 `"enum": ["ask", "auto", "bypass"]`；`613-616` 直接採用。
-- `crates/ade-daemon/src/lib.rs:1264-1345`：`handle_spawn` 沒有比較 `spawn.permission` 與父 session 的權限。
-- `crates/ade-adapter/src/claude.rs:305`：唯一的工具限制是固定加上 `--allowedTools=mcp__ade__*`（放行 ade 自己的 MCP 工具）。
+- `crates/termade-tui/src/lib.rs:1151`：`permission: Default::default()`；`submit_spawn` 只解析 `<agent> <prompt>`。
+- `crates/termade-core/src/lib.rs` 的 `Session`：欄位有 `cwd`、`branch`、`role`、`model` 等，沒有 `permission`。
+- `crates/termade-daemon/src/mcp.rs:305-309`：`termade_spawn` 的 schema 列出 `"enum": ["ask", "auto", "bypass"]`；`613-616` 直接採用。
+- `crates/termade-daemon/src/lib.rs:1264-1345`：`handle_spawn` 沒有比較 `spawn.permission` 與父 session 的權限。
+- `crates/termade-adapter/src/claude.rs:305`：唯一的工具限制是固定加上 `--allowedTools=mcp__termade__*`（放行 termade 自己的 MCP 工具）。
 - `grep 'sandbox\|disallowedTools\|--bare'`：沒有結果。
-- `crates/ade-adapter/src/codex.rs:420-425`：`thread/start` 只帶 `cwd` 與 `approvalPolicy`。
+- `crates/termade-adapter/src/codex.rs:420-425`：`thread/start` 只帶 `cwd` 與 `approvalPolicy`。
 
 ## 分析邏輯
 
@@ -31,10 +31,10 @@ T04 處理的是「規則引擎有沒有被呼叫到」。這張票處理的是�
 
 ## 實作方式
 
-1. **權限寫進狀態**：`Session` 增加 `permission: PermissionPolicy`（`#[serde(default)]`，舊 log 可重播）。TUI 的 sessions 欄對 `bypass` 用醒目顏色標示，`ade sessions` 多一欄。
+1. **權限寫進狀態**：`Session` 增加 `permission: PermissionPolicy`（`#[serde(default)]`，舊 log 可重播）。TUI 的 sessions 欄對 `bypass` 用醒目顏色標示，`termade sessions` 多一欄。
 2. **子 agent 不得高於父 agent**：定義順序 `ask < auto < bypass`。`handle_spawn` 在 `parent` 存在時把請求的權限壓到不超過父 session，並在回覆中註明被調降。人類從 CLI／TUI 發出的 spawn（沒有 `parent`）不受限。
 
-   注意 `parent` 目前由 client 自己填（CLI 讀 `$ADE_SESSION`，MCP 由 `ade mcp --session` 帶入）。agent 可以直接跑 `ade spawn --permission bypass` 並清掉環境變數來規避，所以這是防呆，不是安全邊界；完整的做法需要 daemon 能辨識連線來自哪個 session，另開票處理。
+   注意 `parent` 目前由 client 自己填（CLI 讀 `$TERMADE_SESSION`，MCP 由 `termade mcp --session` 帶入）。agent 可以直接跑 `termade spawn --permission bypass` 並清掉環境變數來規避，所以這是防呆，不是安全邊界；完整的做法需要 daemon 能辨識連線來自哪個 session，另開票處理。
 3. **預設值**（放進 T11 的 `config.toml`）：
    ```toml
    [defaults]
@@ -53,7 +53,7 @@ T04 處理的是「規則引擎有沒有被呼叫到」。這張票處理的是�
    sandbox = "workspace-write"     # read-only | workspace-write | danger-full-access
    ```
 4. **細部選項的對應**：
-   - Claude：`allowed_tools`／`disallowed_tools` → `--allowedTools`／`--disallowedTools`（與既有的 `mcp__ade__*` 合併）；`read_only` → `--permission-mode plan`。
+   - Claude：`allowed_tools`／`disallowed_tools` → `--allowedTools`／`--disallowedTools`（與既有的 `mcp__termade__*` 合併）；`read_only` → `--permission-mode plan`。
    - Codex：`sandbox` → `thread/start` 的 sandbox 參數；`read_only` → `read-only`。欄位名稱要先以實機或文件確認，本機沒有安裝 Codex。
    - ACP（OpenCode／Antigravity）：協定沒有對應的啟動參數，`read_only` 由 daemon 端達成——T04 完成後，在 `ingest` 對寫入類的審批請求自動拒絕。
    - 某個 agent 不支援某選項時，spawn 回傳明確錯誤，不要靜默忽略。
@@ -66,5 +66,5 @@ T04 處理的是「規則引擎有沒有被呼叫到」。這張票處理的是�
 - 測試：沒有 `parent` 的 spawn 可以取得 `bypass`。
 - 測試：舊的 `events.jsonl`（`Session` 沒有 `permission`）可以重播。
 - 測試：`roles.reviewer.permission` 生效，且可被 spawn 請求的明確值覆寫。
-- 測試：Claude 的 `allowed_tools` 與固定的 `mcp__ade__*` 一起出現在命令列。
+- 測試：Claude 的 `allowed_tools` 與固定的 `mcp__termade__*` 一起出現在命令列。
 - TUI 能在建立 session 時選權限，並在清單中看得出 `bypass` 的 session。

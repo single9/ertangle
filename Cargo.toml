@@ -1,19 +1,19 @@
 [package]
-name = "ade"
+name = "termade"
 description = "Terminal-native Agent Development Environment (TUI)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "ade"
+name = "termade"
 path = "src/main.rs"
 
 [dependencies]
-ade-core = { workspace = true }
-ade-protocol = { workspace = true }
-ade-daemon = { workspace = true }
-ade-tui = { workspace = true }
+termade-core = { workspace = true }
+termade-protocol = { workspace = true }
+termade-daemon = { workspace = true }
+termade-tui = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
@@ -31,11 +31,11 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
-ade-core = { path = "crates/ade-core" }
-ade-protocol = { path = "crates/ade-protocol" }
-ade-adapter = { path = "crates/ade-adapter" }
-ade-daemon = { path = "crates/ade-daemon" }
-ade-tui = { path = "crates/ade-tui" }
+termade-core = { path = "crates/termade-core" }
+termade-protocol = { path = "crates/termade-protocol" }
+termade-adapter = { path = "crates/termade-adapter" }
+termade-daemon = { path = "crates/termade-daemon" }
+termade-tui = { path = "crates/termade-tui" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

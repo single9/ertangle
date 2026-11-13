@@ -1,6 +1,6 @@
-# ade — 設計文件
+# termade — 設計文件
 
-> 目標：用 **Rust + Ratatui** 做一個終端機原生的 ADE（Agent Development Environment）。
+> 目標：用 **Rust + Ratatui** 做一個終端機原生的 termade（終端機版 Agent Development Environment）。
 > 核心價值是「**多個 agent 互相溝通、協作、平行工作**」，而不是複製 GUI IDE 的圖形功能。
 
 > **已定案的前提（v1）**
@@ -22,7 +22,7 @@
 
 ## 0. 一句話定義
 
-`ade` 是一個**常駐 daemon + 可拋棄式 TUI 前端**的系統：
+`termade` 是一個**常駐 daemon + 可拋棄式 TUI 前端**的系統：
 
 - daemon 負責「跑 agent、管 worktree、轉譯各家 agent 協定、當訊息交換中心」。
 - TUI 只負責「顯示狀態、收鍵盤輸入、把指令送回 daemon」，因此啟動快、記憶體小、可隨時關掉重開。
@@ -50,10 +50,10 @@
 ## 2. 為什麼是這個架構
 
 ### 2.1 前端與狀態分離（daemon + client）
-GUI ADE 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態放在 daemon：
+GUI termade 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態放在 daemon：
 
 - agent 程序的生命週期與 TUI 解耦 → 可以關 TUI、之後再 attach。
-- 多個 client（TUI、`ade` CLI、未來的 web）可同時看同一份狀態。
+- 多個 client（TUI、`termade` CLI、未來的 web）可同時看同一份狀態。
 - 事件流是 append-only log → 天然可重播、可審計、可 diff。
 
 ### 2.2 為什麼選 ACP 當主要整合面
@@ -85,7 +85,7 @@ GUI ADE 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態放在
 
 ```
                           ┌───────────────────────────────────────────────┐
-                          │              ade (TUI client)                 │
+                          │              termade (TUI client)                 │
                           │   ratatui · 只渲染 + 收鍵盤 · 可隨時重啟       │
                           └───────────────┬───────────────────────────────┘
                                           │ control socket (Unix, NDJSON / JSON-RPC)
@@ -112,28 +112,28 @@ GUI ADE 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態放在
         │ opencode  │        │ claude code │        │   codex     │        │ antigravity │
         │ acp       │        │ acp / stream│        │ app-server  │        │ agy / acp   │
         └───────────┘        └─────────────┘        └─────────────┘        └─────────────┘
-              ▲  每個 agent 都可透過 ade MCP tools 或 `ade` CLI 呼叫 daemon
+              ▲  每個 agent 都可透過 termade MCP tools 或 `termade` CLI 呼叫 daemon
 ```
 
 **單一執行檔、多種模式**（啟動快、部署簡單）：
 
 ```
-ade                 # 等同 ade tui：確保 daemon 在跑 → attach
-ade daemon          # 前景執行 daemon（--detach 可背景化）
-ade tui             # 純前端
-ade mcp             # 以 stdio 跑 MCP server（供 agent 子程序當 MCP server 用）
-ade send/recv/tasks # CLI，給 shell / agent 用
-ade spawn ...       # 建立 session（可指定 agent、worktree、prompt）
+termade                 # 等同 termade tui：確保 daemon 在跑 → attach
+termade daemon          # 前景執行 daemon（--detach 可背景化）
+termade tui             # 純前端
+termade mcp             # 以 stdio 跑 MCP server（供 agent 子程序當 MCP server 用）
+termade send/recv/tasks # CLI，給 shell / agent 用
+termade spawn ...       # 建立 session（可指定 agent、worktree、prompt）
 ```
 
-daemon 的 socket 放 `$XDG_RUNTIME_DIR/ade/daemon.sock`（或 `~/.local/state/ade/`），
-`ade tui` 找不到就自動 spawn 一個 daemon（類似 `opencode` 的行為）。
+daemon 的 socket 放 `$XDG_RUNTIME_DIR/termade/daemon.sock`（或 `~/.local/state/termade/`），
+`termade tui` 找不到就自動 spawn 一個 daemon（類似 `opencode` 的行為）。
 
 ---
 
 ## 4. 核心抽象
 
-以 `ade-core` 定義，所有 adapter 與前端共用。
+以 `termade-core` 定義，所有 adapter 與前端共用。
 
 ### 4.1 `AgentKind`
 ```rust
@@ -158,7 +158,7 @@ struct Session {
 ```
 
 ### 4.3 `Event`（append-only log 的元素）
-定義於 `crates/ade-core/src/lib.rs`，序列化為 `{"kind": "snake_case", ...}`，外層 `Record { seq, ts, event }`：
+定義於 `crates/termade-core/src/lib.rs`，序列化為 `{"kind": "snake_case", ...}`，外層 `Record { seq, ts, event }`：
 ```rust
 enum Event {
     SessionStarted { session },
@@ -181,7 +181,7 @@ enum Event {
 所有狀態都是 fold(Event) 的結果（`State`）→ TUI 重連時能重建畫面。
 
 ### 4.4 Adapter 與 `AgentControl`（現況：同步、std thread）
-`crates/ade-adapter/src/lib.rs` 以**同步 trait** 實作，沒有 async runtime：
+`crates/termade-adapter/src/lib.rs` 以**同步 trait** 實作，沒有 async runtime：
 
 ```rust
 trait AgentControl: Send + Sync {
@@ -228,10 +228,10 @@ struct Task {
 提供**三種互補機制**，由強到弱，確保任何 agent 都能參與。
 
 ### 機制 A（主要）：把 bus 做成 MCP server，注入每個 agent
-daemon 開一個 MCP server（`ade mcp`）。spawn agent 時，透過該 agent 自己的 MCP 設定把它接上去：
+daemon 開一個 MCP server（`termade mcp`）。spawn agent 時，透過該 agent 自己的 MCP 設定把它接上去：
 
-- Claude Code：`--mcp-config <ade.json>`
-- Codex：`~/.codex/config.toml` 的 `[mcp_servers.ade]`（或在 session 建立時帶入）
+- Claude Code：`--mcp-config <termade.json>`
+- Codex：`~/.codex/config.toml` 的 `[mcp_servers.termade]`（或在 session 建立時帶入）
 - OpenCode：`opencode.json` 的 `mcp` 欄位（ACP `session/new` 也接受 MCP servers）
 - Antigravity：`~/.gemini/antigravity-cli/settings.json` 的 MCP 設定
 
@@ -239,29 +239,29 @@ daemon 開一個 MCP server（`ade mcp`）。spawn agent 時，透過該 agent �
 
 | MCP tool | 用途 |
 | --- | --- |
-| `ade_whoami()` | 回傳自己的 session id、role、worktree、branch |
-| `ade_peers()` | 列出其他 session（id、role、status、正在做什麼） |
-| `ade_send(to, body, kind?)` | 傳訊息給某個 session / channel / broadcast |
-| `ade_inbox()` | 讀取尚未處理的訊息 |
-| `ade_wait(timeout_ms)` | 阻塞等待下一則訊息（協作交握用） |
-| `ade_ask(peer, question, timeout_ms)` | 送出問題並等回覆（request/response） |
-| `ade_task_list()` / `ade_task_create()` / `ade_task_update()` | 共用任務看板 |
-| `ade_spawn(kind?, prompt, worktree?, role?)` | **agent 產生子 agent**（協調者 → 工作者） |
-| `ade_artifact_share(path\|branch\|diff)` | 分享產出（檔案、分支、diff）給他人或看板 |
-| `ade_status(text)` | 更新自己在 TUI 上的狀態字串（輕量進度回報） |
+| `termade_whoami()` | 回傳自己的 session id、role、worktree、branch |
+| `termade_peers()` | 列出其他 session（id、role、status、正在做什麼） |
+| `termade_send(to, body, kind?)` | 傳訊息給某個 session / channel / broadcast |
+| `termade_inbox()` | 讀取尚未處理的訊息 |
+| `termade_wait(timeout_ms)` | 阻塞等待下一則訊息（協作交握用） |
+| `termade_ask(peer, question, timeout_ms)` | 送出問題並等回覆（request/response） |
+| `termade_task_list()` / `termade_task_create()` / `termade_task_update()` | 共用任務看板 |
+| `termade_spawn(kind?, prompt, worktree?, role?)` | **agent 產生子 agent**（協調者 → 工作者） |
+| `termade_artifact_share(path\|branch\|diff)` | 分享產出（檔案、分支、diff）給他人或看板 |
+| `termade_status(text)` | 更新自己在 TUI 上的狀態字串（輕量進度回報） |
 
-> 這是「agent 驅動 orchestration」的關鍵：**協調者 agent 可以直接 `ade_spawn` 出 worker**，
+> 這是「agent 驅動 orchestration」的關鍵：**協調者 agent 可以直接 `termade_spawn` 出 worker**，
 > 而 worker 的審批、狀態、訊息全部回到 TUI，人類可隨時介入。
 
-### 機制 B：`ade` CLI（給 shell / 不支援 MCP 的 agent）
+### 機制 B：`termade` CLI（給 shell / 不支援 MCP 的 agent）
 同一批能力也有 CLI 形式，agent 只要會跑 shell 就能用：
 
 ```bash
-ade whoami
-ade send --to worker/checkout "請先跑測試再交棒"
-ade inbox --json
-ade task create "修正 EU 郵遞區號驗證"
-ade spawn --kind codex --worktree --role worker "實作 X，完成後 ade send --to coordinator done"
+termade whoami
+termade send --to worker/checkout "請先跑測試再交棒"
+termade inbox --json
+termade task create "修正 EU 郵遞區號驗證"
+termade spawn --kind codex --worktree --role worker "實作 X，完成後 termade send --to coordinator done"
 ```
 
 CLI 內部直接打 daemon 的 control socket，零額外成本。
@@ -270,22 +270,22 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 對於不支援 MCP 又不方便跑 CLI 的 agent，daemon 會把收到的訊息同步寫到：
 
 ```
-<cwd>/.ade/mailbox/<session>.jsonl   # 收到的訊息（daemon 單向寫入，append_mailbox）
+<cwd>/.termade/mailbox/<session>.jsonl   # 收到的訊息（daemon 單向寫入，append_mailbox）
 ```
 
 **未實作**：原設計的 `outbox/<session>.jsonl`（agent 寫入、daemon 以 `notify` 監看後轉發到 bus）、
-`tasks.json` 快照與 `AGENTS.md` 片段注入。目前 agent 若要回覆，仍須透過 MCP 或 `ade` CLI。
+`tasks.json` 快照與 `AGENTS.md` 片段注入。目前 agent 若要回覆，仍須透過 MCP 或 `termade` CLI。
 
 ### 協作模式（由 config 定義 role）
-- **Hub-and-spoke**：Coordinator 收需求 → 拆任務 → `ade_spawn` 多個 worker（各自 worktree）→ worker 回報 → Coordinator 整合。
-- **Peer-to-peer**：實作者 ↔ 審查者直接對話（`ade_ask` / `ade_send`），人類只旁觀。
+- **Hub-and-spoke**：Coordinator 收需求 → 拆任務 → `termade_spawn` 多個 worker（各自 worktree）→ worker 回報 → Coordinator 整合。
+- **Peer-to-peer**：實作者 ↔ 審查者直接對話（`termade_ask` / `termade_send`），人類只旁觀。
 - **Channels**：`#build`、`#review`、`#alerts` 廣播。
 - **Handoff**（僅有 `kind=handoff` 訊息類型，會喚醒對方；**未實作**連同 worktree 轉交 session）：一個 agent 把 session 連同 worktree 交給另一個（換模型/換工具續做）。
 
 ### 防呆（避免 agent 無限互傳）
 - 每對 session 的訊息速率限制 + 迴圈偵測（相同 body 連續出現 N 次即斷路）。
 - 每個 task 的訊息預算（token/回合上限）：**未實作**。
-- `ade_wait` 有 timeout，預設不會永久阻塞。
+- `termade_wait` 有 timeout，預設不會永久阻塞。
 
 ---
 
@@ -305,7 +305,7 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 ```
 
 TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重建。
-事件以 `seq` 單調遞增，log 落地為 `.ade/log/events.jsonl`（可選 rotate / 上限）。
+事件以 `seq` 單調遞增，log 落地為 `.termade/log/events.jsonl`（可選 rotate / 上限）。
 
 ---
 
@@ -330,7 +330,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 - **左**：repo → worktree → session 樹；狀態以顏色/符號表示（●忙 ○閒 ⏸待審批 ✗失敗）。
 - **中**：選定 session 的對話/工具呼叫/diff（結構化渲染；無法結構化時 fallback 成 PTY 原始輸出）。
   - 逐字稿會即時渲染 **Markdown**：標題、粗體／斜體／刪除線、行內程式碼、連結、無序／有序／工作清單、引言、分隔線、圍籬程式碼區塊（含語言標籤與底色）、GFM 表格（含對齊）。
-  - ade 的語意前綴分色：`❯`（使用者 prompt，綠色）、`💭`（思考，暗色斜體）、`▸`（工具呼叫，琥珀色）、`💬`（審查註解，洋紅）。
+  - termade 的語意前綴分色：`❯`（使用者 prompt，綠色）、`💭`（思考，暗色斜體）、`▸`（工具呼叫，琥珀色）、`💬`（審查註解，洋紅）。
   - 支援翻頁捲動與「跟隨最新」（follow-tail），右側顯示捲軸；滾輪可捲動，滑鼠拖曳可直接選取逐字稿（只含中央區塊）並以 OSC 52 複製；`F2` 可關閉滑鼠擷取改用終端原生選取；`t` 可在渲染後與原始文字間切換。
   - `💭` 思考行預設隱藏（`T` 或 `/thoughts` 切換），避免長篇思考拖慢渲染。
   - `Y` 或 `/copy` 以 OSC 52 複製中央主要區塊（不含側欄與邊框），在 SSH / tmux 下也不需終端原生選取。
@@ -381,7 +381,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 
 ## 8. 工作區與 Git worktree
 
-- 每個「要寫檔的」session 預設配一個 worktree：`git worktree add .ade/wt/<session> -b ade/<label>`。
+- 每個「要寫檔的」session 預設配一個 worktree：`git worktree add .termade/wt/<session> -b termade/<label>`。
 - 唯讀 session（reviewer）可共用主 checkout（唯讀）。
 - daemon 提供：列出 worktree、取 diff、合併回主分支、開 PR（呼叫 `gh` 或 `git`）。
 - 衝突處理：以「一個 worktree 一個 branch」為原則，避免同時改同一檔；需要整合時由 coordinator/人類決定。
@@ -401,13 +401,13 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
   | `Ask` | 轉發 `session/request_permission` | `--permission-mode manual` | `approvalPolicy: untrusted` |
   | `Auto`（預設） | adapter 代核准（`allow_once`） | `--permission-mode acceptEdits` | `approvalPolicy: on-request` |
   | `Bypass` | adapter 代核准（`allow_always`） | `--dangerously-skip-permissions` | `approvalPolicy: never` |
-- **Policy engine**（`.ade/policy.toml` 或 `~/.config/ade/policy.toml`；生效範圍與缺口見 T04）：
+- **Policy engine**（`.termade/policy.toml` 或 `~/.config/termade/policy.toml`；生效範圍與缺口見 T04）：
   - 允許：`Read`、`Grep`、`Glob`、`git status`
   - 詢問：檔案寫入、`Bash`、網路
   - 拒絕：`rm -rf`、`git push --force`、讀取 `~/.ssh`、外洩風險樣式
 - **預設最小權限**：Claude 用 `--permission-mode` + `--allowedTools`；Codex 用 sandbox + approval policy；
   對「不受信任的 repo」走 `--bare`（不載入 hooks/plugins/CLAUDE.md）。
-- **秘密保護**：`redact_secrets` 目前只套用在寫入事件 log 與 `ade_diff` 的回傳；**其他 MCP 工具的回傳尚未做敏感樣式過濾**（原設計項目，未實作）。
+- **秘密保護**：`redact_secrets` 目前只套用在寫入事件 log 與 `termade_diff` 的回傳；**其他 MCP 工具的回傳尚未做敏感樣式過濾**（原設計項目，未實作）。
 - **審計**：所有事件落地成 jsonl，可事後重建「誰在何時批准了什麼」。
 
 ---
@@ -416,7 +416,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 
 | 項目 | 目標 |
 | --- | --- |
-| `ade` TUI 冷啟動 | < 150 ms |
+| `termade` TUI 冷啟動 | < 150 ms |
 | TUI 常駐 RSS | < 20 MB |
 | daemon 閒置 RSS（不含 agent） | < 25 MB |
 | 事件延遲（agent→TUI） | < 50 ms |
@@ -455,23 +455,23 @@ daemon 可選擇性讓閒置 session 進入休眠（保留狀態、暫停子程�
 ## 12. Repo 結構（Cargo workspace）
 
 ```
-ade-rust/
+termade-rust/
 ├─ Cargo.toml                # workspace
 ├─ crates/
-│  ├─ ade-core/              # 領域型別、Event、fold/state、bus、task
-│  ├─ ade-protocol/          # control API 與 bus 的 wire 型別
-│  ├─ ade-adapter/           # AgentControl trait + 各 agent 實作
+│  ├─ termade-core/              # 領域型別、Event、fold/state、bus、task
+│  ├─ termade-protocol/          # control API 與 bus 的 wire 型別
+│  ├─ termade-adapter/           # AgentControl trait + 各 agent 實作
 │  │   ├─ acp.rs             #   ACP client（opencode / agy）
 │  │   ├─ claude.rs          #   Claude stream-json
 │  │   ├─ codex.rs           #   Codex app-server
 │  │   ├─ stream.rs          #   共用 token→行 串流緩衝（StreamBuf）
 │  │   ├─ pty.rs             #   PTY 直通萬用後備
 │  │   └─ ansi.rs            #   ANSI 控制碼剝除
-│  ├─ ade-daemon/            # supervisor、socket server、worktree（lib.rs）、MCP server（mcp.rs）
-│  └─ ade-tui/               # ratatui 前端
+│  ├─ termade-daemon/            # supervisor、socket server、worktree（lib.rs）、MCP server（mcp.rs）
+│  └─ termade-tui/               # ratatui 前端
 │      ├─ lib.rs             #   版面、事件迴圈、視圖切換
 │      └─ markdown.rs        #   零依賴 Markdown → Ratatui 行渲染器
-├─ src/                      # `ade` binary（tui/daemon/mcp/send/spawn/...）
+├─ src/                      # `termade` binary（tui/daemon/mcp/send/spawn/...）
 │  └─ main.rs                #   根目錄 package 入口，支援 `cargo install --path .`
 └─ docs/
    ├─ DESIGN.md              # 本文件
@@ -479,22 +479,22 @@ ade-rust/
    └─ tickets/               # 改善計畫票
 ```
 
-單一 binary `ade`，子命令分派到各 crate；`ade mcp` 也可獨立當 MCP server 執行檔。
+單一 binary `termade`，子命令分派到各 crate；`termade mcp` 也可獨立當 MCP server 執行檔。
 
 ---
 
 ## 13. 里程碑
 
 **M0 — 骨架可跑（已完成，見 `crates/`）**
-Cargo workspace + `ade-core` 型別 + `ade-protocol` 控制 API + daemon（Unix socket、event log、訊息匯流排）
-+ `ade-tui`（attach、即時事件、輸入）+ `ade` CLI；
+Cargo workspace + `termade-core` 型別 + `termade-protocol` 控制 API + daemon（Unix socket、event log、訊息匯流排）
++ `termade-tui`（attach、即時事件、輸入）+ `termade` CLI；
 adapter 實作 **PTY 直通**（對任何 agent 都有效）與 **OpenCode ACP**（原生結構化）。
 
 M0 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 **M1 — 四家 agent 都能跑（原生，零 Node）（已完成，見 `crates/`）**
 Claude（`claude -p` stream-json 雙向）、Codex（`codex app-server`）、Antigravity（`agy acp`）。
-統一審批通道與權限政策（`PermissionPolicy`）。共用的串流行緩衝抽到 `ade-adapter::stream`。
+統一審批通道與權限政策（`PermissionPolicy`）。共用的串流行緩衝抽到 `termade-adapter::stream`。
 
 M1 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
@@ -504,25 +504,25 @@ M1 未完成項（受環境限制，程式路徑已就緒）：
   `session/request_permission`；轉發程式路徑已完成但少有机会實測。
 - **Claude 逐項審批**：`-p` 模式不會穩定發出可轉發的審批請求，留待 M2 以 MCP 權限工具處理。
 
-**M2 — 協作核心（已完成，見 `crates/ade-daemon/src/mcp.rs`）**
-Message bus + task board + **`ade mcp` server** + `ade` CLI；agent 可 `send/inbox/wait/ask/task/spawn/artifact/status`。
-端到端 demo：coordinator 用 `ade_spawn` 產生兩個 worker，各自 worktree，完成後回報並整合。
+**M2 — 協作核心（已完成，見 `crates/termade-daemon/src/mcp.rs`）**
+Message bus + task board + **`termade mcp` server** + `termade` CLI；agent 可 `send/inbox/wait/ask/task/spawn/artifact/status`。
+端到端 demo：coordinator 用 `termade_spawn` 產生兩個 worker，各自 worktree，完成後回報並整合。
 
 M2 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
-**M3 — 工作區與 review（已完成，見 `crates/ade-daemon` 與 `crates/ade-tui`）**
-worktree 管理（`ade worktrees` / `ade gc`）、彩色 diff 視圖（含未追蹤新檔預覽，`ade diff` / TUI `g` 鍵）、行內註解送回 agent（`ade review` / TUI `c` 鍵）、自動 commit 並 merge 回主工作區（`ade merge` / TUI `M` 鍵）/ 開 PR（`ade pr`）。
+**M3 — 工作區與 review（已完成，見 `crates/termade-daemon` 與 `crates/termade-tui`）**
+worktree 管理（`termade worktrees` / `termade gc`）、彩色 diff 視圖（含未追蹤新檔預覽，`termade diff` / TUI `g` 鍵）、行內註解送回 agent（`termade review` / TUI `c` 鍵）、自動 commit 並 merge 回主工作區（`termade merge` / TUI `M` 鍵）/ 開 PR（`termade pr`）。
 
-**M4 — 打磨（已完成，見 `crates/ade-core`、`crates/ade-daemon`、`crates/ade-tui`）**
-命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、成本/用量追蹤（`ade cost` 與 TUI 標題列）、閒置休眠與自動喚醒（`SIGSTOP`/`SIGCONT`，`ade sleep`/`ade wake`/TUI `z` 鍵）、事件重播与增量同步（`ade replay`、`Hello.since`）、Policy 規則引擎（`policy.toml`）與秘密自動遮罩（`redact_secrets`）。
+**M4 — 打磨（已完成，見 `crates/termade-core`、`crates/termade-daemon`、`crates/termade-tui`）**
+命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、成本/用量追蹤（`termade cost` 與 TUI 標題列）、閒置休眠與自動喚醒（`SIGSTOP`/`SIGCONT`，`termade sleep`/`termade wake`/TUI `z` 鍵）、事件重播与增量同步（`termade replay`、`Hello.since`）、Policy 規則引擎（`policy.toml`）與秘密自動遮罩（`redact_secrets`）。
 
-**TUI 檢視區與 Markdown 渲染（已完成，見 `crates/ade-tui/src/markdown.rs`）**
+**TUI 檢視區與 Markdown 渲染（已完成，見 `crates/termade-tui/src/markdown.rs`）**
 零依賴 Markdown 渲染器（標題／粗體／斜體／刪除線／行內程式碼／連結／清單／引言／分隔線／圍籬程式碼／GFM 表格）、
 語意前綴分色（`💭`／`▸`／`💬`）、逐字稿翻頁捲動 + 跟隨最新 + 捲軸 + `t` 原始／渲染切換、
 Diff 視圖舊新行號邊欄與 `+N -M` 統計與 `{`/`}` hunk 跳轉、響應式三欄寬度與兩行標題列。
 
-**M5 — 遠端（已完成，見 `crates/ade-daemon` 與 `src/main.rs`）**
-daemon 支援 `--listen <host:port> --token <secret>`（TCP + token 驗證），client 支援 `--remote <host:port> --token <secret>`（或 `ADE_REMOTE` / `ADE_TOKEN` 環境變數）與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
+**M5 — 遠端（已完成，見 `crates/termade-daemon` 與 `src/main.rs`）**
+daemon 支援 `--listen <host:port> --token <secret>`（TCP + token 驗證），client 支援 `--remote <host:port> --token <secret>`（或 `TERMADE_REMOTE` / `TERMADE_TOKEN` 環境變數）與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
 
 M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
@@ -535,7 +535,7 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | ACP adapter 品質不一 | 以 `probe()` 偵測能力；ACP 不穩就退回原生 headless；adapter 可個別關閉 |
 | Antigravity 的程式化介面較新 | 先以 `agy -p` headless 起步，ACP 支援成熟後切換 |
 | 各 agent 對 MCP 設定方式不同 | adapter 負責「注入 MCP 設定」；同時保留 CLI 與檔案信箱作為退路 |
-| agent 互傳訊息造成無限迴圈 / 成本爆炸 | 速率限制、迴圈偵測、每任務預算、`ade_wait` timeout |
+| agent 互傳訊息造成無限迴圈 / 成本爆炸 | 速率限制、迴圈偵測、每任務預算、`termade_wait` timeout |
 | 多 agent 同時改同檔 | 一 worktree 一 branch；整合交給 coordinator/人 |
 | 授權與合規 | 各 agent 用自己的訂閱/金鑰（BYO）；我們不代理也不儲存憑證 |
 | TUI 對超長輸出的效能 | 虛擬捲動 + ring buffer + delta 合併 |
@@ -545,8 +545,8 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 1. **主要平台**：先 Linux/macOS（Unix socket、PTY），Windows 之後再補。
 2. **daemon 形態**：單一常駐 daemon 管所有 repo。
 3. **ACP adapter 是否可接受 Node 依賴**：盡量零 Node，四家都走原生介面。
-4. **MCP 還是 CLI 優先**：M2 先做 MCP（`ade mcp`），CLI 與檔案信箱作為退路。
-5. **是否要 agent 自主 `ade_spawn`**：M2 開啟，但加上速率限制與迴圈偵測（見風險表）。
+4. **MCP 還是 CLI 優先**：M2 先做 MCP（`termade mcp`），CLI 與檔案信箱作為退路。
+5. **是否要 agent 自主 `termade_spawn`**：M2 開啟，但加上速率限制與迴圈偵測（見風險表）。
 6. **預設權限政策**：`Auto`（不中斷流程）；需要逐項審批時用 `Ask`，全開用 `Bypass`。
    M2 再以 MCP 權限工具補上 Claude / Codex 的逐項轉發（**Claude 仍未實作**，Codex 有轉發路徑但未實機驗證）。
 
@@ -557,15 +557,15 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 > 使用者在 TUI 對 coordinator 說：「修正 EU 結帳的郵遞區號驗證，加測試，開 PR。」
 
 1. TUI `spawn` coordinator（Claude Code，role=coordinator，共用主 checkout）。
-2. Coordinator 透過 MCP `ade_task_create` 建 2 個任務，`ade_spawn` 出：
-   - worker/impl（Codex，`--worktree`，branch `ade/eu-zip`）
-   - worker/test（OpenCode，`--worktree`，branch `ade/eu-zip-tests`）
+2. Coordinator 透過 MCP `termade_task_create` 建 2 個任務，`termade_spawn` 出：
+   - worker/impl（Codex，`--worktree`，branch `termade/eu-zip`）
+   - worker/test（OpenCode，`--worktree`，branch `termade/eu-zip-tests`）
 3. 兩個 worker 各自改檔、跑測試；TUI 左側即時顯示狀態，右側顯示 bus 訊息。
-4. worker/test 用 `ade_ask(peer="worker/impl", ...)` 問介面細節；impl 用 `ade_send` 回覆。
+4. worker/test 用 `termade_ask(peer="worker/impl", ...)` 問介面細節；impl 用 `termade_send` 回覆。
 5. worker/impl 觸發 `Bash` 寫入 → daemon 送 `PermissionRequested` → TUI 跳提示 → 使用者按 `a` 允許。
-6. 兩個 worker `ade_task_update(status=done)` 並 `ade_send(to=coordinator, kind=handoff)`。
-7. Coordinator 用 `ade_wait` 收到、跑整合測試、`ade_artifact_share(diff)`。
-8. 使用者在 TUI 的 Diff 視圖審查、留一行註解 → 送回 coordinator → coordinator 修掉 → `ade merge` / 開 PR。
+6. 兩個 worker `termade_task_update(status=done)` 並 `termade_send(to=coordinator, kind=handoff)`。
+7. Coordinator 用 `termade_wait` 收到、跑整合測試、`termade_artifact_share(diff)`。
+8. 使用者在 TUI 的 Diff 視圖審查、留一行註解 → 送回 coordinator → coordinator 修掉 → `termade merge` / 開 PR。
 
 整個過程：人只按了幾個鍵；agent 之間的溝通、分工、交接全走 bus；所有事件可回溯。
 
@@ -577,10 +577,10 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | --- | --- | --- |
 | async runtime | `tokio`、`async_trait Adapter` | 未採用；同步 `AgentControl` + std thread（4.4、11） |
 | `outbox/` 監看 | daemon 以 `notify` 監看 agent 寫入並轉發 | 未實作；只有 `mailbox/` 單向寫入 |
-| MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 僅 log 與 `ade_diff` 套用 `redact_secrets` |
+| MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 僅 log 與 `termade_diff` 套用 `redact_secrets` |
 | 每任務訊息預算 | token／回合上限 | 未實作；只有速率限制與重複迴圈斷路 |
 | Handoff | 連同 worktree 交給另一個 agent | 只有 `handoff` 訊息類型 |
 | `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | 未實作 |
 | Claude 逐項審批 | 轉成 `PermissionRequested` | 未實作（`claude.rs` 不轉發） |
 | Codex 回合、ACP 逐項審批 | 實機驗證 | 程式路徑就緒，未實機驗證 |
-| `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `ade-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |
+| `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `termade-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |

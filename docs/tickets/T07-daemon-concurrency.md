@@ -1,6 +1,6 @@
 # T07 — daemon 併發：鎖內寫檔、無上限佇列、鎖中毒
 
-優先度：P2　範圍：`ade-daemon`　相依：T06
+優先度：P2　範圍：`termade-daemon`　相依：T06
 
 ## 問題
 
@@ -10,9 +10,9 @@
 
 ## 證據
 
-- `crates/ade-daemon/src/lib.rs:400-426`：`emit` 從頭到尾持有 `inner`，`410-415` 在鎖內寫 log。
-- `crates/ade-daemon/src/lib.rs:1630`：`mpsc::channel::<Frame>()`；`425`：`inner.clients.retain(|c| c.send(...).is_ok())`。
-- `grep -c 'unwrap()\|expect('`：`ade-daemon/src/lib.rs` 34 處。
+- `crates/termade-daemon/src/lib.rs:400-426`：`emit` 從頭到尾持有 `inner`，`410-415` 在鎖內寫 log。
+- `crates/termade-daemon/src/lib.rs:1630`：`mpsc::channel::<Frame>()`；`425`：`inner.clients.retain(|c| c.send(...).is_ok())`。
+- `grep -c 'unwrap()\|expect('`：`termade-daemon/src/lib.rs` 34 處。
 
 ## 分析邏輯
 

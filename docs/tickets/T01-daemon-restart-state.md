@@ -1,21 +1,21 @@
 # T01 — daemon 重啟後還原狀態並維持 seq 連續
 
-優先度：P0　範圍：`ade-daemon`、`ade-protocol`、`ade-tui`
+優先度：P0　範圍：`termade-daemon`、`termade-protocol`、`termade-tui`
 
 ## 問題
 
 daemon 每次啟動都從空狀態、`seq = 0` 開始，卻把事件接著寫進同一個 `events.jsonl`。重啟後：
 
 - 先前的 session、任務、匯流排訊息全部從 daemon 的狀態消失。
-- log 內出現重複的 seq，`ade replay --since <seq>` 的語意不再明確。
+- log 內出現重複的 seq，`termade replay --since <seq>` 的語意不再明確。
 - 還連著舊 `since` 的 client 可能拿到錯的增量。
 
 ## 證據
 
-- `crates/ade-daemon/src/lib.rs:1698-1701`：log 以 `append(true)` 開啟。
-- `crates/ade-daemon/src/lib.rs:1708-1711`：`state: State::new()`、`seq: 0`、`backlog: VecDeque::new()`。
-- `crates/ade-daemon/src/lib.rs:106`：`replay_log` 存在，但唯一呼叫者是 `src/main.rs:856`（`ade replay`）。
-- `crates/ade-daemon/src/lib.rs:571-577`：增量同步的條件是 `since + 1 >= backlog.front().seq || since == seq`。
+- `crates/termade-daemon/src/lib.rs:1698-1701`：log 以 `append(true)` 開啟。
+- `crates/termade-daemon/src/lib.rs:1708-1711`：`state: State::new()`、`seq: 0`、`backlog: VecDeque::new()`。
+- `crates/termade-daemon/src/lib.rs:106`：`replay_log` 存在，但唯一呼叫者是 `src/main.rs:856`（`termade replay`）。
+- `crates/termade-daemon/src/lib.rs:571-577`：增量同步的條件是 `since + 1 >= backlog.front().seq || since == seq`。
 
 ## 分析邏輯
 

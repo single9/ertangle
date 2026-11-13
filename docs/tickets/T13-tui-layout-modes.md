@@ -1,6 +1,6 @@
 # T13 — TUI 版面模式：三欄／兩欄／上方 session 分頁
 
-優先度：P2　範圍：`ade-tui`（設定預設值時涉及 T11 的 `config.toml`）
+優先度：P2　範圍：`termade-tui`（設定預設值時涉及 T11 的 `config.toml`）
 
 ## 問題
 
@@ -13,10 +13,10 @@ TUI 的主區固定是三欄（Sessions／中央／Bus），只會隨終端寬�
 
 ## 證據
 
-- `crates/ade-tui/src/lib.rs:1200-1218`：`draw` 內寫死三個 `Constraint`，側欄寬度依終端寬度取 `(22,24)` 到 `(34,42)`。
-- `crates/ade-tui/src/lib.rs:1220-1226`：無條件呼叫 `draw_sessions`、中央視圖、`draw_bus`。
+- `crates/termade-tui/src/lib.rs:1200-1218`：`draw` 內寫死三個 `Constraint`，側欄寬度依終端寬度取 `(22,24)` 到 `(34,42)`。
+- `crates/termade-tui/src/lib.rs:1220-1226`：無條件呼叫 `draw_sessions`、中央視圖、`draw_bus`。
 - `App` 沒有版面模式的欄位（`CenterView` 只切換中央的內容）。
-- `crates/ade-tui/src/lib.rs:1678-1689`：待審批的請求畫在 `draw_bus` 裡。
+- `crates/termade-tui/src/lib.rs:1678-1689`：待審批的請求畫在 `draw_bus` 裡。
 
 ## 分析邏輯
 

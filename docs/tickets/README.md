@@ -37,9 +37,9 @@ T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 
 
 **讀了什麼**
 - 全部：`README.md`、`docs/DESIGN.md`、`Cargo.toml`、`Makefile`。
-- `crates/ade-daemon/src/lib.rs`：路徑、`replay_log`、`Shared::emit`／`ingest`、`Hello`／`Prompt`／`WorktreeMerge`／`WorktreeGc` 處理、所有 git 輔助函式、`handle_conn`、`run_with_options`。
-- `crates/ade-core/src/lib.rs`：`PolicyEngine`、`redact_secrets`。
-- `crates/ade-adapter/src/acp.rs`：`on_permission`。其餘 adapter 只用 grep 看審批相關的行。
+- `crates/termade-daemon/src/lib.rs`：路徑、`replay_log`、`Shared::emit`／`ingest`、`Hello`／`Prompt`／`WorktreeMerge`／`WorktreeGc` 處理、所有 git 輔助函式、`handle_conn`、`run_with_options`。
+- `crates/termade-core/src/lib.rs`：`PolicyEngine`、`redact_secrets`。
+- `crates/termade-adapter/src/acp.rs`：`on_permission`。其餘 adapter 只用 grep 看審批相關的行。
 - 其餘檔案只看了函式／型別大綱與行數。
 
 **跑了什麼**
@@ -54,7 +54,7 @@ T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 
 - 最後看量化指標：檔案行數、測試分布、`unwrap` 數量。
 
 **沒有檢視的範圍**
-- `ade-tui` 的互動邏輯與 `markdown.rs` 的渲染正確性。
+- `termade-tui` 的互動邏輯與 `markdown.rs` 的渲染正確性。
 - `claude.rs`、`codex.rs`、`pty.rs` 的協定處理細節。
 - `mcp.rs` 的工具實作。
 - 效能目標（冷啟動、RSS、事件延遲）沒有量測。

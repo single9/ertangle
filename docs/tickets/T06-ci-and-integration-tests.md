@@ -12,11 +12,11 @@
 
 | 位置 | 測試數 | 備註 |
 | --- | --- | --- |
-| `ade-tui` | 31 | 其中 `markdown.rs` 16 |
-| `ade-adapter` | 12 | `ansi` 4、`stream` 4、`claude` 2、`codex` 1、`lib` 1；`acp.rs` 與 `pty.rs` 為 0 |
-| `ade-daemon` | 7 | 喚醒邏輯與 `BusGuard`；git 函式、`handle_conn`、認證為 0 |
-| `ade-core` | 5 | |
-| `ade-protocol` | 3 | |
+| `termade-tui` | 31 | 其中 `markdown.rs` 16 |
+| `termade-adapter` | 12 | `ansi` 4、`stream` 4、`claude` 2、`codex` 1、`lib` 1；`acp.rs` 與 `pty.rs` 為 0 |
+| `termade-daemon` | 7 | 喚醒邏輯與 `BusGuard`；git 函式、`handle_conn`、認證為 0 |
+| `termade-core` | 5 | |
+| `termade-protocol` | 3 | |
 | `src/main.rs` | 0 | 927 行 |
 
 - repo 沒有 `.github/` 目錄，也沒有其他 CI 設定。
@@ -36,14 +36,14 @@
    - `cargo clippy --all-targets -- -D warnings`
    - `cargo test`
    - 快取 `~/.cargo` 與 `target`。
-2. **假 agent 執行檔**：在 `crates/ade-adapter/tests/` 放一個測試用的小 binary（或以 `[[bin]]` 加 `required-features = ["test-agent"]`），依參數扮演：
+2. **假 agent 執行檔**：在 `crates/termade-adapter/tests/` 放一個測試用的小 binary（或以 `[[bin]]` 加 `required-features = ["test-agent"]`），依參數扮演：
    - ACP agent：回應 `initialize`、`session/new`、`session/prompt`，串流幾段輸出，發一次 `session/request_permission`。
    - Claude stream-json：吐出固定的 JSON 行。
    - Codex app-server：回應握手與一個回合。
 
    adapter 以可設定的執行檔路徑啟動它（若目前寫死 `opencode`／`claude`，加一個測試用的覆寫，例如環境變數）。
 3. **adapter 整合測試**：對每個 adapter 驗證 prompt 往返、輸出事件順序、審批往返、`cancel`、子程序結束時發出 `Exited`。
-4. **daemon 端到端測試**：以暫存目錄設定 `ADE_SOCKET` 與 `XDG_STATE_HOME`，在測試執行緒內啟動 daemon，用 `Client` 走 spawn（假 agent）→ prompt → 收到輸出 → shutdown。
+4. **daemon 端到端測試**：以暫存目錄設定 `TERMADE_SOCKET` 與 `XDG_STATE_HOME`，在測試執行緒內啟動 daemon，用 `Client` 走 spawn（假 agent）→ prompt → 收到輸出 → shutdown。
 5. **git 函式測試**：隨 T02、T03 一起寫，不在這張票。
 
 ## 驗收條件

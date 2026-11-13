@@ -1,14 +1,14 @@
 //! Session 相關子命令（whoami、sessions、spawn、prompt、cancel、kill、sleep、wake、status）。
 
-use ade_core::{AgentKind, PermissionPolicy, Role};
-use ade_protocol::{Frame, Request, SpawnRequest, Transport};
 use anyhow::{bail, Context, Result};
+use termade_core::{AgentKind, PermissionPolicy, Role};
+use termade_protocol::{Frame, Request, SpawnRequest, Transport};
 
 use super::{join, resolve_self_session, roundtrip};
 
 pub(crate) fn cmd_whoami(session: Option<String>, json: bool) -> Result<()> {
     let sid = session
-        .or_else(|| std::env::var("ADE_SESSION").ok())
+        .or_else(|| std::env::var("TERMADE_SESSION").ok())
         .unwrap_or_else(|| "human".into());
     let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
         bail!("未取得快照");
@@ -123,7 +123,7 @@ pub(crate) fn cmd_spawn(
         ),
         None => None,
     };
-    let parent = parent.or_else(|| std::env::var("ADE_SESSION").ok());
+    let parent = parent.or_else(|| std::env::var("TERMADE_SESSION").ok());
     let req = Request::Spawn(SpawnRequest {
         kind,
         cwd,
@@ -150,11 +150,11 @@ pub(crate) fn cmd_spawn(
     }
 }
 
-pub(crate) fn load_attachments(paths: &[String]) -> Result<Vec<ade_core::Attachment>> {
+pub(crate) fn load_attachments(paths: &[String]) -> Result<Vec<termade_core::Attachment>> {
     paths
         .iter()
         .map(|p| {
-            ade_core::Attachment::load(std::path::Path::new(p)).map_err(|e| anyhow::anyhow!(e))
+            termade_core::Attachment::load(std::path::Path::new(p)).map_err(|e| anyhow::anyhow!(e))
         })
         .collect()
 }

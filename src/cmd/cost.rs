@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use ade_protocol::{Frame, Request};
 use anyhow::{bail, Result};
+use termade_protocol::{Frame, Request};
 
 use super::roundtrip;
 
@@ -19,12 +19,12 @@ pub(crate) fn cmd_quota(json: bool) -> Result<()> {
         println!("(尚無額度資料：agent 執行過一個回合後才會回報)");
         return Ok(());
     }
-    let now = ade_core::now_millis();
+    let now = termade_core::now_millis();
     for q in state.quotas.values() {
         println!(
             "{}   （{} 前更新）",
             q.summary(now),
-            ade_core::format_remaining(now.saturating_sub(q.updated_ms))
+            termade_core::format_remaining(now.saturating_sub(q.updated_ms))
         );
     }
     Ok(())
@@ -78,22 +78,22 @@ pub(crate) fn cmd_cost(json: bool) -> Result<()> {
 }
 
 pub(crate) fn cmd_replay(since: u64, file: Option<PathBuf>, all: bool, json: bool) -> Result<()> {
-    let path = file.unwrap_or_else(ade_daemon::log_path);
+    let path = file.unwrap_or_else(termade_daemon::log_path);
     let (state, records) = if all {
-        ade_daemon::replay_log_all(&path)?
+        termade_daemon::replay_log_all(&path)?
     } else {
-        let older = ade_daemon::rotated_logs(&path);
+        let older = termade_daemon::rotated_logs(&path);
         if !older.is_empty() {
             eprintln!(
                 "提示：另有 {} 份較舊的輪替檔，加 --all 可一併讀取",
                 older.len()
             );
         }
-        ade_daemon::replay_log(&path)?
+        termade_daemon::replay_log(&path)?
     };
     let filtered: Vec<_> = records
         .into_iter()
-        .filter(|r| r.seq > since && !matches!(r.event, ade_core::Event::Snapshot { .. }))
+        .filter(|r| r.seq > since && !matches!(r.event, termade_core::Event::Snapshot { .. }))
         .collect();
     if json {
         println!(

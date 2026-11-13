@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use ade_daemon::RemoteOptions;
-use ade_protocol::Request;
 use anyhow::Result;
+use termade_daemon::RemoteOptions;
+use termade_protocol::Request;
 
 use super::roundtrip;
 
@@ -14,7 +14,7 @@ pub(crate) fn cmd_daemon(
     token_file: Option<PathBuf>,
     insecure_listen_public: bool,
 ) -> Result<()> {
-    ade_daemon::run_remote(RemoteOptions {
+    termade_daemon::run_remote(RemoteOptions {
         listen,
         token,
         token_file,

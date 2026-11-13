@@ -1,8 +1,8 @@
-//! `ade` — 單一執行檔，多種模式。
+//! `termade` — 單一執行檔，多種模式。
 //!
-//! * `ade` / `ade tui`：確保 daemon 在跑，然後 attach TUI。
-//! * `ade daemon [--listen host:port] [--token secret]`：前景執行 daemon（支援 M5 遠端連線）。
-//! * `ade mcp`：stdio MCP server（供 agent 子程序呼叫協作原語）。
+//! * `termade` / `termade tui`：確保 daemon 在跑，然後 attach TUI。
+//! * `termade daemon [--listen host:port] [--token secret]`：前景執行 daemon（支援 M5 遠端連線）。
+//! * `termade mcp`：stdio MCP server（供 agent 子程序呼叫協作原語）。
 //! * M2 協作：`whoami`、`peers`/`sessions`、`spawn`、`prompt`、`send`、`inbox`、`wait`、`ask`、`tasks`、`task`、`task-update`、`status`、`artifact`
 //! * M3 工作區與審查：`worktrees`、`diff`、`review`、`merge`、`pr`、`gc`
 //! * M4 打磨：`sleep`、`wake`、`cost`、`replay`
@@ -16,15 +16,15 @@ use cmd::{bus::*, cost::*, daemon::*, session::*, task::*, worktree::*};
 
 #[derive(Parser)]
 #[command(
-    name = "ade",
+    name = "termade",
     version,
-    about = "ade — 終端機原生的 Agent Development Environment"
+    about = "termade — 終端機原生的 Agent Development Environment"
 )]
 struct Cli {
-    /// 連線遠端 daemon 位址（例如 127.0.0.1:7420；亦可透過環境變數 ADE_REMOTE 設定）
+    /// 連線遠端 daemon 位址（例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定）
     #[arg(long, global = true)]
     remote: Option<String>,
-    /// 遠端認證 token（亦可透過環境變數 ADE_TOKEN 設定）
+    /// 遠端認證 token（亦可透過環境變數 TERMADE_TOKEN 設定）
     #[arg(long, global = true)]
     token: Option<String>,
     #[command(subcommand)]
@@ -40,7 +40,7 @@ enum Cmd {
         /// 同時綁定 TCP 位址供遠端連線（例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token）
         #[arg(long)]
         listen: Option<String>,
-        /// 遠端連線認證用的 token（未指定則讀環境變數 ADE_TOKEN；為安全建議搭配 SSH 轉發）
+        /// 遠端連線認證用的 token（未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發）
         #[arg(long)]
         token: Option<String>,
         /// 從檔案讀取 token（權限需為 0600 或 0400；避免 token 出現在 process list）
@@ -52,7 +52,7 @@ enum Cmd {
     },
     /// stdio MCP server 模式（供 agent 子程序設定為 MCP 工具）
     Mcp {
-        /// 此 MCP server 代表的 session id（預設讀 ADE_SESSION 環境變數）
+        /// 此 MCP server 代表的 session id（預設讀 TERMADE_SESSION 環境變數）
         #[arg(long)]
         session: Option<String>,
     },
@@ -95,7 +95,7 @@ enum Cmd {
         /// 權限政策：ask / auto / bypass（省略則依 config.toml，預設 auto）
         #[arg(long)]
         permission: Option<String>,
-        /// 父 session id 或標籤（未指定時若有 ADE_SESSION 則自動繼承）
+        /// 父 session id 或標籤（未指定時若有 TERMADE_SESSION 則自動繼承）
         #[arg(long)]
         parent: Option<String>,
         /// 明確指定 model（優先於 kind 的 `:model` 與設定檔）
@@ -157,7 +157,7 @@ enum Cmd {
         /// 廣播給所有 session
         #[arg(long, conflicts_with_all = ["to", "channel"])]
         broadcast: bool,
-        /// 寄件者 session id（預設讀 ADE_SESSION 環境變數）
+        /// 寄件者 session id（預設讀 TERMADE_SESSION 環境變數）
         #[arg(long)]
         from: Option<String>,
         /// 訊息種類：chat（預設）/ handoff / question / answer / status / artifact
@@ -251,7 +251,7 @@ enum Cmd {
         #[arg(long)]
         session: Option<String>,
     },
-    /// 列出所有由 ade 管理的 git worktree（M3）
+    /// 列出所有由 termade 管理的 git worktree（M3）
     Worktrees {
         #[arg(long)]
         json: bool,
@@ -306,7 +306,7 @@ enum Cmd {
         /// 只重播序號大於此值的事件
         #[arg(long, default_value = "0")]
         since: u64,
-        /// 指定 events.jsonl 路徑（預設為 ade 自己的 log）
+        /// 指定 events.jsonl 路徑（預設為 termade 自己的 log）
         #[arg(long)]
         file: Option<PathBuf>,
         /// 包含已輪替的舊紀錄檔（events.jsonl.1 等；預設只讀目前活躍檔）
@@ -323,24 +323,24 @@ fn main() -> Result<()> {
     init_tracing();
     let cli = Cli::parse();
     if let Some(r) = &cli.remote {
-        std::env::set_var("ADE_REMOTE", r);
+        std::env::set_var("TERMADE_REMOTE", r);
     }
     // daemon 子命令自己處理 --token（含棄用警告），避免與全域 --token 混淆。
     if let Some(t) = &cli.token {
         if !matches!(cli.cmd, Some(Cmd::Daemon { .. })) {
-            std::env::set_var("ADE_TOKEN", t);
+            std::env::set_var("TERMADE_TOKEN", t);
         }
     }
 
     match cli.cmd.unwrap_or(Cmd::Tui) {
-        Cmd::Tui => ade_tui::run(),
+        Cmd::Tui => termade_tui::run(),
         Cmd::Daemon {
             listen,
             token,
             token_file,
             insecure_listen_public,
         } => cmd_daemon(listen, token, token_file, insecure_listen_public),
-        Cmd::Mcp { session } => ade_daemon::mcp::run(session),
+        Cmd::Mcp { session } => termade_daemon::mcp::run(session),
         Cmd::Whoami { session, json } => cmd_whoami(session, json),
         Cmd::Sessions { json } => cmd_sessions(json),
         Cmd::Spawn {
@@ -448,7 +448,7 @@ fn main() -> Result<()> {
 
 fn init_tracing() {
     use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_from_env("ADE_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
+    let filter = EnvFilter::try_from_env("TERMADE_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)

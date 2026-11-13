@@ -1,6 +1,6 @@
 # T08 — event log 輪替與寫入錯誤回報
 
-優先度：P2　範圍：`ade-daemon`　相依：T01
+優先度：P2　範圍：`termade-daemon`　相依：T01
 
 ## 問題
 
@@ -10,8 +10,8 @@
 
 ## 證據
 
-- `crates/ade-daemon/src/lib.rs:1698-1701`：單一檔案，`append(true)`。
-- `crates/ade-daemon/src/lib.rs:413-414`：`let _ = log.write_all(...)`。
+- `crates/termade-daemon/src/lib.rs:1698-1701`：單一檔案，`append(true)`。
+- `crates/termade-daemon/src/lib.rs:413-414`：`let _ = log.write_all(...)`。
 - `docs/DESIGN.md` 第 6 節寫「可選 rotate／上限」，程式碼中沒有對應實作。
 - 沒有 `flush`／`sync` 呼叫；`File` 本身不緩衝，所以每筆是一次 `write` 系統呼叫，但沒有 `fsync`。
 
@@ -26,7 +26,7 @@
 
 1. **依大小輪替**：log 超過門檻（預設 64 MB，可用環境變數調整）時，把現有檔案改名為 `events.jsonl.1`（舊的依序後移，保留 N 份，預設 3），開新檔。
 2. **新檔開頭寫 snapshot**：新增一種紀錄（例如 `Event::Snapshot { state }`），放在新檔第一行，seq 沿用當下的值。`replay_log` 遇到它就以該狀態為起點。這樣啟動重播只需讀目前這一份。
-3. **`ade replay` 讀全部**：加 `--all` 依序讀取輪替過的檔案；預設只讀目前這一份並提示有較舊的檔案。
+3. **`termade replay` 讀全部**：加 `--all` 依序讀取輪替過的檔案；預設只讀目前這一份並提示有較舊的檔案。
 4. **寫入錯誤**：第一次失敗時 `tracing::error!` 並發出一個 TUI 看得到的事件或狀態旗標（例如標題列顯示 `log ✗`）；之後每隔一段時間重試開檔，不要每筆都印錯誤。
 5. 若 T07 已完成，輪替邏輯放在 log 寫入執行緒內，不需要額外的鎖。
 

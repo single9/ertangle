@@ -1,8 +1,8 @@
 //! 匯流排訊息子命令（send、inbox、wait、ask、artifact）。
 
-use ade_core::{ArtifactKind, MsgKind, Target};
-use ade_protocol::{Frame, Request};
 use anyhow::{bail, Context, Result};
+use termade_core::{ArtifactKind, MsgKind, Target};
+use termade_protocol::{Frame, Request};
 
 use super::{join, resolve_self_session, roundtrip};
 
@@ -27,7 +27,7 @@ pub(crate) fn cmd_send(
     let kind = MsgKind::parse(&kind).with_context(|| {
         format!("未知的訊息種類：{kind}（chat/handoff/question/answer/status/artifact）")
     })?;
-    let from = from.or_else(|| std::env::var("ADE_SESSION").ok());
+    let from = from.or_else(|| std::env::var("TERMADE_SESSION").ok());
     match roundtrip(&Request::BusSend {
         from,
         to: target,
