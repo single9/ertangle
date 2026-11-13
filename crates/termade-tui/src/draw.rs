@@ -596,6 +596,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
             [
                 app.raw_md.then_some("raw"),
                 app.show_thoughts.then_some("思考"),
+                app.show_tools.then_some("工具展開"),
                 (!app.mouse_capture).then_some("滑鼠關"),
                 (app.view == CenterView::Transcript && app.transcript_scroll.is_some())
                     .then_some("⏸暫停跟隨"),
@@ -735,11 +736,7 @@ pub(crate) fn build_transcript_lines(
         Some(b) => b,
         None => return Vec::new(),
     };
-    let src: Vec<String> = buf
-        .iter()
-        .filter(|l| app.show_thoughts || !l.starts_with("💭 "))
-        .cloned()
-        .collect();
+    let src = crate::app::visible_transcript(buf.iter(), app.show_thoughts, app.show_tools);
     let lines: Vec<Line<'static>> = if app.raw_md {
         src.iter().map(|l| Line::raw(l.clone())).collect()
     } else {
@@ -1021,11 +1018,7 @@ pub(crate) fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
         }
     }
     let para = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Worktrees "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(" Worktrees "))
         .wrap(Wrap { trim: false });
     f.render_widget(para, area);
 }
@@ -1113,13 +1106,18 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
             Some((kind, model)) => format!(
                 " spawn → {}{}{} · worktree={} · 權限={} ",
                 kind.id(),
-                model.as_deref().map(|m| format!(":{m}")).unwrap_or_default(),
-                app.spawn_effort.as_deref().map(|e| format!(" effort={e}")).unwrap_or_default(),
+                model
+                    .as_deref()
+                    .map(|m| format!(":{m}"))
+                    .unwrap_or_default(),
+                app.spawn_effort
+                    .as_deref()
+                    .map(|e| format!(" effort={e}"))
+                    .unwrap_or_default(),
                 if app.spawn_worktree { "on" } else { "off" },
                 app.spawn_permission.map_or("預設", |p| p.id()),
             ),
-            None => " spawn：<agent[:model]> <prompt> "
-                .to_string(),
+            None => " spawn：<agent[:model]> <prompt> ".to_string(),
         },
         Mode::Menu => " 選單 ".to_string(),
         Mode::Pick => " 選擇（Enter 確認 · Esc 取消） ".to_string(),

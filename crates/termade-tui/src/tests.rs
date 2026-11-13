@@ -836,3 +836,28 @@ fn header_hides_default_flags_and_shows_deviations() {
         "{text}"
     );
 }
+
+#[test]
+fn tool_runs_fold_into_one_line_but_keep_failures() {
+    let src: Vec<String> = [
+        "hello",
+        "▸ Read a.rs",
+        "  ✓ ok",
+        "▸ Bash cargo test",
+        "  ✗ exit 1",
+        "▸ Read b.rs",
+        "  ✓ ok",
+        "▸ Bash ls",
+        "  ✓ ok",
+        "done",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    let folded = crate::app::visible_transcript(src.iter(), false, false);
+    assert_eq!(folded.len(), 5, "{folded:?}");
+    assert!(folded[1].contains("工具 ×2"), "{folded:?}");
+    assert!(folded.iter().any(|l| l.contains("✗ exit 1")));
+    let full = crate::app::visible_transcript(src.iter(), false, true);
+    assert_eq!(full.len(), src.len());
+}

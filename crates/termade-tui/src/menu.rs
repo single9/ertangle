@@ -80,6 +80,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 it('l', "切換版面", Act::Cmd("layout")),
                 it('r', "原始文字／Markdown", Act::Cmd("raw")),
                 it('t', "顯示／隱藏思考", Act::Cmd("thoughts")),
+                it('x', "展開／摺疊工具呼叫", Act::Cmd("tools")),
                 it('b', "顯示／隱藏 Bus", Act::Cmd("bus")),
             ],
         ),

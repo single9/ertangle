@@ -7,7 +7,8 @@ use termade_daemon::ConnStream;
 use termade_protocol::Request;
 
 use crate::app::{
-    scroll_transcript, scroll_transcript_lines, toggle_thoughts, App, CenterView, Mode,
+    scroll_transcript, scroll_transcript_lines, toggle_thoughts, toggle_tools, App, CenterView,
+    Mode,
 };
 use crate::clipboard::copy_main_pane;
 use crate::commands::{
@@ -252,6 +253,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             };
         }
         KeyCode::Char('T') => toggle_thoughts(app),
+        KeyCode::Char('O') => toggle_tools(app),
         KeyCode::Char('L') => app.cycle_layout(),
         KeyCode::Char('b') => {
             app.bus_overlay = !app.bus_overlay;

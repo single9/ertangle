@@ -5,7 +5,7 @@ use termade_core::{AgentKind, Decision, MsgKind, PermissionPolicy, Role, Target}
 use termade_daemon::ConnStream;
 use termade_protocol::{Request, SpawnRequest, Transport};
 
-use crate::app::{toggle_thoughts, App, CenterView, LayoutMode, Mode};
+use crate::app::{toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode};
 use crate::clipboard::copy_main_pane;
 use crate::{request_selected_diff, send};
 
@@ -100,6 +100,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("layout", "[three|two|tabs]  切換版面"),
     ("raw", "原始文字／Markdown 切換"),
     ("thoughts", "顯示／隱藏思考"),
+    ("tools", "展開／摺疊工具呼叫"),
     ("bus", "顯示／隱藏 Bus 浮層"),
     ("task", "<標題>  新增任務"),
     ("broadcast", "<訊息>  廣播給所有 session"),
@@ -289,6 +290,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             send(writer, &Request::WorktreeList)?;
         }
         "thoughts" | "think" => toggle_thoughts(app),
+        "tools" => toggle_tools(app),
         "layout" => {
             if rest.is_empty() {
                 app.cycle_layout();

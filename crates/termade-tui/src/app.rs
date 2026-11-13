@@ -141,6 +141,8 @@ pub(crate) struct App {
     pub(crate) raw_md: bool,
     /// 是否顯示 agent 的思考行（`💭`）。預設隱藏，避免長篇思考拖慢渲染。
     pub(crate) show_thoughts: bool,
+    /// 展開每一筆工具呼叫；預設把連續的工具行摺成一行。
+    pub(crate) show_tools: bool,
     pub(crate) md_cache: Option<MdCache>,
     /// 上次重算逐字稿的時間；串流期間用來節流（見 `MD_REBUILD_INTERVAL`）。
     pub(crate) last_rebuild: std::time::Instant,
@@ -213,6 +215,7 @@ impl App {
             transcript_total: 0,
             raw_md: false,
             show_thoughts: false,
+            show_tools: false,
             md_cache: None,
             last_rebuild: std::time::Instant::now(),
             rebuild_pending: false,
@@ -315,13 +318,7 @@ pub(crate) fn main_pane_text(app: &App) -> String {
         CenterView::Transcript => app
             .selected_id()
             .and_then(|id| app.state.transcripts.get(&id))
-            .map(|buf| {
-                buf.iter()
-                    .filter(|l| app.show_thoughts || !l.starts_with("💭 "))
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
+            .map(|buf| visible_transcript(buf.iter(), app.show_thoughts, app.show_tools).join("\n"))
             .unwrap_or_default(),
         CenterView::Diff => app.diff_lines.join("\n"),
         CenterView::Worktrees => app
@@ -340,6 +337,60 @@ pub(crate) fn main_pane_text(app: &App) -> String {
             .collect::<Vec<_>>()
             .join("\n"),
     }
+}
+
+/// 依顯示設定過濾逐字稿：隱藏思考行；未展開工具時，把連續的工具呼叫／成功結果
+/// 摺成一行摘要（失敗 `✗` 行保留，錯誤不該被藏起來）。
+pub(crate) fn visible_transcript<'a>(
+    lines: impl Iterator<Item = &'a String>,
+    show_thoughts: bool,
+    show_tools: bool,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    // (呼叫數, 成功數, 最後一個呼叫行)
+    let mut run: Option<(usize, usize, String)> = None;
+    fn flush(out: &mut Vec<String>, run: &mut Option<(usize, usize, String)>) {
+        if let Some((calls, ok, last)) = run.take() {
+            if calls == 1 {
+                out.push(last);
+            } else {
+                let last = last.trim_start_matches("▸ ");
+                out.push(format!("▸ 工具 ×{calls}（✓{ok}）· 最後：{last}"));
+            }
+        }
+    }
+    for l in lines {
+        if !show_thoughts && l.starts_with("💭 ") {
+            continue;
+        }
+        if show_tools {
+            out.push(l.clone());
+        } else if l.starts_with("▸ ") {
+            let (calls, ok, _) = run.take().unwrap_or((0, 0, String::new()));
+            run = Some((calls + 1, ok, l.clone()));
+        } else if l.starts_with("  ✓") {
+            if let Some(r) = run.as_mut() {
+                r.1 += 1;
+            }
+        } else {
+            flush(&mut out, &mut run);
+            out.push(l.clone());
+        }
+    }
+    flush(&mut out, &mut run);
+    out
+}
+
+/// 切換是否展開每一筆工具呼叫。
+pub(crate) fn toggle_tools(app: &mut App) {
+    app.show_tools = !app.show_tools;
+    app.md_cache = None;
+    app.selection = None;
+    app.status = if app.show_tools {
+        "工具：展開（每筆呼叫都顯示，按 O 摺疊）".into()
+    } else {
+        "工具：摺疊（連續呼叫合成一行，按 O 展開）".into()
+    };
 }
 
 /// 切換是否顯示 agent 的思考行（`💭`）。
