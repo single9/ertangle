@@ -26,6 +26,10 @@ pub(crate) fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) 
             return Ok(());
         }
         Mode::Pick => return crate::menu::handle_pick_key(app, writer, key),
+        Mode::Search => {
+            crate::search::handle_search_key(app, key);
+            return Ok(());
+        }
         _ => return handle_input_mode(app, writer, key),
     }
 
@@ -204,6 +208,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.input_cursor = 0;
         }
         KeyCode::Char('n') => crate::menu::start_spawn_picker(app),
+        KeyCode::Char('f') => crate::search::open(app, None),
         KeyCode::Char('m') => {
             app.mode = Mode::Message;
             app.input.clear();
@@ -510,7 +515,7 @@ pub(crate) fn handle_input_mode(
                     execute_command(app, writer, &text)?;
                 }
                 Mode::Jump => execute_jump(app, writer, &text)?,
-                Mode::Normal | Mode::Menu | Mode::Pick | Mode::Help => {}
+                Mode::Normal | Mode::Menu | Mode::Pick | Mode::Help | Mode::Search => {}
             }
         }
         _ => {}
@@ -685,6 +690,9 @@ pub(crate) fn handle_paste(app: &mut App, text: &str) {
         normalized.replace('\n', " ")
     };
     insert_str_input(app, &sanitized);
+    if app.mode == Mode::Search {
+        crate::search::query_changed(app);
+    }
 }
 
 /// ↑／↓ 回顧輸入歷史（Prompt 與 Command 各有自己的一份）。

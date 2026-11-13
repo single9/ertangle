@@ -22,6 +22,7 @@ mod markdown;
 mod menu;
 mod mouse;
 mod notify;
+mod search;
 mod tasks;
 
 #[allow(unused_imports)]
@@ -275,6 +276,7 @@ fn apply_frame(app: &mut App, frame: Frame) {
             app.diff_added = added;
             app.diff_removed = removed;
             app.diff_cursor = 0;
+            search::refresh(app);
         }
         Frame::Worktrees { worktrees } => {
             app.worktrees = worktrees;

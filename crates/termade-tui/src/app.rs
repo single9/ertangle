@@ -24,6 +24,8 @@ pub(crate) enum Mode {
     Help,
     /// 清單選擇器（spawn 的 agent／model）。
     Pick,
+    /// 在逐字稿或 diff 裡搜尋（`f` 或 `:find`）。
+    Search,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -191,6 +193,9 @@ pub(crate) struct App {
     /// 最近一次繪製時任務清單的區域，以及每個可見列對應的任務索引（供滑鼠）。
     pub(crate) tasks_area: Rect,
     pub(crate) task_rows: Vec<Option<usize>>,
+    /// 進行中的搜尋（只在 `Mode::Search` 期間存在）與上一次的查詢（供預填）。
+    pub(crate) search: Option<crate::search::Search>,
+    pub(crate) last_search: String,
     pub(crate) should_quit: bool,
 }
 
@@ -264,6 +269,8 @@ impl App {
             task_offset: 0,
             tasks_area: Rect::default(),
             task_rows: Vec::new(),
+            search: None,
+            last_search: String::new(),
             should_quit: false,
         }
     }
