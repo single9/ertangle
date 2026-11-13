@@ -103,6 +103,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             (":rm :clean", "移除已結束的 session／全部清除"),
             (":kill :cancel", "結束／中斷選取的 session"),
             (":quota", "各 agent 帳號額度與重置時間"),
+            (
+                ":budget",
+                "設定或調高選取 session 的成本上限，如 :budget 10",
+            ),
             (":layout", "切換版面；:raw、:thoughts、:bus 切換顯示"),
             (
                 ":notify",
@@ -120,6 +124,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
         "畫面上的標記",
         &[
             ("ctx 4%", "該 session 的 context 用量；≥80% 黃、≥92% 紅"),
+            (
+                "$1.20/$5",
+                "該 session 的成本與上限；達警告門檻黃、超過上限紅",
+            ),
             ("claude:5h 41%", "帳號額度最吃緊的視窗；≥70% 黃、≥90% 紅"),
             (
                 "[claude:opus !bypass]",

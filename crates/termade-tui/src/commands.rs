@@ -95,7 +95,7 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
         .state
         .sessions
         .get(&id)
-        .is_some_and(|s| s.status == termade_core::SessionStatus::Idle);
+        .is_some_and(|s| s.status == termade_core::SessionStatus::Idle && !s.over_budget);
     if idle && app.queues.len(&id) == 0 {
         return submit_prompt_or_route(app, writer, text);
     }
@@ -120,7 +120,12 @@ pub(crate) fn flush_queues(app: &mut App, writer: &mut ConnStream) -> Result<()>
     let (ready, dropped) = {
         let sessions = &app.state.sessions;
         app.queues.take_ready(
-            |id| sessions.get(id).map(|s| s.status),
+            |id| {
+                sessions
+                    .get(id)
+                    .filter(|s| !s.over_budget)
+                    .map(|s| s.status)
+            },
             std::time::Instant::now(),
         )
     };
@@ -202,6 +207,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("new", "開選擇器：agent → model → prompt"),
     ("help", "說明面板：所有按鍵與命令"),
     ("quota", "顯示各 agent 帳號的額度與重置時間"),
+    (
+        "budget",
+        "<金額>  設定或調高選取 session 的成本上限（美元）",
+    ),
     (
         "handoff",
         "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 agent",
@@ -298,6 +307,37 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                     .collect::<Vec<_>>()
                     .join("   |   ")
             };
+        }
+        "budget" => {
+            let tokens: Vec<&str> = rest.split_whitespace().collect();
+            let (target, amount_str) = match tokens.as_slice() {
+                [amt] => (app.selected_id(), *amt),
+                [ses, amt] => (Some((*ses).to_string()), *amt),
+                _ => {
+                    app.status = "用法：:budget <金額>（或 :budget <session> <金額>）".into();
+                    return Ok(());
+                }
+            };
+            let Some(session) = target else {
+                app.status = "沒有選取的 session".into();
+                return Ok(());
+            };
+            let clean = amount_str.trim_start_matches('$');
+            let Ok(budget_usd) = clean.parse::<f64>() else {
+                app.status = format!("無效的金額：{amount_str}");
+                return Ok(());
+            };
+            send(
+                writer,
+                &Request::SessionBudget {
+                    session,
+                    budget_usd,
+                },
+            )?;
+            app.status = format!(
+                "已設定成本上限為 {}",
+                termade_core::format_usd_limit(budget_usd)
+            );
         }
         "handoff" => {
             let Some(src) = app.selected_id() else {
@@ -682,6 +722,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
             attachments,
             inherit_from: None,
             args: vec![],
+            budget_usd: None,
         }),
     )?;
     app.status = format!("已要求啟動 {kind}");

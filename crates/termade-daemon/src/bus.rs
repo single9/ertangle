@@ -119,9 +119,25 @@ impl Shared {
         body: String,
         reply_to: Option<MsgId>,
     ) {
+        let over_budget_target = match &to {
+            Target::Direct(t) => {
+                let sid = self.resolve_session(t);
+                lock(&self.inner)
+                    .state
+                    .sessions
+                    .get(&sid)
+                    .is_some_and(|s| s.over_budget)
+            }
+            _ => false,
+        };
         match self.deliver_message(from, to, kind, body, reply_to) {
             Ok(msg_id) => {
-                let _ = reply.send(Frame::ok_note(format!("已送出訊息 {msg_id}")));
+                let note = if over_budget_target && kind_wakes_recipient(kind) {
+                    format!("已送出訊息 {msg_id}（收件者已超過成本上限 over_budget，拒絕自動喚醒）")
+                } else {
+                    format!("已送出訊息 {msg_id}")
+                };
+                let _ = reply.send(Frame::ok_note(note));
             }
             Err(e) => {
                 let _ = reply.send(Frame::error(e));
@@ -208,6 +224,7 @@ impl Shared {
             if kind_wakes_recipient(kind) {
                 for s in state_clone.sessions.values() {
                     if s.id == from_sid
+                        || s.over_budget
                         || woken_by_waiter.contains(&s.id)
                         || !matches!(s.status, SessionStatus::Idle | SessionStatus::Sleeping)
                         || !message.matches_recipient(&s.id, Some(&s.label))

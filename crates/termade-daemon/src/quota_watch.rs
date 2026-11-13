@@ -48,6 +48,123 @@ pub(crate) fn pick_fallback(
 }
 
 impl Shared {
+    pub(crate) fn session_config(&self, s: &termade_core::Session) -> Config {
+        let cwd = std::path::Path::new(&s.cwd);
+        let root = std::path::Path::new(s.project_root());
+        let def = self.default_cwd();
+        let dir = if cwd.join(".termade").join("config.toml").is_file() {
+            cwd
+        } else if root.join(".termade").join("config.toml").is_file() {
+            root
+        } else if def.join(".termade").join("config.toml").is_file() {
+            &def
+        } else {
+            cwd
+        };
+        Config::load(&config_dir(), dir)
+    }
+
+    /// `ingest` 在送出 `Event::Cost` 之後呼叫：檢查單一 session 與整棵樹的成本上限。
+    pub(crate) fn check_budget(self: &Arc<Self>, sid: &SessionId) {
+        let Some(s) = lock(&self.inner).state.sessions.get(sid).cloned() else {
+            return;
+        };
+        let cfg = self.session_config(&s);
+        let warn_pct = cfg
+            .limits
+            .warn_percent
+            .unwrap_or(crate::config::DEFAULT_BUDGET_WARN_PERCENT);
+
+        // 1) 單一 session 上限：沒有美金數字（usd == 0 且有 token）時改看 session_tokens，否則看 USD。
+        let total_tokens = s.cost.input_tokens + s.cost.output_tokens;
+        let usd_limit = s
+            .budget_usd
+            .or_else(|| cfg.resolve_budget_usd(&s.role, None));
+        if s.cost.usd == 0.0 && total_tokens > 0 && cfg.limits.session_tokens.is_some() {
+            if let Some(tok_limit) = cfg.limits.session_tokens.filter(|&l| l > 0) {
+                let pct = total_tokens as f64 * 100.0 / tok_limit as f64;
+                if pct < warn_pct {
+                    lock_set(&self.budget_warned).remove(sid);
+                } else if lock_set(&self.budget_warned).insert(sid.clone()) {
+                    self.emit(Event::SessionNote {
+                        session: sid.clone(),
+                        note: format!(
+                            "token 用量已達 {}/{}（{pct:.0}%），接近上限",
+                            termade_core::human_tokens(total_tokens),
+                            termade_core::human_tokens(tok_limit)
+                        ),
+                    });
+                }
+                if total_tokens >= tok_limit {
+                    if let Some((_, ctl)) = self.control(sid) {
+                        let _ = ctl.cancel();
+                    }
+                    self.emit(Event::SessionOverBudget {
+                        session: sid.clone(),
+                        spent: total_tokens as f64,
+                        limit: tok_limit as f64,
+                    });
+                }
+            }
+        } else if let Some(limit) = usd_limit.filter(|&l| l > 0.0) {
+            let spent = s.cost.usd;
+            let pct = spent * 100.0 / limit;
+            if pct < warn_pct {
+                lock_set(&self.budget_warned).remove(sid);
+            } else if lock_set(&self.budget_warned).insert(sid.clone()) {
+                self.emit(Event::SessionNote {
+                    session: sid.clone(),
+                    note: format!(
+                        "成本已達 ${spent:.2}/{}（{pct:.0}%），接近上限",
+                        termade_core::format_usd_limit(limit)
+                    ),
+                });
+            }
+            if spent >= limit {
+                if let Some((_, ctl)) = self.control(sid) {
+                    let _ = ctl.cancel();
+                }
+                self.emit(Event::SessionOverBudget {
+                    session: sid.clone(),
+                    spent,
+                    limit,
+                });
+            }
+        }
+
+        // 2) 整棵樹的上限（tree_usd）：從這個 session 往上找到根，加總整棵樹，超過時中斷樹裡所有 live 的 session。
+        if let Some(tree_limit) = cfg.limits.tree_usd.filter(|&l| l > 0.0) {
+            let (tree_spent, to_stop) = {
+                let inner = lock(&self.inner);
+                let spent = inner.state.tree_cost_usd(sid);
+                let mut targets = Vec::new();
+                if spent >= tree_limit {
+                    for tid in inner.state.tree_sessions(sid) {
+                        if let Some(ts) = inner.state.sessions.get(&tid) {
+                            if ts.status.is_live() {
+                                let ctl = inner.sessions.get(&tid).map(|e| e.ctl.clone());
+                                targets.push((tid, ts.over_budget, ctl));
+                            }
+                        }
+                    }
+                }
+                (spent, targets)
+            };
+            for (tid, already_over, ctl) in to_stop {
+                if let Some(ctl) = ctl {
+                    let _ = ctl.cancel();
+                }
+                if !already_over {
+                    self.emit(Event::SessionOverBudget {
+                        session: tid,
+                        spent: tree_spent,
+                        limit: tree_limit,
+                    });
+                }
+            }
+        }
+    }
+
     /// `ingest` 在額度事件之後呼叫。
     pub(crate) fn react_to_quota(self: &Arc<Self>, event: &Event) {
         match event {

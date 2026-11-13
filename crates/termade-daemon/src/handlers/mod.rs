@@ -100,6 +100,10 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         }
         Request::Sleep { session } => session::handle_sleep(shared, reply, session),
         Request::Wake { session } => session::handle_wake(shared, reply, session),
+        Request::SessionBudget {
+            session,
+            budget_usd,
+        } => session::handle_budget(shared, reply, session, budget_usd),
         Request::ApprovalAsk {
             session,
             tool,

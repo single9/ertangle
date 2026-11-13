@@ -73,6 +73,9 @@ pub struct SpawnRequest {
     /// 一次性額外命令列參數（附加在設定檔的 args 之後）。
     #[serde(default)]
     pub args: Vec<String>,
+    /// 單一 session 的成本上限（美元）；省略時依 `config.toml` 決定。
+    #[serde(default)]
+    pub budget_usd: Option<f64>,
 }
 
 /// client → daemon。
@@ -138,9 +141,14 @@ pub enum Request {
     Sleep {
         session: SessionId,
     },
-    /// 喚醒休眠中的 session 子程序（SIGCONT）。
+    /// 唤醒休眠中的 session 子程序（SIGCONT）。
     Wake {
         session: SessionId,
+    },
+    /// 設定或調高指定 session 的成本上限（美元），並解除 `over_budget`。
+    SessionBudget {
+        session: SessionId,
+        budget_usd: f64,
     },
     /// agent（經 MCP `termade_approve`）請求審批並等待結果；回覆 `Ok` 的 note 為 `allow` 或 `deny`。
     ApprovalAsk {
@@ -350,6 +358,7 @@ mod tests {
             attachments: vec![],
             inherit_from: None,
             args: vec![],
+            budget_usd: None,
         });
         let line = encode_line(&req).unwrap();
         assert!(line.ends_with('\n'));
@@ -384,6 +393,6 @@ mod tests {
     fn old_spawn_json_without_model_still_parses() {
         let req: Request = serde_json::from_str(r#"{"op":"spawn","kind":"claude_code"}"#).unwrap();
         let Request::Spawn(s) = req else { panic!() };
-        assert!(s.model.is_none() && s.args.is_empty());
+        assert!(s.model.is_none() && s.args.is_empty() && s.budget_usd.is_none());
     }
 }

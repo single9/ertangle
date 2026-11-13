@@ -315,6 +315,10 @@ pub fn tool_definitions() -> Vec<Value> {
                     "model": {
                         "type": "string",
                         "description": "Model for the child agent (e.g. a cheaper model for workers). Defaults to config.toml"
+                    },
+                    "budget_usd": {
+                        "type": "number",
+                        "description": "Cost limit in USD for the child session (defaults to config.toml; never higher than the parent's remaining budget)"
                     }
                 },
                 "required": ["prompt"]
@@ -670,6 +674,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 attachments: vec![],
                 inherit_from: None,
                 args: vec![],
+                budget_usd: args["budget_usd"].as_f64(),
             }))?;
             let note = match frame {
                 Frame::Ok { note } => note.unwrap_or_default(),

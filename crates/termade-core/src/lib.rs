@@ -227,6 +227,15 @@ pub fn human_tokens(n: u64) -> String {
     }
 }
 
+/// 把美金上限格式化成簡短字串：整數省略小數（`$5`），否則保留兩位（`$2.50`）。
+pub fn format_usd_limit(limit: f64) -> String {
+    if (limit - limit.round()).abs() < 1e-6 {
+        format!("${:.0}", limit)
+    } else {
+        format!("${:.2}", limit)
+    }
+}
+
 /// 一個 agent 的執行實例。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -263,12 +272,24 @@ pub struct Session {
     /// `None` 表示這個 session 不能接續（舊 log、PTY，或 agent 沒有宣告載入能力）。
     #[serde(default)]
     pub native_id: Option<String>,
+    /// 此 session 的成本上限（美元；解析後的實際上限）。
+    #[serde(default)]
+    pub budget_usd: Option<f64>,
+    /// 是否已達成本上限（達上限後中斷回合並拒絕新 prompt，直到人工調高）。
+    #[serde(default)]
+    pub over_budget: bool,
 }
 
 impl Session {
     /// 這個 session 屬於哪個專案：worktree 看主 repo，否則就是工作目錄。
     pub fn project_root(&self) -> &str {
         self.repo_root.as_deref().unwrap_or(&self.cwd)
+    }
+
+    /// 有設定成本上限時回傳 `$1.20/$5` 格式的字串。
+    pub fn format_budget(&self) -> Option<String> {
+        self.budget_usd
+            .map(|limit| format!("${:.2}/{}", self.cost.usd, format_usd_limit(limit)))
     }
 }
 
@@ -604,6 +625,7 @@ pub struct PermissionRequest {
 /// 系統中發生的事。append-only、可序列化、可重播。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum Event {
     /// log 輪替後寫在新檔第一行的完整狀態；重播時以它為起點。seq 沿用輪替當下的值。
     Snapshot {
@@ -701,6 +723,17 @@ pub enum Event {
     Cost {
         session: SessionId,
         cost: Cost,
+    },
+    /// session 達到成本上限（已中斷當前回合，並將 `over_budget` 設為 `true`）。
+    SessionOverBudget {
+        session: SessionId,
+        spent: f64,
+        limit: f64,
+    },
+    /// 人工調整 session 的成本上限（同時解除 `over_budget`）。
+    SessionBudget {
+        session: SessionId,
+        budget_usd: Option<f64>,
     },
     /// event log 寫入健康狀態（`ok == false` 表示寫入失敗，TUI 顯示 `log ✗`）。
     LogHealth {
@@ -972,10 +1005,90 @@ impl State {
                     s.cost = *cost;
                 }
             }
+            Event::SessionOverBudget { session, .. } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.over_budget = true;
+                }
+            }
+            Event::SessionBudget {
+                session,
+                budget_usd,
+            } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.budget_usd = *budget_usd;
+                    s.over_budget = false;
+                }
+            }
             Event::LogHealth { ok } => {
                 self.log_ok = *ok;
             }
         }
+    }
+
+    /// 計算 `sid` 的深度（人直接產生的 session 為第 0 層，子 agent 依序遞增）。
+    pub fn session_depth(&self, sid: &str) -> usize {
+        let mut depth = 0;
+        let mut cur = sid;
+        let mut seen = std::collections::HashSet::new();
+        while seen.insert(cur) {
+            let Some(parent) = self
+                .sessions
+                .get(cur)
+                .and_then(|s| s.parent.as_deref())
+                .filter(|p| self.sessions.contains_key(*p))
+            else {
+                break;
+            };
+            depth += 1;
+            cur = parent;
+        }
+        depth
+    }
+
+    /// 沿著 `parent` 往上找到該 session 所屬樹的根 session id。
+    pub fn tree_root(&self, sid: &str) -> SessionId {
+        let mut cur = sid;
+        let mut seen = std::collections::HashSet::new();
+        while seen.insert(cur) {
+            let Some(parent) = self
+                .sessions
+                .get(cur)
+                .and_then(|s| s.parent.as_deref())
+                .filter(|p| self.sessions.contains_key(*p))
+            else {
+                break;
+            };
+            cur = parent;
+        }
+        cur.to_string()
+    }
+
+    /// 取得與 `sid` 同一棵樹的所有 session id（根與所有後代）。
+    pub fn tree_sessions(&self, sid: &str) -> Vec<SessionId> {
+        let root = self.tree_root(sid);
+        self.sessions
+            .keys()
+            .filter(|id| self.tree_root(id) == root)
+            .cloned()
+            .collect()
+    }
+
+    /// 計算與 `sid` 同一棵樹（根與所有後代）的美金總花費。
+    pub fn tree_cost_usd(&self, sid: &str) -> f64 {
+        let root = self.tree_root(sid);
+        self.sessions
+            .values()
+            .filter(|s| self.tree_root(&s.id) == root)
+            .map(|s| s.cost.usd)
+            .sum()
+    }
+
+    /// 計算 `parent_id` 目前仍在執行（live）的直接子 session 數量。
+    pub fn live_children_count(&self, parent_id: &str) -> usize {
+        self.sessions
+            .values()
+            .filter(|s| s.parent.as_deref() == Some(parent_id) && s.status.is_live())
+            .count()
     }
 
     /// 方便 TUI 依建立時間排序取得 session 清單。
@@ -1539,6 +1652,8 @@ pub(crate) mod tests {
             context: None,
             native_id: None,
             permission: Default::default(),
+            budget_usd: None,
+            over_budget: false,
         }
     }
 
@@ -1980,5 +2095,55 @@ mod attachment_tests {
         assert!(t.contains("```\nfn main() {}\n```") && t.contains("圖片附件：p.png"));
         let t2 = compose_text("看", &[f, img], false);
         assert!(!t2.contains("圖片附件"));
+    }
+
+    #[test]
+    fn old_session_json_without_budget_fields_parses() {
+        let mut val = serde_json::to_value(crate::tests::sample_session("s1")).unwrap();
+        let obj = val.as_object_mut().unwrap();
+        obj.remove("budget_usd");
+        obj.remove("over_budget");
+        let parsed: Session = serde_json::from_value(val).unwrap();
+        assert_eq!(parsed.budget_usd, None);
+        assert!(!parsed.over_budget);
+    }
+
+    #[test]
+    fn session_budget_formatting_and_state_events() {
+        let mut s = crate::tests::sample_session("s1");
+        s.cost.usd = 1.2;
+        assert_eq!(s.format_budget(), None);
+        s.budget_usd = Some(5.0);
+        assert_eq!(s.format_budget().as_deref(), Some("$1.20/$5"));
+        s.budget_usd = Some(2.5);
+        assert_eq!(s.format_budget().as_deref(), Some("$1.20/$2.50"));
+
+        let mut st = State::new();
+        st.apply(&Record {
+            seq: 1,
+            ts: 0,
+            event: Event::SessionStarted { session: s },
+        });
+        st.apply(&Record {
+            seq: 2,
+            ts: 0,
+            event: Event::SessionOverBudget {
+                session: "s1".into(),
+                spent: 2.5,
+                limit: 2.5,
+            },
+        });
+        assert!(st.sessions["s1"].over_budget);
+
+        st.apply(&Record {
+            seq: 3,
+            ts: 0,
+            event: Event::SessionBudget {
+                session: "s1".into(),
+                budget_usd: Some(10.0),
+            },
+        });
+        assert!(!st.sessions["s1"].over_budget);
+        assert_eq!(st.sessions["s1"].budget_usd, Some(10.0));
     }
 }

@@ -98,6 +98,7 @@ pub(crate) fn cmd_spawn(
     parent: Option<String>,
     model: Option<String>,
     effort: Option<String>,
+    budget: Option<f64>,
     attach: Vec<String>,
     extra: Vec<String>,
 ) -> Result<()> {
@@ -145,6 +146,7 @@ pub(crate) fn cmd_spawn(
         attachments: load_attachments(&attach)?,
         inherit_from: None,
         args: extra,
+        budget_usd: budget,
     });
     match roundtrip(&req)? {
         Frame::Ok { note } => {
@@ -250,5 +252,15 @@ pub(crate) fn cmd_status(session: Option<String>, text: Vec<String>) -> Result<(
         session,
         note: join(text),
     })?;
+    Ok(())
+}
+
+pub(crate) fn cmd_budget(session: String, budget_usd: f64) -> Result<()> {
+    if let Frame::Ok { note } = roundtrip(&Request::SessionBudget {
+        session,
+        budget_usd,
+    })? {
+        println!("{}", note.unwrap_or_else(|| "已更新成本上限".into()));
+    }
     Ok(())
 }

@@ -721,6 +721,16 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     Style::default().fg(color),
                 ));
             }
+            if let (Some(limit), Some(bstr)) = (s.budget_usd, s.format_budget()) {
+                let color = if s.over_budget || s.cost.usd >= limit {
+                    Color::Red
+                } else if limit > 0.0 && s.cost.usd * 100.0 / limit >= 80.0 {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                };
+                spans.push(Span::styled(format!(" {bstr}"), Style::default().fg(color)));
+            }
             if !note.is_empty() {
                 spans.push(Span::styled(
                     format!(" · {}", truncate(note, 16)),
@@ -894,7 +904,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         Some(id) => {
             let s = &app.state.sessions[id];
             format!(
-                " Transcript: {}{} · {} · {}{} (${:.4}) · {}% · {} ",
+                " Transcript: {}{} · {} · {}{} ({}) · {}% · {} ",
                 if multi_project_state(app) || !app.scope_here {
                     format!("[{}] ", project_name(s.project_root(), &all_roots(app)))
                 } else {
@@ -910,7 +920,8 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 s.context
                     .map(|c| format!(" · ctx {}", c.short()))
                     .unwrap_or_default(),
-                s.cost.usd,
+                s.format_budget()
+                    .unwrap_or_else(|| format!("${:.4}", s.cost.usd)),
                 pct,
                 if app.raw_md { "raw" } else { "md" },
             )

@@ -44,6 +44,93 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
     }
 
+    let parent = spawn.parent.as_ref().map(|p| shared.resolve_session(p));
+    let role = spawn.role.clone();
+    let label = spawn
+        .label
+        .clone()
+        .unwrap_or_else(|| format!("{}/{}", role.id(), &id[4..8]));
+
+    let global_dir = config_dir();
+    let cfg_dir = if cwd.join(".termade").join("config.toml").is_file() {
+        cwd.clone()
+    } else if shared
+        .default_cwd()
+        .join(".termade")
+        .join("config.toml")
+        .is_file()
+    {
+        shared.default_cwd()
+    } else {
+        cwd.clone()
+    };
+    let cfg = config::Config::load(&global_dir, &cfg_dir);
+    let resolved = cfg.resolve(
+        &spawn.kind,
+        &role,
+        spawn.model.as_deref(),
+        spawn.effort.as_deref(),
+        &spawn.args,
+        spawn.permission,
+    );
+
+    // 有 parent 時檢查子 agent 層數、同時執行數與整棵樹成本上限。
+    let mut parent_remaining_usd: Option<f64> = None;
+    if let Some(pid) = &parent {
+        let inner = lock(&shared.inner);
+        let depth = if inner.state.sessions.contains_key(pid) {
+            inner.state.session_depth(pid) + 1
+        } else {
+            1
+        };
+        if let Some(max_depth) = cfg.limits.max_depth {
+            if depth > max_depth {
+                let _ = reply.send(Frame::error(format!(
+                    "超過子 agent 層數上限 max_depth：目前第 {depth} 層（上限 {max_depth}）"
+                )));
+                return;
+            }
+        }
+        if let Some(max_children) = cfg.limits.max_children {
+            let live_children = inner.state.live_children_count(pid);
+            if live_children >= max_children {
+                let _ = reply.send(Frame::error(format!(
+                    "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中（上限 {max_children}）"
+                )));
+                return;
+            }
+        }
+        if let Some(tree_usd) = cfg.limits.tree_usd {
+            let tree_spent = inner.state.tree_cost_usd(pid);
+            if tree_spent >= tree_usd {
+                let _ = reply.send(Frame::error(format!(
+                    "已達整棵樹成本上限 tree_usd：目前已花費 ${tree_spent:.2}（上限 ${tree_usd:.2}）"
+                )));
+                return;
+            }
+        }
+        if let Some(p_sess) = inner.state.sessions.get(pid) {
+            if p_sess.over_budget {
+                let _ = reply.send(Frame::error(format!(
+                    "父 session {} 已達成本上限 session_usd（over_budget），無法產生子 agent",
+                    p_sess.label
+                )));
+                return;
+            }
+            if let Some(p_limit) = p_sess.budget_usd {
+                let rem = (p_limit - p_sess.cost.usd).max(0.0);
+                if rem <= 0.0 {
+                    let _ = reply.send(Frame::error(format!(
+                        "父 session {} 剩餘預算 session_usd 為 $0.00（已花費 ${:.2} / 上限 ${:.2}），無法產生子 agent",
+                        p_sess.label, p_sess.cost.usd, p_limit
+                    )));
+                    return;
+                }
+                parent_remaining_usd = Some(rem);
+            }
+        }
+    }
+
     if spawn.worktree {
         let root = git_toplevel(&cwd).unwrap_or_else(|| cwd.clone());
         match make_worktree(&root, &id) {
@@ -59,22 +146,6 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
     }
 
-    let parent = spawn.parent.as_ref().map(|p| shared.resolve_session(p));
-    let role = spawn.role.clone();
-    let label = spawn
-        .label
-        .clone()
-        .unwrap_or_else(|| format!("{}/{}", role.id(), &id[4..8]));
-
-    let global_dir = config_dir();
-    let resolved = config::Config::load(&global_dir, &cwd).resolve(
-        &spawn.kind,
-        &role,
-        spawn.model.as_deref(),
-        spawn.effort.as_deref(),
-        &spawn.args,
-        spawn.permission,
-    );
     // 子 agent 的權限不得高於父 session 與設定的上限（防呆，不是安全邊界）。
     let mut permission = resolved.permission;
     let mut downgraded = None;
@@ -97,6 +168,17 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
     }
 
+    // 解析此 session 的實際成本上限；子 agent 的上限不得高於設定與父 session 剩餘額度。
+    let mut budget_usd = cfg.resolve_budget_usd(&role, spawn.budget_usd);
+    if parent.is_some() {
+        if let Some(cfg_cap) = resolved.session_usd {
+            budget_usd = Some(budget_usd.map_or(cfg_cap, |b| b.min(cfg_cap)));
+        }
+        if let Some(rem) = parent_remaining_usd {
+            budget_usd = Some(budget_usd.map_or(rem, |b| b.min(rem)));
+        }
+    }
+
     let session = Session {
         id: id.clone(),
         kind: spawn.kind.clone(),
@@ -115,6 +197,8 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         context: None,
         native_id: None,
         permission,
+        budget_usd,
+        over_budget: false,
     };
     shared.emit(Event::SessionStarted {
         session: session.clone(),
@@ -386,6 +470,16 @@ pub(crate) fn handle_prompt(
     text: String,
     attachments: Vec<termade_core::Attachment>,
 ) {
+    let resolved_id = shared.resolve_session(&session);
+    if let Some(s) = lock(&shared.inner).state.sessions.get(&resolved_id) {
+        if s.over_budget {
+            let _ = reply.send(Frame::error(format!(
+                "session {} 已超過成本上限（over_budget）；請先用 `termade budget {} <金額>` 或 TUI `:budget <金額>` 調高上限",
+                s.label, s.label
+            )));
+            return;
+        }
+    }
     match shared.control(&session) {
         Some((sid, ctl)) => {
             shared.wake_if_sleeping(&sid, &ctl);
@@ -521,8 +615,45 @@ pub(crate) fn handle_handoff(
             attachments,
             inherit_from: Some(sid),
             args: vec![],
+            budget_usd: None,
         },
     );
+}
+
+pub(crate) fn handle_budget(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    budget_usd: f64,
+) {
+    if !budget_usd.is_finite() || budget_usd <= 0.0 {
+        let _ = reply.send(Frame::error("預算上限必須為大於 0 的數字"));
+        return;
+    }
+    let sid = shared.resolve_session(&session);
+    let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
+    let Some(s) = sess else {
+        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        return;
+    };
+    if budget_usd <= s.cost.usd {
+        let _ = reply.send(Frame::error(format!(
+            "新的上限（${budget_usd:.2}）必須高於目前已花費金額（${:.2}）",
+            s.cost.usd
+        )));
+        return;
+    }
+    if let Ok(mut warned) = shared.budget_warned.lock() {
+        warned.remove(&sid);
+    }
+    shared.emit(Event::SessionBudget {
+        session: sid,
+        budget_usd: Some(budget_usd),
+    });
+    let _ = reply.send(Frame::ok_note(format!(
+        "已將 {} 的預算上限設為 ${budget_usd:.2}",
+        s.label
+    )));
 }
 
 pub(crate) fn handle_cancel(shared: &Arc<Shared>, reply: &ClientTx, session: String) {

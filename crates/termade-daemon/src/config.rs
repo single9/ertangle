@@ -40,6 +40,7 @@ pub struct RoleCfg {
     pub permission: Option<String>,
     pub read_only: Option<bool>,
     pub effort: Option<String>,
+    pub session_usd: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -53,6 +54,27 @@ pub struct TuiCfg {
     /// 回合短於這個秒數時，「做完了」不通知（預設 10）。
     pub notify_min_turn_secs: Option<u64>,
 }
+
+/// 成本與子 agent 數量上限。
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct LimitsCfg {
+    /// 單一 session 的成本上限（美元）。
+    pub session_usd: Option<f64>,
+    /// 沒有美金數字的 agent 用這個（輸入＋輸出 token 數）。
+    pub session_tokens: Option<u64>,
+    /// 一個 session 加上它所有後代的總和上限（美元）。
+    pub tree_usd: Option<f64>,
+    /// 一個 session 同時 live 的直接子 agent 數上限。
+    pub max_children: Option<usize>,
+    /// 子 agent 層數上限（人產生的是第 0 層）。
+    pub max_depth: Option<usize>,
+    /// 成本警告門檻（百分比，預設 80）。
+    pub warn_percent: Option<f64>,
+}
+
+/// 預設的成本警告門檻（百分比）。
+pub const DEFAULT_BUDGET_WARN_PERCENT: f64 = 80.0;
 
 /// 額度提醒與自動交接。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -69,6 +91,7 @@ pub struct HandoffCfg {
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
+    pub limits: LimitsCfg,
     pub handoff: HandoffCfg,
     pub defaults: Defaults,
     pub agents: BTreeMap<String, AgentCfg>,
@@ -91,10 +114,22 @@ pub struct Resolved {
     pub disallowed_tools: Vec<String>,
     pub read_only: bool,
     pub sandbox: Option<String>,
+    /// 設定檔解析出的單一 session 成本上限（`roles.<role>.session_usd` > `limits.session_usd`）。
+    pub session_usd: Option<f64>,
 }
 
 fn kind_key(kind: &AgentKind) -> String {
     kind.id().to_string()
+}
+
+/// 疊加時只允許調低、不允許調高（用於 `limits` 與 repo 的 `roles.<role>.session_usd`）。
+fn min_opt<T: PartialOrd + Copy>(global: Option<T>, local: Option<T>) -> Option<T> {
+    match (global, local) {
+        (Some(g), Some(l)) => Some(if l < g { l } else { g }),
+        (Some(g), None) => Some(g),
+        (None, Some(l)) => Some(l),
+        (None, None) => None,
+    }
 }
 
 impl Config {
@@ -156,6 +191,14 @@ impl Config {
                 e.sandbox = v.sandbox;
             }
         }
+        let global_session_usd = out.limits.session_usd;
+        out.limits.session_usd = min_opt(out.limits.session_usd, local.limits.session_usd);
+        out.limits.session_tokens = min_opt(out.limits.session_tokens, local.limits.session_tokens);
+        out.limits.tree_usd = min_opt(out.limits.tree_usd, local.limits.tree_usd);
+        out.limits.max_children = min_opt(out.limits.max_children, local.limits.max_children);
+        out.limits.max_depth = min_opt(out.limits.max_depth, local.limits.max_depth);
+        out.limits.warn_percent = min_opt(out.limits.warn_percent, local.limits.warn_percent);
+
         for (k, v) in local.roles {
             let e = out.roles.entry(k).or_default();
             if v.agent.is_some() {
@@ -172,6 +215,17 @@ impl Config {
             }
             if v.effort.is_some() {
                 e.effort = v.effort;
+            }
+            if v.session_usd.is_some() {
+                let cap = e.session_usd.or(global_session_usd);
+                e.session_usd = min_opt(cap, v.session_usd);
+            }
+        }
+        if local.limits.session_usd.is_some() {
+            for r in out.roles.values_mut() {
+                if r.session_usd.is_some() {
+                    r.session_usd = min_opt(r.session_usd, local.limits.session_usd);
+                }
             }
         }
         if local.handoff.warn_percent.is_some() {
@@ -255,12 +309,22 @@ impl Config {
                 .unwrap_or_default(),
             read_only: role_cfg.and_then(|r| r.read_only).unwrap_or(false),
             sandbox: agent.and_then(|a| a.sandbox.clone()),
+            session_usd: role_cfg
+                .and_then(|r| r.session_usd)
+                .or(self.limits.session_usd),
             model,
             effort,
             args,
             env,
             bin: agent.and_then(|a| a.bin.clone()),
         }
+    }
+
+    /// 解析單一 session 的實際成本上限（優先序：請求覆寫 > `roles.<role>.session_usd` > `limits.session_usd`）。
+    pub fn resolve_budget_usd(&self, role: &Role, req_budget: Option<f64>) -> Option<f64> {
+        req_budget
+            .or_else(|| self.roles.get(role.id()).and_then(|r| r.session_usd))
+            .or(self.limits.session_usd)
     }
 }
 
@@ -443,5 +507,77 @@ notify_min_turn_secs = 30
             "repo 不能覆寫 notify_command"
         );
         assert_eq!(c.tui.notify.map(|v| v.len()), Some(2));
+    }
+
+    #[test]
+    fn limits_config_layered_only_lowers_never_raises() {
+        let global = Config::parse(
+            r#"
+[limits]
+session_usd = 5.0
+session_tokens = 200000
+tree_usd = 20.0
+max_children = 4
+max_depth = 2
+warn_percent = 80
+
+[roles.coordinator]
+session_usd = 10.0
+"#,
+        )
+        .unwrap();
+
+        // repo 試圖調高各項上限：全部被忽略，維持全域上限
+        let local_higher = Config::parse(
+            r#"
+[limits]
+session_usd = 50.0
+session_tokens = 900000
+tree_usd = 100.0
+max_children = 10
+max_depth = 5
+warn_percent = 95
+
+[roles.coordinator]
+session_usd = 50.0
+[roles.worker]
+session_usd = 20.0
+"#,
+        )
+        .unwrap();
+        let c1 = Config::layered(global.clone(), local_higher);
+        assert_eq!(c1.limits.session_usd, Some(5.0));
+        assert_eq!(c1.limits.session_tokens, Some(200_000));
+        assert_eq!(c1.limits.tree_usd, Some(20.0));
+        assert_eq!(c1.limits.max_children, Some(4));
+        assert_eq!(c1.limits.max_depth, Some(2));
+        assert_eq!(c1.limits.warn_percent, Some(80.0));
+        assert_eq!(c1.roles["coordinator"].session_usd, Some(10.0));
+        // worker 原本沒有 role session_usd，受 global.limits.session_usd (5.0) 限制
+        assert_eq!(c1.roles["worker"].session_usd, Some(5.0));
+
+        // repo 調低各項上限：採用較低值
+        let local_lower = Config::parse(
+            r#"
+[limits]
+session_usd = 2.0
+tree_usd = 8.0
+max_children = 2
+max_depth = 1
+
+[roles.coordinator]
+session_usd = 1.5
+"#,
+        )
+        .unwrap();
+        let c2 = Config::layered(global, local_lower);
+        assert_eq!(c2.limits.session_usd, Some(2.0));
+        assert_eq!(c2.limits.tree_usd, Some(8.0));
+        assert_eq!(c2.limits.max_children, Some(2));
+        assert_eq!(c2.limits.max_depth, Some(1));
+        assert_eq!(c2.roles["coordinator"].session_usd, Some(1.5));
+        assert_eq!(c2.resolve_budget_usd(&Role::Worker, None), Some(2.0));
+        assert_eq!(c2.resolve_budget_usd(&Role::Coordinator, None), Some(1.5));
+        assert_eq!(c2.resolve_budget_usd(&Role::Worker, Some(0.5)), Some(0.5));
     }
 }
