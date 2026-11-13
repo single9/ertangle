@@ -222,9 +222,18 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             if let Some(src) = &spawn.inherit_from {
                 let from = shared.resolve_session(src);
                 shared.emit(Event::SessionHandedOff {
-                    from,
+                    from: from.clone(),
                     to: id.clone(),
                 });
+                // 舊 session 還沒提醒的未讀訊息併給接手者（T25）。
+                let mut inner = lock(&shared.inner);
+                if let Some(ids) = inner.pending_nudge.remove(&from) {
+                    inner
+                        .pending_nudge
+                        .entry(id.clone())
+                        .or_default()
+                        .extend(ids);
+                }
             }
             let mut note = format!("已建立 session {id}");
             if let Some((from, to)) = downgraded {
@@ -893,6 +902,7 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
     shared.emit(Event::SessionRemoved {
         session: sid.clone(),
     });
+    lock(&shared.inner).pending_nudge.remove(&sid);
     shared.clear_queue_for_ended(&sid, true);
     let _ = reply.send(Frame::ok_note(format!("已移除 {}", s.label)));
 }

@@ -2476,3 +2476,211 @@ fn gc_cleans_shared_worktree_once() {
         assert!(matches!(rm(&shared, id, false), Frame::Ok { .. }));
     }
 }
+
+// -----------------------------------------------------------------------
+// T25：忙完後提醒未讀訊息；超限判斷看實際收件者
+// -----------------------------------------------------------------------
+
+fn nudge_setup(status: SessionStatus) -> (Arc<Shared>, MockCtl) {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(&shared, "ses_n", "worker/n", status, ctl.as_ctl(), &dir);
+    (shared, ctl)
+}
+
+fn send_to_n(shared: &Arc<Shared>, kind: MsgKind, body: &str) -> String {
+    shared
+        .deliver_message(
+            Some("human".into()),
+            Target::Direct("ses_n".into()),
+            kind,
+            body.into(),
+            None,
+        )
+        .expect("送出應成功")
+}
+
+fn go_idle(shared: &Arc<Shared>) {
+    shared.ingest(
+        &"ses_n".to_string(),
+        AgentEvent::Status(SessionStatus::Idle),
+    );
+}
+
+#[test]
+fn busy_recipient_gets_one_nudge_after_returning_to_idle() {
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    let id = send_to_n(&shared, MsgKind::Chat, "ping");
+    assert!(ctl.inputs().is_empty(), "Busy 時不應送 prompt");
+    go_idle(&shared);
+    let inputs = ctl.inputs();
+    assert_eq!(inputs.len(), 1);
+    assert!(inputs[0].contains(&id), "{}", inputs[0]);
+    // 一則訊息只提醒一次
+    go_idle(&shared);
+    assert_eq!(ctl.inputs().len(), 1);
+}
+
+#[test]
+fn two_unread_messages_merge_into_one_nudge() {
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    let a = send_to_n(&shared, MsgKind::Chat, "one");
+    let b = send_to_n(&shared, MsgKind::Question, "two");
+    go_idle(&shared);
+    let inputs = ctl.inputs();
+    assert_eq!(inputs.len(), 1);
+    assert!(inputs[0].contains(&a) && inputs[0].contains(&b));
+}
+
+#[test]
+fn queued_prompt_goes_before_unread_nudge() {
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "ses_n".into(),
+            text: "queued".into(),
+            attachments: vec![],
+            queue: true,
+        },
+    );
+    let id = send_to_n(&shared, MsgKind::Chat, "ping");
+    go_idle(&shared);
+    assert_eq!(ctl.inputs(), vec!["queued".to_string()]);
+    go_idle(&shared);
+    let inputs = ctl.inputs();
+    assert_eq!(inputs.len(), 2);
+    assert!(inputs[1].contains(&id));
+}
+
+#[test]
+fn read_messages_are_not_nudged() {
+    // termade_wait 取走：以 inbox 已讀（cursor 前進）模擬同一個判斷
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    send_to_n(&shared, MsgKind::Chat, "one");
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::BusInbox {
+            session: "ses_n".into(),
+            unread_only: true,
+        },
+    );
+    assert!(format!("{:?}", rx.try_iter().collect::<Vec<_>>()).contains("one"));
+    go_idle(&shared);
+    assert!(ctl.inputs().is_empty(), "inbox 已讀不應提醒");
+
+    // 讀過之後又來一則新的：只提醒新的
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    let old = send_to_n(&shared, MsgKind::Chat, "old");
+    shared.handle(
+        &tx,
+        Request::BusInbox {
+            session: "ses_n".into(),
+            unread_only: true,
+        },
+    );
+    let new = send_to_n(&shared, MsgKind::Chat, "new");
+    go_idle(&shared);
+    let inputs = ctl.inputs();
+    assert_eq!(inputs.len(), 1);
+    assert!(inputs[0].contains(&new) && !inputs[0].contains(&old));
+}
+
+#[test]
+fn message_taken_by_waiter_is_not_nudged() {
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::BusWait {
+            session: "ses_n".into(),
+            from: None,
+            reply_to: None,
+            timeout_ms: 5_000,
+        },
+    );
+    send_to_n(&shared, MsgKind::Chat, "answer");
+    let got = rx
+        .rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("waiter 應收到");
+    assert!(format!("{got:?}").contains("answer"));
+    go_idle(&shared);
+    assert!(ctl.inputs().is_empty());
+}
+
+#[test]
+fn status_messages_and_over_budget_sessions_are_not_nudged() {
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    send_to_n(&shared, MsgKind::Status, "fyi");
+    go_idle(&shared);
+    assert!(ctl.inputs().is_empty(), "Status 不提醒");
+
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    lock(&shared.inner)
+        .state
+        .sessions
+        .get_mut("ses_n")
+        .unwrap()
+        .over_budget = true;
+    send_to_n(&shared, MsgKind::Chat, "ping");
+    go_idle(&shared);
+    assert!(ctl.inputs().is_empty(), "over_budget 不提醒");
+}
+
+#[test]
+fn ended_session_drops_pending_nudge() {
+    let (shared, _ctl) = nudge_setup(SessionStatus::Busy);
+    send_to_n(&shared, MsgKind::Chat, "ping");
+    assert!(lock(&shared.inner).pending_nudge.contains_key("ses_n"));
+    shared.ingest(&"ses_n".to_string(), AgentEvent::Exited(Some(0)));
+    assert!(!lock(&shared.inner).pending_nudge.contains_key("ses_n"));
+}
+
+#[test]
+fn over_budget_note_uses_successor_of_handed_off_session() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let old = MockCtl::default();
+    let new = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_a",
+        "t25",
+        SessionStatus::Idle,
+        old.as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "ses_b",
+        "t25→claude",
+        SessionStatus::Idle,
+        new.as_ctl(),
+        &dir,
+    );
+    mark_handed_off(&shared, "ses_a", "ses_b");
+    lock(&shared.inner)
+        .state
+        .sessions
+        .get_mut("ses_b")
+        .unwrap()
+        .over_budget = true;
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::BusSend {
+            from: None,
+            to: Target::Direct("t25".into()),
+            kind: MsgKind::Chat,
+            body: "ping".into(),
+            reply_to: None,
+        },
+    );
+    let frames = format!("{:?}", rx.try_iter().collect::<Vec<_>>());
+    assert!(frames.contains("over_budget"), "{frames}");
+    assert!(new.inputs().is_empty());
+}
