@@ -47,7 +47,7 @@ fn token_file_must_be_private() {
 }
 
 #[test]
-fn socket_dir_is_0700_and_loose_dir_rejected() {
+fn socket_dir_is_0700_and_loose_own_dir_is_tightened() {
     use std::os::unix::fs::PermissionsExt;
     let base = temp_cwd();
     let d = base.join("ade");
@@ -61,25 +61,11 @@ fn socket_dir_is_0700_and_loose_dir_rejected() {
     let loose = base.join("loose");
     fs::create_dir(&loose).unwrap();
     fs::set_permissions(&loose, fs::Permissions::from_mode(0o777)).unwrap();
-    assert!(ensure_private_dir(&loose).is_err());
-}
-
-#[test]
-fn ensure_daemon_validates_socket_dir_before_spawn() {
-    use std::os::unix::fs::PermissionsExt;
-    let base = temp_cwd();
-    let old_xdg = std::env::var_os("XDG_RUNTIME_DIR");
-    std::env::set_var("XDG_RUNTIME_DIR", &base);
-    let d = base.join("ade");
-    fs::create_dir(&d).unwrap();
-    fs::set_permissions(&d, fs::Permissions::from_mode(0o777)).unwrap();
-    let err = crate::client::ensure_daemon().unwrap_err().to_string();
-    if let Some(old) = old_xdg {
-        std::env::set_var("XDG_RUNTIME_DIR", old);
-    } else {
-        std::env::remove_var("XDG_RUNTIME_DIR");
-    }
-    assert!(err.contains("權限過寬"), "{err}");
+    ensure_private_dir(&loose).unwrap();
+    assert_eq!(
+        fs::metadata(&loose).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
 }
 
 #[test]

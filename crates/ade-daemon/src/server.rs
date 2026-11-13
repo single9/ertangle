@@ -170,7 +170,10 @@ pub(crate) fn ensure_private_dir(dir: &Path) -> Result<()> {
                 bail!("{dir:?} 不屬於目前使用者（uid {}），拒絕啟動", meta.uid());
             }
             if meta.permissions().mode() & 0o077 != 0 {
-                bail!("{dir:?} 權限過寬（需 0700），請 chmod 700 後重試");
+                // 目錄是自己的（例如舊版以 755 建立）：直接收緊，不要求使用者手動處理。
+                tracing::warn!("{dir:?} 權限過寬，已改為 0700");
+                fs::set_permissions(dir, fs::Permissions::from_mode(0o700))
+                    .with_context(|| format!("無法將 {dir:?} 改為 0700，請手動 chmod 700"))?;
             }
             Ok(())
         }
