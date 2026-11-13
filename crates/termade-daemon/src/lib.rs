@@ -432,6 +432,17 @@ impl Shared {
     }
 
     /// 另一個仍在執行的 session 是否正在使用這個工作目錄（交接後新舊 session 共用同一個 worktree）。
+    /// 其他尚未移除、與 `s` 共用同一個 worktree 的 session（不論狀態）的 label。
+    pub(crate) fn cwd_shared_with(&self, s: &Session) -> Vec<String> {
+        lock(&self.inner)
+            .state
+            .sessions
+            .values()
+            .filter(|o| o.id != s.id && o.cwd == s.cwd)
+            .map(|o| o.label.clone())
+            .collect()
+    }
+
     pub(crate) fn cwd_in_use_by_other(&self, s: &Session) -> Option<String> {
         lock(&self.inner)
             .state

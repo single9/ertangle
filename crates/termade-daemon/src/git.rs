@@ -303,6 +303,29 @@ pub(crate) fn create_worktree_pr(session: &Session, title: &str, body: &str) -> 
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// 本地分支 `branch` 是否存在。
+pub(crate) fn branch_exists(main_repo: &Path, branch: &str) -> bool {
+    git_output(
+        main_repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
+    .is_ok_and(|o| o.status.success())
+}
+
+/// session 的 worktree 目錄與分支都已不存在（沒有東西可清）。
+pub(crate) fn worktree_gone(main_repo: &Path, session: &Session) -> bool {
+    !Path::new(&session.cwd).exists()
+        && session
+            .branch
+            .as_ref()
+            .is_none_or(|b| !branch_exists(main_repo, b))
+}
+
 /// gc 預設保護：未合併或有未 commit 變更時回傳原因。
 pub(crate) fn gc_block_reason(main_repo: &Path, session: &Session) -> Option<String> {
     let wt_dir = Path::new(&session.cwd);
@@ -314,6 +337,13 @@ pub(crate) fn gc_block_reason(main_repo: &Path, session: &Session) -> Option<Str
         }
     }
     if let Some(branch) = &session.branch {
+        // 分支已不存在（例如共用 worktree 的另一個 session 已把它刪掉）：
+        // 目錄也不在就沒有東西要保護；目錄還在則保守地擋下。
+        if !branch_exists(main_repo, branch) {
+            return wt_dir
+                .exists()
+                .then(|| "分支不存在，worktree 仍在".to_string());
+        }
         match git_output(main_repo, &["merge-base", "--is-ancestor", branch, "HEAD"]) {
             Ok(o) if o.status.success() => {}
             Ok(_) => return Some("尚未合併".into()),
@@ -338,7 +368,11 @@ pub(crate) fn remove_worktree(main_repo: &Path, session: &Session, force: bool) 
             bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
         }
     }
-    if let Some(branch) = &session.branch {
+    if let Some(branch) = session
+        .branch
+        .as_ref()
+        .filter(|b| branch_exists(main_repo, b))
+    {
         let out = git_output(
             main_repo,
             &["branch", if force { "-D" } else { "-d" }, branch],

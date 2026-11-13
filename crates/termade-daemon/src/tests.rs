@@ -2190,3 +2190,122 @@ fn over_budget_holds_queue_rejects_new_prompts_and_resumes_after_raise() {
     assert_eq!(ctl.inputs(), vec!["queued before limit".to_string()]);
     assert!(!lock(&shared.inner).state.queues.contains_key("ses_ob"));
 }
+
+// ---- T22：共用 worktree 的移除 ----
+
+fn rm(shared: &Arc<Shared>, id: &str, force: bool) -> Frame {
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::SessionRemove {
+            session: id.into(),
+            force,
+        },
+    );
+    rx.rx.try_recv().expect("rm 應有回覆")
+}
+
+/// A 與交接後的 B 共用 A 的 worktree 與分支，兩者都已結束、分支已合併。
+fn shared_pair(tag: &str) -> (Arc<Shared>, PathBuf, Session) {
+    let repo = temp_repo(tag);
+    let shared = Shared::restore(
+        Path::new("/dev/null"),
+        PolicyEngine::default(),
+        repo.clone(),
+        None,
+    )
+    .unwrap();
+    let a = wt_session(&repo, "ses_a");
+    let mut b = a.clone();
+    b.id = "ses_b".into();
+    b.label = "w/ses_a→claude".into();
+    shared.emit(Event::SessionStarted { session: a.clone() });
+    shared.emit(Event::SessionStarted { session: b });
+    (shared, repo, a)
+}
+
+#[test]
+fn removing_shared_worktree_keeps_it_until_last_session() {
+    let (shared, repo, a) = shared_pair("t22a");
+    let branch = a.branch.clone().unwrap();
+
+    let f = rm(&shared, "ses_a", false);
+    assert!(matches!(f, Frame::Ok { .. }), "{f:?}");
+    assert!(format!("{f:?}").contains("保留"), "{f:?}");
+    assert!(Path::new(&a.cwd).exists(), "還有 B 參照，worktree 要保留");
+    assert!(crate::git::branch_exists(&repo, &branch));
+
+    let f = rm(&shared, "ses_b", false);
+    assert!(matches!(f, Frame::Ok { .. }), "{f:?}");
+    assert!(!Path::new(&a.cwd).exists());
+    assert!(!crate::git::branch_exists(&repo, &branch));
+    let inner = lock(&shared.inner);
+    assert!(!inner.state.sessions.contains_key("ses_a"));
+    assert!(!inner.state.sessions.contains_key("ses_b"));
+}
+
+#[test]
+fn removing_session_whose_branch_and_worktree_are_gone_succeeds() {
+    let (shared, repo, a) = shared_pair("t22b");
+    // 舊版行為留下的狀態：worktree 與分支已被刪掉，session 紀錄還在。
+    remove_worktree(&repo, &a, false).unwrap();
+    assert!(gc_block_reason(&repo, &a).is_none());
+    // 再刪一次也不算錯（分支不存在時跳過）。
+    remove_worktree(&repo, &a, false).unwrap();
+    for id in ["ses_a", "ses_b"] {
+        let f = rm(&shared, id, false);
+        assert!(matches!(f, Frame::Ok { .. }), "{id}: {f:?}");
+    }
+    assert!(lock(&shared.inner).state.sessions.is_empty());
+}
+
+#[test]
+fn missing_branch_with_worktree_dir_still_blocks_without_force() {
+    let repo = temp_repo("t22c");
+    let s = wt_session(&repo, "ses_c");
+    // 只拿掉分支，目錄還在。
+    git(&repo, &["worktree", "remove", &s.cwd]);
+    fs::create_dir_all(&s.cwd).unwrap();
+    git(&repo, &["branch", "-D", s.branch.as_deref().unwrap()]);
+    let reason = gc_block_reason(&repo, &s).expect("目錄還在時要擋下");
+    assert!(reason.contains("分支不存在"), "{reason}");
+}
+
+#[test]
+fn gc_cleans_shared_worktree_once() {
+    let (shared, repo, a) = shared_pair("t22d");
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::WorktreeGc {
+            session: None,
+            force: false,
+        },
+    );
+    let note = format!("{:?}", rx.rx.try_recv().unwrap());
+    assert!(note.contains("已清理 1 個"), "{note}");
+    assert!(!note.contains("略過"), "{note}");
+    assert!(!Path::new(&a.cwd).exists());
+    assert!(!crate::git::branch_exists(
+        &repo,
+        a.branch.as_deref().unwrap()
+    ));
+
+    // 再跑一次：沒有東西可清，也不報錯。
+    shared.handle(
+        &tx,
+        Request::WorktreeGc {
+            session: None,
+            force: false,
+        },
+    );
+    let note = format!("{:?}", rx.rx.try_recv().unwrap());
+    assert!(
+        note.contains("已清理 0 個") && !note.contains("略過"),
+        "{note}"
+    );
+    // gc 之後兩個 session 都能一般 rm。
+    for id in ["ses_a", "ses_b"] {
+        assert!(matches!(rm(&shared, id, false), Frame::Ok { .. }));
+    }
+}

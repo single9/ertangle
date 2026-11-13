@@ -839,6 +839,24 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         let _ = reply.send(Frame::error(format!("worktree 仍被 {user} 使用，不能移除")));
         return;
     }
+    // 共用 worktree（handoff）：還有其他 session 參照時只移除紀錄，worktree 與分支留給最後一個。
+    let sharers = if s.branch.is_some() {
+        shared.cwd_shared_with(&s)
+    } else {
+        Vec::new()
+    };
+    if !sharers.is_empty() {
+        shared.emit(Event::SessionRemoved {
+            session: sid.clone(),
+        });
+        shared.clear_queue_for_ended(&sid, true);
+        let _ = reply.send(Frame::ok_note(format!(
+            "已移除 {}（worktree 仍由 {} 參照，保留）",
+            s.label,
+            sharers.join("、")
+        )));
+        return;
+    }
     if s.branch.is_some() {
         let repo = crate::git::session_repo(&shared.default_cwd(), &s);
         if !force {

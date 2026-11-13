@@ -140,8 +140,13 @@ pub(crate) fn handle_gc(
     };
     let mut removed = 0usize;
     let mut skipped: Vec<String> = Vec::new();
+    // 共用 worktree（handoff）的多個 session 只清一次。
+    let mut seen_cwd = std::collections::HashSet::new();
     for s in candidates {
         let repo = session_repo(&default_cwd, &s);
+        if !seen_cwd.insert(s.cwd.clone()) || crate::git::worktree_gone(&repo, &s) {
+            continue;
+        }
         if let Some(user) = shared.cwd_in_use_by_other(&s) {
             skipped.push(format!("{}（worktree 仍被 {user} 使用）", s.label));
             continue;
