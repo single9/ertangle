@@ -106,6 +106,7 @@ cargo test                     # 全部單元測試
 | `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
 | `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
 | `T`（或 `/thoughts`） | 顯示 / 隱藏 agent 的思考行（`💭`；預設隱藏以減少渲染量） |
+| `O`（或 `:tools`） | 展開 / 摺疊工具呼叫（預設把連續的呼叫與成功結果摺成一行，失敗行保留） |
 | `Y` 或 `/copy` | 用 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees），不含側欄與邊框 |
 | `PgUp` / `PgDn`（或 `Ctrl-U` / `Ctrl-D`） | 逐字稿 / diff 翻頁捲動（捲動後暫停跟隨，狀態列會顯示 `⏸ paused`） |
 | `Home` / `End` | 跳到最前 / 回到跟隨最新輸出（`▼ follow`） |
