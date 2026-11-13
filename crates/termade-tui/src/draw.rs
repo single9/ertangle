@@ -142,7 +142,7 @@ pub(crate) fn draw_menu(f: &mut TuiFrame, input_area: Rect, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(format!(" {title} · Backspace 返回 ")),
+                .title(format!(" {title} ")),
         ),
         area,
     );
@@ -236,7 +236,7 @@ pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &Ap
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(" 專案檔案（Tab 採用、↑↓ 選擇） "),
+                .title(" 專案檔案（Tab 採用） "),
         ),
         area,
     );
@@ -291,7 +291,7 @@ pub(crate) fn draw_help(f: &mut TuiFrame, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(" 說明（j/k 捲動 · Esc 或 ? 關閉） "),
+                .title(" 說明（Esc 關閉） "),
         ),
         area,
     );
@@ -1024,7 +1024,7 @@ pub(crate) fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Worktrees（M 合併選取 session · G 清理已結束 worktree） "),
+                .title(" Worktrees "),
         )
         .wrap(Wrap { trim: false });
     f.render_widget(para, area);
@@ -1106,27 +1106,27 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
-        Mode::Normal => " 輸入（i 開始輸入 · n 新增 agent · ? 說明） ".to_string(),
+        Mode::Normal => " 輸入（i 輸入 · ? 說明） ".to_string(),
         Mode::Help => " 說明 ".to_string(),
-        Mode::Prompt => " prompt（@檔案/圖片 附件、Tab 補全、Ctrl-V 貼剪貼簿圖片；@peer／#channel 傳訊息；Enter 送出） ".to_string(),
+        Mode::Prompt => " prompt（@ 附檔 · Enter 送出） ".to_string(),
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => format!(
-                " spawn → {}{}{}：prompt（Ctrl-W worktree={}, Ctrl-E 權限={}, Ctrl-F effort, Enter 送出） ",
+                " spawn → {}{}{} · worktree={} · 權限={} ",
                 kind.id(),
                 model.as_deref().map(|m| format!(":{m}")).unwrap_or_default(),
                 app.spawn_effort.as_deref().map(|e| format!(" effort={e}")).unwrap_or_default(),
                 if app.spawn_worktree { "on" } else { "off" },
                 app.spawn_permission.map_or("預設", |p| p.id()),
             ),
-            None => " spawn：<agent[:model]> <prompt>（Ctrl-W worktree, Ctrl-E 權限, Enter 送出） "
+            None => " spawn：<agent[:model]> <prompt> "
                 .to_string(),
         },
-        Mode::Menu => " Space 選單（Esc 關閉） ".to_string(),
-        Mode::Pick => " 選擇中（↑↓ 移動、輸入過濾、Enter 確認、Esc 取消） ".to_string(),
-        Mode::Message => " message → 選取的 session（Enter 送出） ".to_string(),
-        Mode::Review => " review 註解 → 送回選取的 session 修改（Enter 送出） ".to_string(),
-        Mode::Command => " : 命令（Tab 補全；spawn / rm / clean / kill / merge / diff / gc / task …） ".to_string(),
-        Mode::Jump => " Jump Anywhere：輸入關鍵字跳轉 session（Enter 確認） ".to_string(),
+        Mode::Menu => " 選單 ".to_string(),
+        Mode::Pick => " 選擇（Enter 確認 · Esc 取消） ".to_string(),
+        Mode::Message => " message → 選取的 session ".to_string(),
+        Mode::Review => " review 註解 → 選取的 session ".to_string(),
+        Mode::Command => " 命令（Tab 補全） ".to_string(),
+        Mode::Jump => " 跳轉 session ".to_string(),
     };
     let style = if app.mode == Mode::Normal {
         Style::default()
@@ -1166,9 +1166,9 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     let hints = match app.view {
-        CenterView::Transcript => "  ? 說明  Space 選單  : 命令  Tab 換檢視  q 離開",
-        CenterView::Diff => "  ? 說明  j/k 選行  { } hunk  c 註解  M 合併  Tab 換檢視  q 離開",
-        CenterView::Worktrees => "  ? 說明  M 合併  G 清理  r 重整  Tab 換檢視  q 離開",
+        CenterView::Transcript => "  ? 說明  Space 選單  : 命令  q 離開",
+        CenterView::Diff => "  ? 說明  c 註解  M 合併  q 離開",
+        CenterView::Worktrees => "  ? 說明  M 合併  G 清理  q 離開",
     };
     let text = Line::from(vec![
         Span::styled(
