@@ -197,10 +197,6 @@ fn event_loop(
             }
         }
 
-        let before = app.status.clone();
-        commands::flush_queues(&mut app, writer)?;
-        dirty |= app.status != before;
-
         dirty |= app.rebuild_pending;
         // 只在有狀態或輸入變動時重繪，閒置時不佔 CPU。
         // 每秒至少重繪一次，讓時間／狀態類顯示保持更新。

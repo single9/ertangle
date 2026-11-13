@@ -964,6 +964,7 @@ fn prompt_to_ended_session_points_to_resume() {
                 session: id.into(),
                 text: "hi".into(),
                 attachments: vec![],
+                queue: false,
             },
         );
     }
@@ -1566,6 +1567,7 @@ fn budget_warn_once_and_exceed_cancels_blocks_prompt_and_raises() {
             session: "s1".into(),
             text: "繼續做".into(),
             attachments: vec![],
+            queue: false,
         },
     );
     let frames: Vec<Frame> = rx.try_iter().collect();
@@ -1616,6 +1618,7 @@ fn budget_warn_once_and_exceed_cancels_blocks_prompt_and_raises() {
             session: "s1".into(),
             text: "繼續做".into(),
             attachments: vec![],
+            queue: false,
         },
     );
     assert_eq!(ctl.inputs().len(), 1);
@@ -1770,6 +1773,7 @@ done
             session: "worker/acp-t20".into(),
             text: "只做第二件事".into(),
             attachments: vec![],
+            queue: false,
         },
     );
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -1818,4 +1822,371 @@ done
             session: "worker/acp-t20".into(),
         },
     );
+}
+
+// ---- T19：Prompt 排隊移至 daemon ----
+
+#[test]
+fn queue_flushes_one_at_a_time_when_idle_even_without_clients() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_q",
+        "worker/q",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &dir,
+    );
+
+    let (tx, rx) = client_channel(None);
+    for text in ["first prompt", "second prompt"] {
+        shared.handle(
+            &tx,
+            Request::Prompt {
+                session: "ses_q".into(),
+                text: text.into(),
+                attachments: vec![],
+                queue: true,
+            },
+        );
+    }
+    drop(tx);
+    drop(rx);
+    // 確認沒有任何 client 連線
+    assert!(lock(&shared.inner).clients.is_empty());
+    assert!(ctl.inputs().is_empty(), "Busy 時不應立刻送出");
+    assert_eq!(
+        lock(&shared.inner).state.queues.get("ses_q"),
+        Some(&vec![
+            "first prompt".to_string(),
+            "second prompt".to_string()
+        ])
+    );
+
+    // 第一次回到 Idle：只送出第一則，狀態轉為 Busy，佇列剩第二則
+    shared.ingest(
+        &"ses_q".to_string(),
+        AgentEvent::Status(SessionStatus::Idle),
+    );
+    assert_eq!(ctl.inputs(), vec!["first prompt".to_string()]);
+    assert_eq!(
+        lock(&shared.inner).state.queues.get("ses_q"),
+        Some(&vec!["second prompt".to_string()])
+    );
+    assert_eq!(
+        lock(&shared.inner).state.sessions["ses_q"].status,
+        SessionStatus::Busy
+    );
+
+    // 第二次回到 Idle：送出第二則，佇列清空並從 State.queues 移除 key
+    shared.ingest(
+        &"ses_q".to_string(),
+        AgentEvent::Status(SessionStatus::Idle),
+    );
+    assert_eq!(
+        ctl.inputs(),
+        vec!["first prompt".to_string(), "second prompt".to_string()]
+    );
+    assert!(!lock(&shared.inner).state.queues.contains_key("ses_q"));
+}
+
+#[test]
+fn queue_true_on_idle_session_with_empty_queue_sends_immediately() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_idle",
+        "worker/idle",
+        SessionStatus::Idle,
+        ctl.as_ctl(),
+        &dir,
+    );
+
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "ses_idle".into(),
+            text: "run now".into(),
+            attachments: vec![],
+            queue: true,
+        },
+    );
+    let reply = rx.try_iter().next().unwrap();
+    assert!(matches!(reply, Frame::Ok { note: None }));
+    assert_eq!(ctl.inputs(), vec!["run now".to_string()]);
+    assert!(!lock(&shared.inner).state.queues.contains_key("ses_idle"));
+}
+
+#[test]
+fn queue_clears_when_session_fails_or_exits() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_fail",
+        "worker/fail",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &dir,
+    );
+
+    let (tx, _rx) = client_channel(None);
+    for text in ["p1", "p2"] {
+        shared.handle(
+            &tx,
+            Request::Prompt {
+                session: "ses_fail".into(),
+                text: text.into(),
+                attachments: vec![],
+                queue: true,
+            },
+        );
+    }
+    assert_eq!(lock(&shared.inner).state.queues["ses_fail"].len(), 2);
+
+    // session 失敗結束：佇列清空、State.queues 移除該 key，並留下 SessionNote
+    shared.ingest(
+        &"ses_fail".to_string(),
+        AgentEvent::Status(SessionStatus::Failed),
+    );
+    let inner = lock(&shared.inner);
+    assert!(!inner.queues.contains_key("ses_fail"));
+    assert!(!inner.state.queues.contains_key("ses_fail"));
+    let note = inner.state.sessions["ses_fail"]
+        .status_note
+        .as_deref()
+        .unwrap_or("");
+    assert!(note.contains("丟棄 2 則排隊 prompt"), "note={note}");
+}
+
+#[test]
+fn queue_pop_clear_and_cap_20() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_cap",
+        "worker/cap",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &dir,
+    );
+
+    let (tx, rx) = client_channel(None);
+    for i in 1..=20 {
+        shared.handle(
+            &tx,
+            Request::Prompt {
+                session: "ses_cap".into(),
+                text: format!("item-{i}"),
+                attachments: vec![],
+                queue: true,
+            },
+        );
+        assert!(matches!(rx.try_iter().next(), Some(Frame::Ok { .. })));
+    }
+    // 第 21 則應回傳錯誤
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "ses_cap".into(),
+            text: "overflow".into(),
+            attachments: vec![],
+            queue: true,
+        },
+    );
+    match rx.try_iter().next() {
+        Some(Frame::Error { message }) => assert!(message.contains("20"), "{message}"),
+        other => panic!("expected error, got {other:?}"),
+    }
+    assert_eq!(lock(&shared.inner).state.queues["ses_cap"].len(), 20);
+
+    // QueuePop 取回最後一則（item-20）
+    shared.handle(
+        &tx,
+        Request::QueuePop {
+            session: "ses_cap".into(),
+        },
+    );
+    assert!(matches!(rx.try_iter().next(), Some(Frame::Ok { note: Some(n) }) if n == "item-20"));
+    assert_eq!(lock(&shared.inner).state.queues["ses_cap"].len(), 19);
+
+    // QueueClear 清空全部
+    shared.handle(
+        &tx,
+        Request::QueueClear {
+            session: "ses_cap".into(),
+        },
+    );
+    match rx.try_iter().next() {
+        Some(Frame::Ok { note: Some(n) }) => assert!(n.contains("19"), "{n}"),
+        other => panic!("unexpected reply: {other:?}"),
+    }
+    assert!(!lock(&shared.inner).state.queues.contains_key("ses_cap"));
+
+    // 佇列空時 QueuePop 回傳 note: None
+    shared.handle(
+        &tx,
+        Request::QueuePop {
+            session: "ses_cap".into(),
+        },
+    );
+    assert!(matches!(
+        rx.try_iter().next(),
+        Some(Frame::Ok { note: None })
+    ));
+}
+
+#[test]
+fn queue_changed_updates_state_and_old_snapshot_parses_and_hides_attachment_data_from_log() {
+    let dir = temp_cwd();
+    let log = dir.join("events.jsonl");
+    let shared = Shared::restore(&log, PolicyEngine::default(), dir.clone(), None).unwrap();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_att",
+        "worker/att",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &dir,
+    );
+
+    let secret_text = "SUPER_SECRET_ATTACHMENT_BODY_12345";
+    let secret_data = "U1VQRVJfU0VDUkVUX0JBU0U2NF9EQVRB";
+    let att = termade_core::Attachment {
+        name: "foo.rs".into(),
+        mime: "text/plain".into(),
+        path: Some("/tmp/foo.rs".into()),
+        text: Some(secret_text.into()),
+        data: Some(secret_data.into()),
+        size: secret_text.len() as u64,
+        raw_prompt: Some("請看 @foo.rs".into()),
+    };
+
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "ses_att".into(),
+            text: "請看 foo.rs".into(),
+            attachments: vec![att],
+            queue: true,
+        },
+    );
+    shared.flush_log();
+
+    // State.queues 保存的是原始輸入文字（含 @foo.rs）
+    assert_eq!(
+        shared.snapshot().queues.get("ses_att"),
+        Some(&vec!["請看 @foo.rs".to_string()])
+    );
+
+    // event log 不得包含附件的 text 或 data 內容
+    let raw_log = fs::read_to_string(&log).unwrap();
+    assert!(
+        !raw_log.contains(secret_text),
+        "attachment text leaked into log: {raw_log}"
+    );
+    assert!(
+        !raw_log.contains(secret_data),
+        "attachment data leaked into log: {raw_log}"
+    );
+    assert!(raw_log.contains("請看 @foo.rs"));
+
+    // 舊格式快照（不含 queues 欄位）仍可正常反序列化
+    let old_state_json = r#"{
+        "seq": 5,
+        "sessions": {},
+        "tasks": {},
+        "messages": [],
+        "pending_permissions": {},
+        "transcripts": {}
+    }"#;
+    let parsed: State = serde_json::from_str(old_state_json).expect("舊快照應可解析");
+    assert_eq!(parsed.seq, 5);
+    assert!(parsed.queues.is_empty());
+}
+
+// ---- T17 × T19：超過成本上限時的排隊 ----
+
+#[test]
+fn over_budget_holds_queue_rejects_new_prompts_and_resumes_after_raise() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_ob",
+        "worker/ob",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &dir,
+    );
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "ses_ob".into(),
+            text: "queued before limit".into(),
+            attachments: vec![],
+            queue: true,
+        },
+    );
+    while rx.rx.try_recv().is_ok() {}
+
+    // 超過上限：回到 Idle 也不送出排隊的 prompt。
+    shared.emit(Event::SessionOverBudget {
+        session: "ses_ob".into(),
+        spent: 1.0,
+        limit: 1.0,
+    });
+    shared.ingest(
+        &"ses_ob".to_string(),
+        AgentEvent::Status(SessionStatus::Idle),
+    );
+    assert!(ctl.inputs().is_empty(), "超限時不應送出排隊的 prompt");
+    assert!(lock(&shared.inner).state.queues.contains_key("ses_ob"));
+
+    // 超限期間新的 prompt（立即或排隊）都被拒絕，佇列不變。
+    for queue in [false, true] {
+        shared.handle(
+            &tx,
+            Request::Prompt {
+                session: "ses_ob".into(),
+                text: "new".into(),
+                attachments: vec![],
+                queue,
+            },
+        );
+    }
+    let mut errors = 0;
+    while let Ok(frame) = rx.rx.try_recv() {
+        if format!("{frame:?}").contains("over_budget") {
+            errors += 1;
+        }
+    }
+    assert_eq!(errors, 2);
+    assert_eq!(
+        lock(&shared.inner).state.queues.get("ses_ob").map(Vec::len),
+        Some(1)
+    );
+
+    // 調高上限：保留的 prompt 恢復送出。
+    shared.handle(
+        &tx,
+        Request::SessionBudget {
+            session: "ses_ob".into(),
+            budget_usd: 5.0,
+        },
+    );
+    assert_eq!(ctl.inputs(), vec!["queued before limit".to_string()]);
+    assert!(!lock(&shared.inner).state.queues.contains_key("ses_ob"));
 }

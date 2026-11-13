@@ -14,7 +14,7 @@ use termade_protocol::{Frame, SpawnRequest};
 use crate::config;
 use crate::git::{git_toplevel, make_worktree};
 use crate::paths::{config_dir, socket_path};
-use crate::{lock, new_id, ClientTx, SessionEntry, Shared};
+use crate::{lock, new_id, ClientTx, QueuedPrompt, SessionEntry, Shared, MAX_QUEUE_LEN};
 
 pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnRequest) {
     let id = new_id("ses");
@@ -468,61 +468,207 @@ pub(crate) fn handle_resume(
     }
 }
 
+/// 實際送出一則 prompt 給目標 session（由 `handle_prompt` 與佇列自動送出共用）。
+pub(crate) fn send_prompt(
+    shared: &Arc<Shared>,
+    sid: &str,
+    text: &str,
+    attachments: &[termade_core::Attachment],
+) -> anyhow::Result<()> {
+    let Some((sid, ctl)) = shared.control(sid) else {
+        anyhow::bail!("找不到 session {sid}");
+    };
+    shared.wake_if_sleeping(&sid, &ctl);
+    let (is_pty, was_idle) = {
+        let inner = lock(&shared.inner);
+        let sess = inner.state.sessions.get(&sid);
+        (
+            sess.is_some_and(|s| s.transport == "pty"),
+            sess.is_some_and(|s| s.status == SessionStatus::Idle),
+        )
+    };
+    if !is_pty {
+        shared.emit(Event::UserPrompt {
+            session: sid.clone(),
+            text: with_attachment_summary(text, attachments),
+        });
+        if was_idle {
+            shared.emit(Event::SessionStatus {
+                session: sid.clone(),
+                status: SessionStatus::Busy,
+            });
+        }
+    }
+    if let Err(e) = ctl.send_input_with(text, attachments) {
+        if !is_pty && was_idle {
+            shared.emit(Event::SessionStatus {
+                session: sid,
+                status: SessionStatus::Idle,
+            });
+        }
+        return Err(e);
+    }
+    Ok(())
+}
+
 pub(crate) fn handle_prompt(
     shared: &Arc<Shared>,
     reply: &ClientTx,
     session: String,
     text: String,
     attachments: Vec<termade_core::Attachment>,
+    queue: bool,
 ) {
-    let resolved_id = shared.resolve_session(&session);
-    if let Some(s) = lock(&shared.inner).state.sessions.get(&resolved_id) {
-        if s.over_budget {
-            let _ = reply.send(Frame::error(format!(
-                "session {} 已超過成本上限（over_budget）；請先用 `termade budget {} <金額>` 或 TUI `:budget <金額>` 調高上限",
-                s.label, s.label
-            )));
+    let Some((sid, _)) = shared.control(&session) else {
+        let sid = shared.resolve_session(&session);
+        let resumable = lock(&shared.inner)
+            .state
+            .sessions
+            .get(&sid)
+            .map(|s| s.native_id.is_some());
+        let msg = match resumable {
+            Some(true) => {
+                format!("{session} 已結束；可用 :resume（或 `termade resume`）接續原對話")
+            }
+            Some(false) => format!("{session} 已結束，且沒有可接續的對話 id"),
+            None => format!("找不到 session {session}"),
+        };
+        let _ = reply.send(Frame::error(msg));
+        return;
+    };
+    // 超過成本上限（T17）：立即送出與排隊都拒絕，已在佇列裡的保留到調高上限。
+    if let Some(s) = lock(&shared.inner)
+        .state
+        .sessions
+        .get(&sid)
+        .filter(|s| s.over_budget)
+    {
+        let _ = reply.send(Frame::error(format!(
+            "session {} 已超過成本上限（over_budget）；請先用 `termade budget {} <金額>` 或 TUI `:budget <金額>` 調高上限",
+            s.label, s.label
+        )));
+        return;
+    }
+    let mut clean_attachments = attachments;
+    let raw_text = clean_attachments
+        .iter()
+        .find_map(|a| a.raw_prompt.clone())
+        .unwrap_or_else(|| text.clone());
+    for a in &mut clean_attachments {
+        a.raw_prompt = None;
+    }
+
+    if queue {
+        let (send_now, enqueue_res) = {
+            let mut inner = lock(&shared.inner);
+            let is_idle = inner
+                .state
+                .sessions
+                .get(&sid)
+                .is_some_and(|s| s.status == SessionStatus::Idle);
+            let q_empty = inner.queues.get(&sid).is_none_or(|q| q.is_empty());
+            if is_idle && q_empty {
+                (true, Ok(Vec::new()))
+            } else {
+                let q = inner.queues.entry(sid.clone()).or_default();
+                if q.len() >= MAX_QUEUE_LEN {
+                    (false, Err(format!("排隊已滿（上限 {MAX_QUEUE_LEN} 則）")))
+                } else {
+                    q.push_back(QueuedPrompt {
+                        text: text.clone(),
+                        attachments: clean_attachments.clone(),
+                        raw_text,
+                    });
+                    let items: Vec<String> = q.iter().map(|p| p.raw_text.clone()).collect();
+                    (false, Ok(items))
+                }
+            }
+        };
+        if !send_now {
+            match enqueue_res {
+                Ok(items) => {
+                    let n = items.len();
+                    shared.emit(Event::QueueChanged {
+                        session: sid,
+                        items,
+                    });
+                    let _ = reply.send(Frame::ok_note(format!(
+                        "已排隊（共 {n} 則，閒下來自動送出）"
+                    )));
+                }
+                Err(msg) => {
+                    let _ = reply.send(Frame::error(msg));
+                }
+            }
             return;
         }
     }
-    match shared.control(&session) {
-        Some((sid, ctl)) => {
-            shared.wake_if_sleeping(&sid, &ctl);
-            let is_pty = lock(&shared.inner)
-                .state
-                .sessions
+
+    match send_prompt(shared, &sid, &text, &clean_attachments) {
+        Ok(()) => {
+            let _ = reply.send(Frame::ok());
+        }
+        Err(e) => {
+            let _ = reply.send(Frame::error(format!("送 prompt 失敗：{e}")));
+        }
+    }
+}
+
+pub(crate) fn handle_queue_clear(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
+    let sid = shared.resolve_session(&session);
+    let (exists, count, had_state) = {
+        let mut inner = lock(&shared.inner);
+        let exists = inner.state.sessions.contains_key(&sid);
+        let count = inner.queues.remove(&sid).map_or(0, |q| q.len());
+        let had_state = inner.state.queues.contains_key(&sid);
+        (exists, count, had_state)
+    };
+    if !exists {
+        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        return;
+    }
+    if count > 0 || had_state {
+        shared.emit(Event::QueueChanged {
+            session: sid,
+            items: Vec::new(),
+        });
+    }
+    let _ = reply.send(Frame::ok_note(format!("已清空 {count} 則排隊 prompt")));
+}
+
+pub(crate) fn handle_queue_pop(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
+    let sid = shared.resolve_session(&session);
+    let (exists, popped) = {
+        let mut inner = lock(&shared.inner);
+        if !inner.state.sessions.contains_key(&sid) {
+            (false, None)
+        } else {
+            let item = inner.queues.get_mut(&sid).and_then(|q| q.pop_back());
+            let items: Vec<String> = inner
+                .queues
                 .get(&sid)
-                .is_some_and(|s| s.transport == "pty");
-            if !is_pty {
-                shared.emit(Event::UserPrompt {
-                    session: sid.clone(),
-                    text: with_attachment_summary(&text, &attachments),
-                });
+                .map(|q| q.iter().map(|p| p.raw_text.clone()).collect())
+                .unwrap_or_default();
+            if items.is_empty() {
+                inner.queues.remove(&sid);
             }
-            match ctl.send_input_with(&text, &attachments) {
-                Ok(()) => {
-                    let _ = reply.send(Frame::ok());
-                }
-                Err(e) => {
-                    let _ = reply.send(Frame::error(format!("送 prompt 失敗：{e}")));
-                }
-            }
+            (true, item.map(|p| (p.raw_text, items)))
+        }
+    };
+    if !exists {
+        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        return;
+    }
+    match popped {
+        Some((raw_text, items)) => {
+            shared.emit(Event::QueueChanged {
+                session: sid,
+                items,
+            });
+            let _ = reply.send(Frame::ok_note(raw_text));
         }
         None => {
-            let sid = shared.resolve_session(&session);
-            let resumable = lock(&shared.inner)
-                .state
-                .sessions
-                .get(&sid)
-                .map(|s| s.native_id.is_some());
-            let msg = match resumable {
-                Some(true) => {
-                    format!("{session} 已結束；可用 :resume（或 `termade resume`）接續原對話")
-                }
-                Some(false) => format!("{session} 已結束，且沒有可接續的對話 id"),
-                None => format!("找不到 session {session}"),
-            };
-            let _ = reply.send(Frame::error(msg));
+            let _ = reply.send(Frame::ok());
         }
     }
 }
@@ -559,6 +705,7 @@ pub(crate) fn handle_handoff(
             session: sid.clone(),
             code: None,
         });
+        shared.clear_queue_for_ended(&sid, false);
     }
     let wt = std::path::Path::new(&src.cwd);
     let mut git_note = String::new();
@@ -652,9 +799,11 @@ pub(crate) fn handle_budget(
         warned.remove(&sid);
     }
     shared.emit(Event::SessionBudget {
-        session: sid,
+        session: sid.clone(),
         budget_usd: Some(budget_usd),
     });
+    // 超限期間保留的排隊 prompt（T19）在這裡恢復送出。
+    shared.flush_queue_if_idle(&sid);
     let _ = reply.send(Frame::ok_note(format!(
         "已將 {} 的預算上限設為 ${budget_usd:.2}",
         s.label
@@ -706,7 +855,10 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
             return;
         }
     }
-    shared.emit(Event::SessionRemoved { session: sid });
+    shared.emit(Event::SessionRemoved {
+        session: sid.clone(),
+    });
+    shared.clear_queue_for_ended(&sid, true);
     let _ = reply.send(Frame::ok_note(format!("已移除 {}", s.label)));
 }
 
@@ -718,9 +870,10 @@ pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
             // 不該再寫進已經被殺掉的程序（會把剛標成結束的 session 又變回 busy，擋住接續）。
             lock(&shared.inner).sessions.remove(&sid);
             shared.emit(Event::SessionExited {
-                session: sid,
+                session: sid.clone(),
                 code: None,
             });
+            shared.clear_queue_for_ended(&sid, false);
             let _ = reply.send(Frame::ok());
         }
         None => {
@@ -757,6 +910,7 @@ pub(crate) fn handle_wake(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
                     session: sid.clone(),
                     status: SessionStatus::Idle,
                 });
+                shared.flush_queue_if_idle(&sid);
                 let _ = reply.send(Frame::ok_note(format!("已喚醒 {sid}")));
             }
             Err(e) => {

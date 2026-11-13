@@ -263,6 +263,9 @@ pub(crate) fn extract_attachments(
         out.push(c);
         rest = &rest[c.len_utf8()..];
     }
+    if let Some(first) = atts.first_mut() {
+        first.raw_prompt = Some(text.to_string());
+    }
     Ok((out, atts))
 }
 

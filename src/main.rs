@@ -121,8 +121,18 @@ enum Cmd {
         /// 附加檔案或圖片（可重複）
         #[arg(short = 'a', long = "attach")]
         attach: Vec<String>,
+        /// 若 session 忙碌，先排入待送佇列，等閒下來再自動送出
+        #[arg(short = 'q', long = "queue")]
+        queue: bool,
         #[arg(required = true)]
         text: Vec<String>,
+    },
+    /// 查看或清空指定 session 的待送 prompt 佇列
+    Queue {
+        session: String,
+        /// 清空待送佇列
+        #[arg(long)]
+        clear: bool,
     },
     /// 中斷正在執行的 turn
     Cancel { session: String },
@@ -389,8 +399,10 @@ fn main() -> Result<()> {
         Cmd::Prompt {
             session,
             attach,
+            queue,
             text,
-        } => cmd_prompt(session, text, attach),
+        } => cmd_prompt(session, text, attach, queue),
+        Cmd::Queue { session, clear } => cmd_queue(session, clear),
         Cmd::Cancel { session } => cmd_cancel(session),
         Cmd::Kill { session } => cmd_kill(session),
         Cmd::Resume { session, text } => cmd_resume(session, text),

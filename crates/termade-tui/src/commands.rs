@@ -60,6 +60,7 @@ pub(crate) fn submit_prompt_or_route(
                 session: id,
                 text: body,
                 attachments,
+                queue: false,
             },
         )?;
         app.status = if n > 0 {
@@ -73,7 +74,7 @@ pub(crate) fn submit_prompt_or_route(
     Ok(())
 }
 
-/// 把一則 prompt 排進選取 session 的佇列；session 已閒置就直接送。
+/// 把一則 prompt 排進選取 session 的佇列（交由 daemon 管理）；session 已閒置就直接送。
 /// 只處理一般 prompt（含 `@檔案` 附件）；`/命令`、`@peer`、`#channel` 不排隊。
 pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
     let trimmed = text.trim();
@@ -91,62 +92,46 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
     if routed {
         return submit_prompt_or_route(app, writer, text);
     }
-    let idle = app
+    if app.state.sessions.get(&id).is_some_and(|s| s.over_budget) {
+        app.status = "已超過成本上限，先用 :budget <金額> 調高".into();
+        return Ok(());
+    }
+    let (body, attachments) = match crate::attach::extract_attachments(trimmed, &app.search_root())
+    {
+        Ok(r) => r,
+        Err(e) => {
+            app.status = format!("附件錯誤：{e}");
+            return Ok(());
+        }
+    };
+    let n_att = attachments.len();
+    send(
+        writer,
+        &Request::Prompt {
+            session: id.clone(),
+            text: body,
+            attachments,
+            queue: true,
+        },
+    )?;
+    let idle_and_empty = app
         .state
         .sessions
         .get(&id)
-        .is_some_and(|s| s.status == termade_core::SessionStatus::Idle && !s.over_budget);
-    if idle && app.queues.len(&id) == 0 {
-        return submit_prompt_or_route(app, writer, text);
-    }
-    match crate::attach::extract_attachments(trimmed, &app.search_root()) {
-        Ok((body, attachments)) => {
-            app.queues.push(
-                &id,
-                crate::history::Queued {
-                    text: body,
-                    attachments,
-                },
-            );
-            app.status = format!("已排隊（共 {} 則，閒下來自動送出）", app.queues.len(&id));
-        }
-        Err(e) => app.status = format!("附件錯誤：{e}"),
-    }
-    Ok(())
-}
-
-/// 每輪事件迴圈呼叫：session 閒下來就送出它佇列裡的下一則。
-pub(crate) fn flush_queues(app: &mut App, writer: &mut ConnStream) -> Result<()> {
-    let (ready, dropped) = {
-        let sessions = &app.state.sessions;
-        app.queues.take_ready(
-            |id| {
-                sessions
-                    .get(id)
-                    .filter(|s| !s.over_budget)
-                    .map(|s| s.status)
-            },
-            std::time::Instant::now(),
-        )
-    };
-    if dropped > 0 {
-        app.status = format!("session 已結束，丟棄 {dropped} 則排隊 prompt");
-    }
-    for (id, q) in ready {
-        send(
-            writer,
-            &Request::Prompt {
-                session: id.clone(),
-                text: q.text,
-                attachments: q.attachments,
-            },
-        )?;
-        let left = app.queues.len(&id);
-        app.status = if left > 0 {
-            format!("已送出排隊的 prompt（還有 {left} 則）")
+        .is_some_and(|s| s.status == termade_core::SessionStatus::Idle)
+        && app.state.queues.get(&id).is_none_or(|q| q.is_empty());
+    if idle_and_empty {
+        app.status = if n_att > 0 {
+            format!("已送出 prompt（含 {n_att} 個附件）")
         } else {
-            "已送出排隊的 prompt".into()
+            "已送出 prompt".into()
         };
+    } else {
+        let q = app.state.queues.entry(id).or_default();
+        if q.len() < 20 {
+            q.push(trimmed.to_string());
+        }
+        app.status = format!("已排隊（共 {} 則，閒下來自動送出）", q.len());
     }
     Ok(())
 }
@@ -159,7 +144,7 @@ fn queue_command(app: &mut App, writer: &mut ConnStream, rest: &str) -> Result<(
     };
     match rest.trim() {
         "" => {
-            let items = app.queues.texts(&id);
+            let items = app.state.queues.get(&id).cloned().unwrap_or_default();
             app.status = if items.is_empty() {
                 "排隊為空（:queue <文字> 排入，或在輸入框按 Alt-Enter）".into()
             } else {
@@ -173,29 +158,41 @@ fn queue_command(app: &mut App, writer: &mut ConnStream, rest: &str) -> Result<(
             Ok(())
         }
         "clear" => {
-            let n = app.queues.clear(&id);
-            app.status = format!("已清空排隊（{n} 則）");
+            let n = app.state.queues.remove(&id).map_or(0, |q| q.len());
+            send(writer, &Request::QueueClear { session: id })?;
+            app.status = format!("已清空 {n} 則排隊 prompt");
             Ok(())
         }
         text => queue_prompt(app, writer, text),
     }
 }
 
-/// `:command` 命令：`:queue`、`:unqueue`。
-fn unqueue(app: &mut App) {
+/// `:command` 命令：`:unqueue`。
+fn unqueue(app: &mut App, writer: &mut ConnStream) -> Result<()> {
     let Some(id) = app.selected_id() else {
-        return;
+        return Ok(());
     };
-    app.status = match app.queues.pop_last(&id) {
-        Some(q) => {
-            // 取回輸入框方便修改後重新排入。
-            app.input_cursor = q.text.chars().count();
-            app.input = q.text;
-            app.mode = Mode::Prompt;
-            "已取消最後一則排隊，內容放回輸入框".into()
+    let popped = {
+        let item = app.state.queues.get_mut(&id).and_then(|q| q.pop());
+        if app.state.queues.get(&id).is_some_and(|q| q.is_empty()) {
+            app.state.queues.remove(&id);
         }
-        None => "沒有排隊中的 prompt".into(),
+        item
     };
+    match popped {
+        Some(text) => {
+            send(writer, &Request::QueuePop { session: id })?;
+            // 取回輸入框方便修改後重新排入。
+            app.input_cursor = text.chars().count();
+            app.input = text;
+            app.mode = Mode::Prompt;
+            app.status = "已取消最後一則排隊，內容放回輸入框".into();
+        }
+        None => {
+            app.status = "沒有排隊中的 prompt".into();
+        }
+    }
+    Ok(())
 }
 
 /// `:` 命令列可用的命令：(名稱, 用法與說明)，供提示與 Tab 補全。
@@ -524,7 +521,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             _ => app.status = "用法：:notify [on|off|test]".into(),
         },
         "queue" => queue_command(app, writer, rest)?,
-        "unqueue" => unqueue(app),
+        "unqueue" => unqueue(app, writer)?,
         "layout" => {
             if rest.is_empty() {
                 app.cycle_layout();

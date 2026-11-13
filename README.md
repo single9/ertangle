@@ -115,7 +115,7 @@ cargo test                     # 全部單元測試
 | `P`（或 `:scope [here|all]`） | 預設只看啟動目錄所屬專案的 session，按 P 切換成顯示全部。同一個 daemon 管所有專案，有多個專案時 session 列與 transcript 標題會標出專案名（同專案同色），標題列顯示目前專案 |
 | `↑` / `↓`（輸入 prompt 或 `:` 命令時） | 回顧歷史輸入，存在 `~/.local/state/termade/history-*.jsonl`，重開仍在 |
 | `Ctrl-J` / `Shift-Enter` | prompt、message、review 輸入框換行（輸入框隨行數長高，最多 8 行）；貼上多行文字會保留換行。`:` 命令列維持單行。`↑` / `↓` 在多行內容裡先移動游標，到頂／底才切換歷史。Shift-Enter 需要終端機支援 |
-| `Alt-Enter`（或 `:queue <文字>`） | 排隊 prompt：session 忙碌時先排著，閒下來自動依序送出；`:queue` 列出、`:queue clear` 清空、`:unqueue` 取消最後一則並放回輸入框。排隊只存在 TUI 內，關掉 TUI 就沒了 |
+| `Alt-Enter`（或 `:queue <文字>`） | 排隊 prompt：session 忙碌時先排入 daemon 待送佇列（上限 20 則），閒下來自動依序送出；`:queue` 列出、`:queue clear` 清空、`:unqueue` 取消最後一則並放回輸入框。排隊存在 daemon 記憶體內，關掉 TUI 重連仍在（daemon 重啟則不保留） |
 | `Y` 或 `/copy` | 用 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees），不含側欄與邊框 |
 | `PgUp` / `PgDn`（或 `Ctrl-U` / `Ctrl-D`） | 逐字稿 / diff 翻頁捲動（捲動後暫停跟隨，狀態列會顯示 `⏸ paused`） |
 | `Home` / `End` | 跳到最前 / 回到跟隨最新輸出（`▼ follow`） |
@@ -159,7 +159,8 @@ Shell 補全也可直接由 `termade completions <zsh|bash|fish>` 產生（`make
 termade sessions [--json]                       # 列出 sessions（別名 termade peers）
 termade whoami [--session <id>] [--json]        # 查詢當前 session 資訊
 termade spawn --kind claude --permission auto --label worker/a --worktree --prompt "..."
-termade prompt <session-or-label> "再跑一次測試"
+termade prompt [--queue] <session-or-label> "再跑一次測試"
+termade queue <session-or-label> [--clear]      # 列出或清空待送 prompt 佇列
 termade send --to <session-or-label> "請先跑測試" # 或 --channel review / --broadcast / --kind handoff
 termade inbox [--session <id>] [--all] [--json] # 讀取未讀訊息並推進游標
 termade wait [--from <peer>] [--timeout-ms 30000]
@@ -233,6 +234,6 @@ termade completions <bash|zsh|fish>             # 輸出 shell 補全腳本至 s
   限制：通知由 TUI 發出，TUI 沒開就沒有通知；tmux 內要收到焦點事件需 `set -g focus-events on`，否則視為沒有焦點。
 * context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `termade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
 * 協作說明注入（`config.toml`）：啟動 session 時自動注入身分（label、角色、父 session、worktree 分支）與 `termade_*` 工具使用規則（進度用 `termade_status`、任務狀態改 `doing`／`done`、完成向父 session `termade_send` 回報、worktree 不自行合併、協調者用 `termade_task_create` + `depends_on` 與 `termade_wait`）。管道有兩層：MCP `initialize` 回應的 `instructions`，以及 adapter 補強（Claude `--append-system-prompt`、Codex `thread/start` 的 `developerInstructions`、ACP 接在第一則 prompt 前面且不寫入逐字稿 `UserPrompt`；PTY 不注入）。可用 `[collab] instructions = false` 關閉、`[collab] extra = "..."` 與 `[roles.<角色>] instructions = "..."` 附加說明；repo 的 `.termade/instructions.md` 存在時會附在最後（上限 8 KB）。
-* 成本與子 agent 數量上限（`config.toml` `[limits]`）：可設 `session_usd`（單一 session 美元上限，亦可在 `[roles.<角色>]` 覆寫或用 `termade spawn --budget <金額>`／MCP `termade_spawn(budget_usd)` 指定）、`session_tokens`（不回報美元時的 token 上限）、`tree_usd`（同棵父子樹總美元上限）、`max_children`（單一父 session 同時進行中的直接子 session 上限）、`max_depth`（衍生階層深度上限）與 `warn_percent`（警告門檻，預設 80%）。repo 的 `.termade/config.toml` 只能調低上限、不能調高全域設定。設定了上限時，TUI session 清單與 `termade cost` 顯示 `$1.20/$5`（達警告門檻黃、超過上限紅）；超過上限時中斷目前回合並阻擋新 prompt 與自動喚醒，可用 `:budget <金額>` 或 `termade budget <session> <金額>` 調高後繼續。
+* 成本與子 agent 數量上限（`config.toml` `[limits]`）：可設 `session_usd`（單一 session 美元上限，亦可在 `[roles.<角色>]` 覆寫或用 `termade spawn --budget <金額>`／MCP `termade_spawn(budget_usd)` 指定）、`session_tokens`（不回報美元時的 token 上限）、`tree_usd`（同棵父子樹總美元上限）、`max_children`（單一父 session 同時進行中的直接子 session 上限）、`max_depth`（衍生階層深度上限）與 `warn_percent`（警告門檻，預設 80%）。repo 的 `.termade/config.toml` 只能調低上限、不能調高全域設定。設定了上限時，TUI session 清單與 `termade cost` 顯示 `$1.20/$5`（達警告門檻黃、超過上限紅）；超過上限時中斷目前回合並阻擋新 prompt 與自動喚醒，可用 `:budget <金額>` 或 `termade budget <session> <金額>` 調高後繼續。超限期間排隊（`--queue`／TUI 排隊）的新 prompt 同樣被拒絕；超限前已在佇列裡的保留不送，調高上限後自動恢復送出。
 
 開發者：改動按鍵、命令、協定或設定檔時需要手動同步的清單見 [docs/MAINTAINING.md](docs/MAINTAINING.md)。
