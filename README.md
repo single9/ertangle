@@ -1,242 +1,332 @@
-# termade — 終端機原生的多 agent 開發環境
+# termade — 終端機原生的多 Agent 開發協作環境
 
-一個以終端機為核心的 **termade**：讓多個 coding agent
-（OpenCode / Claude Code / Codex / Antigravity）在同一個 repo 上平行工作、彼此溝通、互相協作。
+[English](README_EN.md) | [繁體中文](README.md)
 
-- **TUI 前端**（Rust + Ratatui）：啟動快、記憶體足跡小、SSH 友善，沒有厚重的 GUI。
-- **常駐 daemon**：真正持有 agent 程序、訊息匯流排與工作區；TUI 只是可隨時重啟的「顯示器」。
-- **互通層**：以各家 agent 的**原生結構化協定**為主（零額外依賴），PTY 直通當萬用後備。
+> **讓多個 Coding Agent 在同一個 Repo 內平行工作、自主溝通、互相協同開發的終端機環境**。
 
-完整設計請見 [`docs/DESIGN.md`](docs/DESIGN.md)。
+`termade` 是一個以終端機為核心的多 Agent 協同開發平台。支援 **OpenCode**、**Claude Code**、**Codex** 與 **Antigravity** 等現代 Coding Agent，讓它們各自在獨立的 Git Worktree 內平行寫程式，透過 MCP 訊息匯流排與任務看板互相溝通，並由開發者透過鍵盤驅動的 TUI 介面進行即時審查與安全合併。
 
-## 為什麼不是「又一個 GUI IDE」
+---
 
-Orca 這類 termade 把 worktree、瀏覽器、diff、mobile 全部塞進一個 Electron/原生 app。
-我們只要它的**協作核心**，其餘交給終端機與 agent 自己的 CLI：
+## 為什麼選擇 termade？ (終端機原生 vs. GUI IDE)
 
-| 需求 | 本專案的做法 |
+現有方案 (如 Orca) 傾向將 Worktree、瀏覽器、Diff 視圖與終端機全部包進厚重的 Electron/原生 GUI。`termade` 的哲學是**只聚焦協作與排程核心，其餘交還給終端機與各家 Agent 的原生 CLI**：
+
+| 特性 | 本專案的做法 |
 | --- | --- |
-| 快速啟動、低記憶體 | Rust + Ratatui 前端，常駐成本 < 20 MB；agent 程序才是耗資源的，且可休眠 |
-| 不用圖形化功能 | 全部以鍵盤驅動，並提供 `termade` CLI 與控制 socket，讓 agent 也能驅動環境 |
-| Agent 互相溝通協作 | daemon 內的 message bus + task board，透過 **MCP** 注入每個 agent |
-| 平行不打架 | 每個 session 一個 `git worktree` + branch |
-| 支援多種 agent | Adapter 抽象層（ACP / stream-json / app-server / headless / PTY） |
+| **超輕量與極速** | Rust + Ratatui 開發，常駐記憶體成本 `< 20 MB`，瞬間啟動，SSH 遠端連線零卡頓 |
+| **Daemon 常駐架構** | Daemon 負責真正持有 Agent 子程序、訊息匯流排與狀態；TUI 只是隨時可重開、重新連線的顯示端 |
+| **平行作業不衝突** | 每個 Agent Session 自動配置獨立的 `git worktree` 與分支 (`termade/<session>`) |
+| **零相依原生通訊** | 優先採用各 Agent 的結構化協定 (ACP / stream-json / app-server)，無需額外 Wrapper；未安裝時自動退回 PTY 直通 |
+| **結構化協同機制** | 透過 Daemon 注入 MCP 伺服器，讓 Agent 能彼此通訊、委派任務、發布進度、排隊等待 |
+| **全鍵盤與腳本驅動** | 完整 TUI 快速鍵、Helix 風格選單 (which-key)、命令列，以及功能對等的 `termade` CLI |
 
-## 現況（M0–M5 功能已實作；部分路徑尚未實機驗證）
+---
 
-四家 agent 都有**原生、零額外依賴**的結構化介面，實機驗證狀態如下：
+## 支援的 Agent 與連線協定
 
-| Agent | 原生協定 | 啟動方式 | 傳輸標記 | 實機狀態 |
+各家 Agent 均以其**官方原生、零額外相依**的結構化介面連接：
+
+| Agent | 原生協定 | 預設啟動命令 | 傳輸標記 | 支援狀態與特性 |
 | --- | --- | --- | --- | --- |
-| **OpenCode** | ACP | `opencode acp` | `acp` | ✅ 雙向結構化（prompt / 串流 / 工具 / 審批 / MCP 注入） |
-| **Antigravity** | ACP | `agy acp` | `acp` | ✅ 雙向結構化（與 OpenCode 同方言 / MCP 注入） |
-| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 雙向結構化（逐字串流、工具、成本、MCP 注入） |
-| **Codex** | app-server | `codex app-server`（stdio JSON-RPC） | `app-server` | ⚠️ 握手與 thread 已驗證；回合需 OpenAI 授權 |
+| **OpenCode** | ACP | `opencode acp` | `acp` | ✅ 完整雙向結構化 (串流、工具呼叫、權限核准轉發、MCP 注入) |
+| **Antigravity** | ACP | `agy acp` | `acp` | ✅ 完整雙向結構化 (ACP 方言相容、MCP 注入) |
+| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 逐字串流、工具呼叫、成本統計、5h/7d 額度回報、MCP 注入 |
+| **Codex** | app-server | `codex app-server` | `app-server` | ⚠️ 握手與 Thread 已驗證；執行回合需先於本機執行 `codex login` |
+| **萬用後備** | PTY | 各 Agent 互動 CLI | `pty` | ✅ 找不到原生協定或未安裝時，`--transport auto` 自動退回 PTY 直通 |
 
-> **尚未驗證或未實作**：Codex 回合（需 OpenAI 授權）、ACP 逐項審批（受測 agent 預設自行核准）、
-> Claude 逐項審批（未轉發到 TUI）、`outbox/` 監看、其他 MCP 工具回傳的秘密過濾。
-> 與原始設計的差異彙整於 [`docs/DESIGN.md`](docs/DESIGN.md) 附錄 A。
+> [!NOTE]
+> - **Codex 授權**：`codex app-server` 的通訊協定完整支援，但實際發送 prompt 需要有效的 OpenAI 登入。未授權時 session 會變更為 `failed` 並提示執行 `codex login`。
+> - **PTY 限制**：PTY 模式下全螢幕 TUI 輸出會去除 ANSI 控制碼作為盡力而為的文字記錄，建議優先使用結構化原生協定。
+> - 完整驗證紀錄與實機測試版本請參閱 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)；架構設計細節請見 [`docs/DESIGN.md`](docs/DESIGN.md)。
 
-> 找不到原生協定、或該 agent 未安裝時，`--transport auto` 會**自動退回 PTY 直通**。
+---
 
-已實作（M0–M5；驗證紀錄見 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)）：
+## 快速開始
 
-- **daemon（M0/M2/M4/M5）**：Unix domain socket + 選配 TCP 遠端監聽（`--listen 127.0.0.1:port`，需 `TERMADE_TOKEN` 或 `--token-file`，建議搭配 SSH 轉發）、
-  增量事件同步（`since`）、事件重播（`termade replay`）與秘密遮罩（`sk-...` / `ghp_...` 自動轉 `<REDACTED>`）、
-  訊息匯流排、收件匣游標與阻塞等待（`BusInbox` / `BusWait`）、防呆斷路器（速率限制 + 連續重複迴圈偵測）、任務板。
-  `termade_send` 直接訊息與廣播（`*`）都會喚醒狀態為 `idle` 或休眠中的收件者；收件者正忙（`busy`）時訊息只留在收件匣，等它回到 `idle`（且排隊 prompt 送完）後，把仍未讀的訊息合併成一則提醒，每則只提醒一次；已被 `termade_wait`／`termade_ask` 取走或 `termade_inbox` 讀過、`Status`／`Artifact` 類、超過成本上限的 session 不提醒；指派任務（`termade_task_create` / 改派負責人）也會自動喚醒對方。
-  任務依賴：建立任務時帶 `depends_on`（`termade task --depends-on <id>`，可重複），前置任務還沒全部 `done` 時任務會是 `blocked`，
-  先不通知負責人；前置任務全部完成後自動改成 `todo`，並把指派訊息（附前置任務的標題與負責人）送給負責人、喚醒閒置中的對方。
-  `depends_on` 裡有不存在的 id 會建立失敗；建立後不能再改依賴。有依賴的任務若被手動標成 `blocked`，依賴完成時一樣會被解開。
-  `termade_task_list` 與 `termade tasks` 會列出每個任務還在等哪些前置任務。
-- **MCP 協作伺服器（`termade mcp`，M2/M3）**：spawn session 時自動注入每個 agent，提供 14 個協作工具
-  （`termade_whoami`、`termade_peers`、`termade_send`、`termade_inbox`、`termade_wait`、`termade_ask`、
-  `termade_task_list`、`termade_task_create`、`termade_task_update`、`termade_spawn`、`termade_artifact_share`、`termade_status`、`termade_diff`、`termade_merge`）。
-- **工作區與 Review 迴圈（M3）**：每個 worktree 獨立 branch（`termade/<session>`）、TUI 即時彩色 Diff 視圖、
-  對行下審查註解送回 agent 修改（`termade review` / TUI `c` 鍵）、自動 commit 並合併回主分支（`termade merge` / TUI `M` 鍵）、PR 建立（`termade pr`）與已結束 worktree 清理（`termade gc` / TUI `G` 鍵）。
-- **打磨與資源控制（M4）**：命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、即時成本與 token 統計（`termade cost`）、
-  閒置休眠與自動喚醒（`SIGSTOP` / `SIGCONT`、`termade sleep` / `termade wake` / TUI `z` 鍵）、權限規則引擎（`.termade/policy.toml` 或 `~/.config/termade/policy.toml`）。
-  規則引擎是防呆而非安全邊界：決策順序為 `deny`（子字串比對）→ `allow`（工具名稱或指令整詞前綴）→ session 政策（`auto`／`bypass` 自動允許）→ 詢問使用者；repo 的 `.termade/policy.toml` 只能新增 `deny`，不能移除全域規則。字串比對可被改寫指令繞過，真正的隔離要靠 agent 自己的 sandbox。ACP、Codex 與 Claude 都會經過它；Claude 是透過 `--permission-prompt-tool=mcp__termade__termade_approve` 轉發（非 bypass 時啟用），回應格式依官方 SDK 文件實作，但**尚未用真實 claude 驗證**，逾時 300 秒視為拒絕。
-- **TUI**：四種中央視圖（Overview / Diff / Worktrees / Tasks）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
-  逐字稿會顯示使用者送出的 prompt（`❯` 前綴）並即時渲染 Markdown（標題、粗體／斜體、行內程式碼、清單、引言、分隔線、圍籬程式碼區塊與 GFM 表格），
-  可用 `t` 在渲染後與原始文字之間切換；支援滑鼠拖曳選取（只複製中央區塊）、滾輪捲動、OSC 52 複製，以及帶可見游標與中文 IME 的輸入框。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。
-- **檔案信箱後備**：自動同步寫入 `<cwd>/.termade/mailbox/<session>.jsonl`。
-
-### 權限政策
-
-`--permission` 是跨 agent 的統一旋鈕：
-
-| 政策 | OpenCode / Antigravity（ACP） | Claude Code | Codex |
-| --- | --- | --- | --- |
-| `ask` | 轉發 `session/request_permission` 給 client | `--permission-mode manual` | `approvalPolicy: untrusted` |
-| `auto`（預設） | adapter 代為核准（`allow_once`） | `--permission-mode acceptEdits` | `approvalPolicy: on-request` |
-| `bypass` | adapter 代為核准（`allow_always`） | `--dangerously-skip-permissions` | `approvalPolicy: never` |
-
-> 註：M1 尚未把 Claude / Codex 的審批請求轉成 TUI 提示（Claude 在 `-p` 模式不會穩定發出可轉發的
-> 請求；Codex 需要授權才能走到審批步驟）。ACP 的轉發通道已完成，但受測的 OpenCode / Antigravity
-> 在預設設定下會自行核准工具，因此實測少見審批事件。
-
-### M1 已知限制
-
-- **PTY transcript 是盡力而為**：全螢幕 TUI（互動模式）是螢幕導向輸出，我們剝掉 ANSI 控制碼後
-  只能還原出零碎文字。要可讀的結構化輸出請用原生協定。
-- **`--worktree` 需要 git repo**：非 git 目錄會回報錯誤並中止 spawn。
-- **Codex 需 OpenAI 授權**：`codex app-server` 的 `initialize` / `thread/start` 免授權即可完成，
-  但送出回合會回 `401 Unauthorized`；授權後即可正常使用。登入失效時 session 變 `failed`，
-  原因（含「請執行 `codex login`」）會出現在逐字稿與 status note。agent 以非 0 結束時，
-  stderr 的最後 20 行也會寫進逐字稿（四種 adapter 皆然）。
-- **Claude 取消是盡力而為**：Claude 沒有公開的取消 API，`cancel` 送 `control_request: interrupt`，
-  不保證立即生效。
-
-## 建置與使用
+### 1. 安裝與建置
 
 ```bash
-cargo build --release          # 產出單一執行檔 target/release/termade
-cargo test                     # 全部單元測試
+# 1. 複製並編譯單一執行檔
+git clone <repo-url> ade-rust && cd ade-rust
+cargo build --release
 
-./target/release/termade           # 啟動 TUI（會自動確保 daemon 在跑）
-./target/release/termade daemon    # 或前景跑 daemon
-```
-
-第一次使用：在 TUI 按 `n` 建立 session，輸入 `opencode 幫我把測試修好`。
-
-### TUI 按鍵
-
-| 鍵 | 動作 |
-| --- | --- |
-| `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標；在 Tasks 視圖則為移動任務游標） |
-| 滑鼠拖曳 | 在逐字稿上選取（只含中央區塊，不含側欄與邊框），放開即以 OSC 52 複製 |
-| 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標；Tasks 視圖則移動任務游標，點任務列可選取） |
-| `F2` | 切換滑鼠擷取（預設開啟；關閉後可用終端原生拖曳選取，`Shift`+拖曳在開啟時也可原生選取） |
-| `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
-| `Tab` / `g` | `Tab` 循環中央視圖（Overview → Diff → Worktrees → Tasks）；`g` 在 Diff 與 Overview 之間切換 |
-| `:tasks`（或 `Tab`、`Space v k`） | Tasks 視圖：任務依狀態分組（doing、review、todo、blocked、done），每列顯示 id 尾碼、狀態、標題、負責人、多久前更新與前置任務（`⧗`，黃色是還沒完成的），下方是選取任務的完整說明；兩欄與分頁版面也看得到。`Enter` 跳到負責人的 session 並切回逐字稿；`:task-status <todo\|doing\|blocked\|review\|done>` 改選取任務的狀態（只在 Tasks 視圖有效）。只看本專案時，用負責人或建立者的 session 判斷任務屬於哪個專案，兩者都沒有的任務一律顯示；右側 Bus 欄的精簡清單不分專案。標題列的 `N tasks` 只算未完成的 |
-| `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
-| `T`（或 `/thoughts`） | 顯示 / 隱藏 agent 的思考行（`💭`；預設隱藏以減少渲染量） |
-| `O`（或 `:tools`） | 展開 / 摺疊工具呼叫（預設把連續的呼叫與成功結果摺成一行，失敗行保留） |
-| `P`（或 `:scope [here|all]`） | 預設只看啟動目錄所屬專案的 session，按 P 切換成顯示全部。同一個 daemon 管所有專案，有多個專案時 session 列與 transcript 標題會標出專案名（同專案同色），標題列顯示目前專案 |
-| `↑` / `↓`（輸入 prompt 或 `:` 命令時） | 回顧歷史輸入，存在 `~/.local/state/termade/history-*.jsonl`，重開仍在 |
-| `Ctrl-J` / `Shift-Enter` | prompt、message、review 輸入框換行（輸入框隨行數長高，最多 8 行）；貼上多行文字會保留換行。`:` 命令列維持單行。`↑` / `↓` 在多行內容裡先移動游標，到頂／底才切換歷史。Shift-Enter 需要終端機支援 |
-| `Alt-Enter`（或 `:queue <文字>`） | 排隊 prompt：session 忙碌時先排入 daemon 待送佇列（上限 20 則），閒下來自動依序送出；`:queue` 列出、`:queue clear` 清空、`:unqueue` 取消最後一則並放回輸入框。排隊存在 daemon 記憶體內，關掉 TUI 重連仍在（daemon 重啟則不保留） |
-| `Y` 或 `/copy` | 用 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees），不含側欄與邊框 |
-| `PgUp` / `PgDn`（或 `Ctrl-U` / `Ctrl-D`） | 逐字稿 / diff 翻頁捲動（捲動後暫停跟隨，狀態列會顯示 `⏸ paused`） |
-| `Home` / `End` | 跳到最前 / 回到跟隨最新輸出（`▼ follow`） |
-| `f`（或 `:find <文字>`） | 在逐字稿或 Diff 視圖裡搜尋，邊打邊找。查詢全小寫時不分大小寫，含大寫時區分。`Enter` / `↓` 下一個、`↑` 上一個（到底繞回開頭），`Esc` 離開並停在目前位置；狀態列顯示 `3/17`，再按 `f` 會預填上一次的查詢（`Ctrl-U` 清掉）。符合的行整行加底色。只搜尋畫面上顯示的內容：被摺疊的工具呼叫（`O` 展開）、隱藏的思考行（`T` 顯示）、超過 4000 行已被捨棄的舊內容、跨越自動換行處的字串都找不到；要找舊內容用 `termade replay` |
-| `{` / `}` | （Diff 視圖）跳到上一個 / 下一個 hunk（`@@`） |
-| `i` / `Enter` | 對選取 session 送 prompt（支援 `@peer 訊息`、`#channel 訊息`、`/命令`） |
-| `←` / `→`、`Home` / `End`、`Delete` | 在輸入框移動游標 / 跳到頭尾 / 刪除字元（支援中文等寬字元與 bracketed paste） |
-| `n` | 建立 session：`<agent> <prompt>`（`Ctrl-W` 切換是否開 worktree） |
-| `m` | 送訊息到匯流排（agent 之間溝通） |
-| `c` | （Diff 視圖）對目前選取的 diff 行下審查註解並送回 agent 修改 |
-| `M` / `G` | 合併選取 session 的 worktree 分支回主工作區 / 清理已結束 worktree |
-| `z` | 切換選取 session 的休眠（`SIGSTOP`）/ 喚醒（`SIGCONT`） |
-| `/` 或 `Ctrl-P` | 開啟命令面板（`spawn` / `merge` / `diff` / `gc` / `sleep` / `wake` / `task` / `copy` / `shutdown`） |
-| `Ctrl-K` | Jump-Anywhere：關鍵字快速跳轉至任何 session |
-| `a` / `A` / `d` | 允許 / 一律允許 / 拒絕待審批請求 |
-| `x` / `K` | 中斷當前回合 / 結束 session |
-| `r` | 向 daemon 重新要快照与重整當前視圖 |
-| `q` | 離開 TUI（daemon 與 agent 續跑） |
-| `Q` | 關閉共用 daemon：結束**所有專案**的 agent、移除 socket（等同 `:shutdown`；有 session 在跑時要再輸入 `:shutdown!` 確認）。只想結束本專案的 session 用 `:stop`；daemon 被別處關掉時，TUI 會顯示「連線已中斷」而不是崩潰 |
-
-> 預設啟用滑鼠擷取：可直接在逐字稿上拖曳選取，放開即以 OSC 52 複製（只含中央區塊）；滾輪捲動逐字稿。需要終端原生選取時按 `F2` 關閉擷取，或直接 `Shift`+拖曳。任何時候都可用 `Y` / `/copy` 複製整個主要區塊。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。
-
-## 安裝方式
-
-```bash
-# 本地安裝（在專案根目錄執行，編譯並安裝 termade 到 ~/.cargo/bin）
+# 2. 安裝至 ~/.cargo/bin
 cargo install --path .
 
-# 亦可使用 Makefile 安裝至 ~/.local/bin/termade
+# 或使用 Makefile 安裝至 ~/.local/bin/termade
 make install
 
-# 依目前 SHELL（zsh / bash / fish）安裝補全腳本
+# 3. 安裝 Shell 自動補齊腳本 (支援 bash / zsh / fish，並能動態補齊 session label)
 make install-completions
+# 亦可手動輸出：termade completions <bash|zsh|fish>
 ```
 
-Shell 補全也可直接由 `termade completions <zsh|bash|fish>` 產生（`make install-completions` 會依 `$SHELL` 寫入 `~/.local/share/zsh/site-functions/_termade`、`~/.local/share/bash-completion/completions/termade` 或 `~/.config/fish/completions/termade.fish`）。除了子命令與旗標值（`--kind`、`--transport`、`--permission`、`--effort`），zsh 與 bash 也會在需要填 session 的參數上動態補全目前專案的 session label（無 label 時為 session id）；daemon 未執行時不會自動啟動它。
+### 2. 啟動與第一個任務
 
-### CLI
+在任何 Git 專案目錄下執行：
 
 ```bash
-termade sessions [--json]                       # 列出 sessions（別名 termade peers）
-termade whoami [--session <id>] [--json]        # 查詢當前 session 資訊
-termade spawn --kind claude --permission auto --label worker/a --worktree --prompt "..."
-termade prompt [--queue] <session-or-label> "再跑一次測試"
-termade queue <session-or-label> [--clear]      # 列出或清空待送 prompt 佇列
-termade send --to <session-or-label> "請先跑測試" # 或 --channel review / --broadcast / --kind handoff
-termade inbox [--session <id>] [--all] [--json] # 讀取未讀訊息並推進游標
-termade wait [--from <peer>] [--timeout-ms 30000]
-termade ask <peer> "請問驗證函式的簽名？"        # 送出問題並阻塞等待回覆
-termade task "修正 EU 郵遞區號驗證" --detail "..." --assignee worker/a
-termade task "接上新的驗證函式" --assignee worker/b --depends-on <task-id>  # 前置任務完成後才通知 worker/b
-termade task-update <task-id> --status done
-termade tasks [--json]
-termade status "正在跑整合測試"
-termade artifact src/zip.rs --kind file --note "新增驗證模組"
-termade worktrees [--json]                      # 列出所有受管 git worktrees
-termade diff <session-or-label>                 # 查看該 session 工作區的 git diff
-termade review <session-or-label> --location src/lib.rs:42 "請補上空字串檢查"
-termade merge <session-or-label>                # 將該 session 的 worktree 分支合併回主工作區
-termade pr <session-or-label> --title "..."     # 透過 gh 建立 Pull Request
-termade gc [--session <id>]                     # 清理已結束 session 的 worktrees
-termade sleep <session> ; termade wake <session>    # 暫停 / 喚醒閒置 agent 子程序
-termade cost [--json]                           # 查看各 session 與總計的成本與 token 用量
-termade budget <session-or-label> <amount>      # 設定或調高指定 session 的成本上限（美元）
-termade replay [--since <seq>] [--json]         # 重播與審計 events.jsonl
-# 遠端：建議只綁 loopback，再用 SSH 轉發（TCP 為明文）
-TERMADE_TOKEN=<secret> termade daemon --listen 127.0.0.1:7420   # 或 --token-file <path>（0600）
-ssh -L 7420:127.0.0.1:7420 host                         # 本機端轉發
-TERMADE_TOKEN=<secret> termade --remote 127.0.0.1:7420 ...      # 連線至遠端 daemon
-termade mcp [--session <id>]                    # stdio MCP 協作伺服器（由 adapter 自動注入）
-termade cancel <session-id> ; termade kill <session-id>
-termade resume <session-or-label> ["接續後的 prompt"]  # 已結束的 session 接回原對話
-termade shutdown
-termade completions <bash|zsh|fish>             # 輸出 shell 補全腳本至 stdout
+termade
 ```
 
-- `--kind`：`opencode`（別名 `oc`）| `claude`（別名 `claude-code`）| `codex` | `antigravity`（別名 `agy` / `gemini`）。
-- `--transport`：`auto`（預設）/ `structured`（別名 `acp`）/ `pty`。
-- `--permission`：`ask` | `auto`（預設）| `bypass`。
-- `--effort`：`low` | `medium` | `high` | `xhigh` | `max`。
-
-### 環境變數
-
-- `XDG_RUNTIME_DIR`：socket 位置（預設 `$XDG_RUNTIME_DIR/termade/daemon.sock`，否則 `/tmp/termade-$USER/`）。
-- `XDG_STATE_HOME`：事件記錄位置（預設 `~/.local/state/termade/events.jsonl`）。
-- `TERMADE_LOG`：tracing 過濾（例如 `TERMADE_LOG=debug`）。
-
-### TUI 操作
-
-* `Space`：Helix 風格選單（which-key），按 `s` session、`g` git／worktree、`v` view、`m` message；`Backspace` 返回、`Esc` 關閉。
-* `n`（或 `Space s n`）：依序選 agent → model → 輸入 prompt。model 清單含預設、內建建議（Claude 的 sonnet／opus／haiku）與 `config.toml` 的 `[agents.<名稱>] models = [...]`；清單沒有符合時，Enter 會使用你輸入的值。
-* 版面：預設兩欄（Sessions／中央），Bus 欄不顯示；`L` 依序切換兩欄 → 分頁 → 三欄，`:layout three|two|tabs` 直接指定，`:bus` 暫時疊出 Bus。要固定用三欄，在 `config.toml` 寫 `[tui] layout = "three"`。終端太窄時會自動降級。
-* `:`（或 `/`）：命令列，`Tab` 補全。常用：`spawn claude:opus 做某事`、`rm [session] [--force]`、`clean`（清除所有已結束的 session）、`kill`、`merge --dry-run`、`gc`、`layout`。
-* 啟動失敗的 session 會自動移除（含剛建立的 worktree 與分支）；已結束的 session 可用 `:rm`／`Space s x` 或 `termade rm <session>` 移除。
-* effort（推理強度，low／medium／high／xhigh／max）：`termade spawn --effort high`、MCP `termade_spawn` 的 `effort`、TUI 選擇器（Claude、Codex 會多一步）。也可寫進 `config.toml` 的 `[agents.claude] effort = "medium"` 或 `[roles.reviewer] effort = "high"`（請求 > 角色 > agent）。Claude 對應 `--effort`，Codex 對應 `thread/start` 的 `config.model_reasoning_effort`；ACP agent 只有在 `session/new` 回報了 effort 選項時才能設，否則會明確報錯。
-* 檔案／圖片附件：在 prompt 裡寫 `@` 加檔名片段，會在專案內（選取 session 的工作目錄，用 `git ls-files`，排除 .gitignore）做模糊搜尋並列出建議，`↑↓` 選、`Tab` 採用；只打檔名（如 `@main.rs`）而專案內唯一符合時，送出時會自動找到；`~/`、`/` 開頭的字面路徑用 `Tab` 做路徑補全，含空白用 `@"my file.png"`，送出時文字檔內容、圖片會一起附上；`Space m f` 會預填 `@`；把檔案拖進終端機（貼上路徑）會自動轉成 `@路徑`；`Ctrl-V` 貼剪貼簿圖片（Linux 需要 `wl-paste` 或 `xclip`）。開頭的 `@名稱` 若是存在的檔案就視為附件，否則仍是傳給 peer 的訊息。CLI：`termade prompt <session> -a 圖.png "說明"`、`termade spawn … -a 檔案`。
-  限制：圖片上限 5 MB、文字檔內嵌上限 256 KB（超過只帶路徑）；其他二進位檔只帶路徑。Claude／Codex／Antigravity 以圖片區塊送出，OpenCode 的 ACP 沒宣告圖片支援時改成路徑說明（實測它的 gemma 模型看不到圖）。
-* 交接（額度用完時）：Claude／ACP／Codex 回報額度用完或被限流時，session 會標成 failed 並註明「額度用完」。用 `termade handoff <session> --to codex[:model] [--note "補充"]`、TUI 的 `Space s h` 或 `:handoff` 交接：舊 session 若還在跑會先停掉，worktree 的未 commit 變更自動 commit，daemon 用事件紀錄產生簡報（原始任務、追加指示、指派的 task、最後輸出、git 現況）加上完整 diff 附件，新 agent 沿用**同一個工作目錄與分支**接手。兩個 session 共用 worktree 時，`gc`／`rm` 不會刪掉仍在使用中的那個；`rm` 其中一個只移除紀錄，worktree 與分支保留到最後一個參照它的 session 被移除時才刪，`gc` 對同一個 worktree 只清一次。交接後舊 session 會記下接手者（`handed_off_to`）：之後以舊 session 的 id 或 label 發的直接訊息會自動改投給接手者（連續交接沿鏈走到最後一個），body 開頭註明原收件者，`send` 的回覆也會說明；交接當下舊 session 收件匣裡未讀的訊息會附在交接簡報裡（mailbox 檔案以 session id 分檔，不會搬到新 session）。收件者已結束又沒有接手者時訊息仍寫入紀錄，但回覆會註明「不會被讀取」。廣播與頻道不轉送。目前只有手動觸發，沒有自動 fallback。
-* 額度查詢：agent 自己回報帳號額度，termade 只是顯示（不估算）。Claude 在每個回合的串流裡帶 5 小時／7 天視窗用量與重置時間；Codex 在啟動時用 `account/rateLimits/read` 查、之後收更新通知。標題列顯示最吃緊的視窗（≥70% 黃、≥90% 或已滿紅），`:quota` 或 `termade quota [--json]` 看全部視窗與重置倒數。Claude 的資料要有一個回合跑過才有；OpenCode／Antigravity 目前沒有額度資訊來源。
-* 接續（resume）：agent 程序結束（當掉、被 kill、daemon 重啟）後，用 `termade resume <session> [prompt]`、TUI 的 `:resume [prompt]` 或 `Space s r` 讓**同一個 agent 接回原本的對話**。session id、label、逐字稿、worktree 分支、被指派的 task 都不變；交接則是換一個 agent 開新對話。
-  * 靠的是各家原生的機制：Claude `--resume <id>`、Codex `thread/resume`、OpenCode／Antigravity 的 ACP `session/load`（載入時 agent 重播的歷史不會再寫進逐字稿）。對話內容存在 agent 自己那邊，agent 把它清掉就接不回來。
-  * 只有結構化模式、且 agent 回報過對話 id 的 session 能接續：PTY 模式不行；Claude 要跑過至少一個回合才有 id；這個功能之前建立的 session 沒有記 id。不能接續時會回明確的錯誤，不會悄悄開新對話。
-  * 工作目錄、分支、權限、model 沿用原本的 session；執行檔、參數、環境變數、工具限制與 effort 重新讀 `config.toml`。
-  * daemon 重啟後，原本在跑的 session 仍標成 failed，並註明「可用 :resume 接續」；**不會自動接續**（會動用額度）。重啟時超過 1 小時、已結束又沒有分支的 session 會從清單清掉，清掉後就不能接續。
-  * 對已結束的 session 送 prompt 會提示改用 `:resume`。MCP 沒有開放接續，agent 不能自己把被人停掉的同伴叫回來。
-  * 成本：Claude 每個程序從 0 累計，接續後顯示的是舊值加新值。Codex 回報的是 thread 累計的 token，不另外相加（接續後的數字未實機驗證）。
-* 額度提醒與自動交接（`config.toml`）：`[handoff] warn_percent = 90` 時，agent 帳號額度越過門檻，該 agent 還在跑的 session 會留下「建議 :handoff」的備註（每次越線只提醒一次）。`auto = true` 加 `fallback = ["codex", "claude:sonnet"]` 則在額度用完時自動交接給第一個可用的候選（跳過同一個 agent、額度也滿了的、連續交接超過 3 次的）；預設關閉，因為會動用另一邊的額度。
-* 通知：TUI 開著時，session 回合結束（忙碌 → 閒置）、等待審批、失敗、額度用完會通知。方式在 `config.toml` 設定（repo 的 `.termade/config.toml` 逐欄覆寫全域）：
-  ```toml
-  [tui]
-  notify = ["bell"]                 # bell | osc9 | command，可多選；空陣列 = 關閉；省略 = ["bell"]
-  notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
-  notify_min_turn_secs = 10         # 回合短於這個秒數的「做完了」不通知
+- 若 Daemon 尚未執行，`termade` 會**自動在背景啟動 Daemon** 並進入 TUI。
+- 在 TUI 中按下 **`n`**，依序選擇 Agent (如 `opencode`)、Model (如預設或建議模型)，並輸入提示：
   ```
-  `bell` 寫終端響鈴（`\x07`），`osc9` 寫 OSC 9 桌面通知序列（終端要支援才有效果），`command` 用 `sh -c` 執行 `notify_command`，內容由環境變數帶入：`TERMADE_NOTIFY_KIND`（`done`／`approval`／`failed`／`limited`）、`TERMADE_NOTIFY_SESSION`、`TERMADE_NOTIFY_LABEL`、`TERMADE_NOTIFY_TEXT`。`notify_command` 只讀全域設定，repo 的 `.termade/config.toml` 不能覆寫（避免開啟不受信任的 repo 就執行它指定的命令）。`:notify on|off` 在執行期開關（只影響這個 TUI，不寫回設定），`:notify` 顯示目前狀態，`:notify test` 試發一則。
-  不通知的情況：終端有焦點且事件屬於目前選取的 session（終端不回報焦點時一律通知）；只看本專案（`:scope here`）時其他專案的 session；同一個 session 同一類 3 秒內的重複；連線時補送的歷史事件。審批、失敗、額度用完不受 `notify_min_turn_secs` 限制。
-  限制：通知由 TUI 發出，TUI 沒開就沒有通知；tmux 內要收到焦點事件需 `set -g focus-events on`，否則視為沒有焦點。
-* context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `termade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
-* 協作說明注入（`config.toml`）：啟動 session 時自動注入身分（label、角色、父 session、worktree 分支）與 `termade_*` 工具使用規則（進度用 `termade_status`、任務狀態改 `doing`／`done`、完成向父 session `termade_send` 回報、worktree 不自行合併、協調者用 `termade_task_create` + `depends_on` 與 `termade_wait`）。管道有兩層：MCP `initialize` 回應的 `instructions`，以及 adapter 補強（Claude `--append-system-prompt`、Codex `thread/start` 的 `developerInstructions`、ACP 接在第一則 prompt 前面且不寫入逐字稿 `UserPrompt`；PTY 不注入）。可用 `[collab] instructions = false` 關閉、`[collab] extra = "..."` 與 `[roles.<角色>] instructions = "..."` 附加說明；repo 的 `.termade/instructions.md` 存在時會附在最後（上限 8 KB）。
-* 成本與子 agent 數量上限（`config.toml` `[limits]`）：可設 `session_usd`（單一 session 美元上限，亦可在 `[roles.<角色>]` 覆寫或用 `termade spawn --budget <金額>`／MCP `termade_spawn(budget_usd)` 指定）、`session_tokens`（不回報美元時的 token 上限）、`tree_usd`（同棵父子樹總美元上限）、`max_children`（單一父 session 同時進行中的直接子 session 上限）、`max_depth`（衍生階層深度上限）與 `warn_percent`（警告門檻，預設 80%）。repo 的 `.termade/config.toml` 只能調低上限、不能調高全域設定。設定了上限時，TUI session 清單與 `termade cost` 顯示 `$1.20/$5`（達警告門檻黃、超過上限紅）；超過上限時中斷目前回合並阻擋新 prompt 與自動喚醒，可用 `:budget <金額>` 或 `termade budget <session> <金額>` 調高後繼續。超限期間排隊（`--queue`／TUI 排隊）的新 prompt 同樣被拒絕；超限前已在佇列裡的保留不送，調高上限後自動恢復送出。
+  幫我把測試修好，並修正任何編譯錯誤
+  ```
+- Agent 會在專屬 Worktree (`termade/session-xxx`) 開始工作。你可以在中央視圖即時觀察 Markdown 串流逐字稿、切換到 Diff 視圖審查程式碼變更，並一鍵完成合併。
 
-開發者：改動按鍵、命令、協定或設定檔時需要手動同步的清單見 [docs/MAINTAINING.md](docs/MAINTAINING.md)。
+---
+
+## 核心功能與工作流程
+
+### 1. 工作區隔離與審查迴圈 (Review Loop)
+
+- **Worktree 獨立分支**：每個 session 使用專屬 `git worktree` 與 `termade/<session>` 分支，互不干擾。
+- **即時彩色 Diff**：在 TUI 按 `Tab` 切換至 Diff 視圖，按 `{` / `}` 跳轉 hunk。
+- **行內註解審查 (Review Comment)**：在 Diff 視圖按 `c`，直接對該行留下修改建議 (例如：「請補上邊界條件檢查」)，系統會自動將註解送回該 Agent 要求修正。
+- **安全合併 (Merge)**：按 `M` 或執行 `termade merge`，系統會先執行 pre-check，自動 commit worktree 變更並合併回主分支。
+- **清理 (GC)**：按 `G` 或執行 `termade gc`，自動清除已結束且已合併的 Worktree，絕不誤刪未合併成果。
+
+### 2. 跨 Agent 協作匯流排與任務看板 (MCP & Bus)
+
+Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdio MCP 伺服器：
+
+| 類別 | 工具名稱 | 功能 |
+| --- | --- | --- |
+| **自我與環境** | `termade_whoami`, `termade_peers` | 查詢自己的 session ID、工作區分支，以及其他同伴資訊 |
+| **訊息傳遞** | `termade_send`, `termade_inbox`, `termade_wait`, `termade_ask` | 發送訊息、非同步讀取收件匣、阻塞等待新訊息、同步問答 |
+| **任務看板** | `termade_task_list`, `termade_task_create`, `termade_task_update` | 建立協作任務、指定負責人、支援 `depends_on` 前置相依性 |
+| **衍生與產出** | `termade_spawn`, `termade_artifact_share`, `termade_status` | 派生子 Agent、分享產出物、廣播進度狀態 |
+| **Git 整合** | `termade_diff`, `termade_merge` | 查詢自身分支與主分支 diff、請求合併 |
+
+- **空閒提醒 (Unread Nudge on Idle)**：
+  - 當 Agent 正忙於執行回合時，發來的直接訊息 (或廣播) 只會暫存在收件匣，**不打斷運算**。
+  - 當 Agent 結束回合回到 `idle` 且佇列中的指令處理完畢後，系統會將未讀訊息合併為一則提醒，每則訊息**僅提醒一次**。
+  - 已透過 `termade_wait` / `termade_ask` 取走或超過成本預算的 session 則不予打擾。
+- **任務相依性 (Task Dependencies)**：
+  - 建立任務時可帶 `--depends-on <id>`，在前置任務全數 `done` 之前，任務維持 `blocked` 且不打擾負責人。
+  - 前置任務完成後自動轉為 `todo`，並主動發信喚醒指派的負責人。
+- **信箱後備**：所有訊息同步寫入專案目錄下的 `.termade/mailbox/<session>.jsonl`。
+
+### 3. 額度監控、智慧交接 (Handoff) 與接續 (Resume)
+
+- **額度監視**：
+  - 即時解析 Agent 回報的額度狀態 (Claude 的 5 小時／7 天視窗與重置倒數；Codex 的 rateLimits)。
+  - 標題列即時標示最吃緊視窗 (`≥ 70%` 黃色、`≥ 90%` 紅色)；輸入 `:quota` 可查看完整視窗資訊。
+- **智慧交接 (Handoff)**：
+  - 當 Agent 回報額度用完、被限流，或使用者手動要求 (`:handoff <agent> [備註]`)：
+  - 舊 Agent 停止執行，工作區未 commit 變更自動 commit；
+  - Daemon 彙整任務背景、指派任務、最後輸出與完整 Diff 生成交接簡報；
+  - 新 Agent **直接沿用同一個工作目錄與分支**接手；
+  - 之後發往舊 session 的直接訊息會**自動改投給新接手者**。
+- **對話接續 (Resume)**：
+  - 若 Agent 程序異常中斷或 Daemon 重啟，按下 `Space s r` 或執行 `termade resume <session> [prompt]`，即可喚回**原本的對話**。
+  - 利用各家原生的對話回復機制 (Claude `--resume`、Codex `thread/resume`、ACP `session/load`)，保持同一個 session ID、逐字稿與分支。
+
+### 4. 資源控管與休眠 (Budget & Limits)
+
+- **成本上限設定**：
+  - 支援單一 session 預算 (`session_usd`)、子樹總額上限 (`tree_usd`)、Token 上限 (`session_tokens`)，以及最大子 Agent 數量與層級深度。
+  - 達到警戒線 (預設 80%) 黃色警告，超過上限立即阻斷執行並暫停排隊的 prompt，使用 `:budget <金額>` 調高後自動恢復。
+- **閒置休眠**：
+  - 按 `z` 或執行 `termade sleep <session>`，發送 `SIGSTOP` 暫停 Agent 程序節省系統資源；按 `z` 或收到訊息時發送 `SIGCONT` 自動喚醒。
+
+### 5. 權限政策與安全防護 (Policy Engine)
+
+- 提供跨 Agent 的統一控制旋鈕 `--permission <ask|auto|bypass>`：
+  - `ask`：所有工具呼叫轉交由使用者在 TUI 逐一按 `a` (允許) / `A` (一律允許) / `d` (拒絕) 核准。
+  - `auto` (預設)：安全工具自動核准。
+  - `bypass`：跳過權限確認。
+- **規則引擎**：支援全域 `~/.config/termade/policy.toml` 與專案 `.termade/policy.toml`，以 `deny` (黑名單) → `allow` (白名單) → session 政策順序過濾指令。
+
+---
+
+## TUI 終端介面操作指南
+
+### 1. 版面與檢視
+
+- **版面模式**：按 `L` 循環切換「兩欄」 (Sessions + 中央)、「分頁」 (頂部 Tabs + 中央) 與「三欄」 (Sessions + 中央 + Bus 訊息監控)。
+- **中央視圖**：按 `Tab` 依序切換四大視圖：
+  1. **Overview**：即時串流逐字稿，支援 Markdown 渲染 (標題、清單、表格、程式碼區塊等)。
+  2. **Diff**：即時彩色 Git Diff 視圖，支援行級審查註解。
+  3. **Worktrees**：檢視目前所有由 termade 建立的 Git Worktree 狀態與磁碟路徑。
+  4. **Tasks**：協作看板視圖，任務依狀態 (doing、review、todo、blocked、done) 分組，顯示前置任務相依性 (`⧗`)。按 `Enter` 直達負責人 Session。
+
+### 2. 快速鍵速查表
+
+#### 導航、選單與核心動作
+
+| 按鍵 | 動作 |
+| --- | --- |
+| `Space` | 開啟 **Which-key 選單** (`s` session、`g` git、`v` 檢視、`m` 訊息、`?` 說明) |
+| `:` 或 `/` | 開啟**命令列** (支援 `Tab` 自動補齊) |
+| `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；`Ctrl-W` 切換 Worktree) |
+| `i` / `Enter` | 聚焦輸入框，對選取的 Session 發送 prompt (亦支援 `@peer` 或 `#channel` 傳訊) |
+| `j` / `k` 或 `↑` / `↓` | 移動選取 Session；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
+| `[` / `]` | 快速跳至上一個 / 下一個 Session |
+| `Ctrl-K` | **Jump-Anywhere**：依關鍵字模糊搜尋並跳轉 Session |
+| `q` / `Q` | `q` 關閉 TUI (Daemon 與 Agent 續跑)；`Q` 關閉 Daemon (等同 `:shutdown`) |
+
+#### 逐字稿、搜尋與複製
+
+| 按鍵 | 動作 |
+| --- | --- |
+| `t` | 切換逐字稿顯示模式：Markdown 渲染 ↔ 原始文字 |
+| `T` (或 `:thoughts`) | 顯示 / 隱藏 Agent 的思考行 (`💭`，預設隱藏以加速渲染) |
+| `O` (或 `:tools`) | 展開 / 摺疊工具呼叫紀錄 (連續成功呼叫預設摺疊) |
+| `f` (或 `:find <文字>`) | **即時搜尋**逐字稿或 Diff (邊打邊找，`Enter` / `↓` 下一個、`↑` 上一個、`Esc` 退出) |
+| 滑鼠拖曳 | 在逐字稿中央區塊拖曳選取，放開即透過 **OSC 52** 複製至系統剪貼簿 |
+| `Y` (或 `/copy`) | 複製目前中央區塊的完整文字 (不含側欄與邊框) |
+| `F2` | 切換滑鼠擷取模式 (關閉後可使用終端機原生選取，或使用 `Shift`+拖曳) |
+| `PgUp` / `PgDn` | 向上 / 向下翻頁捲動逐字稿 (捲動時暫停自動跟隨) |
+| `Home` / `End` | 跳至頂部 / 回到底部並恢復跟隨最新輸出 (`▼ follow`) |
+| `P` | 切換專案範圍：只看本專案 (`here`) ↔ 顯示全部專案 Session (`all`) |
+
+#### Prompt 輸入與排隊
+
+| 按鍵 / 語法 | 功能說明 |
+| --- | --- |
+| `@檔名` | **檔案附件模糊搜尋**：輸入 `@` 片段，自動在專案內搜尋檔案並補齊，送出時自動內嵌文字 (上限 256 KB) 或圖片 (上限 5 MB) |
+| `Ctrl-V` | 貼上系統剪貼簿內的圖片 (Linux 需安裝 `wl-paste` 或 `xclip`) |
+| 拖曳檔案 | 直接將檔案從檔案總管拖進終端機，自動轉換為 `@路徑` 語法 |
+| `Ctrl-J` / `Shift-Enter` | 輸入框換行 (輸入框隨行數自動伸展，最多 8 行) |
+| `Alt-Enter` | **將 Prompt 排入佇列** (Session 忙碌時排入 Daemon 佇列，閒置時依序自動送出) |
+| `↑` / `↓` | 在空輸入框時切換歷史輸入指令 (持久化儲存於本機) |
+
+#### 審查、Git 與生命週期控制
+
+| 按鍵 | 動作 |
+| --- | --- |
+| `c` | (Diff 視圖) 針對當前選取的行留下 Review 審查註解並送回 Agent 修改 |
+| `M` | 將選取 Session 的 Worktree 分支安全合併回主分支 (可先用 `:merge --dry-run` 預覽) |
+| `G` | 清理 (GC) 已結束且已合併的 Worktree |
+| `z` | 切換暫停休眠 (`SIGSTOP`) 與喚醒 (`SIGCONT`) |
+| `x` | 中斷 Agent 當前回合運算 (Cancel) |
+| `K` | 強制結束選取的 Agent 子程序 (Kill) |
+| `a` / `A` / `d` | 審核請求：允許一次 / 本回合一律允許 / 拒絕 |
+
+### 3. TUI 命令列 (`:command`) 速查
+
+按 `:` 進入命令列，支援 `Tab` 自動補齊：
+
+- `:spawn <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn claude:opus 修復連線逾時`)
+- `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
+- `:resume [prompt]` — 接續已結束或中斷的 Session 對話
+- `:queue` / `:unqueue` / `:queue clear` — 檢視、取出或清空待送佇列
+- `:rm` / `:clean` — 移除已結束的 Session / 清除所有已結束項目
+- `:budget <金額>` — 查看或調高當前 Session 的美元預算上限
+- `:quota` — 查詢所有 Agent 帳號的額度視窗與重置倒數
+- `:task <標題>` / `:tasks` — 建立新任務 / 切換到任務看板視圖
+- `:task-status <todo|doing|blocked|review|done>` — 修改選取任務的狀態
+- `:notify on|off|test` — 開關桌面通知或測試發送
+- `:shutdown` — 關閉共用 Daemon 與所有專案的 Agent (安全保護：需輸入 `:shutdown!` 確認)
+
+---
+
+## CLI 命令參考
+
+`termade` 提供與 TUI 對等的完整 CLI 工具：
+
+```bash
+# Session 管理
+termade sessions [--json]                         # 列出所有 session (別名 termade peers)
+termade whoami [--session <id>] [--json]          # 查看當前 session 資訊
+termade spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
+termade resume <session-or-label> ["接續 prompt"] # 接續已中斷的 session
+termade handoff <session-or-label> --to <agent> [--note "交接補充"]
+termade sleep <session> ; termade wake <session>  # 暫停 / 喚醒 Agent 程序
+termade cancel <session> ; termade kill <session> # 中斷回合 / 強制中止程序
+termade rm <session> [--force]                    # 移除已結束的 session 紀錄
+
+# 提示詞與佇列
+termade prompt [--queue] <session-or-label> "提示詞"
+termade queue <session-or-label> [--clear]        # 查看或清空待送佇列
+
+# Worktree 與程式碼審查
+termade worktrees                                 # 列出所有由 termade 管理的 worktree
+termade diff <session-or-label>                   # 檢視指定 session 的 git diff
+termade review <session-or-label> --location <file>:<line> "審查意見"
+termade merge <session-or-label> [--dry-run]      # 合併分支回主工作區
+termade pr <session-or-label> --title "PR 標題"   # 透過 gh 建立 Pull Request
+termade gc [--session <id>]                       # 清理已結束且已合併的 worktrees
+
+# 跨 Agent 訊息與任務看板
+termade send <session-or-label> "訊息內容"         # 發送訊息給指定 agent
+termade inbox [--session <id>]                    # 檢視收件匣
+termade tasks                                     # 列出所有任務與相依性狀態
+termade task "任務標題" [--assignee <label>] [--depends-on <id>]
+termade task-update <id> --status <status>        # 更新任務狀態 (todo/doing/blocked/review/done)
+
+# 成本、額度與審核記錄
+termade quota [--json]                            # 查詢帳號額度視窗與重置倒數
+termade cost [--json]                             # 統計各 session 與整體 token / 美元花費
+termade budget <session-or-label> <金額>          # 設定或調高預算上限
+termade replay [--since <seq>] [--json]           # 重播與審核 events.jsonl 事件記錄
+
+# 遠端 Daemon 與 Shell 補齊
+termade daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽遠端 (搭配 TOKEN)
+termade --remote 127.0.0.1:7420                   # 連線至遠端 Daemon
+termade completions <bash|zsh|fish>               # 產生 Shell 自動補齊腳本
+```
+
+---
+
+## 設定檔與環境變數
+
+### 設定檔：`config.toml`
+
+`termade` 依序讀取全域設定 (`~/.config/termade/config.toml`) 並由專案設定 (`<repo>/.termade/config.toml`) 覆寫：
+
+```toml
+[tui]
+layout = "two"                    # 預設版面："two" | "three" | "tabs"
+notify = ["bell", "command"]      # 通知方式："bell" | "osc9" | "command" (可複選)
+notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
+notify_min_turn_secs = 10         # 短於此秒數的回合完成不觸發通知
+
+[limits]
+session_usd = 5.0                 # 單一 Session 成本上限 (美元)
+tree_usd = 15.0                   # 父子 Agent 樹累計成本上限
+warn_percent = 80                 # 成本與額度警告門檻百分比
+max_children = 5                  # 單一 Session 允許派生的最大子 Agent 數
+max_depth = 3                     # 子 Agent 派生深度上限
+
+[handoff]
+warn_percent = 90                 # 額度消耗達 90% 時提示建議 :handoff
+auto = false                      # 額度用盡時是否自動交接 (預設 false 避免非預期費用)
+fallback = ["codex", "claude:sonnet"]
+
+[collab]
+instructions = true               # 是否自動向 Agent 注入 termade 協作工具使用規範
+extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
+```
+
+> [!TIP]
+> 專案內可建立 `.termade/instructions.md` (上限 8 KB)，內容會在啟動時自動附加至 Agent 的 System Prompt 底部。
+
+### 支援的環境變數
+
+| 環境變數 | 預設值 | 說明 |
+| --- | --- | --- |
+| `XDG_RUNTIME_DIR` | `/tmp/termade-$USER/` | Daemon Unix domain socket 存放目錄 |
+| `XDG_STATE_HOME` | `~/.local/state/` | 事件持久化日誌路徑 (`$XDG_STATE_HOME/termade/events.jsonl`) |
+| `TERMADE_LOG` | `warn` | Tracing 日誌過濾等級 (例如 `TERMADE_LOG=debug`) |
+| `TERMADE_TOKEN` | — | 遠端連線認證 Token (建議搭配 SSH 轉發避免明文傳輸) |
+| `TERMADE_REMOTE` | — | 預設遠端 Daemon 位址 (等同 `--remote` 參數) |
+
+---
+
+## 進階架構與相關文件
+
+- [`docs/DESIGN.md`](docs/DESIGN.md) — 系統架構、事件同步協定、狀態機與 MCP 規格定義。
+- [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — 實機驗證成果、各家 Agent 相容性測試紀錄。
+- [`docs/MAINTAINING.md`](docs/MAINTAINING.md) — 開發者維護指南與修改同步檢查清單。
+- [`docs/tickets/`](docs/tickets/) — 系統重構、功能擴充與改善計畫票紀錄 (T01–T25 全數完成)。
+
+---
+
+## 授權條款
+
+本專案依 Apache-2.0 授權條款開源。
