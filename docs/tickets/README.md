@@ -6,19 +6,19 @@
 
 | 票 | 標題 | 優先度 | 相依 |
 | --- | --- | --- | --- |
-| [T01](T01-daemon-restart-state.md) | daemon 重啟後還原狀態並維持 seq 連續 | P0 | — |
-| [T02](T02-merge-safety.md) | merge 前置檢查、衝突還原與 auto-commit 範圍 | P0 | — |
-| [T03](T03-gc-unmerged-work.md) | gc 不得刪除未合併的成果 | P0 | — |
-| [T04](T04-policy-engine-effective.md) | 讓權限規則引擎在所有政策下都生效 | P1 | — |
-| [T05](T05-remote-mode-security.md) | 遠端模式與本機 socket 的安全強化 | P1 | — |
-| [T06](T06-ci-and-integration-tests.md) | CI 與 adapter 整合測試 | P1 | — |
-| [T07](T07-daemon-concurrency.md) | daemon 併發：鎖內寫檔、無上限佇列、鎖中毒 | P2 | T06 |
-| [T08](T08-event-log-rotation.md) | event log 輪替與寫入錯誤回報 | P2 | T01 |
-| [T09](T09-split-large-modules.md) | 拆分 daemon 與 TUI 的大檔 | P2 | T06 |
-| [T10](T10-docs-and-makefile.md) | 文件與實作同步、Makefile 可攜性 | P3 | — |
-| [T11](T11-agent-config-and-model.md) | 設定檔與每個 agent 的 model／參數設定 | P1 | — |
-| [T12](T12-permission-settings.md) | 權限的設定、顯示與子 agent 上限 | P1 | T11 |
-| [T13](T13-tui-layout-modes.md) | TUI 版面模式：三欄／兩欄／上方 session 分頁 | P2 | —（持久化需 T11） |
+| [T01](T01-daemon-restart-state.md) | daemon 重啟後還原狀態並維持 seq 連續（已完成） | P0 | — |
+| [T02](T02-merge-safety.md) | merge 前置檢查、衝突還原與 auto-commit 範圍（已完成） | P0 | — |
+| [T03](T03-gc-unmerged-work.md) | gc 不得刪除未合併的成果（已完成） | P0 | — |
+| [T04](T04-policy-engine-effective.md) | 讓權限規則引擎在所有政策下都生效（已完成） | P1 | — |
+| [T05](T05-remote-mode-security.md) | 遠端模式與本機 socket 的安全強化（已完成） | P1 | — |
+| [T06](T06-ci-and-integration-tests.md) | CI 與 adapter 整合測試（已完成） | P1 | — |
+| [T07](T07-daemon-concurrency.md) | daemon 併發：鎖內寫檔、無上限佇列、鎖中毒（已完成） | P2 | T06 |
+| [T08](T08-event-log-rotation.md) | event log 輪替與寫入錯誤回報（已完成） | P2 | T01 |
+| [T09](T09-split-large-modules.md) | 拆分 daemon 與 TUI 的大檔（已完成） | P2 | T06 |
+| [T10](T10-docs-and-makefile.md) | 文件與實作同步、Makefile 可攜性（已完成） | P3 | — |
+| [T11](T11-agent-config-and-model.md) | 設定檔與每個 agent 的 model／參數設定（已完成） | P1 | — |
+| [T12](T12-permission-settings.md) | 權限的設定、顯示與子 agent 上限（已完成） | P1 | T11 |
+| [T13](T13-tui-layout-modes.md) | TUI 版面模式：三欄／兩欄／上方 session 分頁（已完成） | P2 | —（持久化需 T11） |
 | [T14](T14-session-resume.md) | Session 接續：程序死掉或 daemon 重啟後接回原對話（已完成；Codex 只驗到協定層，見 `docs/VERIFICATION.md`） | P1 | — |
 | [T15](T15-notifications.md) | 回合結束、等待審批、額度用完時通知使用者（已完成） | P1 | — |
 | [T16](T16-transcript-search.md) | 在逐字稿與 diff 裡搜尋（已完成） | P2 | — |
@@ -30,6 +30,7 @@
 | [T22](T22-shared-worktree-remove.md) | 共用 worktree 的 session 在分支刪掉後無法移除（已完成） | P2 | — |
 | [T23](T23-surface-agent-errors.md) | agent 回合失敗時把錯誤原因顯示出來（已完成；TUI 目視未做，見 `docs/VERIFICATION.md`） | P1 | — |
 | [T24](T24-handoff-message-forwarding.md) | 交接後，發給舊 session 的訊息轉給接手的 session（已完成） | P2 | — |
+| [T25](T25-unread-nudge-on-idle.md) | 收件者忙完後提醒未讀訊息；超限判斷看實際收件者 | P2 | T24 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 
