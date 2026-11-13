@@ -977,7 +977,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
             " 輸入（Space=選單, :=命令, i=prompt/@peer/#ch, n=新增 agent, Ctrl-K=跳轉, g=Diff, t=原始/渲染, T=思考, PgUp/PgDn=捲動, F2=滑鼠） "
                 .to_string()
         }
-        Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、:命令，Enter 送出） ".to_string(),
+        Mode::Prompt => " prompt（@檔案/圖片 附件、Tab 補全、Ctrl-V 貼剪貼簿圖片；@peer／#channel 傳訊息；Enter 送出） ".to_string(),
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => format!(
                 " spawn → {}{}{}：prompt（Ctrl-W worktree={}, Ctrl-E 權限={}, Ctrl-F effort, Enter 送出） ",

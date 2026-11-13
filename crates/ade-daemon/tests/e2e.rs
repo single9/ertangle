@@ -52,6 +52,7 @@ fn spawn_prompt_output_shutdown() {
         parent: None,
         model: None,
         effort: None,
+        attachments: vec![],
         args: vec![],
     }))
     .unwrap();
@@ -82,6 +83,7 @@ fn spawn_prompt_output_shutdown() {
             parent,
             model: None,
             effort: None,
+            attachments: vec![],
             args: vec![],
         }))
         .unwrap();

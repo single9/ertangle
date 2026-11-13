@@ -662,6 +662,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 parent: Some(session.to_string()),
                 model: args["model"].as_str().map(|s| s.to_string()),
                 effort: args["effort"].as_str().map(|s| s.to_string()),
+                attachments: vec![],
                 args: vec![],
             }))?;
             let note = match frame {

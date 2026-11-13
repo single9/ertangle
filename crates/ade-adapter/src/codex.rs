@@ -262,13 +262,17 @@ impl CodexControl {
 
 impl AgentControl for CodexControl {
     fn send_input(&self, text: &str) -> Result<()> {
+        self.send_input_with(text, &[])
+    }
+
+    fn send_input_with(&self, text: &str, atts: &[ade_core::Attachment]) -> Result<()> {
         let thread_id = self.thread_id()?;
         let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
         self.conn.call(
             "turn/start",
             json!({
                 "threadId": thread_id,
-                "input": [{ "type": "text", "text": text }]
+                "input": turn_input(text, atts)
             }),
             CALL_TIMEOUT,
         )?;
@@ -432,13 +436,25 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 
     let control = CodexControl { conn, child };
     if let Some(p) = &spec.initial_prompt {
-        control.send_input(p)?;
+        control.send_input_with(p, &spec.initial_attachments)?;
     }
     Ok(Box::new(control))
 }
 
 /// `thread/start` 參數：cwd、approvalPolicy，加上可選的 model 與 sandbox（官方文件範例：
 /// `"model"`、`"sandbox": "workspace-write"`；`read_only` 對應 `read-only`）。
+/// Codex `turn/start` 的 input：文字（含內嵌文字檔）加上 data URL 圖片。
+fn turn_input(text: &str, atts: &[ade_core::Attachment]) -> Value {
+    let mut items =
+        vec![json!({ "type": "text", "text": ade_core::compose_text(text, atts, false) })];
+    for a in atts.iter().filter(|a| a.is_image()) {
+        if let Some(data) = &a.data {
+            items.push(json!({ "type": "image", "url": format!("data:{};base64,{data}", a.mime) }));
+        }
+    }
+    Value::Array(items)
+}
+
 fn thread_start_params(spec: &SessionSpec) -> Value {
     let mut p = json!({
         "cwd": spec.cwd.to_string_lossy(),
@@ -507,6 +523,7 @@ mod tests {
             permission: ade_core::PermissionPolicy::Auto,
             mcp_exe: None,
             initial_prompt: None,
+            initial_attachments: vec![],
             cols: 80,
             rows: 24,
         };

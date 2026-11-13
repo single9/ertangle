@@ -227,10 +227,14 @@ struct ClaudeControl {
 
 impl AgentControl for ClaudeControl {
     fn send_input(&self, text: &str) -> Result<()> {
+        self.send_input_with(text, &[])
+    }
+
+    fn send_input_with(&self, text: &str, atts: &[ade_core::Attachment]) -> Result<()> {
         let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
         self.conn.send_raw(&json!({
             "type": "user",
-            "message": { "role": "user", "content": [{ "type": "text", "text": text }] }
+            "message": { "role": "user", "content": user_content(text, atts) }
         }))
     }
 
@@ -272,6 +276,21 @@ impl AgentControl for ClaudeControl {
 // ---------------------------------------------------------------------------
 // 啟動
 // ---------------------------------------------------------------------------
+
+/// Claude 的 user content：文字（含內嵌的文字檔）加上 base64 圖片區塊。
+fn user_content(text: &str, atts: &[ade_core::Attachment]) -> Value {
+    let mut blocks =
+        vec![json!({ "type": "text", "text": ade_core::compose_text(text, atts, false) })];
+    for a in atts.iter().filter(|a| a.is_image()) {
+        if let Some(data) = &a.data {
+            blocks.push(json!({
+                "type": "image",
+                "source": { "type": "base64", "media_type": a.mime, "data": data }
+            }));
+        }
+    }
+    Value::Array(blocks)
+}
 
 /// 權限相關的命令列參數（唯讀、放行／禁止工具，與固定放行的 ade MCP 工具合併）。
 fn permission_args(spec: &SessionSpec) -> Vec<String> {
@@ -391,7 +410,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 
     let control = ClaudeControl { conn, child };
     if let Some(p) = &spec.initial_prompt {
-        control.send_input(p)?;
+        control.send_input_with(p, &spec.initial_attachments)?;
     }
     Ok(Box::new(control))
 }
@@ -431,6 +450,7 @@ mod tests {
             permission: ade_core::PermissionPolicy::Auto,
             mcp_exe: Some("/bin/ade".into()),
             initial_prompt: None,
+            initial_attachments: vec![],
             cols: 80,
             rows: 24,
         }
@@ -448,6 +468,31 @@ mod tests {
         s.read_only = true;
         let a = permission_args(&s);
         assert!(a.windows(2).any(|w| w == ["--permission-mode", "plan"]));
+    }
+
+    #[test]
+    fn user_content_adds_image_block_and_embeds_text_files() {
+        let atts = vec![
+            ade_core::Attachment {
+                name: "p.png".into(),
+                mime: "image/png".into(),
+                data: Some("QUJD".into()),
+                ..Default::default()
+            },
+            ade_core::Attachment {
+                name: "n.txt".into(),
+                mime: "text/plain".into(),
+                text: Some("hi".into()),
+                ..Default::default()
+            },
+        ];
+        let c = user_content("看", &atts);
+        let arr = c.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert!(arr[0]["text"].as_str().unwrap().contains("hi"));
+        assert_eq!(arr[1]["type"], "image");
+        assert_eq!(arr[1]["source"]["media_type"], "image/png");
+        assert_eq!(arr[1]["source"]["data"], "QUJD");
     }
 
     #[test]

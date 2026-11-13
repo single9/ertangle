@@ -78,7 +78,11 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
 
         // Session
         Request::Spawn(spawn) => session::handle_spawn(shared, reply, spawn),
-        Request::Prompt { session, text } => session::handle_prompt(shared, reply, session, text),
+        Request::Prompt {
+            session,
+            text,
+            attachments,
+        } => session::handle_prompt(shared, reply, session, text, attachments),
         Request::Cancel { session } => session::handle_cancel(shared, reply, session),
         Request::Kill { session } => session::handle_kill(shared, reply, session),
         Request::SessionRemove { session, force } => {

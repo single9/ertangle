@@ -34,6 +34,8 @@ struct Conn {
     perms: Mutex<HashMap<String, (Value, Vec<Value>)>>,
     /// 串流輸出的行緩衝（把 token 級 chunk 併成完整行）。
     stream: Mutex<StreamBuf>,
+    /// agent 在 initialize 宣告支援圖片區塊（`promptCapabilities.image`）。
+    image_ok: std::sync::atomic::AtomicBool,
     /// 權限政策：`Auto` / `Bypass` 時由 adapter 直接代為核准。
     tx: Sender<AgentEvent>,
 }
@@ -75,7 +77,7 @@ impl Conn {
     }
 
     /// 送出一段 prompt，等整個回合結束。
-    fn prompt(&self, text: &str) -> Result<()> {
+    fn prompt(&self, text: &str, atts: &[ade_core::Attachment]) -> Result<()> {
         let sid = self.acp_session.lock().unwrap().clone();
         if sid.is_empty() {
             bail!("session 尚未就緒");
@@ -83,7 +85,7 @@ impl Conn {
         let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
         let res = self.call(
             "session/prompt",
-            json!({ "sessionId": sid, "prompt": [{ "type": "text", "text": text }] }),
+            json!({ "sessionId": sid, "prompt": prompt_blocks(text, atts, self.image_ok.load(Ordering::SeqCst)) }),
             PROMPT_TIMEOUT,
         );
         self.flush_stream();
@@ -247,10 +249,15 @@ struct AcpControl {
 
 impl AgentControl for AcpControl {
     fn send_input(&self, text: &str) -> Result<()> {
+        self.send_input_with(text, &[])
+    }
+
+    fn send_input_with(&self, text: &str, atts: &[ade_core::Attachment]) -> Result<()> {
         let conn = self.conn.clone();
         let text = text.to_string();
+        let atts = atts.to_vec();
         std::thread::spawn(move || {
-            if let Err(e) = conn.prompt(&text) {
+            if let Err(e) = conn.prompt(&text, &atts) {
                 tracing::warn!("ACP prompt 失敗：{e}");
             }
         });
@@ -289,6 +296,20 @@ impl AgentControl for AcpControl {
     fn transport(&self) -> &'static str {
         "acp"
     }
+}
+
+/// ACP prompt 區塊：文字（含內嵌文字檔）；agent 支援圖片時另加 image 區塊，否則圖片改成一行說明。
+fn prompt_blocks(text: &str, atts: &[ade_core::Attachment], image_ok: bool) -> Value {
+    let mut blocks =
+        vec![json!({ "type": "text", "text": ade_core::compose_text(text, atts, !image_ok) })];
+    if image_ok {
+        for a in atts.iter().filter(|a| a.is_image()) {
+            if let Some(data) = &a.data {
+                blocks.push(json!({ "type": "image", "data": data, "mimeType": a.mime }));
+            }
+        }
+    }
+    Value::Array(blocks)
 }
 
 /// 從 `session/new` 回應的 `configOptions` 找出 model 選項，並驗證 `wanted` 合法。
@@ -380,6 +401,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         pending: Mutex::new(HashMap::new()),
         perms: Mutex::new(HashMap::new()),
         stream: Mutex::new(StreamBuf::default()),
+        image_ok: std::sync::atomic::AtomicBool::new(false),
         tx: tx.clone(),
     });
 
@@ -419,6 +441,12 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         CALL_TIMEOUT,
     )?;
     tracing::debug!("ACP initialize: {init}");
+    conn.image_ok.store(
+        init["agentCapabilities"]["promptCapabilities"]["image"]
+            .as_bool()
+            .unwrap_or(false),
+        Ordering::SeqCst,
+    );
 
     let mcp_servers = match &spec.mcp_exe {
         Some(exe) => json!([{
@@ -463,7 +491,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let control = AcpControl { conn, child };
 
     if let Some(p) = &spec.initial_prompt {
-        control.send_input(p)?;
+        control.send_input_with(p, &spec.initial_attachments)?;
     }
 
     Ok(Box::new(control))

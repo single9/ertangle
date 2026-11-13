@@ -31,6 +31,7 @@ fn claude_roundtrip_output_cost_and_exit() {
         permission: PermissionPolicy::default(),
         mcp_exe: None,
         initial_prompt: Some("ping".into()),
+        initial_attachments: vec![],
         cols: 80,
         rows: 24,
     };

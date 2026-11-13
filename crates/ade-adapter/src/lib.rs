@@ -76,6 +76,8 @@ pub struct SessionSpec {
     pub mcp_exe: Option<PathBuf>,
     /// 啟動後立刻送出的第一個 prompt。
     pub initial_prompt: Option<String>,
+    /// 初始 prompt 的附件。
+    pub initial_attachments: Vec<ade_core::Attachment>,
     pub cols: u16,
     pub rows: u16,
 }
@@ -84,6 +86,10 @@ pub struct SessionSpec {
 pub trait AgentControl: Send + Sync {
     /// 送一段使用者輸入 / prompt。
     fn send_input(&self, text: &str) -> Result<()>;
+    /// 送 prompt 並附上檔案／圖片。預設把附件併進文字；支援圖片區塊的 adapter 會覆寫。
+    fn send_input_with(&self, text: &str, attachments: &[ade_core::Attachment]) -> Result<()> {
+        self.send_input(&ade_core::compose_text(text, attachments, true))
+    }
     /// 中斷當前回合（不殺程序）。
     fn cancel(&self) -> Result<()>;
     /// 結束並殺掉程序。

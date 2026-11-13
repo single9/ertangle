@@ -22,7 +22,10 @@ pub(crate) fn submit_prompt_or_route(
     if let Some(cmd) = trimmed.strip_prefix('/') {
         return execute_command(app, writer, cmd);
     }
-    if trimmed.starts_with('@') || trimmed.starts_with('#') {
+    // `@存在的檔案` 是附件，不是 `@peer` 訊息。
+    if (trimmed.starts_with('@') && !crate::attach::leads_with_file(trimmed))
+        || trimmed.starts_with('#')
+    {
         let mut parts = trimmed.splitn(2, char::is_whitespace);
         let target_str = parts.next().unwrap_or("");
         let body = parts.next().unwrap_or("").trim();
@@ -42,14 +45,27 @@ pub(crate) fn submit_prompt_or_route(
         }
     }
     if let Some(id) = app.selected_id() {
+        let (body, attachments) = match crate::attach::extract_attachments(trimmed) {
+            Ok(r) => r,
+            Err(e) => {
+                app.status = format!("附件錯誤：{e}");
+                return Ok(());
+            }
+        };
+        let n = attachments.len();
         send(
             writer,
             &Request::Prompt {
                 session: id,
-                text: trimmed.to_string(),
+                text: body,
+                attachments,
             },
         )?;
-        app.status = "已送出 prompt".into();
+        app.status = if n > 0 {
+            format!("已送出 prompt（含 {n} 個附件）")
+        } else {
+            "已送出 prompt".into()
+        };
     } else {
         app.status = "沒有選取的 session".into();
     }
@@ -336,6 +352,17 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         (kind, model, prompt)
     };
     let prompt = prompt.filter(|p| !p.is_empty());
+    let (prompt, attachments) = match prompt.as_deref().map(crate::attach::extract_attachments) {
+        Some(Ok((body, atts))) => (Some(body), atts),
+        Some(Err(e)) => {
+            app.status = format!("附件錯誤：{e}");
+            app.mode = Mode::Spawn;
+            app.input = text.to_string();
+            app.input_cursor = app.input.chars().count();
+            return Ok(());
+        }
+        None => (None, Vec::new()),
+    };
     // bypass 需要再按一次 Enter 確認。
     if app.spawn_permission == Some(PermissionPolicy::Bypass) && !app.spawn_bypass_armed {
         app.spawn_bypass_armed = true;
@@ -362,6 +389,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
             parent: None,
             model,
             effort,
+            attachments,
             args: vec![],
         }),
     )?;

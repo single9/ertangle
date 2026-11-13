@@ -347,6 +347,21 @@ pub(crate) fn handle_input_mode(
             app.status = format!("effort = {}", app.spawn_effort.as_deref().unwrap_or("預設"));
         }
         KeyCode::Tab if app.mode == Mode::Command => complete_command(app),
+        KeyCode::Tab if matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) => {
+            complete_attachment_path(app)
+        }
+        KeyCode::Char('v')
+            if key.modifiers.contains(KeyModifiers::CONTROL)
+                && matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) =>
+        {
+            match crate::attach::clipboard_image() {
+                Ok(path) => {
+                    insert_str_input(app, &format!("@{} ", path.display()));
+                    app.status = "已貼上剪貼簿圖片".into();
+                }
+                Err(e) => app.status = e,
+            }
+        }
         KeyCode::Backspace => backspace_input(app),
         KeyCode::Delete => delete_input(app),
         KeyCode::Left => app.input_cursor = app.input_cursor.saturating_sub(1),
@@ -414,6 +429,46 @@ pub(crate) fn handle_input_mode(
         _ => {}
     }
     Ok(())
+}
+
+/// 游標前的 `@路徑` 做 Tab 補全：唯一符合就補完，多個則補到共同前綴並列出候選。
+fn complete_attachment_path(app: &mut App) {
+    let chars: Vec<char> = app.input.chars().collect();
+    let cur = app.input_cursor.min(chars.len());
+    let before: String = chars[..cur].iter().collect();
+    let Some(at) = before.rfind('@') else { return };
+    if at > 0 && !before[..at].ends_with(char::is_whitespace) {
+        return;
+    }
+    let prefix = &before[at + 1..];
+    if prefix.contains(char::is_whitespace) {
+        return;
+    }
+    let cands = crate::attach::complete_path(prefix);
+    if cands.is_empty() {
+        app.status = "沒有符合的路徑".into();
+        return;
+    }
+    let common = crate::attach::common_prefix(&cands);
+    let new_prefix = if cands.len() == 1 {
+        cands[0].clone()
+    } else {
+        common
+    };
+    if new_prefix.len() > prefix.len() {
+        let start = byte_index(&app.input, before[..at + 1].chars().count());
+        let end = byte_index(&app.input, cur);
+        app.input.replace_range(start..end, &new_prefix);
+        app.input_cursor = before[..at + 1].chars().count() + new_prefix.chars().count();
+    }
+    if cands.len() > 1 {
+        let shown: Vec<&str> = cands.iter().take(8).map(String::as_str).collect();
+        app.status = format!(
+            "候選：{}{}",
+            shown.join("  "),
+            if cands.len() > 8 { " …" } else { "" }
+        );
+    }
 }
 
 /// `:` 命令列的 Tab 補全：輸入的第一個字若只符合一個命令就補完；多個則補到共同前綴並列出候選。
@@ -494,6 +549,14 @@ pub(crate) fn delete_input(app: &mut App) {
 
 /// 貼上（bracketed paste）：只插入目前輸入框；換行轉成空白以維持單行輸入。
 pub(crate) fn handle_paste(app: &mut App, text: &str) {
+    // 拖曳檔案進終端機會貼上它的路徑：轉成 `@path` 附件引用。
+    if matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) {
+        if let Some(r) = crate::attach::pasted_file_ref(text) {
+            insert_str_input(app, &r);
+            app.status = "已加入附件引用（送出時一併附上）".into();
+            return;
+        }
+    }
     let sanitized = text.replace(['\r', '\n'], " ");
     insert_str_input(app, &sanitized);
 }

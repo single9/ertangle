@@ -6,8 +6,8 @@
 //! 這個 crate 只有 wire 型別與編解碼，不含任何 IO，方便日後換成 TCP / JSON-RPC。
 
 use ade_core::{
-    AgentKind, ArtifactKind, BusMessage, Decision, MsgId, MsgKind, PermissionPolicy, Record, Role,
-    Seq, SessionId, State, Target, TaskId, TaskStatus, WorktreeInfo,
+    AgentKind, ArtifactKind, Attachment, BusMessage, Decision, MsgId, MsgKind, PermissionPolicy,
+    Record, Role, Seq, SessionId, State, Target, TaskId, TaskStatus, WorktreeInfo,
 };
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,9 @@ pub struct SpawnRequest {
     /// 推理強度（low／medium／high／xhigh／max）；省略時依 config.toml。
     #[serde(default)]
     pub effort: Option<String>,
+    /// 初始 prompt 的附件。
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
     /// 一次性額外命令列參數（附加在設定檔的 args 之後）。
     #[serde(default)]
     pub args: Vec<String>,
@@ -91,6 +94,9 @@ pub enum Request {
     Prompt {
         session: SessionId,
         text: String,
+        /// 附件（檔案、圖片）。
+        #[serde(default)]
+        attachments: Vec<Attachment>,
     },
     /// 中斷當前回合（不殺程序）。
     Cancel {
@@ -319,6 +325,7 @@ mod tests {
             parent: None,
             model: None,
             effort: None,
+            attachments: vec![],
             args: vec![],
         });
         let line = encode_line(&req).unwrap();

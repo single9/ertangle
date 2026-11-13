@@ -926,6 +926,7 @@ fn failed_spawn_leaves_no_session() {
             parent: None,
             model: None,
             effort: None,
+            attachments: vec![],
             args: vec![],
         }),
     );

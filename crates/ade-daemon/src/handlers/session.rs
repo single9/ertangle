@@ -137,6 +137,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         sandbox: resolved.sandbox.clone(),
         mcp_exe,
         initial_prompt: spawn.prompt.clone(),
+        initial_attachments: spawn.attachments.clone(),
         cols: 120,
         rows: 40,
     };
@@ -152,7 +153,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                 if let Some(prompt) = spawn.prompt.as_deref().filter(|p| !p.trim().is_empty()) {
                     shared.emit(Event::UserPrompt {
                         session: id.clone(),
-                        text: prompt.to_string(),
+                        text: with_attachment_summary(prompt, &spawn.attachments),
                     });
                 }
             }
@@ -204,7 +205,13 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     }
 }
 
-pub(crate) fn handle_prompt(shared: &Arc<Shared>, reply: &ClientTx, session: String, text: String) {
+pub(crate) fn handle_prompt(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    text: String,
+    attachments: Vec<ade_core::Attachment>,
+) {
     match shared.control(&session) {
         Some((sid, ctl)) => {
             shared.wake_if_sleeping(&sid, &ctl);
@@ -216,10 +223,10 @@ pub(crate) fn handle_prompt(shared: &Arc<Shared>, reply: &ClientTx, session: Str
             if !is_pty {
                 shared.emit(Event::UserPrompt {
                     session: sid.clone(),
-                    text: text.clone(),
+                    text: with_attachment_summary(&text, &attachments),
                 });
             }
-            match ctl.send_input(&text) {
+            match ctl.send_input_with(&text, &attachments) {
                 Ok(()) => {
                     let _ = reply.send(Frame::ok());
                 }
@@ -232,6 +239,16 @@ pub(crate) fn handle_prompt(shared: &Arc<Shared>, reply: &ClientTx, session: Str
             let _ = reply.send(Frame::error(format!("找不到 session {session}")));
         }
     }
+}
+
+/// transcript 的 prompt 回顯：原文後面接上每個附件的一行摘要。
+fn with_attachment_summary(text: &str, atts: &[ade_core::Attachment]) -> String {
+    let mut out = text.to_string();
+    for a in atts {
+        out.push('\n');
+        out.push_str(&a.summary());
+    }
+    out
 }
 
 pub(crate) fn handle_cancel(shared: &Arc<Shared>, reply: &ClientTx, session: String) {

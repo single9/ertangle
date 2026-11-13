@@ -97,6 +97,7 @@ pub(crate) fn cmd_spawn(
     parent: Option<String>,
     model: Option<String>,
     effort: Option<String>,
+    attach: Vec<String>,
     extra: Vec<String>,
 ) -> Result<()> {
     // `claude:opus` 形式同時指定 model；`--model` 優先。
@@ -134,6 +135,7 @@ pub(crate) fn cmd_spawn(
         parent,
         model,
         effort,
+        attachments: load_attachments(&attach)?,
         args: extra,
     });
     match roundtrip(&req)? {
@@ -146,10 +148,20 @@ pub(crate) fn cmd_spawn(
     }
 }
 
-pub(crate) fn cmd_prompt(session: String, text: Vec<String>) -> Result<()> {
+pub(crate) fn load_attachments(paths: &[String]) -> Result<Vec<ade_core::Attachment>> {
+    paths
+        .iter()
+        .map(|p| {
+            ade_core::Attachment::load(std::path::Path::new(p)).map_err(|e| anyhow::anyhow!(e))
+        })
+        .collect()
+}
+
+pub(crate) fn cmd_prompt(session: String, text: Vec<String>, attach: Vec<String>) -> Result<()> {
     roundtrip(&Request::Prompt {
         session,
         text: join(text),
+        attachments: load_attachments(&attach)?,
     })?;
     Ok(())
 }

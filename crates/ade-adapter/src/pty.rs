@@ -158,7 +158,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     };
 
     if let Some(p) = &spec.initial_prompt {
-        let _ = control.send_input(p);
+        let _ = control.send_input_with(p, &spec.initial_attachments);
     }
 
     Ok(Box::new(control))

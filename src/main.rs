@@ -104,6 +104,9 @@ enum Cmd {
         /// 推理強度：low / medium / high / xhigh / max（省略則依 config.toml）
         #[arg(long)]
         effort: Option<String>,
+        /// 附加檔案或圖片到初始 prompt（可重複）
+        #[arg(short = 'a', long = "attach")]
+        attach: Vec<String>,
         /// 附加給底層 agent 的命令列參數
         #[arg(last = true)]
         extra: Vec<String>,
@@ -111,6 +114,9 @@ enum Cmd {
     /// 送出 prompt 給指定 session
     Prompt {
         session: String,
+        /// 附加檔案或圖片（可重複）
+        #[arg(short = 'a', long = "attach")]
+        attach: Vec<String>,
         #[arg(required = true)]
         text: Vec<String>,
     },
@@ -332,12 +338,17 @@ fn main() -> Result<()> {
             parent,
             model,
             effort,
+            attach,
             extra,
         } => cmd_spawn(
             kind, prompt, cwd, label, role, worktree, transport, permission, parent, model, effort,
-            extra,
+            attach, extra,
         ),
-        Cmd::Prompt { session, text } => cmd_prompt(session, text),
+        Cmd::Prompt {
+            session,
+            attach,
+            text,
+        } => cmd_prompt(session, text, attach),
         Cmd::Cancel { session } => cmd_cancel(session),
         Cmd::Kill { session } => cmd_kill(session),
         Cmd::Sleep { session } => cmd_sleep(session),

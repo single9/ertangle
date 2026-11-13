@@ -9,6 +9,7 @@
 //! 並可用 `t` 在渲染後與原始文字之間切換。
 
 mod app;
+mod attach;
 mod clipboard;
 mod commands;
 mod diff;

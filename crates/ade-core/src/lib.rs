@@ -1111,6 +1111,163 @@ pub fn tool_summary(input: &str) -> Option<String> {
     }
 }
 
+/// 隨 prompt 一起送出的附件（檔案或圖片）。內容由送出端（TUI／CLI）讀好並內嵌，
+/// 所以遠端 daemon 也不需要存取同一個檔案系統。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Attachment {
+    /// 顯示用檔名。
+    pub name: String,
+    /// MIME 類型，例如 `image/png`、`text/plain`。
+    pub mime: String,
+    /// 原始路徑（僅供參考／PTY 使用）。
+    #[serde(default)]
+    pub path: Option<String>,
+    /// 圖片的 base64 內容。
+    #[serde(default)]
+    pub data: Option<String>,
+    /// 文字檔的內容。
+    #[serde(default)]
+    pub text: Option<String>,
+    pub size: u64,
+}
+
+/// 圖片附件大小上限（5 MB）與文字檔內嵌上限（256 KB）。
+pub const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
+pub const MAX_TEXT_BYTES: u64 = 256 * 1024;
+
+/// 依副檔名猜測圖片 MIME；不是圖片回傳 `None`。
+pub fn image_mime(path: &std::path::Path) -> Option<&'static str> {
+    match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+/// 標準 base64 編碼（含 padding）。
+pub fn base64_encode(bytes: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = (u32::from(chunk[0]) << 16)
+            | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*chunk.get(2).unwrap_or(&0));
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 {
+            T[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            T[n as usize & 63] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+impl Attachment {
+    /// 讀取檔案成附件：圖片內嵌 base64（上限 5 MB）；UTF-8 文字檔內嵌內容（上限 256 KB，
+    /// 超過就只帶路徑）；其他二進位檔只帶路徑。
+    pub fn load(path: &std::path::Path) -> Result<Attachment, String> {
+        let meta =
+            std::fs::metadata(path).map_err(|e| format!("無法讀取 {}：{e}", path.display()))?;
+        if !meta.is_file() {
+            return Err(format!("{} 不是檔案", path.display()));
+        }
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.display().to_string());
+        let abs = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let mut att = Attachment {
+            name,
+            mime: "application/octet-stream".into(),
+            path: Some(abs.to_string_lossy().to_string()),
+            size: meta.len(),
+            ..Default::default()
+        };
+        if let Some(mime) = image_mime(path) {
+            if meta.len() > MAX_IMAGE_BYTES {
+                return Err(format!(
+                    "圖片 {} 太大（{} KB，上限 {} KB）",
+                    att.name,
+                    meta.len() / 1024,
+                    MAX_IMAGE_BYTES / 1024
+                ));
+            }
+            let bytes = std::fs::read(path).map_err(|e| format!("讀取 {} 失敗：{e}", att.name))?;
+            att.mime = mime.into();
+            att.data = Some(base64_encode(&bytes));
+            return Ok(att);
+        }
+        if meta.len() <= MAX_TEXT_BYTES {
+            let bytes = std::fs::read(path).map_err(|e| format!("讀取 {} 失敗：{e}", att.name))?;
+            if !bytes.contains(&0) {
+                if let Ok(text) = String::from_utf8(bytes) {
+                    att.mime = "text/plain".into();
+                    att.text = Some(text);
+                }
+            }
+        }
+        Ok(att)
+    }
+
+    pub fn is_image(&self) -> bool {
+        self.mime.starts_with("image/")
+    }
+
+    /// 一行摘要，用於 transcript：`📎 name (image/png, 12 KB)`。
+    pub fn summary(&self) -> String {
+        format!(
+            "📎 {} ({}, {} KB)",
+            self.name,
+            self.mime,
+            self.size.div_ceil(1024)
+        )
+    }
+}
+
+/// 把附件併入 prompt 文字：文字檔以 fenced block 內嵌；圖片在 `images_as_text` 為真時改成一行說明
+/// （給不支援圖片區塊的 agent）。
+pub fn compose_text(text: &str, atts: &[Attachment], images_as_text: bool) -> String {
+    let mut out = text.to_string();
+    for a in atts {
+        if a.is_image() {
+            if images_as_text {
+                out.push_str(&format!(
+                    "\n\n[圖片附件：{}{}]",
+                    a.name,
+                    a.path
+                        .as_deref()
+                        .map(|p| format!("，路徑 {p}"))
+                        .unwrap_or_default()
+                ));
+            }
+        } else if let Some(t) = &a.text {
+            out.push_str(&format!(
+                "\n\n[檔案：{}]\n```\n{}\n```",
+                a.name,
+                t.trim_end()
+            ));
+        } else {
+            out.push_str(&format!(
+                "\n\n[檔案附件：{}{}（內容未內嵌）]",
+                a.name,
+                a.path
+                    .as_deref()
+                    .map(|p| format!("，路徑 {p}"))
+                    .unwrap_or_default()
+            ));
+        }
+    }
+    out
+}
+
 /// 遮罩文字中的常見金鑰與憑證樣式（寫入 event log 前保護秘密）。
 pub fn redact_secrets(input: &str) -> String {
     const PREFIXES: &[&str] = &["sk-", "ghp_", "gho_", "AIza", "AKIA", "xoxb-"];
@@ -1435,5 +1592,40 @@ mod tests {
         let t: Vec<_> = st.transcripts["s1"].iter().cloned().collect();
         assert_eq!(t[0], "▸ Bash: git status -s");
         assert_eq!(t[1], "  ✗ fatal: not a repo …(+1 行)");
+    }
+}
+
+#[cfg(test)]
+mod attachment_tests {
+    use super::*;
+
+    #[test]
+    fn base64_matches_known_vectors() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn compose_text_embeds_files_and_notes_images() {
+        let f = Attachment {
+            name: "a.rs".into(),
+            mime: "text/plain".into(),
+            text: Some("fn main() {}\n".into()),
+            ..Default::default()
+        };
+        let img = Attachment {
+            name: "p.png".into(),
+            mime: "image/png".into(),
+            path: Some("/tmp/p.png".into()),
+            data: Some("AAAA".into()),
+            ..Default::default()
+        };
+        let t = compose_text("看", &[f.clone(), img.clone()], true);
+        assert!(t.contains("```\nfn main() {}\n```") && t.contains("圖片附件：p.png"));
+        let t2 = compose_text("看", &[f, img], false);
+        assert!(!t2.contains("圖片附件"));
     }
 }

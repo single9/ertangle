@@ -676,3 +676,85 @@ fn antigravity_models_are_grouped_by_base_name() {
     assert_eq!(p.variants["gemini-4-argon"], vec!["medium", "high"]);
     assert_eq!(p.items[0].0, "gemini-4-argon  (Gemini 4 Argon)");
 }
+
+// ---- 附件（@檔案／圖片）----
+
+fn temp_dir_with(files: &[(&str, &[u8])]) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("ade-att-{}", ade_core::new_id("t")));
+    std::fs::create_dir_all(&d).unwrap();
+    for (n, c) in files {
+        std::fs::write(d.join(n), c).unwrap();
+    }
+    d
+}
+
+#[test]
+fn at_tokens_become_attachments_and_unknown_stay() {
+    let d = temp_dir_with(&[
+        ("notes.txt", b"hello\n"),
+        ("pic.png", &[0x89, b'P', b'N', b'G', 1, 2, 3]),
+    ]);
+    let text = format!(
+        "看 @{}/notes.txt 和 @{}/pic.png，另外 @nobody 與 a@b.com",
+        d.display(),
+        d.display()
+    );
+    let (body, atts) = crate::attach::extract_attachments(&text).unwrap();
+    assert_eq!(atts.len(), 2);
+    assert!(body.contains("notes.txt") && body.contains("pic.png"));
+    assert!(body.contains("@nobody") && body.contains("a@b.com"));
+    assert_eq!(atts[0].mime, "text/plain");
+    assert_eq!(atts[0].text.as_deref(), Some("hello\n"));
+    assert!(atts[1].is_image() && atts[1].data.is_some());
+}
+
+#[test]
+fn leading_at_file_is_not_a_peer_message() {
+    let d = temp_dir_with(&[("a.txt", b"x")]);
+    assert!(crate::attach::leads_with_file(&format!(
+        "@{}/a.txt 看一下",
+        d.display()
+    )));
+    assert!(!crate::attach::leads_with_file("@worker/a 嗨"));
+}
+
+#[test]
+fn quoted_path_with_spaces_and_trailing_punctuation() {
+    let d = temp_dir_with(&[("my file.txt", b"s"), ("b.txt", b"b")]);
+    let (_, atts) = crate::attach::extract_attachments(&format!(
+        "@\"{}/my file.txt\" 與 @{}/b.txt,",
+        d.display(),
+        d.display()
+    ))
+    .unwrap();
+    assert_eq!(atts.len(), 2);
+}
+
+#[test]
+fn oversized_image_is_rejected_and_binary_is_path_only() {
+    let d = temp_dir_with(&[("bin.dat", &[0, 1, 2, 3])]);
+    let (_, atts) =
+        crate::attach::extract_attachments(&format!("@{}/bin.dat", d.display())).unwrap();
+    assert!(atts[0].text.is_none() && atts[0].data.is_none());
+    let big = d.join("big.png");
+    std::fs::write(&big, vec![0u8; (ade_core::MAX_IMAGE_BYTES + 1) as usize]).unwrap();
+    assert!(crate::attach::extract_attachments(&format!("@{}", big.display())).is_err());
+}
+
+#[test]
+fn path_completion_and_pasted_paths() {
+    let d = temp_dir_with(&[("alpha.txt", b"1"), ("alpine.md", b"2")]);
+    let c = crate::attach::complete_path(&format!("{}/alp", d.display()));
+    assert_eq!(c.len(), 2);
+    assert!(crate::attach::common_prefix(&c).ends_with("/alp"));
+    let p = d.join("alpha.txt");
+    assert_eq!(
+        crate::attach::pasted_file_ref(&format!("'{}'", p.display())),
+        Some(format!("@{} ", p.display()))
+    );
+    assert_eq!(
+        crate::attach::pasted_file_ref(&format!("file://{}", p.display())),
+        Some(format!("@{} ", p.display()))
+    );
+    assert!(crate::attach::pasted_file_ref("not a file").is_none());
+}

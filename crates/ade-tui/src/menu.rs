@@ -89,6 +89,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     Act::Prefill(Mode::Command, "broadcast "),
                 ),
                 it('t', "新增任務", Act::Prefill(Mode::Command, "task ")),
+                it(
+                    'f',
+                    "附加檔案／圖片…（@路徑，Tab 補全）",
+                    Act::Prefill(Mode::Prompt, "@"),
+                ),
             ],
         ),
         _ => return None,
