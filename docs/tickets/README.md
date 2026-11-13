@@ -19,8 +19,18 @@
 | [T11](T11-agent-config-and-model.md) | 設定檔與每個 agent 的 model／參數設定 | P1 | — |
 | [T12](T12-permission-settings.md) | 權限的設定、顯示與子 agent 上限 | P1 | T11 |
 | [T13](T13-tui-layout-modes.md) | TUI 版面模式：三欄／兩欄／上方 session 分頁 | P2 | —（持久化需 T11） |
+| [T14](T14-session-resume.md) | Session 接續：程序死掉或 daemon 重啟後接回原對話 | P1 | — |
+| [T15](T15-notifications.md) | 回合結束、等待審批、額度用完時通知使用者 | P1 | — |
+| [T16](T16-transcript-search.md) | 在逐字稿與 diff 裡搜尋 | P2 | — |
+| [T17](T17-budget-limits.md) | 成本與子 agent 數量上限 | P1 | —（成本累計與 T14 有交互） |
+| [T18](T18-task-board.md) | 任務板：依賴解鎖與獨立視圖 | P2 | — |
+| [T19](T19-daemon-prompt-queue.md) | 把 prompt 排隊移到 daemon | P2 | —（與 T17 有交互） |
+| [T20](T20-collab-instructions.md) | 把協作說明注入每個 agent | P2 | — |
+| [T21](T21-shell-completions.md) | Shell 補全 | P3 | —（session 補全會用到 T14 的 `resume`） |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
+
+T14–T21 也是缺少的功能，於 2026-11-13 對 `main`（`f3fc576`）再檢視一次後追加。這一批只讀了程式碼與各 agent 的 `--help`，沒有實機重現；每張票的「分析邏輯」都列出了沒有確認的部分，動手前先查證。
 
 優先度：P0 會造成資料遺失或狀態錯亂；P1 是安全或防止回歸；P2 是穩定度與可維護性；P3 是整理。
 
@@ -32,6 +42,14 @@ T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 
 4. T11：設定檔與 model。它引入的 `config.toml` 是 T12 與 T04 的基礎。
 5. T12、T04、T05：權限與安全。
 6. T07、T08、T09、T10。
+
+### T14–T21 的建議順序
+
+1. T15：改動只在 TUI，最小，日常使用最有感。
+2. T14：影響最大。先做「記下原生 id」（第 1 步），那一步獨立、沒有風險，之後的 session 才有 id 可以接續。
+3. T17：放著讓 agent 自己跑之前要有的保護。排在 T14 之後，成本累計的處理才不用改兩次。
+4. T18 的 A（依賴解鎖）與 T20：兩者一起決定 agent 之間能不能不靠人就接力下去。
+5. T19、T16、T18 的 B（任務視圖）、T21。
 
 ## 這次檢視怎麼做的
 
