@@ -2,3 +2,4 @@
 /dist
 .termade/
 *.sock
+.fuse_hidden*
