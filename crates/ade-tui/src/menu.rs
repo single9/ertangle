@@ -155,7 +155,6 @@ pub(crate) enum PickStage {
     Model(AgentKind),
 }
 
-#[derive(Clone)]
 pub(crate) struct Picker {
     pub stage: PickStage,
     pub title: String,
@@ -163,9 +162,33 @@ pub(crate) struct Picker {
     pub items: Vec<(String, String)>,
     pub filter: String,
     pub cursor: usize,
+    /// 背景查詢 agent 可用 model 的結果（查到後併入 `items`）。
+    pub pending: Option<std::sync::mpsc::Receiver<Vec<(String, String)>>>,
+    pub loading: bool,
 }
 
 impl Picker {
+    /// 把背景查詢的結果併進清單（每次繪製前呼叫）。
+    pub(crate) fn poll_pending(&mut self) {
+        let Some(rx) = &self.pending else { return };
+        match rx.try_recv() {
+            Ok(found) => {
+                for (label, value) in found {
+                    if !self.items.iter().any(|(_, v)| *v == value) {
+                        self.items.push((label, value));
+                    }
+                }
+                self.loading = false;
+                self.pending = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(_) => {
+                self.loading = false;
+                self.pending = None;
+            }
+        }
+    }
+
     pub(crate) fn visible(&self) -> Vec<&(String, String)> {
         let f = self.filter.to_ascii_lowercase();
         self.items
@@ -199,6 +222,62 @@ pub(crate) fn model_choices(kind: &AgentKind) -> Vec<(String, String)> {
     out
 }
 
+/// 向 agent 的 CLI 查詢可用 model（`opencode models`、`agy models`），最多等 8 秒。
+/// 輸出每行第一欄是 model id，後面（以 tab 分隔）是顯示名稱。
+fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
+    let (bin, args): (&str, &[&str]) = match kind {
+        AgentKind::OpenCode => ("opencode", &["models"]),
+        AgentKind::Antigravity => ("agy", &["models"]),
+        _ => return Vec::new(),
+    };
+    let Ok(mut child) = std::process::Command::new(bin)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return Vec::new();
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            _ => {
+                let _ = child.kill();
+                return Vec::new();
+            }
+        }
+    }
+    let mut out = String::new();
+    if let Some(mut so) = child.stdout.take() {
+        use std::io::Read;
+        let _ = so.read_to_string(&mut out);
+    }
+    parse_models(&out)
+}
+
+/// 解析 `models` 子命令的輸出：忽略空行與沒有 id 樣子的提示行。
+pub(crate) fn parse_models(out: &str) -> Vec<(String, String)> {
+    out.lines()
+        .filter_map(|line| {
+            let mut cols = line.split('\t');
+            let id = cols.next()?.trim();
+            if id.is_empty() || id.contains(char::is_whitespace) || id.ends_with("...") {
+                return None;
+            }
+            let label = match cols.next().map(str::trim) {
+                Some(name) if !name.is_empty() => format!("{id}  ({name})"),
+                _ => id.to_string(),
+            };
+            Some((label, id.to_string()))
+        })
+        .collect()
+}
+
 pub(crate) fn start_spawn_picker(app: &mut App) {
     let items = AgentKind::builtins()
         .iter()
@@ -210,6 +289,8 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
         items,
         filter: String::new(),
         cursor: 0,
+        pending: None,
+        loading: false,
     });
     app.mode = Mode::Pick;
 }
@@ -259,6 +340,9 @@ pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
             let custom = p.filter.trim().to_string();
             match p.stage.clone() {
                 PickStage::Agent => {
+                    // 沒有符合的項目時，也接受別名（例如 agy、oc）。
+                    let chosen =
+                        chosen.or_else(|| AgentKind::parse(&custom).map(|k| k.id().to_string()));
                     let Some(kind) = chosen.and_then(|v| AgentKind::parse(&v)) else {
                         app.status = "沒有符合的 agent".into();
                         return Ok(());
@@ -270,6 +354,16 @@ pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
                     p.items = model_choices(&kind);
                     p.filter.clear();
                     p.cursor = 0;
+                    // 向 CLI 查詢可用 model（不阻塞介面）。
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let k = kind.clone();
+                    if matches!(k, AgentKind::OpenCode | AgentKind::Antigravity) {
+                        std::thread::spawn(move || {
+                            let _ = tx.send(query_models(&k));
+                        });
+                        p.pending = Some(rx);
+                        p.loading = true;
+                    }
                     p.stage = PickStage::Model(kind);
                 }
                 PickStage::Model(kind) => {

@@ -98,6 +98,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     draw_status(f, chunks[3], app);
     match app.mode {
         Mode::Menu => draw_menu(f, chunks[2], app),
+        Mode::Command => draw_command_hints(f, chunks[2], app),
         Mode::Pick => draw_picker(f, app),
         _ => {}
     }
@@ -145,9 +146,58 @@ pub(crate) fn draw_menu(f: &mut TuiFrame, input_area: Rect, app: &App) {
     );
 }
 
+/// `:` 命令列的提示浮層：貼在輸入框上方左側，列出符合的命令與用法。
+pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) {
+    let hints = crate::commands::command_hints(&app.input);
+    if hints.is_empty() {
+        return;
+    }
+    let shown = hints
+        .len()
+        .min(input_area.y.saturating_sub(2) as usize)
+        .min(12);
+    let name_w = hints.iter().map(|(n, _)| n.len()).max().unwrap_or(4);
+    let text_w = hints
+        .iter()
+        .map(|(n, d)| name_w + 2 + UnicodeWidthStr::width(*d) + n.len().saturating_sub(n.len()))
+        .max()
+        .unwrap_or(20);
+    let w = (text_w + 4).min(f.area().width as usize) as u16;
+    let h = shown as u16 + 2;
+    let area = Rect::new(f.area().x, input_area.y.saturating_sub(h), w, h);
+    let lines: Vec<Line> = hints
+        .iter()
+        .take(shown)
+        .map(|(n, d)| {
+            Line::from(vec![
+                Span::styled(
+                    format!(" {n:<name_w$}  "),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(d.to_string(), Style::default().fg(Color::Gray)),
+            ])
+        })
+        .collect();
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" 命令（Tab 補全） "),
+        ),
+        area,
+    );
+}
+
 /// 置中的清單選擇器（agent／model），第一列是過濾輸入。
-pub(crate) fn draw_picker(f: &mut TuiFrame, app: &App) {
-    let Some(p) = &app.picker else { return };
+pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
+    let Some(p) = app.picker.as_mut() else { return };
+    p.poll_pending();
+    let loading = p.loading;
+    let p = &*p;
     let vis = p.visible();
     let w = 56.min(f.area().width);
     let h = (vis.len() as u16 + 4).clamp(6, 18).min(f.area().height);
@@ -175,7 +225,13 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &App) {
             },
         )));
     }
-    if vis.is_empty() {
+    if loading {
+        lines.push(Line::from(Span::styled(
+            "  載入可用 model 中…",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+    if vis.is_empty() && !loading {
         lines.push(Line::from(Span::styled(
             if p.filter.is_empty() {
                 "（沒有選項）".to_string()

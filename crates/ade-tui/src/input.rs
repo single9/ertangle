@@ -396,7 +396,7 @@ fn complete_command(app: &mut App) {
     }
     let cands: Vec<&str> = crate::commands::COMMANDS
         .iter()
-        .copied()
+        .map(|(n, _)| *n)
         .filter(|c| c.starts_with(app.input.as_str()))
         .collect();
     match cands.len() {

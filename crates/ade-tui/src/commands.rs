@@ -56,31 +56,52 @@ pub(crate) fn submit_prompt_or_route(
     Ok(())
 }
 
-/// `:` 命令列可用的命令（Tab 補全用）。
-pub(crate) const COMMANDS: &[&str] = &[
-    "spawn",
-    "new",
-    "kill",
-    "cancel",
-    "sleep",
-    "wake",
-    "rm",
-    "clean",
-    "merge",
-    "diff",
-    "gc",
-    "worktrees",
-    "overview",
-    "layout",
-    "raw",
-    "thoughts",
-    "bus",
-    "task",
-    "broadcast",
-    "copy",
-    "quit",
-    "shutdown",
+/// `:` 命令列可用的命令：(名稱, 用法與說明)，供提示與 Tab 補全。
+pub(crate) const COMMANDS: &[(&str, &str)] = &[
+    (
+        "spawn",
+        "[agent[:model] prompt]  新增 agent；不帶參數開選擇器",
+    ),
+    ("new", "開選擇器：agent → model → prompt"),
+    ("kill", "結束選取的 session"),
+    ("cancel", "中斷選取 session 的目前回合"),
+    ("sleep", "休眠選取的 session"),
+    ("wake", "喚醒選取的 session"),
+    ("rm", "[session] [--force]  移除已結束的 session"),
+    ("clean", "清除所有已結束（且沒有分支）的 session"),
+    ("merge", "[session] [--dry-run]  合併 worktree 回主工作區"),
+    ("diff", "顯示選取 session 的 diff"),
+    ("gc", "[session]  清理已合併的 worktree"),
+    ("worktrees", "顯示 worktree 清單"),
+    ("overview", "回到 transcript 視圖"),
+    ("layout", "[three|two|tabs]  切換版面"),
+    ("raw", "原始文字／Markdown 切換"),
+    ("thoughts", "顯示／隱藏思考"),
+    ("bus", "顯示／隱藏 Bus 浮層"),
+    ("task", "<標題>  新增任務"),
+    ("broadcast", "<訊息>  廣播給所有 session"),
+    ("copy", "複製目前畫面內容"),
+    ("quit", "離開（保留 daemon）"),
+    ("shutdown", "關閉 daemon 並離開"),
 ];
+
+/// 依目前輸入給出提示：還在打命令名稱時列出符合的命令；已打完命令名稱則顯示該命令的用法。
+pub(crate) fn command_hints(input: &str) -> Vec<(&'static str, &'static str)> {
+    let input = input.trim_start().trim_start_matches(['/', ':']);
+    let verb = input.split_whitespace().next().unwrap_or("");
+    if input.contains(char::is_whitespace) {
+        return COMMANDS
+            .iter()
+            .copied()
+            .filter(|(n, _)| *n == verb)
+            .collect();
+    }
+    COMMANDS
+        .iter()
+        .copied()
+        .filter(|(n, _)| n.starts_with(verb))
+        .collect()
+}
 
 pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<()> {
     let raw = raw.trim().trim_start_matches('/');

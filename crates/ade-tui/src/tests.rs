@@ -580,10 +580,41 @@ fn picker_filters_and_offers_default_model() {
         items: choices,
         filter: "op".into(),
         cursor: 0,
+        pending: None,
+        loading: false,
     };
     let vis = p.visible();
     assert!(vis
         .iter()
         .all(|(l, v)| l.contains("op") || v.contains("op")));
     assert!(!vis.is_empty());
+}
+
+#[test]
+fn parses_models_output_and_skips_status_lines() {
+    let out = "Fetching available models...\ngemini-4-argon-medium\tGemini 4 Argon (Medium)\nollama/gemma4:12b\n\n";
+    let m = crate::menu::parse_models(out);
+    assert_eq!(m.len(), 2);
+    assert_eq!(m[0].1, "gemini-4-argon-medium");
+    assert!(m[0].0.contains("Gemini 4 Argon"));
+    assert_eq!(
+        m[1],
+        (
+            "ollama/gemma4:12b".to_string(),
+            "ollama/gemma4:12b".to_string()
+        )
+    );
+}
+
+#[test]
+fn command_hints_list_matches_then_usage() {
+    let all = crate::commands::command_hints("");
+    assert!(all.len() > 10);
+    let m = crate::commands::command_hints("me");
+    assert_eq!(m.len(), 1);
+    assert_eq!(m[0].0, "merge");
+    let usage = crate::commands::command_hints("merge --dr");
+    assert_eq!(usage.len(), 1);
+    assert!(usage[0].1.contains("dry-run"));
+    assert!(crate::commands::command_hints("zzz").is_empty());
 }
