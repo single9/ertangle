@@ -110,6 +110,8 @@ pub(crate) struct App {
     /// 選擇器選好的 (agent, model)；Spawn 模式的輸入就只是 prompt。
     pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
     pub(crate) spawn_effort: Option<String>,
+    /// 選到的 model 有哪些 effort 變體（Antigravity：effort 是 model id 的尾巴）。
+    pub(crate) spawn_variants: Vec<String>,
     /// Space 選單目前走到的路徑。
     pub(crate) menu_path: Vec<char>,
     pub(crate) picker: Option<crate::menu::Picker>,
@@ -186,6 +188,7 @@ impl App {
             spawn_bypass_armed: false,
             spawn_target: None,
             spawn_effort: None,
+            spawn_variants: Vec::new(),
             menu_path: Vec::new(),
             picker: None,
             diff_session: None,

@@ -299,6 +299,7 @@ pub(crate) fn handle_input_mode(
             app.input_cursor = 0;
             app.spawn_target = None;
             app.spawn_effort = None;
+            app.spawn_variants.clear();
         }
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.spawn_worktree = !app.spawn_worktree;
@@ -319,6 +320,31 @@ pub(crate) fn handle_input_mode(
                 "權限 = {}",
                 app.spawn_permission.map_or("預設(config)", |p| p.id())
             );
+        }
+        KeyCode::Char('f')
+            if key.modifiers.contains(KeyModifiers::CONTROL) && app.mode == Mode::Spawn =>
+        {
+            // 預設不指定 effort；Ctrl-F 依序切換 預設 → 各等級 → 預設。
+            let levels: Vec<String> = if app.spawn_variants.is_empty() {
+                ade_adapter::EFFORT_LEVELS
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect()
+            } else {
+                ade_adapter::EFFORT_LEVELS
+                    .iter()
+                    .filter(|l| app.spawn_variants.iter().any(|v| v == *l))
+                    .map(|s| s.to_string())
+                    .collect()
+            };
+            app.spawn_effort = match &app.spawn_effort {
+                None => levels.first().cloned(),
+                Some(cur) => levels
+                    .iter()
+                    .position(|l| l == cur)
+                    .and_then(|i| levels.get(i + 1).cloned()),
+            };
+            app.status = format!("effort = {}", app.spawn_effort.as_deref().unwrap_or("預設"));
         }
         KeyCode::Tab if app.mode == Mode::Command => complete_command(app),
         KeyCode::Backspace => backspace_input(app),

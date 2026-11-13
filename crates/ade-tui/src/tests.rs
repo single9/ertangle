@@ -582,6 +582,8 @@ fn picker_filters_and_offers_default_model() {
         cursor: 0,
         pending: None,
         loading: false,
+        group_effort: false,
+        variants: Default::default(),
     };
     let vis = p.visible();
     assert!(vis
@@ -625,4 +627,52 @@ fn parses_codex_model_catalog_visible_only() {
     let m = crate::menu::parse_codex_models(out);
     assert_eq!(m, vec![("a  (A)".to_string(), "a".to_string())]);
     assert!(crate::menu::parse_codex_models("not json").is_empty());
+}
+
+#[test]
+fn effort_suffix_is_split_from_model_id() {
+    use crate::menu::split_effort_suffix;
+    assert_eq!(
+        split_effort_suffix("gemini-4-argon-medium"),
+        Some(("gemini-4-argon", "medium"))
+    );
+    assert_eq!(
+        split_effort_suffix("gemini-4-hydrogen-xhigh"),
+        Some(("gemini-4-hydrogen", "xhigh"))
+    );
+    assert_eq!(split_effort_suffix("gemini-pro-orchestrator-g1-pro"), None);
+    assert_eq!(split_effort_suffix("ollama/gemma4:12b"), None);
+}
+
+#[test]
+fn antigravity_models_are_grouped_by_base_name() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(vec![
+        (
+            "gemini-4-argon-medium  (Gemini 4 Argon (Medium))".to_string(),
+            "gemini-4-argon-medium".to_string(),
+        ),
+        (
+            "gemini-4-argon-high  (Gemini 4 Argon (High))".to_string(),
+            "gemini-4-argon-high".to_string(),
+        ),
+        ("plain".to_string(), "plain".to_string()),
+    ])
+    .unwrap();
+    let mut p = crate::menu::Picker {
+        stage: crate::menu::PickStage::Agent,
+        title: "t".into(),
+        items: vec![],
+        filter: String::new(),
+        cursor: 0,
+        pending: Some(rx),
+        loading: true,
+        group_effort: true,
+        variants: Default::default(),
+    };
+    p.poll_pending();
+    let values: Vec<_> = p.items.iter().map(|(_, v)| v.as_str()).collect();
+    assert_eq!(values, vec!["gemini-4-argon", "plain"]);
+    assert_eq!(p.variants["gemini-4-argon"], vec!["medium", "high"]);
+    assert_eq!(p.items[0].0, "gemini-4-argon  (Gemini 4 Argon)");
 }

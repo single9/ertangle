@@ -980,7 +980,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         Mode::Prompt => " prompt（可輸入 @peer 訊息、#channel 訊息、:命令，Enter 送出） ".to_string(),
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => format!(
-                " spawn → {}{}{}：prompt（Ctrl-W worktree={}, Ctrl-E 權限={}, Enter 送出） ",
+                " spawn → {}{}{}：prompt（Ctrl-W worktree={}, Ctrl-E 權限={}, Ctrl-F effort, Enter 送出） ",
                 kind.id(),
                 model.as_deref().map(|m| format!(":{m}")).unwrap_or_default(),
                 app.spawn_effort.as_deref().map(|e| format!(" effort={e}")).unwrap_or_default(),

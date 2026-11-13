@@ -153,8 +153,6 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
 pub(crate) enum PickStage {
     Agent,
     Model(AgentKind),
-    /// 已選好 agent 與 model，最後選推理強度。
-    Effort(AgentKind, Option<String>),
 }
 
 pub(crate) struct Picker {
@@ -167,6 +165,18 @@ pub(crate) struct Picker {
     /// 背景查詢 agent 可用 model 的結果（查到後併入 `items`）。
     pub pending: Option<std::sync::mpsc::Receiver<Vec<(String, String)>>>,
     pub loading: bool,
+    /// Antigravity 的 model id 把 effort 寫在尾巴（`-low`／`-medium`…）：清單只列基底名稱，
+    /// 這裡記錄每個基底有哪些 effort 變體。
+    pub group_effort: bool,
+    pub variants: std::collections::HashMap<String, Vec<String>>,
+}
+
+/// 把 `base-medium` 這類 id 拆成 (base, effort)；沒有 effort 尾巴就回 `None`。
+pub(crate) fn split_effort_suffix(id: &str) -> Option<(&str, &str)> {
+    let (base, suffix) = id.rsplit_once('-')?;
+    ade_adapter::EFFORT_LEVELS
+        .contains(&suffix)
+        .then_some((base, suffix))
 }
 
 impl Picker {
@@ -175,9 +185,54 @@ impl Picker {
         let Some(rx) = &self.pending else { return };
         match rx.try_recv() {
             Ok(found) => {
+                // 先依基底名稱分組，再決定要不要合併：只有出現兩個以上 effort 變體才視為
+                // 「同一個 model 的不同 effort」（ACP 的 model 選項不含 effort 尾巴）。
+                let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
                 for (label, value) in found {
-                    if !self.items.iter().any(|(_, v)| *v == value) {
-                        self.items.push((label, value));
+                    let key = match split_effort_suffix(&value) {
+                        Some((base, _)) if self.group_effort => base.to_string(),
+                        _ => value.clone(),
+                    };
+                    match groups.iter_mut().find(|(k, _)| *k == key) {
+                        Some((_, v)) => v.push((label, value)),
+                        None => groups.push((key, vec![(label, value)])),
+                    }
+                }
+                for (base, members) in groups {
+                    let merge = self.group_effort
+                        && members.len() >= 2
+                        && members
+                            .iter()
+                            .all(|(_, v)| split_effort_suffix(v).is_some());
+                    if merge {
+                        for (_, v) in &members {
+                            if let Some((_, eff)) = split_effort_suffix(v) {
+                                self.variants
+                                    .entry(base.clone())
+                                    .or_default()
+                                    .push(eff.to_string());
+                            }
+                        }
+                        // 顯示名稱去掉尾端的 `(Medium)` 這類 effort 標記。
+                        let name = members[0]
+                            .0
+                            .split_once("  (")
+                            .map(|(_, n)| n.trim_end_matches(')'))
+                            .and_then(|n| n.rsplit_once(" ("))
+                            .map(|(n, _)| n.to_string());
+                        let label = match name {
+                            Some(n) => format!("{base}  ({n})"),
+                            None => base.clone(),
+                        };
+                        if !self.items.iter().any(|(_, v)| *v == base) {
+                            self.items.push((label, base));
+                        }
+                    } else {
+                        for (label, value) in members {
+                            if !self.items.iter().any(|(_, v)| *v == value) {
+                                self.items.push((label, value));
+                            }
+                        }
                     }
                 }
                 self.loading = false;
@@ -319,6 +374,8 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
         cursor: 0,
         pending: None,
         loading: false,
+        group_effort: false,
+        variants: Default::default(),
     });
     app.mode = Mode::Pick;
 }
@@ -418,6 +475,7 @@ pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
                         });
                         p.pending = Some(rx);
                         p.loading = true;
+                        p.group_effort = matches!(kind, AgentKind::Antigravity);
                     }
                     p.stage = PickStage::Model(kind);
                 }
@@ -429,28 +487,11 @@ pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
                         None if !custom.is_empty() => Some(custom),
                         None => None,
                     };
-                    if matches!(kind, AgentKind::ClaudeCode | AgentKind::Codex) {
-                        p.title = format!("{} 的 effort（推理強度）", kind.id());
-                        p.items =
-                            std::iter::once(("預設（依 config.toml）".to_string(), String::new()))
-                                .chain(
-                                    ade_adapter::EFFORT_LEVELS
-                                        .iter()
-                                        .map(|e| (e.to_string(), e.to_string())),
-                                )
-                                .collect();
-                        p.filter.clear();
-                        p.cursor = 0;
-                        p.pending = None;
-                        p.loading = false;
-                        p.stage = PickStage::Effort(kind, model);
-                    } else {
-                        finish_picker(app, kind, model, None);
-                    }
-                }
-                PickStage::Effort(kind, model) => {
-                    let effort = chosen.filter(|v| !v.is_empty());
-                    finish_picker(app, kind, model, effort);
+                    app.spawn_variants = model
+                        .as_deref()
+                        .and_then(|m| p.variants.get(m).cloned())
+                        .unwrap_or_default();
+                    finish_picker(app, kind, model, None);
                 }
             }
         }

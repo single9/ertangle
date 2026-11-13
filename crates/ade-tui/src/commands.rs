@@ -346,6 +346,8 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         return Ok(());
     }
     app.spawn_target = None;
+    let effort = app.spawn_effort.take();
+    app.spawn_variants.clear();
     send(
         writer,
         &Request::Spawn(SpawnRequest {
@@ -359,7 +361,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
             permission: app.spawn_permission,
             parent: None,
             model,
-            effort: app.spawn_effort.take(),
+            effort,
             args: vec![],
         }),
     )?;
