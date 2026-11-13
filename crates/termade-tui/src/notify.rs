@@ -407,6 +407,7 @@ mod tests {
                     native_id: None,
                     budget_usd: None,
                     over_budget: false,
+                    handed_off_to: None,
                 },
             );
         }

@@ -130,13 +130,16 @@ impl Shared {
             }
             _ => false,
         };
-        match self.deliver_message(from, to, kind, body, reply_to) {
-            Ok(msg_id) => {
-                let note = if over_budget_target && kind_wakes_recipient(kind) {
+        match self.deliver_message_noted(from, to, kind, body, reply_to) {
+            Ok((msg_id, route_notes)) => {
+                let mut note = if over_budget_target && kind_wakes_recipient(kind) {
                     format!("已送出訊息 {msg_id}（收件者已超過成本上限 over_budget，拒絕自動喚醒）")
                 } else {
                     format!("已送出訊息 {msg_id}")
                 };
+                for n in route_notes {
+                    note.push_str(&format!("（{n}）"));
+                }
                 let _ = reply.send(Frame::ok_note(note));
             }
             Err(e) => {
@@ -162,7 +165,24 @@ impl Shared {
         body: String,
         reply_to: Option<MsgId>,
     ) -> std::result::Result<MsgId, String> {
+        self.deliver_message_noted(from, to, kind, body, reply_to)
+            .map(|(id, _)| id)
+    }
+
+    /// 同 [`Self::deliver_message`]，另回傳投遞路徑的說明（改投給接手者、收件者已結束等）。
+    ///
+    /// 直接訊息的收件者若已結束且已被交接，改投給 [`State::successor_of`] 的結果，
+    /// body 開頭註明原收件者；已結束又沒有接手者時仍照常投遞（留作紀錄），但說明不會被讀取。
+    pub(crate) fn deliver_message_noted(
+        self: &Arc<Self>,
+        from: Option<SessionId>,
+        to: Target,
+        kind: MsgKind,
+        mut body: String,
+        reply_to: Option<MsgId>,
+    ) -> std::result::Result<(MsgId, Vec<String>), String> {
         let now = now_millis();
+        let mut route_notes: Vec<String> = Vec::new();
         let (from_sid, resolved_to) = {
             let mut inner = lock(&self.inner);
             let from_sid = from
@@ -170,7 +190,33 @@ impl Shared {
                 .unwrap_or_else(|| "human".into());
             let resolved_to = match to {
                 Target::Direct(t) => {
-                    Target::Direct(inner.state.resolve_session_id(&t).unwrap_or(t))
+                    let mut sid = inner
+                        .state
+                        .resolve_session_id(&t)
+                        .unwrap_or_else(|| t.clone());
+                    let dead = |st: &termade_core::State, id: &str| {
+                        st.sessions.get(id).is_some_and(|s| !s.status.is_live())
+                    };
+                    if dead(&inner.state, &sid) {
+                        let succ = inner.state.successor_of(&sid);
+                        if succ != sid {
+                            let succ_label = inner
+                                .state
+                                .sessions
+                                .get(&succ)
+                                .map(|s| s.label.clone())
+                                .unwrap_or_else(|| succ.clone());
+                            body = format!("（原收件者 {t}，已交接）\n{body}");
+                            route_notes.push(format!(
+                                "收件者 {t} 已交接，訊息改投給接手的 {succ_label}（{succ}）"
+                            ));
+                            sid = succ;
+                        }
+                        if dead(&inner.state, &sid) {
+                            route_notes.push(format!("對方 {sid} 已結束，訊息不會被讀取"));
+                        }
+                    }
+                    Target::Direct(sid)
                 }
                 other => other,
             };
@@ -263,7 +309,7 @@ impl Shared {
             let _ = ctl.send_input(&nudge);
         }
 
-        Ok(msg_id)
+        Ok((msg_id, route_notes))
     }
 
     pub(crate) fn handle_bus_wait(

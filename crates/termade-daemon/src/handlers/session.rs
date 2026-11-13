@@ -199,6 +199,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         permission,
         budget_usd,
         over_budget: false,
+        handed_off_to: None,
     };
     shared.emit(Event::SessionStarted {
         session: session.clone(),
@@ -217,6 +218,14 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     };
     match launch_session(shared, launch) {
         Ok(()) => {
+            // 交接：把舊 session 的匯流排身分移交給新 session（之後送給舊 session 的訊息改投這裡）。
+            if let Some(src) = &spawn.inherit_from {
+                let from = shared.resolve_session(src);
+                shared.emit(Event::SessionHandedOff {
+                    from,
+                    to: id.clone(),
+                });
+            }
             let mut note = format!("已建立 session {id}");
             if let Some((from, to)) = downgraded {
                 note.push_str(&format!(
@@ -726,7 +735,15 @@ pub(crate) fn handle_handoff(
     let git_summary = format!("{git_note}工作區狀態：{status}\n最近的 commit：\n{log}\n最後一個 commit 的變更：\n{stat}\n");
     let brief = {
         let inner = lock(&shared.inner);
-        crate::handoff::build_handoff_brief(&inner.state, &src, &git_summary, note.as_deref())
+        let after = inner.inbox_cursors.get(&sid).cloned();
+        let unread = inner.state.inbox_for(&sid, after.as_deref());
+        crate::handoff::build_handoff_brief(
+            &inner.state,
+            &src,
+            &git_summary,
+            note.as_deref(),
+            &unread,
+        )
     };
     let mut attachments = Vec::new();
     if wt.is_dir() {

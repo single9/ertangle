@@ -278,6 +278,9 @@ pub struct Session {
     /// 是否已達成本上限（達上限後中斷回合並拒絕新 prompt，直到人工調高）。
     #[serde(default)]
     pub over_budget: bool,
+    /// 被誰接手（交接後由 `Event::SessionHandedOff` 設定；舊 log 沒有此欄位）。
+    #[serde(default)]
+    pub handed_off_to: Option<SessionId>,
 }
 
 impl Session {
@@ -676,6 +679,11 @@ pub enum Event {
         session: SessionId,
         note: String,
     },
+    /// 交接完成：`to` 接手 `from` 的工作（匯流排訊息會轉給接手者）。
+    SessionHandedOff {
+        from: SessionId,
+        to: SessionId,
+    },
     /// 使用者送出的 prompt（顯示在逐字稿，讓對話有上下文）。
     UserPrompt {
         session: SessionId,
@@ -898,6 +906,11 @@ impl State {
                     } else {
                         Some(note.clone())
                     };
+                }
+            }
+            Event::SessionHandedOff { from, to } => {
+                if let Some(s) = self.sessions.get_mut(from) {
+                    s.handed_off_to = Some(to.clone());
                 }
             }
             Event::UserPrompt { session, text } => {
@@ -1157,6 +1170,27 @@ impl State {
                     .max_by_key(|s| s.created_ms)
             })
             .map(|s| s.id.clone())
+    }
+
+    /// 沿 `handed_off_to` 走到最後一個接手者；遇到環或超過 16 層就停在目前這個。
+    pub fn successor_of(&self, id: &str) -> SessionId {
+        let mut cur = id.to_string();
+        let mut seen = vec![cur.clone()];
+        for _ in 0..16 {
+            let Some(next) = self
+                .sessions
+                .get(&cur)
+                .and_then(|s| s.handed_off_to.clone())
+            else {
+                break;
+            };
+            if seen.contains(&next) {
+                break;
+            }
+            seen.push(next.clone());
+            cur = next;
+        }
+        cur
     }
 
     /// 取得某個 session 在 `after_msg_id` 之後收到的訊息。
@@ -1674,6 +1708,7 @@ pub(crate) mod tests {
             permission: Default::default(),
             budget_usd: None,
             over_budget: false,
+            handed_off_to: None,
         }
     }
 
@@ -2126,6 +2161,51 @@ mod attachment_tests {
         let parsed: Session = serde_json::from_value(val).unwrap();
         assert_eq!(parsed.budget_usd, None);
         assert!(!parsed.over_budget);
+    }
+
+    #[test]
+    fn old_session_json_without_handed_off_to_parses() {
+        let mut val = serde_json::to_value(crate::tests::sample_session("s1")).unwrap();
+        val.as_object_mut().unwrap().remove("handed_off_to");
+        let parsed: Session = serde_json::from_value(val).unwrap();
+        assert_eq!(parsed.handed_off_to, None);
+    }
+
+    fn handoff(st: &mut State, seq: u64, from: &str, to: &str) {
+        st.apply(&Record {
+            seq,
+            ts: 0,
+            event: Event::SessionHandedOff {
+                from: from.into(),
+                to: to.into(),
+            },
+        });
+    }
+
+    #[test]
+    fn successor_follows_chain_and_survives_cycles() {
+        let mut st = State::new();
+        for (i, id) in ["a", "b", "c"].into_iter().enumerate() {
+            st.apply(&Record {
+                seq: i as u64,
+                ts: 0,
+                event: Event::SessionStarted {
+                    session: crate::tests::sample_session(id),
+                },
+            });
+        }
+        assert_eq!(st.successor_of("a"), "a");
+        handoff(&mut st, 10, "a", "b");
+        assert_eq!(st.successor_of("a"), "b");
+        handoff(&mut st, 11, "b", "c");
+        assert_eq!(st.successor_of("a"), "c");
+        assert_eq!(st.successor_of("unknown"), "unknown");
+        // 環：c → a，不會無限迴圈，停在環上的最後一個新節點。
+        handoff(&mut st, 12, "c", "a");
+        assert_eq!(st.successor_of("a"), "c");
+        // 自己接手自己。
+        handoff(&mut st, 13, "a", "a");
+        assert_eq!(st.successor_of("a"), "a");
     }
 
     #[test]
