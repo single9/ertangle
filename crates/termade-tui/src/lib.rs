@@ -165,9 +165,23 @@ fn event_loop(
     let mut last_draw = std::time::Instant::now();
 
     loop {
-        while let Ok(frame) = rx.try_recv() {
-            apply_frame(&mut app, frame);
-            dirty = true;
+        loop {
+            match rx.try_recv() {
+                Ok(frame) => {
+                    apply_frame(&mut app, frame);
+                    dirty = true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    if !app.disconnected {
+                        app.disconnected = true;
+                        app.status =
+                            "daemon 連線已中斷（可能被關閉了）。畫面是最後的狀態，按 q 離開後重新啟動".into();
+                        dirty = true;
+                    }
+                    break;
+                }
+            }
         }
 
         let before = app.status.clone();
@@ -187,9 +201,22 @@ fn event_loop(
             dirty = true;
             match event::read()? {
                 CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
-                    handle_key(&mut app, writer, key)?;
+                    if let Err(e) = handle_key(&mut app, writer, key) {
+                        // 連線已斷時，送出請求失敗不該讓整個 TUI 崩掉。
+                        if app.disconnected {
+                            app.status = "daemon 已斷線，無法送出；按 q 離開".into();
+                        } else {
+                            return Err(e);
+                        }
+                    }
                 }
-                CtEvent::Mouse(mouse) => handle_mouse(&mut app, writer, mouse)?,
+                CtEvent::Mouse(mouse) => {
+                    if let Err(e) = handle_mouse(&mut app, writer, mouse) {
+                        if !app.disconnected {
+                            return Err(e);
+                        }
+                    }
+                }
                 CtEvent::Paste(text) => handle_paste(&mut app, &text),
                 _ => {}
             }

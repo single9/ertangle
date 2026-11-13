@@ -73,11 +73,7 @@ fn handle_ctrl_key(app: &mut App, key: KeyEvent) -> Result<bool> {
 fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Char('Q') => {
-            send(writer, &Request::Shutdown)?;
-            app.status = "已關閉 daemon（所有 agent 已結束）".into();
-            app.should_quit = true;
-        }
+        KeyCode::Char('Q') => execute_command(app, writer, "shutdown")?,
         KeyCode::Tab => {
             app.selection = None;
             app.view = match app.view {

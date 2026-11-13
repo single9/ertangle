@@ -143,6 +143,8 @@ pub(crate) struct App {
     pub(crate) show_thoughts: bool,
     /// 展開每一筆工具呼叫；預設把連續的工具行摺成一行。
     pub(crate) show_tools: bool,
+    /// 與 daemon 的連線已中斷（例如別的 TUI 下了 shutdown）。
+    pub(crate) disconnected: bool,
     /// TUI 啟動所在的專案根目錄（git 頂層，否則 cwd）。
     pub(crate) home_project: String,
     /// 只列出屬於 `home_project` 的 session。
@@ -225,6 +227,7 @@ impl App {
             raw_md: false,
             show_thoughts: false,
             show_tools: false,
+            disconnected: false,
             home_project: home_project(&cwd),
             scope_here: true,
             input_inner_w: 80,

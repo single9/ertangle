@@ -128,7 +128,7 @@ cargo test                     # 全部單元測試
 | `x` / `K` | 中斷當前回合 / 結束 session |
 | `r` | 向 daemon 重新要快照与重整當前視圖 |
 | `q` | 離開 TUI（daemon 與 agent 續跑） |
-| `Q` | 關閉 daemon：結束所有 agent、移除 socket（等同 `/shutdown`） |
+| `Q` | 關閉共用 daemon：結束**所有專案**的 agent、移除 socket（等同 `:shutdown`；有 session 在跑時要再輸入 `:shutdown!` 確認）。只想結束本專案的 session 用 `:stop`；daemon 被別處關掉時，TUI 會顯示「連線已中斷」而不是崩潰 |
 
 > 預設啟用滑鼠擷取：可直接在逐字稿上拖曳選取，放開即以 OSC 52 複製（只含中央區塊）；滾輪捲動逐字稿。需要終端原生選取時按 `F2` 關閉擷取，或直接 `Shift`+拖曳。任何時候都可用 `Y` / `/copy` 複製整個主要區塊。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。
 

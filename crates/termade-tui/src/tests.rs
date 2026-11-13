@@ -1050,3 +1050,36 @@ fn all_scope_shows_project_chip_and_groups_by_project() {
     assert!(squashed.contains("beta"), "{text}");
     assert!(squashed.contains("全部專案"), "{text}");
 }
+
+#[test]
+fn shutdown_needs_confirmation_while_sessions_are_live() {
+    let mut app = sample_app(&["hi"]);
+    let (mut w, mut peer) = pair_writer();
+    peer.set_nonblocking(true).unwrap();
+    crate::commands::execute_command(&mut app, &mut w, "shutdown").unwrap();
+    assert!(!app.should_quit, "live session: must not shut down yet");
+    assert!(app.status.contains(":shutdown!"), "{}", app.status);
+    let mut buf = [0u8; 16];
+    assert!(
+        std::io::Read::read(&mut peer, &mut buf).is_err(),
+        "nothing sent yet"
+    );
+    crate::commands::execute_command(&mut app, &mut w, "shutdown!").unwrap();
+    assert!(app.should_quit);
+}
+
+#[test]
+fn stop_only_kills_this_projects_sessions() {
+    let mut app = sample_app(&["hi"]);
+    app.home_project = "/work/alpha".into();
+    app.state.sessions.get_mut("ses_test").unwrap().cwd = "/work/beta".into();
+    let (mut w, mut peer) = pair_writer();
+    peer.set_nonblocking(true).unwrap();
+    crate::commands::execute_command(&mut app, &mut w, "stop").unwrap();
+    assert!(app.status.contains('0'), "{}", app.status);
+    let mut buf = [0u8; 16];
+    assert!(
+        std::io::Read::read(&mut peer, &mut buf).is_err(),
+        "other project untouched"
+    );
+}

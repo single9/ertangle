@@ -47,7 +47,8 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 it('y', "複製目前畫面", Act::Cmd("copy")),
                 it('?', "說明（所有按鍵與命令）", Act::Cmd("help")),
                 it('q', "離開（保留 daemon）", Act::Cmd("quit")),
-                it('Q', "關閉 daemon 並離開", Act::Cmd("shutdown")),
+                it('x', "結束本專案所有 session", Act::Cmd("stop")),
+                it('Q', "關閉共用 daemon 並離開", Act::Cmd("shutdown")),
             ],
         ),
         ['s'] => (

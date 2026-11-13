@@ -232,7 +232,14 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("broadcast", "<訊息>  廣播給所有 session"),
     ("copy", "複製目前畫面內容"),
     ("quit", "離開（保留 daemon）"),
-    ("shutdown", "關閉 daemon 並離開"),
+    (
+        "stop",
+        "結束本專案所有執行中的 session（不動 daemon 與其他專案）",
+    ),
+    (
+        "shutdown",
+        "關閉共用 daemon（結束所有專案的 session）並離開；有 session 在跑時需 :shutdown! 確認",
+    ),
 ];
 
 /// 依目前輸入給出提示：還在打命令名稱時列出符合的命令；已打完命令名稱則顯示該命令的用法。
@@ -483,9 +490,41 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             )?;
         }
         "copy" | "yank" => copy_main_pane(app),
-        "shutdown" => {
-            send(writer, &Request::Shutdown)?;
-            app.should_quit = true;
+        "shutdown" | "shutdown!" => {
+            // daemon 是所有專案共用的：關掉它會結束每個專案的 agent。有人在跑就先確認。
+            let live: Vec<&termade_core::Session> = app.state.live_sessions().collect();
+            let others = live
+                .iter()
+                .filter(|s| s.project_root() != app.home_project)
+                .count();
+            if verb == "shutdown" && !live.is_empty() {
+                app.status = format!(
+                    "shutdown 會關掉共用的 daemon，結束 {} 個執行中的 session（其他專案 {} 個）。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit",
+                    live.len(),
+                    others
+                );
+            } else {
+                send(writer, &Request::Shutdown)?;
+                app.should_quit = true;
+            }
+        }
+        "stop" => {
+            // 只結束本專案執行中的 session，不動 daemon 與其他專案。
+            let ids: Vec<String> = app
+                .state
+                .live_sessions()
+                .filter(|s| s.project_root() == app.home_project)
+                .map(|s| s.id.clone())
+                .collect();
+            for id in &ids {
+                send(
+                    writer,
+                    &Request::Kill {
+                        session: id.clone(),
+                    },
+                )?;
+            }
+            app.status = format!("已要求結束本專案 {} 個執行中的 session", ids.len());
         }
         "q" | "quit" => {
             app.should_quit = true;
