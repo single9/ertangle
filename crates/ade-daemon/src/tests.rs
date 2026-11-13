@@ -903,3 +903,57 @@ fn restore_prunes_old_ended_sessions_but_keeps_branches_and_recent() {
     assert!(inner.state.sessions.contains_key("ses-old-branch"));
     assert!(inner.state.sessions.contains_key("ses-recent"));
 }
+
+// ---- session 移除與啟動失敗清理 ----
+
+#[test]
+fn failed_spawn_leaves_no_session() {
+    let shared = test_shared();
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Spawn(ade_protocol::SpawnRequest {
+            kind: AgentKind::Codex,
+            cwd: Some(std::env::temp_dir().to_string_lossy().to_string()),
+            label: None,
+            role: Default::default(),
+            prompt: None,
+            worktree: false,
+            transport: ade_protocol::Transport::Structured,
+            permission: None,
+            parent: None,
+            model: None,
+            args: vec![],
+        }),
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(frames.iter().any(|f| matches!(f, Frame::Error { .. })));
+    assert!(lock(&shared.inner).state.sessions.is_empty());
+}
+
+#[test]
+fn session_remove_only_ended() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: restart_session("ses-live", SessionStatus::Idle),
+    });
+    shared.emit(Event::SessionStarted {
+        session: restart_session("ses-dead", SessionStatus::Failed),
+    });
+    let (tx, rx) = client_channel(None);
+    for id in ["ses-live", "ses-dead"] {
+        shared.handle(
+            &tx,
+            Request::SessionRemove {
+                session: id.into(),
+                force: false,
+            },
+        );
+    }
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(matches!(frames[0], Frame::Error { .. }));
+    assert!(matches!(frames[1], Frame::Ok { .. }));
+    let inner = lock(&shared.inner);
+    assert!(inner.state.sessions.contains_key("ses-live"));
+    assert!(!inner.state.sessions.contains_key("ses-dead"));
+}

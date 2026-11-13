@@ -162,6 +162,13 @@ pub(crate) fn cmd_kill(session: String) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn cmd_rm(session: String, force: bool) -> Result<()> {
+    if let Frame::Ok { note } = roundtrip(&Request::SessionRemove { session, force })? {
+        println!("{}", note.unwrap_or_else(|| "已移除".into()));
+    }
+    Ok(())
+}
+
 pub(crate) fn cmd_sleep(session: String) -> Result<()> {
     let frame = roundtrip(&Request::Sleep { session })?;
     if let Frame::Ok { note } = frame {

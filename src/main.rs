@@ -119,6 +119,12 @@ enum Cmd {
     Sleep { session: String },
     /// 喚醒已休眠的 session
     Wake { session: String },
+    /// 從清單移除已結束的 session（有 worktree 分支時需已合併，或加 --force）
+    Rm {
+        session: String,
+        #[arg(long)]
+        force: bool,
+    },
     /// 透過匯流排傳送訊息給其他 session
     Send {
         /// 收件者：session id、標籤（例如 worker/b）、或 @id / @label
@@ -331,6 +337,7 @@ fn main() -> Result<()> {
         Cmd::Kill { session } => cmd_kill(session),
         Cmd::Sleep { session } => cmd_sleep(session),
         Cmd::Wake { session } => cmd_wake(session),
+        Cmd::Rm { session, force } => cmd_rm(session, force),
         Cmd::Send {
             to,
             channel,

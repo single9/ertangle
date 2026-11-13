@@ -81,6 +81,9 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         Request::Prompt { session, text } => session::handle_prompt(shared, reply, session, text),
         Request::Cancel { session } => session::handle_cancel(shared, reply, session),
         Request::Kill { session } => session::handle_kill(shared, reply, session),
+        Request::SessionRemove { session, force } => {
+            session::handle_remove(shared, reply, session, force)
+        }
         Request::Sleep { session } => session::handle_sleep(shared, reply, session),
         Request::Wake { session } => session::handle_wake(shared, reply, session),
         Request::ApprovalAsk {

@@ -93,6 +93,12 @@ pub enum Request {
     Cancel {
         session: SessionId,
     },
+    /// 從清單移除已結束的 session；有 worktree 分支時比照 gc（未合併或有未 commit 變更需 `force`）。
+    SessionRemove {
+        session: SessionId,
+        #[serde(default)]
+        force: bool,
+    },
     /// 結束 session 並殺掉程序。
     Kill {
         session: SessionId,

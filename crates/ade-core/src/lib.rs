@@ -560,6 +560,10 @@ pub enum Event {
         session: SessionId,
         status: SessionStatus,
     },
+    /// session 從清單移除（啟動失敗或使用者清除已結束的 session）。
+    SessionRemoved {
+        session: SessionId,
+    },
     /// agent 回報（或設定指定）的實際 model。
     SessionModel {
         session: SessionId,
@@ -715,6 +719,12 @@ impl State {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = *status;
                 }
+            }
+            Event::SessionRemoved { session } => {
+                self.sessions.remove(session);
+                self.transcripts.remove(session);
+                self.pending_permissions
+                    .retain(|_, p| &p.session != session);
             }
             Event::SessionModel { session, model } => {
                 if let Some(s) = self.sessions.get_mut(session) {

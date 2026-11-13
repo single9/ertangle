@@ -185,9 +185,17 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             let _ = reply.send(Frame::ok_note(note));
         }
         Err(e) => {
-            shared.emit(Event::SessionExited {
+            // 啟動失敗：不留殘影。剛建立的 worktree 與分支一併清掉，session 直接移除。
+            if session.branch.is_some() {
+                let repo = session
+                    .repo_root
+                    .as_deref()
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| shared.default_cwd());
+                let _ = crate::git::remove_worktree(&repo, &session, true);
+            }
+            shared.emit(Event::SessionRemoved {
                 session: id.clone(),
-                code: None,
             });
             let _ = reply.send(Frame::error(format!("啟動 agent 失敗：{e}")));
         }
@@ -234,6 +242,39 @@ pub(crate) fn handle_cancel(shared: &Arc<Shared>, reply: &ClientTx, session: Str
             let _ = reply.send(Frame::error(format!("找不到 session {session}")));
         }
     }
+}
+
+pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: String, force: bool) {
+    let sid = shared.resolve_session(&session);
+    let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
+    let Some(s) = sess else {
+        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        return;
+    };
+    if s.status.is_live() {
+        let _ = reply.send(Frame::error(
+            "session 仍在執行，請先結束（kill）".to_string(),
+        ));
+        return;
+    }
+    if s.branch.is_some() {
+        let repo = crate::git::session_repo(&shared.default_cwd(), &s);
+        if !force {
+            if let Some(reason) = crate::git::gc_block_reason(&repo, &s) {
+                let _ = reply.send(Frame::error(format!(
+                    "{}（{reason}）：請先 merge，或用 force 強制移除",
+                    s.label
+                )));
+                return;
+            }
+        }
+        if let Err(e) = crate::git::remove_worktree(&repo, &s, force) {
+            let _ = reply.send(Frame::error(format!("移除 worktree 失敗：{e}")));
+            return;
+        }
+    }
+    shared.emit(Event::SessionRemoved { session: sid });
+    let _ = reply.send(Frame::ok_note(format!("已移除 {}", s.label)));
 }
 
 pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
