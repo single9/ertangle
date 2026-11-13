@@ -55,6 +55,11 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("b", "顯示／隱藏 Bus 浮層"),
             ("t / T", "原始文字／Markdown；顯示／隱藏思考"),
             ("O", "展開／摺疊工具呼叫（預設摺疊）"),
+            ("↑ / ↓", "（輸入 prompt 或命令時）回顧歷史輸入"),
+            (
+                "Alt-Enter",
+                "（輸入 prompt 時）排隊，session 閒下來自動送出",
+            ),
             ("PgUp / PgDn", "捲動 transcript；End 回到最新"),
             ("拖曳 / Y / F2", "選取複製；複製目前畫面；切換滑鼠擷取"),
         ],

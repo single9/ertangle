@@ -73,6 +73,126 @@ pub(crate) fn submit_prompt_or_route(
     Ok(())
 }
 
+/// 把一則 prompt 排進選取 session 的佇列；session 已閒置就直接送。
+/// 只處理一般 prompt（含 `@檔案` 附件）；`/命令`、`@peer`、`#channel` 不排隊。
+pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+    let routed = trimmed.starts_with('/')
+        || trimmed.starts_with('#')
+        || (trimmed.starts_with('@')
+            && !crate::attach::leads_with_file(trimmed, &app.search_root()));
+    let Some(id) = app.selected_id() else {
+        app.status = "沒有選取的 session".into();
+        return Ok(());
+    };
+    if routed {
+        return submit_prompt_or_route(app, writer, text);
+    }
+    let idle = app
+        .state
+        .sessions
+        .get(&id)
+        .is_some_and(|s| s.status == termade_core::SessionStatus::Idle);
+    if idle && app.queues.len(&id) == 0 {
+        return submit_prompt_or_route(app, writer, text);
+    }
+    match crate::attach::extract_attachments(trimmed, &app.search_root()) {
+        Ok((body, attachments)) => {
+            app.queues.push(
+                &id,
+                crate::history::Queued {
+                    text: body,
+                    attachments,
+                },
+            );
+            app.status = format!("已排隊（共 {} 則，閒下來自動送出）", app.queues.len(&id));
+        }
+        Err(e) => app.status = format!("附件錯誤：{e}"),
+    }
+    Ok(())
+}
+
+/// 每輪事件迴圈呼叫：session 閒下來就送出它佇列裡的下一則。
+pub(crate) fn flush_queues(app: &mut App, writer: &mut ConnStream) -> Result<()> {
+    let (ready, dropped) = {
+        let sessions = &app.state.sessions;
+        app.queues.take_ready(
+            |id| sessions.get(id).map(|s| s.status),
+            std::time::Instant::now(),
+        )
+    };
+    if dropped > 0 {
+        app.status = format!("session 已結束，丟棄 {dropped} 則排隊 prompt");
+    }
+    for (id, q) in ready {
+        send(
+            writer,
+            &Request::Prompt {
+                session: id.clone(),
+                text: q.text,
+                attachments: q.attachments,
+            },
+        )?;
+        let left = app.queues.len(&id);
+        app.status = if left > 0 {
+            format!("已送出排隊的 prompt（還有 {left} 則）")
+        } else {
+            "已送出排隊的 prompt".into()
+        };
+    }
+    Ok(())
+}
+
+/// `:queue [文字|clear]`、`:unqueue`。
+fn queue_command(app: &mut App, writer: &mut ConnStream, rest: &str) -> Result<()> {
+    let Some(id) = app.selected_id() else {
+        app.status = "沒有選取的 session".into();
+        return Ok(());
+    };
+    match rest.trim() {
+        "" => {
+            let items = app.queues.texts(&id);
+            app.status = if items.is_empty() {
+                "排隊為空（:queue <文字> 排入，或在輸入框按 Alt-Enter）".into()
+            } else {
+                let list: Vec<String> = items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| format!("{}.{}", i + 1, t.chars().take(24).collect::<String>()))
+                    .collect();
+                format!("排隊 {} 則：{}", items.len(), list.join(" | "))
+            };
+            Ok(())
+        }
+        "clear" => {
+            let n = app.queues.clear(&id);
+            app.status = format!("已清空排隊（{n} 則）");
+            Ok(())
+        }
+        text => queue_prompt(app, writer, text),
+    }
+}
+
+/// `:command` 命令：`:queue`、`:unqueue`。
+fn unqueue(app: &mut App) {
+    let Some(id) = app.selected_id() else {
+        return;
+    };
+    app.status = match app.queues.pop_last(&id) {
+        Some(q) => {
+            // 取回輸入框方便修改後重新排入。
+            app.input_cursor = q.text.chars().count();
+            app.input = q.text;
+            app.mode = Mode::Prompt;
+            "已取消最後一則排隊，內容放回輸入框".into()
+        }
+        None => "沒有排隊中的 prompt".into(),
+    };
+}
+
 /// `:` 命令列可用的命令：(名稱, 用法與說明)，供提示與 Tab 補全。
 pub(crate) const COMMANDS: &[(&str, &str)] = &[
     (
@@ -101,6 +221,11 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("raw", "原始文字／Markdown 切換"),
     ("thoughts", "顯示／隱藏思考"),
     ("tools", "展開／摺疊工具呼叫"),
+    (
+        "queue",
+        "[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出",
+    ),
+    ("unqueue", "取消最後一則排隊並放回輸入框"),
     ("bus", "顯示／隱藏 Bus 浮層"),
     ("task", "<標題>  新增任務"),
     ("broadcast", "<訊息>  廣播給所有 session"),
@@ -291,6 +416,8 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
         }
         "thoughts" | "think" => toggle_thoughts(app),
         "tools" => toggle_tools(app),
+        "queue" => queue_command(app, writer, rest)?,
+        "unqueue" => unqueue(app),
         "layout" => {
             if rest.is_empty() {
                 app.cycle_layout();

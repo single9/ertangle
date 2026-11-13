@@ -15,6 +15,7 @@ mod commands;
 mod diff;
 mod draw;
 mod help;
+mod history;
 mod input;
 mod markdown;
 mod menu;
@@ -157,6 +158,8 @@ fn event_loop(
     rx: Receiver<Frame>,
 ) -> Result<()> {
     let mut app = App::new();
+    app.prompt_history = history::History::load(Some(history::history_path("prompt")));
+    app.command_history = history::History::load(Some(history::history_path("command")));
     let mut dirty = true;
     let mut last_draw = std::time::Instant::now();
 
@@ -165,6 +168,10 @@ fn event_loop(
             apply_frame(&mut app, frame);
             dirty = true;
         }
+
+        let before = app.status.clone();
+        commands::flush_queues(&mut app, writer)?;
+        dirty |= app.status != before;
 
         dirty |= app.rebuild_pending;
         // 只在有狀態或輸入變動時重繪，閒置時不佔 CPU。

@@ -1101,7 +1101,10 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
         Mode::Normal => " 輸入（i 輸入 · ? 說明） ".to_string(),
         Mode::Help => " 說明 ".to_string(),
-        Mode::Prompt => " prompt（@ 附檔 · Enter 送出） ".to_string(),
+        Mode::Prompt => match app.selected_id().map(|id| app.queues.len(&id)).unwrap_or(0) {
+            0 => " prompt（@ 附檔 · Enter 送出 · Alt-Enter 排隊） ".to_string(),
+            n => format!(" prompt（排隊 {n} 則 · Alt-Enter 再排） "),
+        },
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => format!(
                 " spawn → {}{}{} · worktree={} · 權限={} ",

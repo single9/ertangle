@@ -861,3 +861,74 @@ fn tool_runs_fold_into_one_line_but_keep_failures() {
     let full = crate::app::visible_transcript(src.iter(), false, true);
     assert_eq!(full.len(), src.len());
 }
+
+#[test]
+fn history_recalls_dedups_and_restores_draft() {
+    let mut h = crate::history::History::default();
+    h.push("one");
+    h.push("two");
+    h.push("two");
+    h.push("   ");
+    assert_eq!(h.prev("draft").as_deref(), Some("two"));
+    assert_eq!(h.prev("x").as_deref(), Some("one"));
+    assert_eq!(h.prev("x").as_deref(), Some("one"), "stays at oldest");
+    assert_eq!(h.next().as_deref(), Some("two"));
+    assert_eq!(
+        h.next().as_deref(),
+        Some("draft"),
+        "past newest returns the draft"
+    );
+    assert_eq!(h.next(), None);
+}
+
+#[test]
+fn history_persists_across_loads() {
+    let dir = std::env::temp_dir().join(format!("termade-hist-{}", std::process::id()));
+    let path = dir.join("h.jsonl");
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut h = crate::history::History::load(Some(path.clone()));
+    h.push("第一則 \"quoted\"");
+    h.push("second");
+    let mut h2 = crate::history::History::load(Some(path));
+    assert_eq!(h2.prev("").as_deref(), Some("second"));
+    assert_eq!(h2.prev("").as_deref(), Some("第一則 \"quoted\""));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn queue_sends_one_at_a_time_when_idle() {
+    use crate::history::{PromptQueues, Queued};
+    use std::time::{Duration, Instant};
+    use termade_core::SessionStatus::{Busy, Exited, Idle};
+    let q = |t: &str| Queued {
+        text: t.into(),
+        attachments: vec![],
+    };
+    let mut pq = PromptQueues::default();
+    pq.push("s", q("a"));
+    pq.push("s", q("b"));
+    let t0 = Instant::now();
+    // 忙碌：不送
+    assert!(pq.take_ready(|_| Some(Busy), t0).0.is_empty());
+    // 閒置：送第一則
+    let (r, _) = pq.take_ready(|_| Some(Idle), t0);
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0].1.text, "a");
+    // 還沒看到轉忙碌：不重複送
+    assert!(pq.take_ready(|_| Some(Idle), t0).0.is_empty());
+    // 轉忙碌再閒置：送第二則
+    assert!(pq.take_ready(|_| Some(Busy), t0).0.is_empty());
+    let (r, _) = pq.take_ready(|_| Some(Idle), t0);
+    assert_eq!(r[0].1.text, "b");
+    assert_eq!(pq.len("s"), 0);
+    // 沒看到忙碌但逾時：放行
+    pq.push("s", q("c"));
+    assert!(pq.take_ready(|_| Some(Idle), t0).0.is_empty());
+    let (r, _) = pq.take_ready(|_| Some(Idle), t0 + Duration::from_secs(5));
+    assert_eq!(r[0].1.text, "c");
+    // session 結束：丟棄
+    pq.push("s", q("d"));
+    let (r, dropped) = pq.take_ready(|_| Some(Exited), t0);
+    assert!(r.is_empty());
+    assert_eq!(dropped, 1);
+}

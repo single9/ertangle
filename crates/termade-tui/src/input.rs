@@ -334,6 +334,8 @@ pub(crate) fn handle_input_mode(
     match key.code {
         KeyCode::Esc => {
             app.mode = Mode::Normal;
+            app.prompt_history.reset();
+            app.command_history.reset();
             app.input.clear();
             app.input_cursor = 0;
             app.spawn_target = None;
@@ -401,6 +403,15 @@ pub(crate) fn handle_input_mode(
                 Err(e) => app.status = e,
             }
         }
+        KeyCode::Up | KeyCode::Down if matches!(app.mode, Mode::Prompt | Mode::Command) => {
+            recall_history(app, key.code == KeyCode::Up);
+        }
+        KeyCode::Char(c @ ('p' | 'n'))
+            if key.modifiers.contains(KeyModifiers::CONTROL)
+                && matches!(app.mode, Mode::Prompt | Mode::Command) =>
+        {
+            recall_history(app, c == 'p');
+        }
         KeyCode::Backspace => backspace_input(app),
         KeyCode::Delete => delete_input(app),
         KeyCode::Left => app.input_cursor = app.input_cursor.saturating_sub(1),
@@ -429,8 +440,16 @@ pub(crate) fn handle_input_mode(
             app.input_cursor = 0;
             let mode = app.mode;
             app.mode = Mode::Normal;
+            let queue = key.modifiers.contains(KeyModifiers::ALT);
             match mode {
-                Mode::Prompt => submit_prompt_or_route(app, writer, &text)?,
+                Mode::Prompt => {
+                    app.prompt_history.push(&text);
+                    if queue {
+                        crate::commands::queue_prompt(app, writer, &text)?;
+                    } else {
+                        submit_prompt_or_route(app, writer, &text)?;
+                    }
+                }
                 Mode::Spawn => submit_spawn(app, writer, &text)?,
                 Mode::Message => {
                     if let Some(id) = app.selected_id() {
@@ -460,7 +479,10 @@ pub(crate) fn handle_input_mode(
                         )?;
                     }
                 }
-                Mode::Command => execute_command(app, writer, &text)?,
+                Mode::Command => {
+                    app.command_history.push(&text);
+                    execute_command(app, writer, &text)?;
+                }
                 Mode::Jump => execute_jump(app, writer, &text)?,
                 Mode::Normal | Mode::Menu | Mode::Pick | Mode::Help => {}
             }
@@ -632,4 +654,19 @@ pub(crate) fn handle_paste(app: &mut App, text: &str) {
     }
     let sanitized = text.replace(['\r', '\n'], " ");
     insert_str_input(app, &sanitized);
+}
+
+/// ↑／↓ 回顧輸入歷史（Prompt 與 Command 各有自己的一份）。
+pub(crate) fn recall_history(app: &mut App, older: bool) {
+    let cur = app.input.clone();
+    let hist = if app.mode == Mode::Command {
+        &mut app.command_history
+    } else {
+        &mut app.prompt_history
+    };
+    let got = if older { hist.prev(&cur) } else { hist.next() };
+    if let Some(t) = got {
+        app.input_cursor = t.chars().count();
+        app.input = t;
+    }
 }
