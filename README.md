@@ -107,7 +107,7 @@ cargo test                     # 全部單元測試
 | `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
 | `T`（或 `/thoughts`） | 顯示 / 隱藏 agent 的思考行（`💭`；預設隱藏以減少渲染量） |
 | `O`（或 `:tools`） | 展開 / 摺疊工具呼叫（預設把連續的呼叫與成功結果摺成一行，失敗行保留） |
-| `P`（或 `:scope [here|all]`） | 只看啟動目錄所屬專案的 session／顯示全部。同一個 daemon 管所有專案，有多個專案時 session 列與 transcript 標題會標出專案名（同專案同色），標題列顯示目前專案 |
+| `P`（或 `:scope [here|all]`） | 預設只看啟動目錄所屬專案的 session，按 P 切換成顯示全部。同一個 daemon 管所有專案，有多個專案時 session 列與 transcript 標題會標出專案名（同專案同色），標題列顯示目前專案 |
 | `↑` / `↓`（輸入 prompt 或 `:` 命令時） | 回顧歷史輸入，存在 `~/.local/state/termade/history-*.jsonl`，重開仍在 |
 | `Ctrl-J` / `Shift-Enter` | prompt、message、review 輸入框換行（輸入框隨行數長高，最多 8 行）；貼上多行文字會保留換行。`:` 命令列維持單行。`↑` / `↓` 在多行內容裡先移動游標，到頂／底才切換歷史。Shift-Enter 需要終端機支援 |
 | `Alt-Enter`（或 `:queue <文字>`） | 排隊 prompt：session 忙碌時先排著，閒下來自動依序送出；`:queue` 列出、`:queue clear` 清空、`:unqueue` 取消最後一則並放回輸入框。排隊只存在 TUI 內，關掉 TUI 就沒了 |
