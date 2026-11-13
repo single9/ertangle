@@ -117,6 +117,10 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     shared.emit(Event::SessionStarted {
         session: session.clone(),
     });
+    let system_append = {
+        let inner = lock(&shared.inner);
+        crate::collab::for_session(&inner.state, &id, &global_dir, &cwd)
+    };
 
     let mcp_exe = std::env::current_exe().ok();
     let mut env = vec![
@@ -155,6 +159,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         read_only: resolved.read_only,
         sandbox: resolved.sandbox.clone(),
         mcp_exe,
+        system_append,
         initial_prompt: spawn.prompt.clone(),
         initial_attachments: spawn.attachments.clone(),
         cols: 120,

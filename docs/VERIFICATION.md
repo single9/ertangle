@@ -64,3 +64,14 @@
 | `:notify off`／`:notify` | 在 TUI 輸入 | 狀態列顯示 `通知：關（bell、osc9、command）` |
 
 沒有驗證：直接在終端模擬器（不經 tmux）的 bell 與 `notify_command`；各終端對 OSC 9 的實際顯示；tmux 是否把 OSC 9 轉給外層終端；焦點事件在實機終端的回報；由真實 agent 的回合結束／審批觸發（這些路徑只有單元測試）。
+
+## 協作說明注入（T20）實機驗證
+
+以只回傳 `initialize.instructions` 的探測 MCP server 單獨測試第一層是否進入模型 context，並以隔離 daemon 啟動子 session（`--parent coord`、prompt 不含 `termade_send` 提示）驗證主動回報：
+
+| Agent | 第一層（MCP `initialize.instructions`） | 第二層（adapter 補強） | 子 agent 主動回報實測 |
+| --- | --- | --- | --- |
+| **Claude Code** | ✅ 有效（模型可直接讀到 `initialize.instructions`） | `--append-system-prompt` | ✅ 完成 `17+25=42` 後主動呼叫 `termade_send(to="coord")` 回報 |
+| **OpenCode** | ✅ 有效（`opencode acp` 會將 `initialize.instructions` 放進 context） | ACP 首則 prompt 前置（`UserPrompt` 事件不含） | ✅ 主動呼叫 `termade_status` 與 `termade_send(to="coord")` 回報 |
+| **Antigravity** | ❌ 無效（`agy acp` 忽略 `initialize.instructions`） | ✅ ACP 首則 prompt 前置生效（`UserPrompt` 事件不含） | ✅ 靠第二層前置說明主動呼叫 `termade_status` 與 `termade_send(to="coord")` 回報 |
+| **Codex** | 未單獨實測（受限於回合授權） | `thread/start` 的 `developerInstructions`（schema 查證支援，握手成功） | ⚠️ `initialize` + `thread/start`（含 `developerInstructions`）成功；`turn/start` 因本機無有效授權停止 |

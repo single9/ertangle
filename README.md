@@ -216,5 +216,6 @@ termade shutdown
   不通知的情況：終端有焦點且事件屬於目前選取的 session（終端不回報焦點時一律通知）；只看本專案（`:scope here`）時其他專案的 session；同一個 session 同一類 3 秒內的重複；連線時補送的歷史事件。審批、失敗、額度用完不受 `notify_min_turn_secs` 限制。
   限制：通知由 TUI 發出，TUI 沒開就沒有通知；tmux 內要收到焦點事件需 `set -g focus-events on`，否則視為沒有焦點。
 * context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `termade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
+* 協作說明注入（`config.toml`）：啟動 session 時自動注入身分（label、角色、父 session、worktree 分支）與 `termade_*` 工具使用規則（進度用 `termade_status`、任務狀態改 `doing`／`done`、完成向父 session `termade_send` 回報、worktree 不自行合併、協調者用 `termade_task_create` + `depends_on` 與 `termade_wait`）。管道有兩層：MCP `initialize` 回應的 `instructions`，以及 adapter 補強（Claude `--append-system-prompt`、Codex `thread/start` 的 `developerInstructions`、ACP 接在第一則 prompt 前面且不寫入逐字稿 `UserPrompt`；PTY 不注入）。可用 `[collab] instructions = false` 關閉、`[collab] extra = "..."` 與 `[roles.<角色>] instructions = "..."` 附加說明；repo 的 `.termade/instructions.md` 存在時會附在最後（上限 8 KB）。
 
 開發者：改動按鍵、命令、協定或設定檔時需要手動同步的清單見 [docs/MAINTAINING.md](docs/MAINTAINING.md)。

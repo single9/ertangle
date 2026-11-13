@@ -581,7 +581,7 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 僅 log 與 `termade_diff` 套用 `redact_secrets` |
 | 每任務訊息預算 | token／回合上限 | 未實作；只有速率限制與重複迴圈斷路 |
 | Handoff | 連同 worktree 交給另一個 agent | 只有 `handoff` 訊息類型 |
-| `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | 未實作 |
+| `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | `tasks.json` 未實作；協作說明改由 MCP `initialize.instructions` 與 adapter 系統提示／首則 prompt 注入（見 `collab.rs`），不寫入 worktree 的 `AGENTS.md`，避免自動 commit 把它一起提交進使用者分支或覆蓋 repo 自己的 `AGENTS.md` |
 | Claude 逐項審批 | 轉成 `PermissionRequested` | 未實作（`claude.rs` 不轉發） |
 | Codex 回合、ACP 逐項審批 | 實機驗證 | 程式路徑就緒，未實機驗證 |
 | `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `termade-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |

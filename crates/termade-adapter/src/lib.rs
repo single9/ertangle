@@ -83,6 +83,9 @@ pub struct SessionSpec {
     pub permission: PermissionPolicy,
     /// 若提供 `termade` 執行檔路徑，adapter 會在啟動時將 `termade mcp` 注入該 agent。
     pub mcp_exe: Option<PathBuf>,
+    /// 附加在系統提示（Claude `--append-system-prompt`、Codex `developerInstructions`）
+    /// 或 ACP 第一則 prompt 前面的協作說明；PTY 不注入。
+    pub system_append: Option<String>,
     /// 啟動後立刻送出的第一個 prompt。
     pub initial_prompt: Option<String>,
     /// 初始 prompt 的附件。

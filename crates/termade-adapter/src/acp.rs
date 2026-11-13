@@ -34,6 +34,8 @@ struct Conn {
     perms: Mutex<HashMap<String, (Value, Vec<Value>)>>,
     /// 串流輸出的行緩衝（把 token 級 chunk 併成完整行）。
     stream: Mutex<StreamBuf>,
+    /// 第一則 prompt 前置的協作說明（取出一次即清空）。
+    prepend_once: Mutex<Option<String>>,
     /// agent 在 initialize 宣告支援圖片區塊（`promptCapabilities.image`）。
     image_ok: std::sync::atomic::AtomicBool,
     /// 權限政策：`Auto` / `Bypass` 時由 adapter 直接代為核准。
@@ -82,10 +84,11 @@ impl Conn {
         if sid.is_empty() {
             bail!("session 尚未就緒");
         }
+        let effective = take_effective_prompt(&self.prepend_once, text);
         let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
         let res = self.call(
             "session/prompt",
-            json!({ "sessionId": sid, "prompt": prompt_blocks(text, atts, self.image_ok.load(Ordering::SeqCst)) }),
+            json!({ "sessionId": sid, "prompt": prompt_blocks(&effective, atts, self.image_ok.load(Ordering::SeqCst)) }),
             PROMPT_TIMEOUT,
         );
         self.flush_stream();
@@ -310,6 +313,16 @@ impl AgentControl for AcpControl {
     }
 }
 
+/// 取出只用一次的前置說明，接在第一則 prompt 前面。
+fn take_effective_prompt(prepend_once: &Mutex<Option<String>>, text: &str) -> String {
+    match prepend_once.lock().unwrap().take() {
+        Some(prefix) if !prefix.trim().is_empty() => {
+            format!("{}\n\n{}", prefix.trim_end(), text)
+        }
+        _ => text.to_string(),
+    }
+}
+
 /// ACP prompt 區塊：文字（含內嵌文字檔）；agent 支援圖片時另加 image 區塊，否則圖片改成一行說明。
 fn prompt_blocks(text: &str, atts: &[termade_core::Attachment], image_ok: bool) -> Value {
     let mut blocks =
@@ -413,6 +426,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         pending: Mutex::new(HashMap::new()),
         perms: Mutex::new(HashMap::new()),
         stream: Mutex::new(StreamBuf::default()),
+        prepend_once: Mutex::new(spec.system_append.clone().filter(|s| !s.trim().is_empty())),
         image_ok: std::sync::atomic::AtomicBool::new(false),
         tx: tx.clone(),
     });
@@ -523,5 +537,14 @@ mod model_tests {
         let e = pick_model_option(&new, "zzz").unwrap_err().to_string();
         assert!(e.contains("p/m1") && e.contains("zzz"));
         assert!(pick_model_option(&json!({"sessionId":"x"}), "a").is_err());
+    }
+
+    #[test]
+    fn prepend_once_applies_only_to_first_prompt() {
+        let p = Mutex::new(Some("[termade 協作說明]\n規則\n".to_string()));
+        let first = take_effective_prompt(&p, "做任務 A");
+        assert!(first.starts_with("[termade 協作說明]\n規則\n\n做任務 A"));
+        let second = take_effective_prompt(&p, "做任務 B");
+        assert_eq!(second, "做任務 B");
     }
 }
