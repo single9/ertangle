@@ -15,7 +15,8 @@ BIN_MACOS_X86_64    := target/x86_64-apple-darwin/release/termade
 BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/termade
 
 .PHONY: check-zigbuild all build dev run tui daemon shutdown test clippy lint fmt \
-        macos macos-arm64 macos-x86_64 macos-universal dist install install-completions clean help
+        macos macos-arm64 macos-x86_64 macos-universal dist install install-completions clean help \
+        i18n-extract i18n-check
 
 all: build
 
@@ -58,6 +59,14 @@ clippy lint:
 ## 格式化程式碼
 fmt:
 	PATH="$(BUILD_PATH)" $(CARGO) fmt
+
+## 從原始碼抽出 tr! 字串更新 locales/termade.pot 與各 .po（需要 xtr 與 gettext 的 msgmerge）
+i18n-extract:
+	PATH="$(BUILD_PATH)" sh scripts/i18n-extract.sh
+
+## 檢查翻譯檔：.pot 同步、沒有 fuzzy 與缺譯、佔位符一致
+i18n-check:
+	PATH="$(BUILD_PATH)" sh scripts/i18n-check.sh
 
 ## 交叉編譯 macOS Apple Silicon (aarch64-apple-darwin)
 macos-arm64: check-zigbuild
@@ -119,6 +128,8 @@ help:
 	@echo "  make lint             執行 cargo clippy --all-targets -- -D warnings"
 	@echo "  make install          安裝 termade 至 $(BINDIR)/termade"
 	@echo "  make install-completions  依目前 SHELL 安裝補全腳本 (zsh / bash / fish)"
+	@echo "  make i18n-extract     更新 locales/termade.pot 與各語言 .po"
+	@echo "  make i18n-check       檢查翻譯檔 (CI 也會跑)"
 	@echo ""
 	@echo "macOS 交叉編譯目標:"
 	@echo "  make macos            建置全部 macOS 版本 (arm64 / x86_64 / universal2)"

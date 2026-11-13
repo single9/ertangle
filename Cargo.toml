@@ -20,6 +20,7 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true }
 serde_json = { workspace = true }
+tr = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
@@ -56,6 +57,9 @@ ratatui = "0.30"
 crossterm = "0.29"
 portable-pty = "0.9"
 unicode-width = "0.2.3"
+# `internal::set_translator` 是 doc(hidden) API，鎖定版本避免小版號變動。
+tr = { version = "=0.1.11", default-features = false }
+rspolib = "0.1.2"
 
 [profile.release]
 opt-level = 3

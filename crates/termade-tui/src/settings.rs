@@ -6,6 +6,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use termade_core::AgentKind;
 use termade_daemon::config::Config;
+use tr::tr;
 
 use crate::app::{App, Mode};
 
@@ -20,9 +21,10 @@ pub(crate) enum Item {
     SpawnConfirm,
     SpawnMaxEffort,
     CollabInstructions,
+    Language,
 }
 
-pub(crate) const ITEMS: [Item; 9] = [
+pub(crate) const ITEMS: [Item; 10] = [
     Item::DefaultAgent,
     Item::DefaultPermission,
     Item::TargetAgent,
@@ -32,6 +34,7 @@ pub(crate) const ITEMS: [Item; 9] = [
     Item::SpawnConfirm,
     Item::SpawnMaxEffort,
     Item::CollabInstructions,
+    Item::Language,
 ];
 
 const AGENTS: [&str; 4] = ["opencode", "claude", "codex", "antigravity"];
@@ -115,18 +118,19 @@ const LIVE_KINDS: [&str; 3] = ["opencode", "antigravity", "codex"];
 impl Item {
     pub(crate) fn label(self, s: &Settings) -> String {
         match self {
-            Item::DefaultAgent => "預設 agent".into(),
-            Item::DefaultPermission => "預設權限".into(),
-            Item::TargetAgent => "下面兩項設定的對象 agent".into(),
+            Item::DefaultAgent => tr!("預設 agent"),
+            Item::DefaultPermission => tr!("預設權限"),
+            Item::TargetAgent => tr!("下面兩項設定的對象 agent"),
             Item::Model if s.loading_models() => {
-                format!("{} 的預設 model（清單載入中…）", s.agent)
+                tr!("{agent} 的預設 model（清單載入中…）", agent = s.agent)
             }
-            Item::Model => format!("{} 的預設 model", s.agent),
-            Item::Effort => format!("{} 的預設 effort", s.agent),
-            Item::SpawnWorktree => "agent 自己建立的 session 用獨立 worktree".into(),
-            Item::SpawnConfirm => "agent 建立高消耗 session 時".into(),
-            Item::SpawnMaxEffort => "agent 建立 session 免確認的 effort 上限".into(),
-            Item::CollabInstructions => "把協作說明注入每個 agent".into(),
+            Item::Model => tr!("{agent} 的預設 model", agent = s.agent),
+            Item::Effort => tr!("{agent} 的預設 effort", agent = s.agent),
+            Item::SpawnWorktree => tr!("agent 自己建立的 session 用獨立 worktree"),
+            Item::SpawnConfirm => tr!("agent 建立高消耗 session 時"),
+            Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
+            Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
+            Item::Language => tr!("介面語言"),
         }
     }
 
@@ -144,6 +148,7 @@ impl Item {
             Item::SpawnConfirm => c.agent_spawn.confirm().to_string(),
             Item::SpawnMaxEffort => c.agent_spawn.max_effort().to_string(),
             Item::CollabInstructions => on_off(c.collab.instructions != Some(false)),
+            Item::Language => c.tui.language.clone().unwrap_or_default(),
         }
     }
 
@@ -152,20 +157,20 @@ impl Item {
         let pair = |v: &str, l: &str| (v.to_string(), l.to_string());
         let mut out = match self {
             Item::DefaultAgent => {
-                let mut v = vec![pair("", "未設定")];
+                let mut v = vec![pair("", &tr!("未設定"))];
                 v.extend(AGENTS.iter().map(|a| pair(a, a)));
                 v
             }
             Item::DefaultPermission => vec![
-                pair("", "未設定（auto）"),
-                pair("ask", "ask：每個動作都問"),
-                pair("auto", "auto：自動核准一般動作"),
-                pair("bypass", "bypass：完全不問"),
+                pair("", &tr!("未設定（auto）")),
+                pair("ask", &tr!("ask：每個動作都問")),
+                pair("auto", &tr!("auto：自動核准一般動作")),
+                pair("bypass", &tr!("bypass：完全不問")),
             ],
             Item::TargetAgent => AGENTS.iter().map(|a| pair(a, a)).collect(),
             Item::Model => {
                 let kind = AgentKind::parse(&s.agent);
-                let mut v = vec![pair("", "未設定（agent 自己的預設）")];
+                let mut v = vec![pair("", &tr!("未設定（agent 自己的預設）"))];
                 if let Some(k) = kind {
                     v.extend(
                         crate::menu::model_choices(&k)
@@ -188,22 +193,31 @@ impl Item {
                 v
             }
             Item::Effort => {
-                let mut v = vec![pair("", "未設定")];
+                let mut v = vec![pair("", &tr!("未設定"))];
                 v.extend(termade_adapter::EFFORT_LEVELS.iter().map(|l| pair(l, l)));
                 v
             }
             Item::SpawnWorktree | Item::CollabInstructions => {
-                vec![pair("on", "開"), pair("off", "關")]
+                vec![pair("on", &tr!("開")), pair("off", &tr!("關"))]
             }
             Item::SpawnConfirm => vec![
-                pair("costly", "超出範圍才問使用者"),
-                pair("always", "每次都問使用者"),
-                pair("never", "不問（effort 調降、model 拒絕）"),
+                pair("costly", &tr!("超出範圍才問使用者")),
+                pair("always", &tr!("每次都問使用者")),
+                pair("never", &tr!("不問（effort 調降、model 拒絕）")),
             ],
             Item::SpawnMaxEffort => termade_adapter::EFFORT_LEVELS
                 .iter()
                 .map(|l| pair(l, l))
                 .collect(),
+            Item::Language => {
+                let mut v = vec![pair("", &tr!("自動 (依 LANG 環境變數)"))];
+                v.extend(
+                    termade_core::i18n::LANGUAGES
+                        .iter()
+                        .map(|(_, code, name)| pair(code, name)),
+                );
+                v
+            }
         };
         // 設定檔裡手寫了清單以外的值時也要列出來，才不會一切換就把它蓋掉而回不去。
         let cur = self.current(s);
@@ -265,6 +279,7 @@ fn apply_value(app: &mut App, value: String) {
         Item::SpawnConfirm => (&["agent_spawn"], "confirm"),
         Item::SpawnMaxEffort => (&["agent_spawn"], "max_effort"),
         Item::CollabInstructions => (&["collab"], "instructions"),
+        Item::Language => (&["tui"], "language"),
         Item::Model => (&["agents", ""], "model"),
         Item::Effort => (&["agents", ""], "effort"),
         Item::TargetAgent => return,
@@ -285,9 +300,21 @@ fn apply_value(app: &mut App, value: String) {
     match Config::set_toml(&path, &tbl, key, toml_value) {
         Ok(()) => {
             s.cfg = Config::load_file(&path);
-            app.status = format!("已儲存到 {}（新建立的 session 起生效）", path.display());
+            if item == Item::Language {
+                // 立即生效：之後畫的每個字串都走新語言。
+                let lang = termade_core::i18n::resolve(Some(&value));
+                app.status = match termade_core::i18n::set_language(lang) {
+                    Ok(()) => tr!("已儲存到 {path}", path = path.display()),
+                    Err(e) => tr!("載入翻譯失敗：{e}", e = e),
+                };
+                return;
+            }
+            app.status = tr!(
+                "已儲存到 {path}（新建立的 session 起生效）",
+                path = path.display()
+            );
         }
-        Err(e) => app.status = format!("寫入設定失敗：{e}"),
+        Err(e) => app.status = tr!("寫入設定失敗：{e}", e = e),
     }
 }
 

@@ -30,3 +30,17 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+
+  i18n:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/xtr
+          key: xtr-0.1.11
+      # xtr 是 AGPL-3.0 的開發工具，只在 CI 執行，不連結進專案。
+      - run: command -v xtr || cargo install xtr --version 0.1.11 --locked
+      - run: sudo apt-get update && sudo apt-get install -y gettext
+      - run: make i18n-check

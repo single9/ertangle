@@ -1,0 +1,119 @@
+# English translation of termade.
+# This file is distributed under the same license as the termade package.
+msgid ""
+msgstr ""
+"Project-Id-Version: termade\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: crates/termade-tui/src/settings.rs
+msgid "預設 agent"
+msgstr "Default agent"
+
+#: crates/termade-tui/src/settings.rs
+msgid "預設權限"
+msgstr "Default permission"
+
+#: crates/termade-tui/src/settings.rs
+msgid "下面兩項設定的對象 agent"
+msgstr "Agent for the two settings below"
+
+#: crates/termade-tui/src/settings.rs
+msgid "{agent} 的預設 model（清單載入中…）"
+msgstr "Default model for {agent} (loading list…)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "{agent} 的預設 model"
+msgstr "Default model for {agent}"
+
+#: crates/termade-tui/src/settings.rs
+msgid "{agent} 的預設 effort"
+msgstr "Default effort for {agent}"
+
+#: crates/termade-tui/src/settings.rs
+msgid "agent 自己建立的 session 用獨立 worktree"
+msgstr "Sessions spawned by agents use their own worktree"
+
+#: crates/termade-tui/src/settings.rs
+msgid "agent 建立高消耗 session 時"
+msgstr "When an agent spawns a costly session"
+
+#: crates/termade-tui/src/settings.rs
+msgid "agent 建立 session 免確認的 effort 上限"
+msgstr "Max effort for agent spawns without confirmation"
+
+#: crates/termade-tui/src/settings.rs
+msgid "把協作說明注入每個 agent"
+msgstr "Inject collaboration instructions into every agent"
+
+#: crates/termade-tui/src/settings.rs
+msgid "介面語言"
+msgstr "Interface language"
+
+#: crates/termade-tui/src/settings.rs
+msgid "未設定"
+msgstr "Not set"
+
+#: crates/termade-tui/src/settings.rs
+msgid "未設定（auto）"
+msgstr "Not set (auto)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "ask：每個動作都問"
+msgstr "ask: confirm every action"
+
+#: crates/termade-tui/src/settings.rs
+msgid "auto：自動核准一般動作"
+msgstr "auto: approve routine actions automatically"
+
+#: crates/termade-tui/src/settings.rs
+msgid "bypass：完全不問"
+msgstr "bypass: never ask"
+
+#: crates/termade-tui/src/settings.rs
+msgid "未設定（agent 自己的預設）"
+msgstr "Not set (agent's own default)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "開"
+msgstr "On"
+
+#: crates/termade-tui/src/settings.rs
+msgid "關"
+msgstr "Off"
+
+#: crates/termade-tui/src/settings.rs
+msgid "超出範圍才問使用者"
+msgstr "Ask the user only when over the limits"
+
+#: crates/termade-tui/src/settings.rs
+msgid "每次都問使用者"
+msgstr "Always ask the user"
+
+#: crates/termade-tui/src/settings.rs
+msgid "不問（effort 調降、model 拒絕）"
+msgstr "Never ask (lower effort, reject model)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "自動 (依 LANG 環境變數)"
+msgstr "Auto (from LANG environment variable)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "已儲存到 {path}"
+msgstr "Saved to {path}"
+
+#: crates/termade-tui/src/settings.rs
+msgid "載入翻譯失敗：{e}"
+msgstr "Failed to load translation: {e}"
+
+#: crates/termade-tui/src/settings.rs
+msgid "已儲存到 {path}（新建立的 session 起生效）"
+msgstr "Saved to {path} (applies to new sessions)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "寫入設定失敗：{e}"
+msgstr "Failed to write settings: {e}"

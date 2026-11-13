@@ -142,6 +142,9 @@ pub struct CollabCfg {
 #[serde(default)]
 pub struct TuiCfg {
     pub layout: Option<String>,
+    /// 介面語言：`auto` (依 `LC_ALL`／`LC_MESSAGES`／`LANG`)、`zh-TW`、`en`；省略 = `auto`。
+    /// 只認全域設定，見 `termade_core::i18n`。
+    pub language: Option<String>,
     /// 通知方式：`bell`、`osc9`、`command`；空陣列 = 關閉，省略 = `["bell"]`。
     pub notify: Option<Vec<String>>,
     /// `command` 方式執行的命令（`sh -c`），內容由 `TERMADE_NOTIFY_*` 環境變數帶入。

@@ -7,6 +7,8 @@
 //! * **Event 是唯一真相**：所有狀態都是把事件 fold 進 [`State`] 的結果。
 //! * 事件可序列化、可落地、可重播，讓 TUI 斷線後能無縫重建畫面。
 
+pub mod i18n;
+
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};

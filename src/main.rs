@@ -362,8 +362,20 @@ enum Cmd {
     },
 }
 
+/// 依全域設定的 `[tui] language` 與環境變數決定介面語言。daemon 也走這裡，
+/// 所以 daemon 回給使用者的訊息跟 daemon 啟動時的語言一致。
+fn init_language() {
+    let path = termade_daemon::config_dir().join("config.toml");
+    let cfg = termade_daemon::config::Config::load_file(&path);
+    let lang = termade_core::i18n::resolve(cfg.tui.language.as_deref());
+    if let Err(e) = termade_core::i18n::set_language(lang) {
+        tracing::warn!("載入翻譯失敗，改用繁體中文：{e}");
+    }
+}
+
 fn main() -> Result<()> {
     init_tracing();
+    init_language();
     let cli = Cli::parse();
     if let Some(r) = &cli.remote {
         std::env::set_var("TERMADE_REMOTE", r);

@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+tr.workspace = true
 termade-core.workspace = true
 termade-protocol.workspace = true
 termade-adapter.workspace = true
