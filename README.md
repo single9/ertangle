@@ -44,22 +44,39 @@
 
 ## 快速開始
 
-### 1. 安裝與建置
+### 1. 安裝
+
+**方式一：下載預編譯執行檔** (從 [Releases](https://github.com/single9/termade/releases/latest) 取得，支援 Linux x86_64 / arm64 與 macOS arm64 / x86_64 / universal)
 
 ```bash
-# 1. 複製並編譯單一執行檔
-git clone <repo-url> ade-rust && cd ade-rust
-cargo build --release
+# 以 Linux x86_64 為例，其他平台請替換檔名 (termade-linux-arm64、termade-macos-arm64 等)
+curl -fsSL https://github.com/single9/termade/releases/latest/download/termade-linux-x86_64.tar.gz | tar -xz
+install -m 755 termade-linux-x86_64 ~/.local/bin/termade
+```
 
-# 2. 安裝至 ~/.cargo/bin
-cargo install --path .
+**方式二：直接從 git 安裝** (需要 Rust 工具鏈)
 
+```bash
+cargo install --git https://github.com/single9/termade
+
+# 指定版本
+cargo install --git https://github.com/single9/termade --tag v0.1.0
+```
+
+**方式三：從原始碼建置**
+
+```bash
+git clone https://github.com/single9/termade && cd termade
+cargo install --path .        # 安裝至 ~/.cargo/bin
 # 或使用 Makefile 安裝至 ~/.local/bin/termade
 make install
+```
 
-# 3. 安裝 Shell 自動補齊腳本 (支援 bash / zsh / fish，並能動態補齊 session label)
-make install-completions
-# 亦可手動輸出：termade completions <bash|zsh|fish>
+**Shell 自動補齊** (支援 bash / zsh / fish，並能動態補齊 session label)
+
+```bash
+make install-completions      # 於原始碼目錄執行，依目前 SHELL 自動安裝
+# 或手動輸出：termade completions <bash|zsh|fish>
 ```
 
 ### 2. 啟動與第一個任務

@@ -44,22 +44,39 @@ Each agent communicates via its **official, native structured interface without 
 
 ## Quick Start
 
-### 1. Installation & Building
+### 1. Installation
+
+**Option 1: Download a prebuilt binary** (from [Releases](https://github.com/single9/termade/releases/latest); Linux x86_64 / arm64 and macOS arm64 / x86_64 / universal)
 
 ```bash
-# 1. Clone repository and build release binary
-git clone <repo-url> ade-rust && cd ade-rust
-cargo build --release
+# Linux x86_64 shown; swap the asset name for other platforms (termade-linux-arm64, termade-macos-arm64, ...)
+curl -fsSL https://github.com/single9/termade/releases/latest/download/termade-linux-x86_64.tar.gz | tar -xz
+install -m 755 termade-linux-x86_64 ~/.local/bin/termade
+```
 
-# 2. Install to ~/.cargo/bin
-cargo install --path .
+**Option 2: Install directly from git** (requires a Rust toolchain)
 
-# Or install to ~/.local/bin/termade using Makefile
+```bash
+cargo install --git https://github.com/single9/termade
+
+# Pin a specific version
+cargo install --git https://github.com/single9/termade --tag v0.1.0
+```
+
+**Option 3: Build from source**
+
+```bash
+git clone https://github.com/single9/termade && cd termade
+cargo install --path .        # installs to ~/.cargo/bin
+# or use the Makefile to install to ~/.local/bin/termade
 make install
+```
 
-# 3. Install shell completion scripts (supports bash, zsh, fish, with dynamic session label completion)
-make install-completions
-# Or generate completions manually: termade completions <bash|zsh|fish>
+**Shell completions** (bash / zsh / fish, with dynamic session label completion)
+
+```bash
+make install-completions      # run from the source checkout; detects your SHELL
+# or generate manually: termade completions <bash|zsh|fish>
 ```
 
 ### 2. Launching Your First Agent Session
