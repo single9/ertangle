@@ -590,7 +590,7 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | async runtime | `tokio`、`async_trait Adapter` | 未採用；同步 `AgentControl` + std thread（4.4、11） |
 | `outbox/` 監看 | daemon 以 `notify` 監看 agent 寫入並轉發 | 未實作；只有 `mailbox/` 單向寫入 |
 | MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 僅 log 與 `termade_diff` 套用 `redact_secrets` |
-| 每任務訊息預算 | token／回合上限 | 未實作；只有速率限制與重複迴圈斷路 |
+| 每任務訊息預算 | token／回合上限 | 已實作 session 美元／token 上限、父子樹總額上限與子 agent 數量／深度上限（`[limits]`、`:budget`、`termade budget`）；訊息匯流排另有速率限制與重複迴圈斷路 |
 | Handoff | 連同 worktree 交給另一個 agent | 只有 `handoff` 訊息類型 |
 | `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | `tasks.json` 未實作；協作說明改由 MCP `initialize.instructions` 與 adapter 系統提示／首則 prompt 注入（見 `collab.rs`），不寫入 worktree 的 `AGENTS.md`，避免自動 commit 把它一起提交進使用者分支或覆蓋 repo 自己的 `AGENTS.md` |
 | Claude 逐項審批 | 轉成 `PermissionRequested` | 未實作（`claude.rs` 不轉發） |

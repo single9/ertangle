@@ -178,6 +178,7 @@ termade pr <session-or-label> --title "..."     # 透過 gh 建立 Pull Request
 termade gc [--session <id>]                     # 清理已結束 session 的 worktrees
 termade sleep <session> ; termade wake <session>    # 暫停 / 喚醒閒置 agent 子程序
 termade cost [--json]                           # 查看各 session 與總計的成本與 token 用量
+termade budget <session-or-label> <amount>      # 設定或調高指定 session 的成本上限（美元）
 termade replay [--since <seq>] [--json]         # 重播與審計 events.jsonl
 # 遠端：建議只綁 loopback，再用 SSH 轉發（TCP 為明文）
 TERMADE_TOKEN=<secret> termade daemon --listen 127.0.0.1:7420   # 或 --token-file <path>（0600）
@@ -232,5 +233,6 @@ termade completions <bash|zsh|fish>             # 輸出 shell 補全腳本至 s
   限制：通知由 TUI 發出，TUI 沒開就沒有通知；tmux 內要收到焦點事件需 `set -g focus-events on`，否則視為沒有焦點。
 * context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `termade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
 * 協作說明注入（`config.toml`）：啟動 session 時自動注入身分（label、角色、父 session、worktree 分支）與 `termade_*` 工具使用規則（進度用 `termade_status`、任務狀態改 `doing`／`done`、完成向父 session `termade_send` 回報、worktree 不自行合併、協調者用 `termade_task_create` + `depends_on` 與 `termade_wait`）。管道有兩層：MCP `initialize` 回應的 `instructions`，以及 adapter 補強（Claude `--append-system-prompt`、Codex `thread/start` 的 `developerInstructions`、ACP 接在第一則 prompt 前面且不寫入逐字稿 `UserPrompt`；PTY 不注入）。可用 `[collab] instructions = false` 關閉、`[collab] extra = "..."` 與 `[roles.<角色>] instructions = "..."` 附加說明；repo 的 `.termade/instructions.md` 存在時會附在最後（上限 8 KB）。
+* 成本與子 agent 數量上限（`config.toml` `[limits]`）：可設 `session_usd`（單一 session 美元上限，亦可在 `[roles.<角色>]` 覆寫或用 `termade spawn --budget <金額>`／MCP `termade_spawn(budget_usd)` 指定）、`session_tokens`（不回報美元時的 token 上限）、`tree_usd`（同棵父子樹總美元上限）、`max_children`（單一父 session 同時進行中的直接子 session 上限）、`max_depth`（衍生階層深度上限）與 `warn_percent`（警告門檻，預設 80%）。repo 的 `.termade/config.toml` 只能調低上限、不能調高全域設定。設定了上限時，TUI session 清單與 `termade cost` 顯示 `$1.20/$5`（達警告門檻黃、超過上限紅）；超過上限時中斷目前回合並阻擋新 prompt 與自動喚醒，可用 `:budget <金額>` 或 `termade budget <session> <金額>` 調高後繼續。
 
 開發者：改動按鍵、命令、協定或設定檔時需要手動同步的清單見 [docs/MAINTAINING.md](docs/MAINTAINING.md)。

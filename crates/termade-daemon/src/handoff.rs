@@ -127,6 +127,8 @@ mod tests {
             context: None,
             native_id: None,
             permission: PermissionPolicy::Auto,
+            budget_usd: None,
+            over_budget: false,
         }
     }
 

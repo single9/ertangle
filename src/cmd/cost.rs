@@ -45,6 +45,8 @@ pub(crate) fn cmd_cost(json: bool) -> Result<()> {
                     "label": s.label,
                     "kind": s.kind.id(),
                     "usd": s.cost.usd,
+                    "budget_usd": s.budget_usd,
+                    "over_budget": s.over_budget,
                     "input_tokens": s.cost.input_tokens,
                     "output_tokens": s.cost.output_tokens,
                 })
@@ -60,12 +62,24 @@ pub(crate) fn cmd_cost(json: bool) -> Result<()> {
         return Ok(());
     }
     for s in state.sessions_sorted() {
+        let cost_col = match (s.budget_usd, s.format_budget()) {
+            (Some(limit), Some(bstr)) => {
+                if s.over_budget || s.cost.usd >= limit {
+                    format!("\x1b[31m{bstr} [超過上限]\x1b[0m")
+                } else if limit > 0.0 && s.cost.usd * 100.0 / limit >= 80.0 {
+                    format!("\x1b[33m{bstr}\x1b[0m")
+                } else {
+                    bstr
+                }
+            }
+            _ => format!("${:.4}", s.cost.usd),
+        };
         println!(
-            "{}  {:<20} {:<10} ${:.4}  ({} in / {} out)",
+            "{}  {:<20} {:<10} {}  ({} in / {} out)",
             s.id,
             s.label,
             s.kind.id(),
-            s.cost.usd,
+            cost_col,
             s.cost.input_tokens,
             s.cost.output_tokens
         );

@@ -23,6 +23,8 @@ fn sample_app(lines: &[&str]) -> App {
         context: None,
         native_id: None,
         permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
     };
     app.state.sessions.insert(s.id.clone(), s);
     let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();
@@ -1015,6 +1017,8 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
         context: None,
         native_id: None,
         permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
     };
     for s in [
         mk("a", "/work/alpha", None),
@@ -1668,4 +1672,38 @@ fn resume_command_sends_request_and_is_discoverable() {
     let n = keys.len();
     keys.dedup();
     assert_eq!(keys.len(), n, "Space s 選單有重複的快捷鍵");
+}
+
+#[test]
+fn budget_command_and_session_list_budget_display() {
+    use std::io::BufRead;
+    let mut app = sample_app(&["hi"]);
+    app.home_project = "/tmp".into();
+    app.scope_here = true;
+    {
+        let s = app.state.sessions.get_mut("ses_test").unwrap();
+        s.label = "w".into();
+        s.branch = None;
+        s.cost.usd = 1.20;
+        s.budget_usd = Some(5.0);
+    }
+    let text = render(&mut app);
+    assert!(text.contains("$1.20/$5"), "應顯示 $1.20/$5：{text}");
+
+    let (mut w, peer) = pair_writer();
+    crate::commands::execute_command(&mut app, &mut w, "budget 10").unwrap();
+    assert!(app.status.contains("$10"), "{}", app.status);
+    let mut line = String::new();
+    std::io::BufReader::new(peer).read_line(&mut line).unwrap();
+    let req: Request = termade_protocol::decode_line(line.trim()).unwrap();
+    match req {
+        Request::SessionBudget {
+            session,
+            budget_usd,
+        } => {
+            assert_eq!(session, "ses_test");
+            assert_eq!(budget_usd, 10.0);
+        }
+        other => panic!("unexpected {other:?}"),
+    }
 }

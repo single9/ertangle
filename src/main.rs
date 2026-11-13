@@ -105,6 +105,9 @@ enum Cmd {
         /// 推理強度：low / medium / high / xhigh / max（省略則依 config.toml）
         #[arg(long, value_parser = EFFORT_VALUES)]
         effort: Option<String>,
+        /// 此 session 的成本上限（美元，例如 2.50）
+        #[arg(long)]
+        budget: Option<f64>,
         /// 附加檔案或圖片到初始 prompt（可重複）
         #[arg(short = 'a', long = "attach")]
         attach: Vec<String>,
@@ -308,6 +311,12 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// 設定或調高指定 session 的成本上限（美元）
+    Budget {
+        session: String,
+        /// 新的成本上限（美元，例如 10）
+        amount: f64,
+    },
     /// 重播 event log 並印出歷史事件
     Replay {
         /// 只重播序號大於此值的事件
@@ -370,11 +379,12 @@ fn main() -> Result<()> {
             parent,
             model,
             effort,
+            budget,
             attach,
             extra,
         } => cmd_spawn(
             kind, prompt, cwd, label, role, worktree, transport, permission, parent, model, effort,
-            attach, extra,
+            budget, attach, extra,
         ),
         Cmd::Prompt {
             session,
@@ -451,6 +461,7 @@ fn main() -> Result<()> {
         } => cmd_pr(session, title, body),
         Cmd::Gc { session, force } => cmd_gc(session, force),
         Cmd::Cost { json } => cmd_cost(json),
+        Cmd::Budget { session, amount } => cmd_budget(session, amount),
         Cmd::Quota { json } => cmd_quota(json),
         Cmd::Replay {
             since,

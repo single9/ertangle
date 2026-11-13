@@ -163,6 +163,8 @@ mod tests {
             permission: Default::default(),
             context: None,
             native_id: None,
+            budget_usd: None,
+            over_budget: false,
         }
     }
 

@@ -282,6 +282,8 @@ pub(crate) struct Shared {
     pub(crate) epoch: String,
     /// 已經提醒過額度快滿的 agent（用量降回門檻以下才會重新提醒）。
     pub(crate) quota_warned: Mutex<std::collections::HashSet<String>>,
+    /// 已經提醒過成本接近上限的 session（降回門檻以下或調高上限後才會重新提醒）。
+    pub(crate) budget_warned: Mutex<std::collections::HashSet<SessionId>>,
 }
 
 impl Shared {
@@ -342,6 +344,7 @@ impl Shared {
             auth_token,
             epoch: new_id("ep"),
             quota_warned: Default::default(),
+            budget_warned: Default::default(),
         });
 
         let weak_shared = Arc::downgrade(&shared);
@@ -558,12 +561,16 @@ impl Shared {
             },
         };
         let exited = matches!(event, Event::SessionExited { .. });
+        let is_cost = matches!(event, Event::Cost { .. });
         let watch = matches!(
             event,
             Event::QuotaUpdated { .. } | Event::SessionLimited { .. }
         )
         .then(|| event.clone());
         self.emit(event);
+        if is_cost {
+            self.check_budget(sid);
+        }
         if let Some(ev) = watch {
             self.react_to_quota(&ev);
         }

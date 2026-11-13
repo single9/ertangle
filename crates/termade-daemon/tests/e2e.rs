@@ -55,6 +55,7 @@ fn spawn_prompt_output_shutdown() {
         attachments: vec![],
         inherit_from: None,
         args: vec![],
+        budget_usd: None,
     }))
     .unwrap();
 
@@ -87,6 +88,7 @@ fn spawn_prompt_output_shutdown() {
             attachments: vec![],
             inherit_from: None,
             args: vec![],
+            budget_usd: None,
         }))
         .unwrap();
         loop {
@@ -240,6 +242,7 @@ fn resume_keeps_session_transcript_branch_and_cost(root: &std::path::Path) {
         attachments: vec![],
         inherit_from: None,
         args: vec![],
+        budget_usd: None,
     }));
     let find = || {
         let st = snapshot();

@@ -117,6 +117,7 @@ fn paths_are_under_expected_dirs() {
 struct MockCtl {
     inputs: Arc<Mutex<Vec<String>>>,
     wakes: Arc<Mutex<usize>>,
+    cancels: Arc<Mutex<usize>>,
 }
 
 impl MockCtl {
@@ -129,6 +130,9 @@ impl MockCtl {
     fn wake_count(&self) -> usize {
         *self.wakes.lock().unwrap()
     }
+    fn cancel_count(&self) -> usize {
+        *self.cancels.lock().unwrap()
+    }
 }
 
 impl AgentControl for MockCtl {
@@ -137,6 +141,7 @@ impl AgentControl for MockCtl {
         Ok(())
     }
     fn cancel(&self) -> Result<()> {
+        *self.cancels.lock().unwrap() += 1;
         Ok(())
     }
     fn kill(&self) -> Result<()> {
@@ -199,6 +204,8 @@ fn add_session(
             context: None,
             native_id: None,
             permission: Default::default(),
+            budget_usd: None,
+            over_budget: false,
         },
     );
     inner.sessions.insert(
@@ -672,6 +679,8 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         context: None,
         native_id: None,
         permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
     }
 }
 
@@ -806,6 +815,8 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         context: None,
         native_id: None,
         permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
     }
 }
 
@@ -1292,6 +1303,7 @@ fn failed_spawn_leaves_no_session() {
             attachments: vec![],
             inherit_from: None,
             args: vec![],
+            budget_usd: None,
         }),
     );
     let frames: Vec<Frame> = rx.try_iter().collect();
@@ -1380,6 +1392,297 @@ fn high_quota_leaves_a_handoff_hint_once_per_crossing() {
         .is_some());
 }
 
+// ---- T17：成本與子 agent 數量上限 ----
+
+#[test]
+fn spawn_enforces_max_depth_and_max_children_only_for_child_sessions() {
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    fs::create_dir_all(cwd.join(".termade")).unwrap();
+    fs::write(
+        cwd.join(".termade").join("config.toml"),
+        "[limits]\nmax_depth = 2\nmax_children = 2\n",
+    )
+    .unwrap();
+
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "root",
+        "root",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &cwd,
+    );
+    add_session(&shared, "c1", "c1", SessionStatus::Busy, ctl.as_ctl(), &cwd);
+    add_session(&shared, "c2", "c2", SessionStatus::Idle, ctl.as_ctl(), &cwd);
+    add_session(&shared, "g1", "g1", SessionStatus::Busy, ctl.as_ctl(), &cwd);
+    {
+        let mut inner = lock(&shared.inner);
+        inner.state.sessions.get_mut("c1").unwrap().parent = Some("root".into());
+        inner.state.sessions.get_mut("c2").unwrap().parent = Some("root".into());
+        inner.state.sessions.get_mut("g1").unwrap().parent = Some("c1".into());
+    }
+
+    let spawn_req = |parent: Option<&str>| {
+        Request::Spawn(termade_protocol::SpawnRequest {
+            kind: AgentKind::ClaudeCode,
+            cwd: Some(cwd.to_string_lossy().to_string()),
+            label: None,
+            role: Role::Worker,
+            prompt: None,
+            worktree: false,
+            transport: termade_protocol::Transport::Structured,
+            permission: None,
+            parent: parent.map(String::from),
+            model: None,
+            effort: None,
+            attachments: vec![],
+            inherit_from: None,
+            args: vec![],
+            budget_usd: None,
+        })
+    };
+
+    // g1 的深度已是 2（root=0 -> c1=1 -> g1=2），再往下一層深度為 3 > max_depth(2)
+    let (tx, rx) = client_channel(None);
+    shared.handle(&tx, spawn_req(Some("g1")));
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    match &frames[0] {
+        Frame::Error { message } => {
+            assert!(
+                message.contains("max_depth") && message.contains('2'),
+                "應包含上限名稱與數值：{message}"
+            );
+        }
+        other => panic!("預期錯誤，得到 {other:?}"),
+    }
+
+    // root 已有 2 個進行中的子 session（c1, c2），再衍生第 3 個應被 max_children(2) 拒絕
+    let (tx, rx) = client_channel(None);
+    shared.handle(&tx, spawn_req(Some("root")));
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    match &frames[0] {
+        Frame::Error { message } => {
+            assert!(
+                message.contains("max_children") && message.contains('2'),
+                "應包含上限名稱與數值：{message}"
+            );
+        }
+        other => panic!("預期錯誤，得到 {other:?}"),
+    }
+
+    // 若 c2 已結束（Exited），進行中的子 session 只剩 1 個，不再被 max_children 擋下
+    shared.emit(Event::SessionStatus {
+        session: "c2".into(),
+        status: SessionStatus::Exited,
+    });
+    assert_eq!(lock(&shared.inner).state.live_children_count("root"), 1);
+}
+
+#[test]
+fn budget_warn_once_and_exceed_cancels_blocks_prompt_and_raises() {
+    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("termade-budget-log")));
+    let shared =
+        Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    let cwd = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "s1",
+        "worker/a",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &cwd,
+    );
+    let s1 = {
+        let mut inner = lock(&shared.inner);
+        let s = inner.state.sessions.get_mut("s1").unwrap();
+        s.budget_usd = Some(5.0);
+        s.clone()
+    };
+    shared.emit(Event::SessionStarted { session: s1 });
+
+    // 82% ($4.10 / $5)：跨越 warn_percent (80%)，留一筆 SessionNote
+    Shared::ingest(
+        &shared,
+        &"s1".into(),
+        termade_adapter::AgentEvent::Cost(Cost {
+            usd: 4.10,
+            input_tokens: 1000,
+            output_tokens: 500,
+        }),
+    );
+    let note1 = lock(&shared.inner).state.sessions["s1"]
+        .status_note
+        .clone()
+        .unwrap();
+    assert!(note1.contains("82%") && note1.contains("$5"), "{note1}");
+    assert_eq!(ctl.cancel_count(), 0);
+    assert!(!lock(&shared.inner).state.sessions["s1"].over_budget);
+
+    // 85% ($4.25 / $5)：同一次跨越不重複留 SessionNote
+    shared.emit(Event::SessionNote {
+        session: "s1".into(),
+        note: String::new(),
+    });
+    Shared::ingest(
+        &shared,
+        &"s1".into(),
+        termade_adapter::AgentEvent::Cost(Cost {
+            usd: 4.25,
+            input_tokens: 1100,
+            output_tokens: 600,
+        }),
+    );
+    assert!(lock(&shared.inner).state.sessions["s1"]
+        .status_note
+        .is_none());
+
+    // 100% ($5.05 / $5)：超過上限，呼叫 ctl.cancel() 並標記 over_budget
+    Shared::ingest(
+        &shared,
+        &"s1".into(),
+        termade_adapter::AgentEvent::Cost(Cost {
+            usd: 5.05,
+            input_tokens: 1500,
+            output_tokens: 800,
+        }),
+    );
+    assert_eq!(ctl.cancel_count(), 1);
+    assert!(lock(&shared.inner).state.sessions["s1"].over_budget);
+
+    // 模擬回合被中斷後回到 Idle
+    shared.emit(Event::SessionStatus {
+        session: "s1".into(),
+        status: SessionStatus::Idle,
+    });
+
+    // over_budget 時送 Request::Prompt 會被拒絕並回傳錯誤
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "s1".into(),
+            text: "繼續做".into(),
+            attachments: vec![],
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    match &frames[0] {
+        Frame::Error { message } => assert!(message.contains("超過成本上限"), "{message}"),
+        other => panic!("預期錯誤，得到 {other:?}"),
+    }
+    assert!(ctl.inputs().is_empty());
+
+    // over_budget 時收到直接訊息也不會自動喚醒
+    shared.handle(
+        &tx,
+        Request::BusSend {
+            from: None,
+            to: Target::Direct("s1".into()),
+            kind: MsgKind::Chat,
+            body: "ping".into(),
+            reply_to: None,
+        },
+    );
+    assert!(ctl.inputs().is_empty());
+
+    // 重播事件日誌後 over_budget 仍保留
+    shared.flush_log();
+    let (replayed, _) = replay_log(&log).unwrap();
+    assert!(replayed.sessions["s1"].over_budget);
+
+    // 調高上限至 $10：解除 over_budget，之後可繼續送 prompt
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::SessionBudget {
+            session: "s1".into(),
+            budget_usd: 10.0,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(matches!(frames[0], Frame::Ok { .. }));
+    assert!(!lock(&shared.inner).state.sessions["s1"].over_budget);
+    assert_eq!(
+        lock(&shared.inner).state.sessions["s1"].budget_usd,
+        Some(10.0)
+    );
+
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "s1".into(),
+            text: "繼續做".into(),
+            attachments: vec![],
+        },
+    );
+    assert_eq!(ctl.inputs().len(), 1);
+}
+
+#[test]
+fn child_cost_counts_toward_parent_tree_usd_and_stops_tree() {
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    fs::create_dir_all(cwd.join(".termade")).unwrap();
+    fs::write(
+        cwd.join(".termade").join("config.toml"),
+        "[limits]\ntree_usd = 10.0\n",
+    )
+    .unwrap();
+
+    let parent_ctl = MockCtl::default();
+    let child_ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "parent",
+        "coord",
+        SessionStatus::Idle,
+        parent_ctl.as_ctl(),
+        &cwd,
+    );
+    add_session(
+        &shared,
+        "child",
+        "worker/1",
+        SessionStatus::Busy,
+        child_ctl.as_ctl(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        inner.state.sessions.get_mut("child").unwrap().parent = Some("parent".into());
+    }
+
+    // 父 session 已花 $6，子 session 再花 $4.5 → 整棵樹 $10.50 >= tree_usd ($10)
+    Shared::ingest(
+        &shared,
+        &"parent".into(),
+        termade_adapter::AgentEvent::Cost(Cost {
+            usd: 6.0,
+            input_tokens: 100,
+            output_tokens: 100,
+        }),
+    );
+    assert!(!lock(&shared.inner).state.sessions["parent"].over_budget);
+
+    Shared::ingest(
+        &shared,
+        &"child".into(),
+        termade_adapter::AgentEvent::Cost(Cost {
+            usd: 4.5,
+            input_tokens: 100,
+            output_tokens: 100,
+        }),
+    );
+    assert_eq!(lock(&shared.inner).state.tree_cost_usd("parent"), 10.5);
+    assert!(lock(&shared.inner).state.sessions["parent"].over_budget);
+    assert!(lock(&shared.inner).state.sessions["child"].over_budget);
+    assert_eq!(parent_ctl.cancel_count(), 1);
+    assert_eq!(child_ctl.cancel_count(), 1);
+}
+
 #[test]
 fn acp_prepends_collab_instructions_to_first_prompt_only_and_hides_from_user_prompt_event() {
     use std::os::unix::fs::PermissionsExt;
@@ -1441,6 +1744,7 @@ done
             attachments: vec![],
             inherit_from: None,
             args: vec![],
+            budget_usd: None,
         }),
     );
 
