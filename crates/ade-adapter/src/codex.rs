@@ -447,6 +447,10 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
     if let Some(m) = &spec.model {
         p["model"] = json!(m);
     }
+    if let Some(e) = &spec.effort {
+        // thread 層級的 config 覆寫，等同 `-c model_reasoning_effort=...`。
+        p["config"] = json!({ "model_reasoning_effort": e });
+    }
     let sandbox = if spec.read_only {
         Some("read-only".to_string())
     } else {
@@ -494,6 +498,7 @@ mod tests {
             bin: None,
             args: vec![],
             model: Some("m1".into()),
+            effort: Some("high".into()),
             allowed_tools: vec![],
             disallowed_tools: vec![],
             read_only: false,
@@ -508,6 +513,7 @@ mod tests {
         let p = thread_start_params(&spec);
         assert_eq!(p["model"], "m1");
         assert_eq!(p["sandbox"], "workspace-write");
+        assert_eq!(p["config"]["model_reasoning_effort"], "high");
         let mut ro = spec.clone();
         ro.read_only = true;
         assert_eq!(thread_start_params(&ro)["sandbox"], "read-only");

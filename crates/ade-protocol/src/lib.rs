@@ -61,6 +61,9 @@ pub struct SpawnRequest {
     /// 指定 model；省略時依 `config.toml` 決定。
     #[serde(default)]
     pub model: Option<String>,
+    /// 推理強度（low／medium／high／xhigh／max）；省略時依 config.toml。
+    #[serde(default)]
+    pub effort: Option<String>,
     /// 一次性額外命令列參數（附加在設定檔的 args 之後）。
     #[serde(default)]
     pub args: Vec<String>,
@@ -315,6 +318,7 @@ mod tests {
             permission: None,
             parent: None,
             model: None,
+            effort: None,
             args: vec![],
         });
         let line = encode_line(&req).unwrap();

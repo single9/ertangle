@@ -51,6 +51,7 @@ fn spawn_prompt_output_shutdown() {
         permission: None,
         parent: None,
         model: None,
+        effort: None,
         args: vec![],
     }))
     .unwrap();
@@ -80,6 +81,7 @@ fn spawn_prompt_output_shutdown() {
             permission: Some(perm),
             parent,
             model: None,
+            effort: None,
             args: vec![],
         }))
         .unwrap();

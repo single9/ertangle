@@ -276,6 +276,9 @@ impl AgentControl for ClaudeControl {
 /// 權限相關的命令列參數（唯讀、放行／禁止工具，與固定放行的 ade MCP 工具合併）。
 fn permission_args(spec: &SessionSpec) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
+    if let Some(e) = &spec.effort {
+        out.extend(["--effort".to_string(), e.clone()]);
+    }
     if spec.read_only {
         out.extend(["--permission-mode".into(), "plan".into()]);
     } else {
@@ -419,6 +422,7 @@ mod tests {
             bin: None,
             args: vec![],
             model: None,
+            effort: None,
             allowed_tools: vec!["Read".into(), "Grep".into()],
             disallowed_tools: vec!["Bash".into()],
             read_only: false,
@@ -444,6 +448,14 @@ mod tests {
         s.read_only = true;
         let a = permission_args(&s);
         assert!(a.windows(2).any(|w| w == ["--permission-mode", "plan"]));
+    }
+
+    #[test]
+    fn effort_flag_added() {
+        let mut s = spec_for_args();
+        s.effort = Some("high".into());
+        let a = permission_args(&s);
+        assert!(a.windows(2).any(|w| w == ["--effort", "high"]), "{a:?}");
     }
 
     #[test]

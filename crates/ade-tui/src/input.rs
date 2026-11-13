@@ -298,6 +298,7 @@ pub(crate) fn handle_input_mode(
             app.input.clear();
             app.input_cursor = 0;
             app.spawn_target = None;
+            app.spawn_effort = None;
         }
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.spawn_worktree = !app.spawn_worktree;

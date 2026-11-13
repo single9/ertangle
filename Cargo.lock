@@ -66,6 +66,7 @@ dependencies = [
 name = "ade-tui"
 version = "0.1.0"
 dependencies = [
+ "ade-adapter",
  "ade-core",
  "ade-daemon",
  "ade-protocol",

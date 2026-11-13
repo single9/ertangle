@@ -59,6 +59,8 @@ pub struct SessionSpec {
     pub args: Vec<String>,
     /// 要使用的 model（目前僅 Claude 結構化模式支援）。
     pub model: Option<String>,
+    /// 推理強度（Claude `--effort`、Codex `model_reasoning_effort`、ACP configOption）。
+    pub effort: Option<String>,
     /// Claude 專用：額外放行／禁止的工具。
     pub allowed_tools: Vec<String>,
     pub disallowed_tools: Vec<String>,
@@ -136,6 +138,9 @@ pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
     }
 }
 
+/// 推理強度的合法值。
+pub const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+
 /// 啟動一個 session，回傳控制把手；事件會從 `tx` 流出。
 ///
 /// 依 `spec.transport` 決定用原生結構化協定還是 PTY 直通。
@@ -143,6 +148,11 @@ pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
 pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     // 不支援的細部權限選項要明確報錯，不能靜默忽略。
     let is_claude = matches!(spec.kind, AgentKind::ClaudeCode);
+    if let Some(e) = &spec.effort {
+        if !EFFORT_LEVELS.contains(&e.as_str()) {
+            bail!("未知的 effort `{e}`；可用：{}", EFFORT_LEVELS.join(", "));
+        }
+    }
     let is_codex = matches!(spec.kind, AgentKind::Codex);
     if !is_claude && (!spec.allowed_tools.is_empty() || !spec.disallowed_tools.is_empty()) {
         bail!(

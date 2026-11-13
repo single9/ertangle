@@ -359,6 +359,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
             permission: app.spawn_permission,
             parent: None,
             model,
+            effort: app.spawn_effort.take(),
             args: vec![],
         }),
     )?;

@@ -101,6 +101,9 @@ enum Cmd {
         /// 明確指定 model（優先於 kind 的 `:model` 與設定檔）
         #[arg(long)]
         model: Option<String>,
+        /// 推理強度：low / medium / high / xhigh / max（省略則依 config.toml）
+        #[arg(long)]
+        effort: Option<String>,
         /// 附加給底層 agent 的命令列參數
         #[arg(last = true)]
         extra: Vec<String>,
@@ -328,9 +331,11 @@ fn main() -> Result<()> {
             permission,
             parent,
             model,
+            effort,
             extra,
         } => cmd_spawn(
-            kind, prompt, cwd, label, role, worktree, transport, permission, parent, model, extra,
+            kind, prompt, cwd, label, role, worktree, transport, permission, parent, model, effort,
+            extra,
         ),
         Cmd::Prompt { session, text } => cmd_prompt(session, text),
         Cmd::Cancel { session } => cmd_cancel(session),

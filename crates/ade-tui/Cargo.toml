@@ -8,6 +8,7 @@ license.workspace = true
 ade-core.workspace = true
 ade-protocol.workspace = true
 ade-daemon.workspace = true
+ade-adapter.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
 ratatui.workspace = true

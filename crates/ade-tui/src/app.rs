@@ -109,6 +109,7 @@ pub(crate) struct App {
     pub(crate) spawn_bypass_armed: bool,
     /// 選擇器選好的 (agent, model)；Spawn 模式的輸入就只是 prompt。
     pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
+    pub(crate) spawn_effort: Option<String>,
     /// Space 選單目前走到的路徑。
     pub(crate) menu_path: Vec<char>,
     pub(crate) picker: Option<crate::menu::Picker>,
@@ -184,6 +185,7 @@ impl App {
             spawn_permission: None,
             spawn_bypass_armed: false,
             spawn_target: None,
+            spawn_effort: None,
             menu_path: Vec::new(),
             picker: None,
             diff_session: None,

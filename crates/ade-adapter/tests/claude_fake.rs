@@ -22,6 +22,7 @@ fn claude_roundtrip_output_cost_and_exit() {
         bin: None,
         args: vec![],
         model: None,
+        effort: None,
         allowed_tools: vec![],
         disallowed_tools: vec![],
         read_only: false,

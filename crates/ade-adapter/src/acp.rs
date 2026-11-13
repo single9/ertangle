@@ -318,6 +318,33 @@ fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
     Ok((id, wanted.to_string()))
 }
 
+/// 從 `session/new` 的 `configOptions` 找出推理強度選項（id 或 category 含 effort／reasoning／thought）。
+fn pick_effort_option(new: &Value, wanted: &str) -> Result<(String, String)> {
+    let opts = new["configOptions"].as_array().cloned().unwrap_or_default();
+    let is_effort = |s: &str| {
+        let s = s.to_ascii_lowercase();
+        s.contains("effort") || s.contains("reasoning") || s.contains("thought")
+    };
+    let opt = opts
+        .iter()
+        .find(|o| {
+            is_effort(o["id"].as_str().unwrap_or(""))
+                || is_effort(o["category"].as_str().unwrap_or(""))
+        })
+        .ok_or_else(|| anyhow!("此 agent 沒有回報可設定的 effort（configOptions 無相關項）"))?;
+    let id = opt["id"].as_str().unwrap_or("effort").to_string();
+    let values: Vec<String> = opt["options"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|o| o["value"].as_str().map(str::to_string))
+        .collect();
+    if !values.is_empty() && !values.iter().any(|v| v == wanted) {
+        bail!("effort `{wanted}` 不在可用清單：{}", values.join(", "));
+    }
+    Ok((id, wanted.to_string()))
+}
+
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     let (default_prog, args) = spec
         .kind
@@ -421,6 +448,15 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         )
         .with_context(|| format!("設定 model `{value}` 失敗"))?;
         let _ = tx.send(AgentEvent::Model(value));
+    }
+    if let Some(e) = &spec.effort {
+        let (config_id, value) = pick_effort_option(&new, e)?;
+        conn.call(
+            "session/set_config_option",
+            json!({ "sessionId": sid, "configId": config_id, "value": value }),
+            CALL_TIMEOUT,
+        )
+        .with_context(|| format!("設定 effort `{value}` 失敗"))?;
     }
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 

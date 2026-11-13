@@ -187,3 +187,4 @@ ade shutdown
 * `n`（或 `Space s n`）：依序選 agent → model → 輸入 prompt。model 清單含預設、內建建議（Claude 的 sonnet／opus／haiku）與 `config.toml` 的 `[agents.<名稱>] models = [...]`；清單沒有符合時，Enter 會使用你輸入的值。
 * `:`（或 `/`）：命令列，`Tab` 補全。常用：`spawn claude:opus 做某事`、`rm [session] [--force]`、`clean`（清除所有已結束的 session）、`kill`、`merge --dry-run`、`gc`、`layout`。
 * 啟動失敗的 session 會自動移除（含剛建立的 worktree 與分支）；已結束的 session 可用 `:rm`／`Space s x` 或 `ade rm <session>` 移除。
+* effort（推理強度，low／medium／high／xhigh／max）：`ade spawn --effort high`、MCP `ade_spawn` 的 `effort`、TUI 選擇器（Claude、Codex 會多一步）。也可寫進 `config.toml` 的 `[agents.claude] effort = "medium"` 或 `[roles.reviewer] effort = "high"`（請求 > 角色 > agent）。Claude 對應 `--effort`，Codex 對應 `thread/start` 的 `config.model_reasoning_effort`；ACP agent 只有在 `session/new` 回報了 effort 選項時才能設，否則會明確報錯。

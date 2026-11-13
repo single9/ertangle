@@ -52,6 +52,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         &spawn.kind,
         &role,
         spawn.model.as_deref(),
+        spawn.effort.as_deref(),
         &spawn.args,
         spawn.permission,
     );
@@ -120,6 +121,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     env.extend(resolved.env.iter().cloned());
     let (tx, rx) = mpsc::channel();
     let spec = SessionSpec {
+        effort: resolved.effort.clone(),
         id: id.clone(),
         kind: spawn.kind.clone(),
         cwd: cwd.clone(),

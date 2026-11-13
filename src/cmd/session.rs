@@ -96,6 +96,7 @@ pub(crate) fn cmd_spawn(
     permission: Option<String>,
     parent: Option<String>,
     model: Option<String>,
+    effort: Option<String>,
     extra: Vec<String>,
 ) -> Result<()> {
     // `claude:opus` 形式同時指定 model；`--model` 優先。
@@ -132,6 +133,7 @@ pub(crate) fn cmd_spawn(
         permission,
         parent,
         model,
+        effort,
         args: extra,
     });
     match roundtrip(&req)? {

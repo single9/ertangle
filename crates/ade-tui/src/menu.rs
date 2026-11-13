@@ -153,6 +153,8 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
 pub(crate) enum PickStage {
     Agent,
     Model(AgentKind),
+    /// 已選好 agent 與 model，最後選推理強度。
+    Effort(AgentKind, Option<String>),
 }
 
 pub(crate) struct Picker {
@@ -321,6 +323,30 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
     app.mode = Mode::Pick;
 }
 
+fn finish_picker(app: &mut App, kind: AgentKind, model: Option<String>, effort: Option<String>) {
+    app.picker = None;
+    app.status = format!(
+        "spawn → {}{}{}：輸入 prompt 後 Enter（可留空）",
+        kind.id(),
+        model
+            .as_deref()
+            .map(|m| format!(":{m}"))
+            .unwrap_or_default(),
+        effort
+            .as_deref()
+            .map(|e| format!(" effort={e}"))
+            .unwrap_or_default(),
+    );
+    app.spawn_target = Some((kind, model));
+    app.spawn_effort = effort;
+    app.mode = Mode::Spawn;
+    app.input.clear();
+    app.input_cursor = 0;
+    app.spawn_worktree = false;
+    app.spawn_permission = None;
+    app.spawn_bypass_armed = false;
+}
+
 pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
     let Some(p) = app.picker.as_mut() else {
         app.mode = Mode::Normal;
@@ -403,22 +429,28 @@ pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
                         None if !custom.is_empty() => Some(custom),
                         None => None,
                     };
-                    app.picker = None;
-                    app.status = format!(
-                        "spawn → {}{}：輸入 prompt 後 Enter（可留空）",
-                        kind.id(),
-                        model
-                            .as_deref()
-                            .map(|m| format!(":{m}"))
-                            .unwrap_or_default()
-                    );
-                    app.spawn_target = Some((kind, model));
-                    app.mode = Mode::Spawn;
-                    app.input.clear();
-                    app.input_cursor = 0;
-                    app.spawn_worktree = false;
-                    app.spawn_permission = None;
-                    app.spawn_bypass_armed = false;
+                    if matches!(kind, AgentKind::ClaudeCode | AgentKind::Codex) {
+                        p.title = format!("{} 的 effort（推理強度）", kind.id());
+                        p.items =
+                            std::iter::once(("預設（依 config.toml）".to_string(), String::new()))
+                                .chain(
+                                    ade_adapter::EFFORT_LEVELS
+                                        .iter()
+                                        .map(|e| (e.to_string(), e.to_string())),
+                                )
+                                .collect();
+                        p.filter.clear();
+                        p.cursor = 0;
+                        p.pending = None;
+                        p.loading = false;
+                        p.stage = PickStage::Effort(kind, model);
+                    } else {
+                        finish_picker(app, kind, model, None);
+                    }
+                }
+                PickStage::Effort(kind, model) => {
+                    let effort = chosen.filter(|v| !v.is_empty());
+                    finish_picker(app, kind, model, effort);
                 }
             }
         }

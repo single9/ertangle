@@ -307,6 +307,11 @@ pub fn tool_definitions() -> Vec<Value> {
                         "enum": ["ask", "auto", "bypass"],
                         "description": "Permission policy (default from config.toml; never higher than the parent's)"
                     },
+                    "effort": {
+                        "type": "string",
+                        "enum": ["low", "medium", "high", "xhigh", "max"],
+                        "description": "Reasoning effort for the child agent (supported by claude, codex; others may reject it)"
+                    },
                     "model": {
                         "type": "string",
                         "description": "Model for the child agent (e.g. a cheaper model for workers). Defaults to config.toml"
@@ -656,6 +661,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 permission,
                 parent: Some(session.to_string()),
                 model: args["model"].as_str().map(|s| s.to_string()),
+                effort: args["effort"].as_str().map(|s| s.to_string()),
                 args: vec![],
             }))?;
             let note = match frame {

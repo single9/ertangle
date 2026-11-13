@@ -24,6 +24,7 @@ pub struct AgentCfg {
     pub model: Option<String>,
     /// TUI 選擇 model 時額外列出的建議清單。
     pub models: Vec<String>,
+    pub effort: Option<String>,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
     pub allowed_tools: Vec<String>,
@@ -38,6 +39,7 @@ pub struct RoleCfg {
     pub model: Option<String>,
     pub permission: Option<String>,
     pub read_only: Option<bool>,
+    pub effort: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -59,6 +61,7 @@ pub struct Config {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Resolved {
     pub model: Option<String>,
+    pub effort: Option<String>,
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
     pub bin: Option<String>,
@@ -118,6 +121,9 @@ impl Config {
                 e.args = v.args;
             }
             e.env.extend(v.env);
+            if v.effort.is_some() {
+                e.effort = v.effort;
+            }
             if !v.models.is_empty() {
                 e.models = v.models;
             }
@@ -145,6 +151,9 @@ impl Config {
             if v.read_only.is_some() {
                 e.read_only = v.read_only;
             }
+            if v.effort.is_some() {
+                e.effort = v.effort;
+            }
         }
         if local.tui.layout.is_some() {
             out.tui.layout = local.tui.layout;
@@ -166,6 +175,7 @@ impl Config {
         kind: &AgentKind,
         role: &Role,
         req_model: Option<&str>,
+        req_effort: Option<&str>,
         req_args: &[String],
         req_permission: Option<PermissionPolicy>,
     ) -> Resolved {
@@ -175,6 +185,10 @@ impl Config {
             .map(str::to_string)
             .or_else(|| role_cfg.and_then(|r| r.model.clone()))
             .or_else(|| agent.and_then(|a| a.model.clone()));
+        let effort = req_effort
+            .map(str::to_string)
+            .or_else(|| role_cfg.and_then(|r| r.effort.clone()))
+            .or_else(|| agent.and_then(|a| a.effort.clone()));
         let mut args = agent.map(|a| a.args.clone()).unwrap_or_default();
         args.extend(req_args.iter().cloned());
         let env = agent
@@ -207,6 +221,7 @@ impl Config {
             read_only: role_cfg.and_then(|r| r.read_only).unwrap_or(false),
             sandbox: agent.and_then(|a| a.sandbox.clone()),
             model,
+            effort,
             args,
             env,
             bin: agent.and_then(|a| a.bin.clone()),
@@ -235,15 +250,22 @@ model = "haiku"
     fn precedence_request_role_agent() {
         let c = Config::parse(SRC).unwrap();
         let k = AgentKind::ClaudeCode;
-        let r = c.resolve(&k, &Role::Coordinator, None, &[], None);
+        let r = c.resolve(&k, &Role::Coordinator, None, None, &[], None);
         assert_eq!(r.model.as_deref(), Some("sonnet")); // agent 層
-        let r = c.resolve(&k, &Role::Worker, None, &[], None);
+        let r = c.resolve(&k, &Role::Worker, None, None, &[], None);
         assert_eq!(r.model.as_deref(), Some("haiku")); // role 蓋過 agent
-        let r = c.resolve(&k, &Role::Worker, Some("opus"), &["--bar".into()], None);
+        let r = c.resolve(
+            &k,
+            &Role::Worker,
+            Some("opus"),
+            None,
+            &["--bar".into()],
+            None,
+        );
         assert_eq!(r.model.as_deref(), Some("opus")); // 請求最優先
         assert_eq!(r.args, vec!["--foo", "--bar"]);
         assert_eq!(r.env, vec![("A".to_string(), "1".to_string())]);
-        let r = c.resolve(&AgentKind::Codex, &Role::Coordinator, None, &[], None);
+        let r = c.resolve(&AgentKind::Codex, &Role::Coordinator, None, None, &[], None);
         assert_eq!(r.model, None);
     }
 
@@ -265,7 +287,7 @@ model = "haiku"
         )
         .unwrap();
         let k = AgentKind::ClaudeCode;
-        let r = c.resolve(&k, &Role::Reviewer, None, &[], None);
+        let r = c.resolve(&k, &Role::Reviewer, None, None, &[], None);
         assert_eq!(r.permission, PermissionPolicy::Ask);
         assert!(r.read_only);
         assert_eq!(r.max_agent_permission, Some(PermissionPolicy::Auto));
@@ -273,12 +295,39 @@ model = "haiku"
             &k,
             &Role::Reviewer,
             None,
+            None,
             &[],
             Some(PermissionPolicy::Bypass),
         );
         assert_eq!(r.permission, PermissionPolicy::Bypass);
-        let r = c.resolve(&k, &Role::Worker, None, &[], None);
+        let r = c.resolve(&k, &Role::Worker, None, None, &[], None);
         assert_eq!(r.permission, PermissionPolicy::Auto);
+    }
+
+    #[test]
+    fn effort_precedence_request_role_agent() {
+        let c =
+            Config::parse("[agents.claude]\neffort=\"low\"\n[roles.reviewer]\neffort=\"high\"\n")
+                .unwrap();
+        let k = AgentKind::ClaudeCode;
+        assert_eq!(
+            c.resolve(&k, &Role::Worker, None, None, &[], None)
+                .effort
+                .as_deref(),
+            Some("low")
+        );
+        assert_eq!(
+            c.resolve(&k, &Role::Reviewer, None, None, &[], None)
+                .effort
+                .as_deref(),
+            Some("high")
+        );
+        assert_eq!(
+            c.resolve(&k, &Role::Reviewer, None, Some("max"), &[], None)
+                .effort
+                .as_deref(),
+            Some("max")
+        );
     }
 
     #[test]
@@ -295,7 +344,7 @@ bin = "/opt/custom/claude"
 "#,
         )
         .unwrap();
-        let r = c.resolve(&AgentKind::ClaudeCode, &Role::Worker, None, &[], None);
+        let r = c.resolve(&AgentKind::ClaudeCode, &Role::Worker, None, None, &[], None);
         assert_eq!(r.bin.as_deref(), Some("/opt/custom/claude"));
     }
 
