@@ -12,8 +12,8 @@
 | 訊息匯流排 | `termade send --to <id>` / `--channel review` | 訊息進 `State.messages` |
 | 任務板 | `termade task "..."` / `termade tasks` | 任務進 `State.tasks` |
 | TUI attach | `termade` | 三欄（Sessions / Transcript / Bus）即時更新、`q` 離線不影響 agent |
-| 中斷 / 結束 | `termade cancel <id>` / `termade kill <id>` | ACP `session/cancel`、程序 kill；狀態轉 `exited` |
-| 關閉 | `termade shutdown` | 先結束所有 agent 子程序、移除 socket 再離開 |
+| 中斷 / 結束 | `termade cancel <id>` / `termade kill <id>` | ACP `session/cancel`、處理程序 kill；狀態轉 `exited` |
+| 關閉 | `termade shutdown` | 先結束所有 agent 子處理程序、移除 socket 再離開 |
 
 ## M1 已驗證（實機）
 
@@ -63,7 +63,7 @@
 | tmux 內 `notify_command` | 命令把 `TERMADE_NOTIFY_KIND`／`LABEL`／`TEXT` 寫進檔案 | 檔案內容 `done\|termade\|termade：測試通知` |
 | `:notify off`／`:notify` | 在 TUI 輸入 | 狀態列顯示 `通知：關（bell、osc9、command）` |
 
-沒有驗證：直接在終端模擬器（不經 tmux）的 bell 與 `notify_command`；各終端對 OSC 9 的實際顯示；tmux 是否把 OSC 9 轉給外層終端；焦點事件在實機終端的回報；由真實 agent 的回合結束／審批觸發（這些路徑只有單元測試）。
+沒有驗證：直接在終端機模擬器（不經 tmux）的 bell 與 `notify_command`；各終端機對 OSC 9 的實際顯示；tmux 是否把 OSC 9 轉給外層終端機；焦點事件在實機終端機的回報；由真實 agent 的回合結束／核准觸發（這些路徑只有單元測試）。
 
 ## T14 Session 接續（實機，2026-11-13）
 
@@ -77,7 +77,7 @@
 | OpenCode ACP `session/load`（daemon 重啟） | `termade shutdown` → 重新啟動 daemon → `termade resume oc "<問題>"` | 重啟後三個 session 都是 failed 且備註「daemon 重啟，可用 :resume 接續」，沒有自動接續；接續後答出原本的字，備註清除 |
 | 對已結束的 session 送 prompt | `termade prompt oc hi` | 回「已結束；可用 :resume…接續原對話」 |
 | 對執行中的 session 接續 | `termade resume cl`（狀態 busy） | 回「仍在執行，不需要接續」 |
-| Codex `thread/resume`（只到協定層） | 直接對 `codex app-server` 送 `thread/start` → 另一個程序 `thread/resume` | 回傳同一個 thread id，且帶回先前的 1 個回合；本機 codex 的登入已失效（回合回 `unauthorized`），所以**沒有驗證**模型接續後的回答 |
+| Codex `thread/resume`（只到協定層） | 直接對 `codex app-server` 送 `thread/start` → 另一個處理程序 `thread/resume` | 回傳同一個 thread id，且帶回先前的 1 個回合；本機 codex 的登入已失效（回合回 `unauthorized`），所以**沒有驗證**模型接續後的回答 |
 
 未驗證：
 

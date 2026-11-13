@@ -1,6 +1,6 @@
 //! PTY 直通 adapter。
 //!
-//! 把 agent CLI 當成一個在偽終端裡跑的互動程序：輸出直接變成 [`AgentEvent::Output`]，
+//! 把 agent CLI 當成一個在偽終端機裡跑的互動處理程序：輸出直接變成 [`AgentEvent::Output`]，
 //! 使用者輸入寫回 PTY。這條路**對任何 CLI agent 都有效**，是萬用後備。
 
 use crate::{AgentControl, AgentEvent, SessionSpec};
@@ -51,7 +51,7 @@ impl AgentControl for PtyControl {
         Ok(())
     }
 
-    /// PTY 沒有結構化協定，無法逐項審批。
+    /// PTY 沒有結構化協定，無法逐項核准。
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
         Ok(())
     }
@@ -102,11 +102,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
-    // 讀取輸出：剝掉終端控制碼後即時送出，但略過「整段都是空白」的重繪 chunk。
+    // 讀取輸出：剝掉終端機控制碼後即時送出，但略過「整段都是空白」的重繪 chunk。
     //
     // 註：全螢幕 TUI（opencode/claude/agy 互動模式）是螢幕導向輸出，只靠 escape
     // 序列定位，純文字抽取天生不完美。可讀的結構化輸出請走 ACP / headless；
-    // 這裡是萬用後備。完整的 vt100 終端模擬留待後續。
+    // 這裡是萬用後備。完整的 vt100 終端機模擬留待後續。
     {
         let tx = tx.clone();
         std::thread::spawn(move || {
@@ -125,7 +125,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                             break;
                         }
                     }
-                    Err(_) => break, // 子程序結束時 Linux 會回 EIO
+                    Err(_) => break, // 子處理程序結束時 Linux 會回 EIO
                 }
             }
         });

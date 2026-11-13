@@ -239,7 +239,7 @@ impl Shared {
         };
         let shared = self.clone();
         let sid = sid.clone();
-        // 交接會啟動新程序，不要卡住 ingest 執行緒。
+        // 交接會啟動新處理程序，不要卡住 ingest 執行緒。
         std::thread::spawn(move || {
             let (tx, _rx) = client_channel(None);
             crate::handlers::session::handle_handoff(

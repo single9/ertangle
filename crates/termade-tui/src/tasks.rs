@@ -188,7 +188,7 @@ fn fit(s: &str, w: usize) -> String {
     out
 }
 
-/// 依賴清單：未完成的用醒目顏色，已完成的淡化。
+/// 相依性清單：未完成的用醒目顏色，已完成的淡化。
 fn dep_spans(app: &App, t: &Task) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     for (i, id) in t.depends_on.iter().enumerate() {

@@ -19,7 +19,7 @@ Codex 登入失效（refresh token 被撤銷）時，`termade spawn --kind codex
 
 1. 從 event log 的順序看，握手（`initialize`、`thread/start`）有成功（有 `session_model`、轉 `idle`），失敗發生在第一個回合，所以錯誤應該走 `error` 通知或 `turn.error`。**沒有確認是哪一條**，也沒抓 app-server 的原始輸出。
 2. 不管哪一條，都只差「把文字往上送」。daemon 已經有 `AgentEvent::Output` 與 `SessionNote` 可以用，不必改協定。
-3. stderr 改成收集最後幾行，在程序異常結束時附上，可以涵蓋握手前就掛掉的情況。
+3. stderr 改成收集最後幾行，在處理程序異常結束時附上，可以涵蓋握手前就掛掉的情況。
 
 ## 實作方式
 

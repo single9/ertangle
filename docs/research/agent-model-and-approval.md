@@ -1,4 +1,4 @@
-# 研究：各 agent 的 model／sandbox 指定與審批轉發
+# 研究：各 agent 的 model／sandbox 指定與核准轉發
 
 查證日期：2026-11-13。標示規則：【已確認】= 有官方文件網址或本機 `--help` 輸出為據；【未確認】= 未能取得一手來源，不可當作事實。
 注意：查證過程中遇到使用額度上限，部分文件未能抓取，這些項目一律標【未確認】並列在「待補」。
@@ -37,7 +37,7 @@
 
 ### 轉發給 `termade mcp` 的可行做法（設計建議，待實測）
 1. termade 啟動 `claude -p --input-format stream-json --output-format stream-json --mcp-config '<json 指向 termade mcp>' --strict-mcp-config --permission-prompt-tool mcp__termade__approve --permission-prompts host`。
-2. `termade mcp` 暴露一個 `approve` 工具：收到工具名稱與輸入後，透過 daemon 轉成 TUI 審批事件，阻塞等待使用者決定，再回傳 allow／deny JSON。
+2. `termade mcp` 暴露一個 `approve` 工具：收到工具名稱與輸入後，透過 daemon 轉成 TUI 核准事件，阻塞等待使用者決定，再回傳 allow／deny JSON。
 3. 需實測項目：逾時行為、`updatedInput` 是否必填、`--permission-mode` 為 manual／dontAsk 時是否仍呼叫該工具、`--permission-prompts none` 時確實全部自動拒絕。
 
 ## 待補清單

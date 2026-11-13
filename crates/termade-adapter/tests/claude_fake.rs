@@ -74,7 +74,7 @@ fn claude_roundtrip_output_cost_and_exit() {
             exited = true;
         }
     }
-    assert!(exited, "子程序結束時應發出 Exited");
+    assert!(exited, "子處理程序結束時應發出 Exited");
 
     // 接續：`--resume <id>` 會傳給 agent，`init` 回報同一個 id。
     let (tx, rx) = mpsc::channel();

@@ -149,6 +149,8 @@ mod tests {
             budget_usd: None,
             over_budget: false,
             handed_off_to: None,
+            effort: None,
+            slash_commands: Vec::new(),
         }
     }
 

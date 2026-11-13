@@ -1,6 +1,6 @@
 //! 極簡 ANSI/escape 序列過濾器。
 //!
-//! PTY 直通會拿到 agent TUI 的原始終端輸出（CSI/OSC 控制碼、游標移動、顏色…）。
+//! PTY 直通會拿到 agent TUI 的原始終端機輸出（CSI/OSC 控制碼、游標移動、顏色…）。
 //! 為了讓 transcript 可讀，我們在 adapter 這層把它們剝掉。
 //!
 //! 這是**跨 chunk 有狀態**的：escape 序列可能被切在兩次 read 之間。

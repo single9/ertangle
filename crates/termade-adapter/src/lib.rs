@@ -3,7 +3,7 @@
 //! 每個 agent 的協定（ACP、stream-json、app-server、PTY）都在這裡被翻譯成
 //! 同一組 [`AgentEvent`]，所以 daemon 之上完全不需要知道底下是哪一家。
 //!
-//! 結構化 adapter（原生、零額外依賴）：
+//! 結構化 adapter（原生、零額外相依性）：
 //! * [`acp`]：Agent Client Protocol — OpenCode（`opencode acp`）、Antigravity（`agy acp`）。
 //! * [`claude`]：Claude Code 的 `--input-format/--output-format stream-json`。
 //! * [`codex`]：Codex 的 `codex app-server`（stdio JSON-RPC）。
@@ -43,6 +43,8 @@ pub enum AgentEvent {
     Permission(PermissionRequest),
     Cost(Cost),
     Model(String),
+    /// agent 原生的斜線指令名稱（不含 `/`）。
+    Commands(Vec<String>),
     /// agent 原生的對話 id（接續用）。只有之後能用這個 id 接續時才會送出。
     NativeId(String),
     /// 額度用完／被限流。
@@ -56,7 +58,7 @@ pub enum AgentEvent {
     },
     /// 帳號額度狀態更新。
     Quota(termade_core::Quota),
-    /// 程序結束。
+    /// 處理程序結束。
     Exited(Option<i32>),
 }
 
@@ -109,22 +111,36 @@ pub trait AgentControl: Send + Sync {
     fn send_input_with(&self, text: &str, attachments: &[termade_core::Attachment]) -> Result<()> {
         self.send_input(&termade_core::compose_text(text, attachments, true))
     }
-    /// 中斷當前回合（不殺程序）。
+    /// 中斷當前回合（不殺處理程序）。
     fn cancel(&self) -> Result<()>;
-    /// 結束並殺掉程序。
+    /// 結束並殺掉處理程序。
     fn kill(&self) -> Result<()>;
-    /// 暫停子程序（SIGSTOP，用於閒置休眠）。
+    /// 暫停子處理程序（SIGSTOP，用於閒置休眠）。
     fn sleep(&self) -> Result<()> {
         Ok(())
     }
-    /// 喚醒子程序（SIGCONT）。
+    /// 喚醒子處理程序（SIGCONT）。
     fn wake(&self) -> Result<()> {
         Ok(())
     }
-    /// 回覆審批請求。
+    /// 回覆核准請求。
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
     /// 這個 session 實際使用的傳輸方式（顯示用）。
     fn transport(&self) -> &'static str;
+    /// 執行期切換 model 與／或 effort（下一個回合起生效）。
+    /// 成功回傳實際生效的 model（agent 有回報才有）；不支援的 adapter 回傳明確錯誤。
+    fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
+        let _ = (model, effort);
+        bail!("{} 不支援執行期切換 model／effort", self.transport())
+    }
+}
+
+/// 檢查 effort 值合法。
+pub fn check_effort(e: &str) -> Result<()> {
+    if !EFFORT_LEVELS.contains(&e) {
+        bail!("未知的 effort `{e}`；可用：{}", EFFORT_LEVELS.join(", "));
+    }
+    Ok(())
 }
 
 /// 對指定 PID 送出 Unix 訊號（例如 `-STOP` / `-CONT`）。

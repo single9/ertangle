@@ -16,7 +16,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         ])
         .split(f.area());
 
-    // 依終端寬度調整三欄比例：寬螢幕給側欄多一點，窄螢幕留給中央。
+    // 依終端機寬度調整三欄比例：寬螢幕給側欄多一點，窄螢幕留給中央。
     let w = f.area().width;
     let layout = effective_layout(app.layout, w);
     app.bus_visible = layout == LayoutMode::Three || app.bus_overlay;
@@ -74,7 +74,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         }
     };
 
-    // Bus 被隱藏時，待審批請求必須在別處看得到。
+    // Bus 被隱藏時，待核准請求必須在別處看得到。
     let center = if layout != LayoutMode::Three && !app.state.pending_permissions.is_empty() {
         let rows = Layout::default()
             .direction(Direction::Vertical)
@@ -108,6 +108,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         Mode::Prompt | Mode::Spawn | Mode::Message => draw_file_suggestions(f, chunks[2], app),
         Mode::Pick => draw_picker(f, app),
         Mode::Help => draw_help(f, app),
+        Mode::Settings => draw_settings(f, app),
         _ => {}
     }
 }
@@ -156,7 +157,7 @@ pub(crate) fn draw_menu(f: &mut TuiFrame, input_area: Rect, app: &App) {
 
 /// `:` 命令列的提示浮層：貼在輸入框上方左側，列出符合的命令與用法。
 pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) {
-    let hints = crate::commands::command_hints(&app.input);
+    let hints = crate::commands::hints_with_native(app);
     if hints.is_empty() {
         return;
     }
@@ -167,7 +168,7 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
     let name_w = hints.iter().map(|(n, _)| n.len()).max().unwrap_or(4);
     let text_w = hints
         .iter()
-        .map(|(n, d)| name_w + 2 + UnicodeWidthStr::width(*d) + n.len().saturating_sub(n.len()))
+        .map(|(_, d)| name_w + 2 + UnicodeWidthStr::width(d.as_str()))
         .max()
         .unwrap_or(20);
     let w = (text_w + 4).min(f.area().width as usize) as u16;
@@ -184,7 +185,7 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(d.to_string(), Style::default().fg(Color::Gray)),
+                Span::styled(d.clone(), Style::default().fg(Color::Gray)),
             ])
         })
         .collect();
@@ -303,6 +304,129 @@ pub(crate) fn draw_help(f: &mut TuiFrame, app: &App) {
     );
 }
 
+/// 設定面板：每列一個設定，目前值用 ◀ ▶ 包起來；選取列反相顯示。
+pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
+    let Some(s) = app.settings.as_ref() else {
+        return;
+    };
+    let full = f.area();
+    let w = full.width.saturating_sub(6).clamp(40, 100);
+    let h = (crate::settings::ITEMS.len() as u16 + 5).min(full.height);
+    let area = Rect::new(
+        full.x + full.width.saturating_sub(w) / 2,
+        full.y + full.height.saturating_sub(h) / 2,
+        w.min(full.width),
+        h,
+    );
+    let label_w = crate::settings::ITEMS
+        .iter()
+        .map(|i| UnicodeWidthStr::width(i.label(s).as_str()))
+        .max()
+        .unwrap_or(20);
+    let mut lines: Vec<Line> = crate::settings::ITEMS
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let label = item.label(s);
+            let pad = label_w.saturating_sub(UnicodeWidthStr::width(label.as_str()));
+            let value = item.display(s);
+            let value = if item.is_toggle() {
+                format!("[{value}]")
+            } else {
+                format!("{value} ▾")
+            };
+            let sel = i == s.cursor;
+            let base = if sel {
+                Style::default().add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default()
+            };
+            Line::from(vec![
+                Span::styled(format!(" {label}{}  ", " ".repeat(pad)), base),
+                Span::styled(value, base.fg(Color::Yellow)),
+            ])
+        })
+        .collect();
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        " ↑↓ 選項目 · Enter 開清單選擇（開關直接切換）· ←→ 輪替 · Esc 關閉　變更立即儲存",
+        Style::default().fg(Color::Gray),
+    )));
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" 設定（寫入全域 config.toml） "),
+        ),
+        area,
+    );
+    if let Some(sub) = &s.sub {
+        draw_settings_sub(f, s, sub, area);
+    }
+}
+
+/// 設定值的選擇清單：疊在設定面板上，第一列是過濾輸入。
+fn draw_settings_sub(
+    f: &mut TuiFrame,
+    s: &crate::settings::Settings,
+    sub: &crate::settings::Sub,
+    panel: Rect,
+) {
+    let item = crate::settings::ITEMS[s.cursor];
+    let all = s.sub_visible();
+    let w = panel.width.saturating_sub(8).clamp(30, 80);
+    let h = (all.len() as u16 + 3)
+        .clamp(5, panel.height.max(5))
+        .min(f.area().height);
+    let area = Rect::new(
+        panel.x + panel.width.saturating_sub(w) / 2,
+        panel.y + 1,
+        w.min(f.area().width),
+        h,
+    );
+    let rows = h.saturating_sub(3) as usize;
+    let top = sub.cursor.saturating_sub(rows.saturating_sub(1));
+    let cur = item.display(s);
+    let mut lines: Vec<Line> = vec![Line::from(vec![
+        Span::styled(" 過濾：", Style::default().fg(Color::Gray)),
+        Span::raw(sub.filter.clone()),
+        Span::styled("▏", Style::default().fg(Color::Yellow)),
+    ])];
+    if all.is_empty() {
+        lines.push(Line::from(Span::styled(
+            " （沒有符合的項目）",
+            Style::default().fg(Color::Gray),
+        )));
+    }
+    for (i, (_, label)) in all.iter().enumerate().skip(top).take(rows) {
+        let mark = if *label == cur { "●" } else { " " };
+        let style = if i == sub.cursor {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+        };
+        lines.push(Line::from(Span::styled(format!(" {mark} {label}"), style)));
+    }
+    let loading = item == crate::settings::Item::Model && s.loading_models_pub();
+    let title = format!(
+        " {}{} · Enter 選定 · Esc 返回 ",
+        item.label(s),
+        if loading { "（載入中…）" } else { "" }
+    );
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow))
+                .title(title),
+        ),
+        area,
+    );
+}
+
 /// 置中的清單選擇器（agent／model），第一列是過濾輸入。
 pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let Some(p) = app.picker.as_mut() else { return };
@@ -364,7 +488,7 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     );
 }
 
-/// 一行待審批提示（Bus 隱藏時使用）：優先顯示目前選取 session 的請求。
+/// 一行待核准提示（Bus 隱藏時使用）：優先顯示目前選取 session 的請求。
 pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
     let selected = app.selected_id();
     let pending = &app.state.pending_permissions;
@@ -1117,7 +1241,7 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     for p in app.state.pending_permissions.values() {
         lines.push(Line::from(vec![
             Span::styled(
-                "⏸ 審批 ",
+                "⏸ 核准 ",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
@@ -1189,6 +1313,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
         Mode::Normal => " 輸入（i 輸入 · ? 說明） ".to_string(),
         Mode::Help => " 說明 ".to_string(),
+        Mode::Settings => " 設定 ".to_string(),
         Mode::Prompt => match app
             .selected_id()
             .and_then(|id| app.state.queues.get(&id).map(Vec::len))
@@ -1248,7 +1373,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(para, area);
 
-    // 把終端游標放到輸入框內，IME 的 preedit 就會錨定在這裡。
+    // 把終端機游標放到輸入框內，IME 的 preedit 就會錨定在這裡。
     if area.width > 2 && area.height > 2 {
         let x = area
             .x

@@ -26,6 +26,8 @@ fn sample_app(lines: &[&str]) -> App {
         budget_usd: None,
         over_budget: false,
         handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
     };
     app.state.sessions.insert(s.id.clone(), s);
     let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();
@@ -921,7 +923,7 @@ fn tui_queue_and_unqueue_preserve_original_input_with_at_filename() {
         Some(&["請檢查 @foo.rs 的實作".to_string()][..])
     );
 
-    // 模擬 daemon 廣播 QueueChanged，確認 State.queues 保存原始輸入文字
+    // 模擬 daemon 廣播 QueueChanged，確認 State.queues 儲存原始輸入文字
     app.state.apply(&termade_core::Record {
         seq: 10,
         ts: 10,
@@ -1063,6 +1065,8 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
         budget_usd: None,
         over_budget: false,
         handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
     };
     for s in [
         mk("a", "/work/alpha", None),
@@ -1215,7 +1219,7 @@ fn tasks_view_groups_by_status_in_every_layout() {
             assert!(text.contains(title), "{layout:?}: 缺 {title}");
         }
         assert!(text.contains("worker"), "{layout:?}: 缺負責人 label");
-        assert!(text.contains("ccc333"), "{layout:?}: 缺依賴");
+        assert!(text.contains("ccc333"), "{layout:?}: 缺相依性");
         assert!(
             text.contains("detail-of-tsk_aaa111"),
             "{layout:?}: 缺選取任務的說明"
@@ -1750,4 +1754,128 @@ fn budget_command_and_session_list_budget_display() {
         }
         other => panic!("unexpected {other:?}"),
     }
+}
+
+#[test]
+fn hints_include_selected_sessions_native_commands() {
+    let mut app = sample_app(&[]);
+    app.state.apply(&termade_core::Record {
+        seq: 1,
+        ts: 1,
+        event: termade_core::Event::SessionCommands {
+            session: "ses_test".into(),
+            commands: vec!["compact".into(), "context".into(), "model".into()],
+        },
+    });
+    app.selected = 0;
+    app.input = "co".into();
+    let h = crate::commands::hints_with_native(&app);
+    let names: Vec<&str> = h.iter().map(|(n, _)| n.as_str()).collect();
+    assert!(
+        names.contains(&"compact") && names.contains(&"context"),
+        "{names:?}"
+    );
+    // 與 TUI 命令同名的不重複列出
+    app.input = "mod".into();
+    let h = crate::commands::hints_with_native(&app);
+    assert_eq!(h.iter().filter(|(n, _)| n == "model").count(), 1);
+}
+
+#[test]
+fn set_command_offers_argument_candidates() {
+    let mut app = sample_app(&[]);
+    app.selected = 0;
+    let cands = |app: &App, i: &str| -> Vec<String> {
+        crate::commands::arg_candidates(app, i)
+            .map(|(_, c)| c.into_iter().map(|(v, _)| v).collect())
+            .unwrap_or_default()
+    };
+    let keys = cands(&app, "set ");
+    assert!(keys.contains(&"permission".to_string()) && keys.contains(&"--repo".to_string()));
+    assert_eq!(cands(&app, "set --repo pe"), vec!["permission"]);
+    assert_eq!(
+        cands(&app, "set permission "),
+        vec!["ask", "auto", "bypass"]
+    );
+    assert_eq!(cands(&app, "set effort hi"), vec!["high"]);
+    assert_eq!(cands(&app, "effort zz"), Vec::<String>::new());
+    assert!(cands(&app, "set agent c").contains(&"claude".to_string()));
+
+    // Tab 補全：唯一候選補完並加空白
+    app.input = "set perm".into();
+    crate::input::complete_command_for_test(&mut app);
+    assert_eq!(app.input, "set permission ");
+}
+
+#[test]
+fn settings_panel_cycles_values_and_writes_config() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let dir = std::env::temp_dir().join(format!("termade-settings-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &dir);
+    let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+
+    let mut app = sample_app(&[]);
+    app.selected = 0;
+    crate::settings::open(&mut app);
+    assert_eq!(app.mode, Mode::Settings);
+    // 寬字元在 buffer 中夾著空白格，比對前去掉空白。
+    let text: String = render(&mut app).split_whitespace().collect();
+    assert!(text.contains("預設權限") && text.contains("獨立worktree"));
+
+    // 第 2 列「預設權限」：未設定 → ask
+    crate::settings::handle_key(&mut app, key(KeyCode::Down));
+    // Enter 開清單，打字過濾後 Enter 選定
+    crate::settings::handle_key(&mut app, key(KeyCode::Enter));
+    assert!(app.settings.as_ref().unwrap().sub.is_some());
+    let t: String = render(&mut app).split_whitespace().collect();
+    assert!(t.contains("過濾"), "{t}");
+    for c in "ask".chars() {
+        crate::settings::handle_key(&mut app, key(KeyCode::Char(c)));
+    }
+    crate::settings::handle_key(&mut app, key(KeyCode::Enter));
+    assert!(app.settings.as_ref().unwrap().sub.is_none());
+    // 第 6 列「worktree」：預設 on → off（寫成布林）
+    for _ in 0..4 {
+        crate::settings::handle_key(&mut app, key(KeyCode::Down));
+    }
+    crate::settings::handle_key(&mut app, key(KeyCode::Char(' ')));
+
+    let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
+    assert_eq!(cfg.defaults.permission.as_deref(), Some("ask"));
+    assert!(!cfg.agent_spawn.worktree());
+
+    // 再切一次回 on；Esc 關閉
+    crate::settings::handle_key(&mut app, key(KeyCode::Left));
+    let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
+    assert!(cfg.agent_spawn.worktree());
+    crate::settings::handle_key(&mut app, key(KeyCode::Esc));
+    assert_eq!(app.mode, Mode::Normal);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn agy_model_variants_are_split_from_effort() {
+    let out = "gemini-4-argon-medium\tGemini 4 Argon (Medium)\n\
+gemini-4-argon-high\tGemini 4 Argon (High)\n\
+gemini-pro-orchestrator-g1-pro\tPro\n\
+claude-opus-5-5-low\tClaude Opus 5.5 (Low)\n\
+claude-opus-5-5-high\tClaude Opus 5.5 (High)\n\
+gpt-oss-120b-medium\tGPT OSS\n";
+    let m = crate::menu::split_effort_variants(crate::menu::parse_models(out));
+    let ids: Vec<&str> = m.iter().map(|(_, v)| v.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec![
+            "gemini-4-argon",
+            "gemini-pro-orchestrator-g1-pro",
+            "claude-opus-5-5",
+            "gpt-oss-120b-medium"
+        ]
+    );
+    assert!(
+        m[0].0.contains("Gemini 4 Argon") && !m[0].0.contains("Medium"),
+        "{:?}",
+        m[0]
+    );
 }

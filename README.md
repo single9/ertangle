@@ -15,7 +15,7 @@
 | 特性 | 本專案的做法 |
 | --- | --- |
 | **超輕量與極速** | Rust + Ratatui 開發，常駐記憶體成本 `< 20 MB`，瞬間啟動，SSH 遠端連線零卡頓 |
-| **Daemon 常駐架構** | Daemon 負責真正持有 Agent 子程序、訊息匯流排與狀態；TUI 只是隨時可重開、重新連線的顯示端 |
+| **Daemon 常駐架構** | Daemon 負責真正持有 Agent 子處理程序、訊息匯流排與狀態；TUI 只是隨時可重開、重新連線的顯示端 |
 | **平行作業不衝突** | 每個 Agent Session 自動配置獨立的 `git worktree` 與分支 (`termade/<session>`) |
 | **零相依原生通訊** | 優先採用各 Agent 的結構化協定 (ACP / stream-json / app-server)，無需額外 Wrapper；未安裝時自動退回 PTY 直通 |
 | **結構化協同機制** | 透過 Daemon 注入 MCP 伺服器，讓 Agent 能彼此通訊、委派任務、發布進度、排隊等待 |
@@ -139,7 +139,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - 新 Agent **直接沿用同一個工作目錄與分支**接手；
   - 之後發往舊 session 的直接訊息會**自動改投給新接手者**。
 - **對話接續 (Resume)**：
-  - 若 Agent 程序異常中斷或 Daemon 重啟，按下 `Space s r` 或執行 `termade resume <session> [prompt]`，即可喚回**原本的對話**。
+  - 若 Agent 處理程序異常中斷或 Daemon 重啟，按下 `Space s r` 或執行 `termade resume <session> [prompt]`，即可喚回**原本的對話**。
   - 利用各家原生的對話回復機制 (Claude `--resume`、Codex `thread/resume`、ACP `session/load`)，保持同一個 session ID、逐字稿與分支。
 
 ### 4. 資源控管與休眠 (Budget & Limits)
@@ -148,7 +148,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - 支援單一 session 預算 (`session_usd`)、子樹總額上限 (`tree_usd`)、Token 上限 (`session_tokens`)，以及最大子 Agent 數量與層級深度。
   - 達到警戒線 (預設 80%) 黃色警告，超過上限立即阻斷執行並暫停排隊的 prompt，使用 `:budget <金額>` 調高後自動恢復。
 - **閒置休眠**：
-  - 按 `z` 或執行 `termade sleep <session>`，發送 `SIGSTOP` 暫停 Agent 程序節省系統資源；按 `z` 或收到訊息時發送 `SIGCONT` 自動喚醒。
+  - 按 `z` 或執行 `termade sleep <session>`，發送 `SIGSTOP` 暫停 Agent 處理程序節省系統資源；按 `z` 或收到訊息時發送 `SIGCONT` 自動喚醒。
 
 ### 5. 權限政策與安全防護 (Policy Engine)
 
@@ -160,7 +160,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 ---
 
-## TUI 終端介面操作指南
+## TUI 終端機介面操作指南
 
 ### 1. 版面與檢視
 
@@ -221,7 +221,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | `G` | 清理 (GC) 已結束且已合併的 Worktree |
 | `z` | 切換暫停休眠 (`SIGSTOP`) 與喚醒 (`SIGCONT`) |
 | `x` | 中斷 Agent 當前回合運算 (Cancel) |
-| `K` | 強制結束選取的 Agent 子程序 (Kill) |
+| `K` | 強制結束選取的 Agent 子處理程序 (Kill) |
 | `a` / `A` / `d` | 審核請求：允許一次 / 本回合一律允許 / 拒絕 |
 
 ### 3. TUI 命令列 (`:command`) 速查
@@ -253,8 +253,8 @@ termade whoami [--session <id>] [--json]          # 查看當前 session 資訊
 termade spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
 termade resume <session-or-label> ["接續 prompt"] # 接續已中斷的 session
 termade handoff <session-or-label> --to <agent> [--note "交接補充"]
-termade sleep <session> ; termade wake <session>  # 暫停 / 喚醒 Agent 程序
-termade cancel <session> ; termade kill <session> # 中斷回合 / 強制中止程序
+termade sleep <session> ; termade wake <session>  # 暫停 / 喚醒 Agent 處理程序
+termade cancel <session> ; termade kill <session> # 中斷回合 / 強制中止處理程序
 termade rm <session> [--force]                    # 移除已結束的 session 紀錄
 
 # 提示詞與佇列

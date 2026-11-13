@@ -154,7 +154,7 @@ pub enum SessionStatus {
     Idle,
     Busy,
     WaitingApproval,
-    /// 閒置休眠（程序已 SIGSTOP 暫停，收到新訊息或喚醒時自動 SIGCONT）。
+    /// 閒置休眠（處理程序已 SIGSTOP 暫停，收到新訊息或喚醒時自動 SIGCONT）。
     Sleeping,
     Exited,
     Failed,
@@ -281,6 +281,12 @@ pub struct Session {
     /// 被誰接手（交接後由 `Event::SessionHandedOff` 設定；舊 log 沒有此欄位）。
     #[serde(default)]
     pub handed_off_to: Option<SessionId>,
+    /// 目前的推理強度（啟動時解析出的值，或執行期切換後的值；舊 log 沒有此欄位）。
+    #[serde(default)]
+    pub effort: Option<String>,
+    /// agent 回報的原生斜線指令名稱（不含 `/`；Claude `slash_commands`、ACP `available_commands_update`）。
+    #[serde(default)]
+    pub slash_commands: Vec<String>,
 }
 
 impl Session {
@@ -504,7 +510,7 @@ pub struct WorktreeInfo {
 }
 
 // ---------------------------------------------------------------------------
-// 審批
+// 核准
 // ---------------------------------------------------------------------------
 
 /// 統一權限政策：決定 agent 執行工具時要不要問人。
@@ -609,7 +615,7 @@ pub enum Decision {
     Deny,
 }
 
-/// agent 送出的審批請求（已正規化，不分來源協定）。
+/// agent 送出的核准請求（已正規化，不分來源協定）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionRequest {
     /// adapter 內部的請求 id，回覆時要帶回。
@@ -664,6 +670,16 @@ pub enum Event {
     SessionModel {
         session: SessionId,
         model: String,
+    },
+    /// agent 回報的原生斜線指令。
+    SessionCommands {
+        session: SessionId,
+        commands: Vec<String>,
+    },
+    /// 執行期切換（或啟動時設定）的推理強度。
+    SessionEffort {
+        session: SessionId,
+        effort: String,
     },
     /// agent 回報的原生對話 id（接續用）。
     SessionNativeId {
@@ -788,7 +804,7 @@ pub struct State {
     pub artifacts: Vec<Artifact>,
     #[serde(default)]
     pub reviews: Vec<ReviewComment>,
-    /// 尚未回覆的審批請求。
+    /// 尚未回覆的核准請求。
     pub pending_permissions: BTreeMap<String, PermissionRequest>,
     /// session id → 輸出文字行。
     pub transcripts: HashMap<SessionId, VecDeque<String>>,
@@ -887,6 +903,16 @@ impl State {
             Event::SessionModel { session, model } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.model = Some(model.clone());
+                }
+            }
+            Event::SessionCommands { session, commands } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.slash_commands = commands.clone();
+                }
+            }
+            Event::SessionEffort { session, effort } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.effort = Some(effort.clone());
                 }
             }
             Event::SessionNativeId { session, native_id } => {
@@ -1274,7 +1300,7 @@ impl PolicyEngine {
         engine
     }
 
-    /// 評估一個審批請求：
+    /// 評估一個核准請求：
     /// * 命中 `deny` → `Some(Decision::Deny)`
     /// * 命中 `allow` → `Some(Decision::Allow)`
     /// * 其餘 → `None`（交由 session 的 `PermissionPolicy` 或人類決定）
@@ -1331,7 +1357,7 @@ fn word_prefix(text: &str, pat: &str) -> bool {
             .is_none_or(char::is_whitespace)
 }
 
-/// 從審批請求的 `detail`（通常是 JSON rawInput）取出指令字串。
+/// 從核准請求的 `detail`（通常是 JSON rawInput）取出指令字串。
 fn command_text(detail: &str) -> Option<String> {
     // 不是 JSON 時，整段當作指令文字。
     let Ok(v) = serde_json::from_str::<serde_json::Value>(detail) else {
@@ -1709,6 +1735,8 @@ pub(crate) mod tests {
             budget_usd: None,
             over_budget: false,
             handed_off_to: None,
+            effort: None,
+            slash_commands: Vec::new(),
         }
     }
 

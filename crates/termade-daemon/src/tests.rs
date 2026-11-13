@@ -159,7 +159,18 @@ impl AgentControl for MockCtl {
     }
 }
 
+/// 測試不能讀到使用者真實的 `~/.config/termade/config.toml`：把設定目錄指到空的暫存目錄。
+fn isolate_global_config() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("termade-test-xdg-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+    });
+}
+
 fn test_shared() -> Arc<Shared> {
+    isolate_global_config();
     Shared::restore(
         Path::new("/dev/null"),
         PolicyEngine::default(),
@@ -207,6 +218,8 @@ fn add_session(
             budget_usd: None,
             over_budget: false,
             handed_off_to: None,
+            effort: None,
+            slash_commands: Vec::new(),
         },
     );
     inner.sessions.insert(
@@ -537,7 +550,7 @@ fn task_assignment_wakes_idle_assignee() {
     assert_eq!(inbox[0].kind, MsgKind::Handoff);
 }
 
-// ---- T18：任務依賴解鎖 ----
+// ---- T18：任務相依性解鎖 ----
 
 /// 建立任務並回傳 (回覆 frame, 任務 id)。任務 id 取狀態裡最新建立的那個。
 fn create_task(
@@ -605,7 +618,7 @@ fn task_with_unfinished_dependency_is_blocked_and_silent() {
     let second = second.unwrap();
 
     assert_eq!(task_status(&shared, &second), TaskStatus::Blocked);
-    assert!(worker.inputs().is_empty(), "依賴未完成時不該通知負責人");
+    assert!(worker.inputs().is_empty(), "相依性未完成時不該通知負責人");
     assert!(lock(&shared.inner)
         .state
         .inbox_for("ses_dep_w", None)
@@ -692,7 +705,7 @@ fn two_dependencies_need_both_done() {
 
     set_task_status(&shared, &a, TaskStatus::Done);
     assert_eq!(task_status(&shared, &c), TaskStatus::Blocked);
-    assert!(worker.inputs().is_empty(), "只完成一個依賴不該解鎖");
+    assert!(worker.inputs().is_empty(), "只完成一個相依性不該解鎖");
 
     set_task_status(&shared, &b, TaskStatus::Done);
     assert_eq!(task_status(&shared, &c), TaskStatus::Todo);
@@ -728,7 +741,7 @@ fn dependency_already_done_behaves_like_no_dependency() {
     set_task_status(&shared, &a, TaskStatus::Done);
     let (_, b) = create_task(&shared, "B", Some("worker/ready"), &[&a]);
     assert_eq!(task_status(&shared, &b.unwrap()), TaskStatus::Todo);
-    assert_eq!(worker.inputs().len(), 1, "依賴都完成時立刻通知");
+    assert_eq!(worker.inputs().len(), 1, "相依性都完成時立刻通知");
 }
 
 #[test]
@@ -759,7 +772,7 @@ fn reassigning_task_waiting_on_dependency_stays_silent() {
             detail: None,
         },
     );
-    assert!(worker.inputs().is_empty(), "還在等依賴，改派也先不通知");
+    assert!(worker.inputs().is_empty(), "還在等相依性，改派也先不通知");
 
     set_task_status(&shared, &a, TaskStatus::Done);
     assert_eq!(worker.inputs().len(), 1, "解鎖時通知後來指派的負責人");
@@ -847,6 +860,8 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         budget_usd: None,
         over_budget: false,
         handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
     }
 }
 
@@ -984,6 +999,8 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         budget_usd: None,
         over_budget: false,
         handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
     }
 }
 
@@ -1070,7 +1087,7 @@ fn native_id_survives_flush_and_replay_and_restart_leaves_resume_hint() {
     let without = &inner.state.sessions["ses-no-id"];
     assert_eq!(without.status, SessionStatus::Failed);
     assert_eq!(without.status_note, None);
-    assert!(inner.sessions.is_empty(), "不該自動啟動任何程序");
+    assert!(inner.sessions.is_empty(), "不該自動啟動任何處理程序");
 }
 
 #[test]
@@ -1177,7 +1194,7 @@ fn hello_with_wrong_epoch_gets_snapshot() {
     assert!(!rx2.try_iter().any(|f| matches!(f, Frame::Snapshot { .. })));
 }
 
-// ---- 審批決策（T04）----
+// ---- 核准決策（T04）----
 
 #[test]
 fn permission_decision_order() {
@@ -1341,7 +1358,7 @@ fn unwritable_log_does_not_stop_daemon() {
     assert_eq!(shared.snapshot().seq, 2);
 }
 
-// ---- MCP 審批轉發（Claude --permission-prompt-tool）----
+// ---- MCP 核准轉發（Claude --permission-prompt-tool）----
 
 fn ask_sess(id: &str, perm: PermissionPolicy) -> Session {
     let mut s = restart_session(id, SessionStatus::Idle);
@@ -1396,7 +1413,7 @@ fn approval_ask_waits_for_human_decision() {
         let r = rx.try_iter().next();
         r
     });
-    // 等審批請求出現在狀態裡，再由「人」回覆
+    // 等核准請求出現在狀態裡，再由「人」回覆
     let req = loop {
         if let Some(r) = lock(&shared.inner).state.pending_permissions.keys().next() {
             break r.clone();
@@ -2250,7 +2267,7 @@ fn queue_changed_updates_state_and_old_snapshot_parses_and_hides_attachment_data
     );
     shared.flush_log();
 
-    // State.queues 保存的是原始輸入文字（含 @foo.rs）
+    // State.queues 儲存的是原始輸入文字（含 @foo.rs）
     assert_eq!(
         shared.snapshot().queues.get("ses_att"),
         Some(&vec!["請看 @foo.rs".to_string()])
@@ -2708,4 +2725,118 @@ fn raising_budget_sends_nudge_held_while_over_budget() {
     let inputs = ctl.inputs();
     assert_eq!(inputs.len(), 1, "調高上限後補提醒");
     assert!(inputs[0].contains(&id), "{}", inputs[0]);
+}
+
+/// 記錄 `set_config` 呼叫的控制把手。
+type ConfigCall = (Option<String>, Option<String>);
+
+#[derive(Clone, Default)]
+struct ConfigCtl {
+    calls: Arc<Mutex<Vec<ConfigCall>>>,
+    fail: bool,
+}
+
+impl AgentControl for ConfigCtl {
+    fn send_input(&self, _text: &str) -> Result<()> {
+        Ok(())
+    }
+    fn cancel(&self) -> Result<()> {
+        Ok(())
+    }
+    fn kill(&self) -> Result<()> {
+        Ok(())
+    }
+    fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
+        Ok(())
+    }
+    fn transport(&self) -> &'static str {
+        "mock"
+    }
+    fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
+        if self.fail {
+            anyhow::bail!("不支援");
+        }
+        self.calls
+            .lock()
+            .unwrap()
+            .push((model.map(str::to_string), effort.map(str::to_string)));
+        Ok(model.map(str::to_string))
+    }
+}
+
+#[test]
+fn session_config_switches_model_and_effort_and_records_them() {
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl = ConfigCtl::default();
+    add_session(
+        &shared,
+        "s1",
+        "w1",
+        SessionStatus::Idle,
+        Arc::new(ctl.clone()),
+        &cwd,
+    );
+
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::SessionConfig {
+            session: "w1".into(),
+            model: Some("opus".into()),
+            effort: Some("high".into()),
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(matches!(frames[0], Frame::Ok { .. }), "{frames:?}");
+    let s = lock(&shared.inner).state.sessions["s1"].clone();
+    assert_eq!(s.model.as_deref(), Some("opus"));
+    assert_eq!(s.effort.as_deref(), Some("high"));
+    assert_eq!(
+        ctl.calls.lock().unwrap()[0],
+        (Some("opus".into()), Some("high".into()))
+    );
+
+    // 兩個都沒給 → 錯誤，不呼叫 adapter
+    shared.handle(
+        &tx,
+        Request::SessionConfig {
+            session: "s1".into(),
+            model: None,
+            effort: Some("  ".into()),
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(matches!(frames[0], Frame::Error { .. }));
+    assert_eq!(ctl.calls.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn session_config_error_leaves_state_untouched() {
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl = ConfigCtl {
+        fail: true,
+        ..Default::default()
+    };
+    add_session(
+        &shared,
+        "s1",
+        "w1",
+        SessionStatus::Idle,
+        Arc::new(ctl),
+        &cwd,
+    );
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::SessionConfig {
+            session: "s1".into(),
+            model: Some("x".into()),
+            effort: None,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(matches!(frames[0], Frame::Error { .. }));
+    assert!(lock(&shared.inner).state.sessions["s1"].model.is_none());
 }

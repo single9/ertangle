@@ -1,5 +1,5 @@
 //! daemon 端到端：啟動 daemon → spawn（假 claude）→ prompt → 收到輸出 → shutdown。
-//! 不依賴真實 agent 或網路。環境變數是行程全域的，所以整個流程放在單一測試裡。
+//! 不需要真實 agent 或網路。環境變數是行程全域的，所以整個流程放在單一測試裡。
 
 use std::time::{Duration, Instant};
 use termade_core::{AgentKind, Event};
@@ -286,7 +286,7 @@ fn resume_keeps_session_transcript_branch_and_cost(root: &std::path::Path) {
         session: before.id.clone(),
     });
     assert!(!find().unwrap().0.status.is_live());
-    // 緊接著接續：舊程序的 Exited 這時多半還沒到，不能把接回來的 session 又標成結束。
+    // 緊接著接續：舊處理程序的 Exited 這時多半還沒到，不能把接回來的 session 又標成結束。
     let note = request_ok(&Request::Resume {
         session: "res".into(),
         prompt: Some("second-prompt".into()),
@@ -317,7 +317,7 @@ fn resume_keeps_session_transcript_branch_and_cost(root: &std::path::Path) {
         1,
         "接續不會多出一個 session"
     );
-    // 等舊程序的結束事件確定到過之後，接回來的 session 仍然活著、仍可送 prompt。
+    // 等舊處理程序的結束事件確定到過之後，接回來的 session 仍然活著、仍可送 prompt。
     std::thread::sleep(Duration::from_millis(400));
     assert!(find().unwrap().0.status.is_live());
     request_ok(&Request::Prompt {

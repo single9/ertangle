@@ -6,7 +6,7 @@
 > **已定案的前提（v1）**
 > - 平台：**Linux + macOS**（Unix domain socket + PTY）；Windows 之後再補。
 > - daemon：**單一常駐 daemon 管所有 repo**（一個使用者一個 daemon，服務多個專案與多個 TUI）。
-> - 依賴：**盡量零 Node**。四家 agent 都走原生介面，ACP 的 npm adapter 只當選配。
+> - 相依性：**盡量零 Node**。四家 agent 都走原生介面，ACP 的 npm adapter 只當選配。
 >   - OpenCode：原生 `opencode acp`
 >   - Claude Code：原生 `claude -p --input-format stream-json --output-format stream-json`
 >   - Codex：原生 `codex app-server`
@@ -37,7 +37,7 @@
 1. 在同一或多個 repo 上，同時跑多個 agent session，互不干擾（git worktree 隔離）。
 2. 讓 agent 之間能**交換訊息、共用任務清單、交接工作**，並可由 agent 自行產生子 agent。
 3. 支援 **OpenCode / Claude Code / Codex / Antigravity**，且新 agent 只要寫一個 adapter 就能加入。
-4. 啟動 < 200ms、閒置記憶體 < 20MB（不含 agent 子程序），可在 SSH / tmux 中運作。
+4. 啟動 < 200ms、閒置記憶體 < 20MB（不含 agent 子處理程序），可在 SSH / tmux 中運作。
 5. 人可隨時「介入、旁觀、接管」任何 session；所有事件可回溯。
 
 ### 非目標（明確不做）
@@ -52,7 +52,7 @@
 ### 2.1 前端與狀態分離（daemon + client）
 GUI termade 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態放在 daemon：
 
-- agent 程序的生命週期與 TUI 解耦 → 可以關 TUI、之後再 attach。
+- agent 處理程序的生命週期與 TUI 解耦 → 可以關 TUI、之後再 attach。
 - 多個 client（TUI、`termade` CLI、未來的 web）可同時看同一份狀態。
 - 事件流是 append-only log → 天然可重播、可審計、可 diff。
 
@@ -61,7 +61,7 @@ GUI termade 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態�
 
 - `initialize` / `session/new` / `session/prompt` / `session/cancel`
 - 串流事件（assistant 訊息、tool call 開始/結束）
-- **server→client 的 permission request**（審批）
+- **server→client 的 permission request**（核准）
 - 可傳入 **MCP servers**（`session/new` 時帶入）→ 我們能把 message bus 注入 agent
 - 官方 **Rust crates**：`agent-client-protocol`（runtime）與 `agent-client-protocol-schema`（型別）
 
@@ -121,7 +121,7 @@ GUI termade 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態�
 termade                 # 等同 termade tui：確保 daemon 在跑 → attach
 termade daemon          # 前景執行 daemon（--detach 可背景化）
 termade tui             # 純前端
-termade mcp             # 以 stdio 跑 MCP server（供 agent 子程序當 MCP server 用）
+termade mcp             # 以 stdio 跑 MCP server（供 agent 子處理程序當 MCP server 用）
 termade send/recv/tasks # CLI，給 shell / agent 用
 termade spawn ...       # 建立 session（可指定 agent、worktree、prompt）
 ```
@@ -194,7 +194,7 @@ trait AgentControl: Send + Sync {
     fn transport(&self) -> &'static str;
 }
 ```
-啟動時由 adapter 以 `SessionSpec`（kind、cwd、權限政策、`mcp_exe`、初始 prompt…）建立子程序與讀取執行緒，
+啟動時由 adapter 以 `SessionSpec`（kind、cwd、權限政策、`mcp_exe`、初始 prompt…）建立子處理程序與讀取執行緒，
 把各家協定（ACP、stream-json、app-server、PTY）**正規化成同一組 `AgentEvent`**，經 channel 送給 daemon。
 daemon 之上完全不需要知道底下是哪一家。實作位於 `acp.rs`、`claude.rs`、`codex.rs`、`pty.rs`。
 
@@ -251,7 +251,7 @@ daemon 開一個 MCP server（`termade mcp`）。spawn agent 時，透過該 age
 | `termade_status(text)` | 更新自己在 TUI 上的狀態字串（輕量進度回報） |
 
 > 這是「agent 驅動 orchestration」的關鍵：**協調者 agent 可以直接 `termade_spawn` 出 worker**，
-> 而 worker 的審批、狀態、訊息全部回到 TUI，人類可隨時介入。
+> 而 worker 的核准、狀態、訊息全部回到 TUI，人類可隨時介入。
 
 ### 機制 B：`termade` CLI（給 shell / 不支援 MCP 的 agent）
 同一批能力也有 CLI 形式，agent 只要會跑 shell 就能用：
@@ -288,9 +288,9 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 `Request::Resume` 讓已結束的 session 以 `SessionSpec.resume` 重新啟動 adapter：Claude 加 `--resume`、Codex 改呼叫 `thread/resume`、ACP 改呼叫 `session/load`（回應前的 `session/update` 是歷史重播，一律丟掉）。
 
 - 沿用同一個 termade session id，不送 `SessionStarted`；label、worktree、task、收件匣游標都綁在這個 id 上。
-- spawn 與 resume 共用 `handlers/session.rs` 的 `launch_session`。每次啟動有一個 run id（`SessionEntry.run`），ingest 執行緒發現自己不是目前的 run 就停手，舊程序遲到的 `Exited` 才不會把剛接回來的 session 標成結束。
+- spawn 與 resume 共用 `handlers/session.rs` 的 `launch_session`。每次啟動有一個 run id（`SessionEntry.run`），ingest 執行緒發現自己不是目前的 run 就停手，舊處理程序遲到的 `Exited` 才不會把剛接回來的 session 標成結束。
 - 沒有 `native_id` 等於不能接續：PTY 不送；ACP 只有 agent 宣告 `loadSession` 時才送。
-- Claude 的成本是程序內累計，接續時以舊的 `Session.cost` 為基底相加（在 `launch_session` 的 ingest 執行緒裡加，`Event::Cost` 仍是「目前累計值」）。
+- Claude 的成本是處理程序內累計，接續時以舊的 `Session.cost` 為基底相加（在 `launch_session` 的 ingest 執行緒裡加，`Event::Cost` 仍是「目前累計值」）。
 - daemon 重啟不自動接續，只留 `SessionNote`。
 
 ### 防呆（避免 agent 無限互傳）
@@ -338,13 +338,13 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **左**：repo → worktree → session 樹；狀態以顏色/符號表示（●忙 ○閒 ⏸待審批 ✗失敗）。
+- **左**：repo → worktree → session 樹；狀態以顏色/符號表示（●忙 ○閒 ⏸待核准 ✗失敗）。
 - **中**：選定 session 的對話/工具呼叫/diff（結構化渲染；無法結構化時 fallback 成 PTY 原始輸出）。
   - 逐字稿會即時渲染 **Markdown**：標題、粗體／斜體／刪除線、行內程式碼、連結、無序／有序／工作清單、引言、分隔線、圍籬程式碼區塊（含語言標籤與底色）、GFM 表格（含對齊）。
   - termade 的語意前綴分色：`❯`（使用者 prompt，綠色）、`💭`（思考，暗色斜體）、`▸`（工具呼叫，琥珀色）、`💬`（審查註解，洋紅）。
-  - 支援翻頁捲動與「跟隨最新」（follow-tail），右側顯示捲軸；滾輪可捲動，滑鼠拖曳可直接選取逐字稿（只含中央區塊）並以 OSC 52 複製；`F2` 可關閉滑鼠擷取改用終端原生選取；`t` 可在渲染後與原始文字間切換。
+  - 支援翻頁捲動與「跟隨最新」（follow-tail），右側顯示捲軸；滾輪可捲動，滑鼠拖曳可直接選取逐字稿（只含中央區塊）並以 OSC 52 複製；`F2` 可關閉滑鼠擷取改用終端機原生選取；`t` 可在渲染後與原始文字間切換。
   - `💭` 思考行預設隱藏（`T` 或 `/thoughts` 切換），避免長篇思考拖慢渲染。
-  - `Y` 或 `/copy` 以 OSC 52 複製中央主要區塊（不含側欄與邊框），在 SSH / tmux 下也不需終端原生選取。
+  - `Y` 或 `/copy` 以 OSC 52 複製中央主要區塊（不含側欄與邊框），在 SSH / tmux 下也不需終端機原生選取。
   - Diff 視圖每行附舊／新檔行號邊欄，標題顯示 `+N -M` 統計，`{` / `}` 可跳 hunk。
 - **右**：bus 活動流 + 任務看板（可切 tab）。
 - **Tasks 視圖**（中央，`Tab` 或 `:tasks`）：任務依狀態分組，顯示負責人與前置任務，下方是選取任務的說明；`Enter` 跳到負責人，`:task-status` 改狀態。`Task` 沒有專案欄位，只看本專案時用負責人或建立者的 session 判斷，兩者都沒有就顯示。
@@ -360,7 +360,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標） |
 | 滑鼠拖曳 | 在逐字稿上選取（只含中央區塊，不含側欄與邊框），放開即以 OSC 52 複製 |
 | 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標） |
-| `F2` | 切換滑鼠擷取（預設開啟；關閉後可用終端原生拖曳選取，`Shift`+拖曳在開啟時也可原生選取） |
+| `F2` | 切換滑鼠擷取（預設開啟；關閉後可用終端機原生拖曳選取，`Shift`+拖曳在開啟時也可原生選取） |
 | `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
 | `Tab` / `g` | 切換中央視圖（Overview → Diff → Worktrees → Tasks） |
 | `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
@@ -378,7 +378,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | `z` | 切換選取 session 的休眠（`SIGSTOP`）/ 喚醒（`SIGCONT`） |
 | `/` 或 `Ctrl-P` | 開啟命令面板（`spawn` / `merge` / `diff` / `gc` / `sleep` / `wake` / `task` / `copy` / `shutdown`） |
 | `Ctrl-K` | Jump-Anywhere：關鍵字快速跳轉至任何 session |
-| `a` / `A` / `d` | 允許 / 一律允許 / 拒絕待審批請求 |
+| `a` / `A` / `d` | 允許 / 一律允許 / 拒絕待核准請求 |
 | `x` / `K` | 中斷當前回合 / 結束 session |
 | `r` | 向 daemon 重新要快照与重整當前視圖 |
 | `q` | 離開 TUI（daemon 與 agent 續跑） |
@@ -401,9 +401,9 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 
 ---
 
-## 9. 權限、審批與安全
+## 9. 權限、核准與安全
 
-- **統一審批通道**：ACP 的 permission request、Codex 的 approval、Antigravity 的 confirm
+- **統一核准通道**：ACP 的 permission request、Codex 的 approval、Antigravity 的 confirm
   全部轉成 `PermissionRequested` 事件 → TUI 跳出 `[a]llow / [d]eny / [A]lways` 提示。
 - **統一權限政策（M1 已實作）**：`PermissionPolicy`（`Ask` / `Auto` / `Bypass`）由 client 指定，
   adapter 翻譯成各家原生機制：
@@ -435,14 +435,14 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | 支援同時 session 數 | 16+（受 agent 本身資源限制） |
 | 前端崩潰 | 不影響任何 agent；重啟後自動復原畫面 |
 
-要點：**我們自己的程式碼保持輕量**；真正耗記憶體的是 agent 子程序（Node/Python），
-daemon 可選擇性讓閒置 session 進入休眠（保留狀態、暫停子程序）。
+要點：**我們自己的程式碼保持輕量**；真正耗記憶體的是 agent 子處理程序（Node/Python），
+daemon 可選擇性讓閒置 session 進入休眠（保留狀態、暫停子處理程序）。
 
 ---
 
 ## 11. 技術選型（現況）
 
-實際依賴（`Cargo.toml` workspace）：
+實際相依性（`Cargo.toml` workspace）：
 
 | 用途 | crate / 做法 | 備註 |
 | --- | --- | --- |
@@ -453,7 +453,7 @@ daemon 可選擇性讓閒置 session 進入休眠（保留狀態、暫停子程�
 | 序列化 | `serde` / `serde_json` | |
 | 本地 socket | `std::os::unix::net::UnixListener` | 遠端為 `std::net::TcpListener` + token |
 | PTY fallback | `portable-pty` | |
-| git | 以子程序呼叫 `git`（worktree 用 CLI 較穩） | 不用 `git2` |
+| git | 以子處理程序呼叫 `git`（worktree 用 CLI 較穩） | 不用 `git2` |
 | CLI | `clap`（derive） | |
 | 日誌 | `tracing` + `tracing-subscriber` | |
 | id | `uuid` | 時間戳直接用 `SystemTime`，不用 `jiff`／`chrono` |
@@ -482,7 +482,7 @@ termade-rust/
 │  ├─ termade-daemon/            # supervisor、socket server、worktree（lib.rs）、MCP server（mcp.rs）
 │  └─ termade-tui/               # ratatui 前端
 │      ├─ lib.rs             #   版面、事件迴圈、視圖切換
-│      └─ markdown.rs        #   零依賴 Markdown → Ratatui 行渲染器
+│      └─ markdown.rs        #   零相依性 Markdown → Ratatui 行渲染器
 ├─ src/                      # `termade` binary（tui/daemon/mcp/send/spawn/...）
 │  └─ main.rs                #   根目錄 package 入口，支援 `cargo install --path .`
 └─ docs/
@@ -506,15 +506,15 @@ M0 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 **M1 — 四家 agent 都能跑（原生，零 Node）（已完成，見 `crates/`）**
 Claude（`claude -p` stream-json 雙向）、Codex（`codex app-server`）、Antigravity（`agy acp`）。
-統一審批通道與權限政策（`PermissionPolicy`）。共用的串流行緩衝抽到 `termade-adapter::stream`。
+統一核准通道與權限政策（`PermissionPolicy`）。共用的串流行緩衝抽到 `termade-adapter::stream`。
 
 M1 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 M1 未完成項（受環境限制，程式路徑已就緒）：
 - **Codex 回合**：本機無 OpenAI 授權，`turn/start` 回 401；授權後應可直接運作。
-- **ACP 逐項審批實測**：受測的 OpenCode / Antigravity 在預設設定下會自行核准工具，未發出
+- **ACP 逐項核准實測**：受測的 OpenCode / Antigravity 在預設設定下會自行核准工具，未發出
   `session/request_permission`；轉發程式路徑已完成但少有机会實測。
-- **Claude 逐項審批**：`-p` 模式不會穩定發出可轉發的審批請求，留待 M2 以 MCP 權限工具處理。
+- **Claude 逐項核准**：`-p` 模式不會穩定發出可轉發的核准請求，留待 M2 以 MCP 權限工具處理。
 
 **M2 — 協作核心（已完成，見 `crates/termade-daemon/src/mcp.rs`）**
 Message bus + task board + **`termade mcp` server** + `termade` CLI；agent 可 `send/inbox/wait/ask/task/spawn/artifact/status`。
@@ -529,7 +529,7 @@ worktree 管理（`termade worktrees` / `termade gc`）、彩色 diff 視圖（�
 命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、成本/用量追蹤（`termade cost` 與 TUI 標題列）、閒置休眠與自動喚醒（`SIGSTOP`/`SIGCONT`，`termade sleep`/`termade wake`/TUI `z` 鍵）、事件重播与增量同步（`termade replay`、`Hello.since`）、Policy 規則引擎（`policy.toml`）與秘密自動遮罩（`redact_secrets`）。
 
 **TUI 檢視區與 Markdown 渲染（已完成，見 `crates/termade-tui/src/markdown.rs`）**
-零依賴 Markdown 渲染器（標題／粗體／斜體／刪除線／行內程式碼／連結／清單／引言／分隔線／圍籬程式碼／GFM 表格）、
+零相依性 Markdown 渲染器（標題／粗體／斜體／刪除線／行內程式碼／連結／清單／引言／分隔線／圍籬程式碼／GFM 表格）、
 語意前綴分色（`💭`／`▸`／`💬`）、逐字稿翻頁捲動 + 跟隨最新 + 捲軸 + `t` 原始／渲染切換、
 Diff 視圖舊新行號邊欄與 `+N -M` 統計與 `{`/`}` hunk 跳轉、響應式三欄寬度與兩行標題列。
 
@@ -556,10 +556,10 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 ### 已定案的開放問題
 1. **主要平台**：先 Linux/macOS（Unix socket、PTY），Windows 之後再補。
 2. **daemon 形態**：單一常駐 daemon 管所有 repo。
-3. **ACP adapter 是否可接受 Node 依賴**：盡量零 Node，四家都走原生介面。
+3. **ACP adapter 是否可接受 Node 相依性**：盡量零 Node，四家都走原生介面。
 4. **MCP 還是 CLI 優先**：M2 先做 MCP（`termade mcp`），CLI 與檔案信箱作為退路。
 5. **是否要 agent 自主 `termade_spawn`**：M2 開啟，但加上速率限制與迴圈偵測（見風險表）。
-6. **預設權限政策**：`Auto`（不中斷流程）；需要逐項審批時用 `Ask`，全開用 `Bypass`。
+6. **預設權限政策**：`Auto`（不中斷流程）；需要逐項核准時用 `Ask`，全開用 `Bypass`。
    M2 再以 MCP 權限工具補上 Claude / Codex 的逐項轉發（**Claude 仍未實作**，Codex 有轉發路徑但未實機驗證）。
 
 ---
@@ -593,6 +593,6 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | 每任務訊息預算 | token／回合上限 | 已實作 session 美元／token 上限、父子樹總額上限與子 agent 數量／深度上限（`[limits]`、`:budget`、`termade budget`）；訊息匯流排另有速率限制與重複迴圈斷路 |
 | Handoff | 連同 worktree 交給另一個 agent | 只有 `handoff` 訊息類型 |
 | `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | `tasks.json` 未實作；協作說明改由 MCP `initialize.instructions` 與 adapter 系統提示／首則 prompt 注入（見 `collab.rs`），不寫入 worktree 的 `AGENTS.md`，避免自動 commit 把它一起提交進使用者分支或覆蓋 repo 自己的 `AGENTS.md` |
-| Claude 逐項審批 | 轉成 `PermissionRequested` | 未實作（`claude.rs` 不轉發） |
-| Codex 回合、ACP 逐項審批 | 實機驗證 | 程式路徑就緒，未實機驗證 |
+| Claude 逐項核准 | 轉成 `PermissionRequested` | 未實作（`claude.rs` 不轉發） |
+| Codex 回合、ACP 逐項核准 | 實機驗證 | 程式路徑就緒，未實機驗證 |
 | `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `termade-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |

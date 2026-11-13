@@ -53,7 +53,7 @@
 ## 測試與建置
 
 - 提交前跑：`cargo fmt`、`cargo clippy --all-targets -- -D warnings`、`cargo test`（CI 也跑這三項）。
-- 單元測試不要依賴本機有沒有安裝某個 agent；需要「啟動失敗」時，把 `TERMADE_CLAUDE_BIN` 指向不存在的路徑。
+- 單元測試不要相依性本機有沒有安裝某個 agent；需要「啟動失敗」時，把 `TERMADE_CLAUDE_BIN` 指向不存在的路徑。
 - 需要假 agent 時用 `crates/termade-adapter/tests/fake_claude.sh`（git 裡必須保持可執行權限）。
 - 測試裡要重新載入 event log 前，先呼叫 `flush_log()`，log 是非同步寫入的。
 - 這個專案放在不支援 `chmod` 的磁碟上時，`sed -i` 會印出權限警告但仍然會改檔；用 `git diff` 確認結果。

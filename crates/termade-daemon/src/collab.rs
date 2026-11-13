@@ -67,7 +67,8 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
     }
     if me.role == Role::Coordinator {
         out.push_str(
-            "- 協調：用 termade_spawn 產生 worker，用 termade_task_create 與 depends_on 安排順序；等回覆用 termade_wait，不要輪詢。\n",
+            "- 協調：用 termade_spawn 產生 worker，用 termade_task_create 與 depends_on 安排順序；等回覆用 termade_wait，不要輪詢。\n\
+             - 成本：termade_spawn 出的 session 預設各自獨立工作區。不要自己挑高消耗的 model 或 effort；沒有特別需要就不指定（用設定的預設），需要較強的 model 時先問使用者。超出使用者設定的範圍時，系統會彈出確認。\n",
         );
     }
     push_extra(&mut out, extra);
@@ -82,10 +83,35 @@ pub fn general_instructions(extra: &str) -> String {
     out
 }
 
+fn truncate_text(mut t: String, name: &str) -> String {
+    if t.len() > MAX_REPO_INSTRUCTIONS {
+        let mut cut = MAX_REPO_INSTRUCTIONS;
+        while !t.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        t.truncate(cut);
+        t.push_str(&format!("\n…（{name} 過長，已截斷）"));
+    }
+    t.trim().to_string()
+}
+
 /// 設定與 repo 提供的附加文字：`[collab] extra`、`[roles.<role>] instructions`，
 /// 最後是 `<project>/.termade/instructions.md`。
-fn extra_text(cfg: &Config, role: Option<&Role>, project: &Path) -> String {
+fn extra_text(cfg: &Config, role: Option<&Role>, project: &Path, global_dir: &Path) -> String {
     let mut parts: Vec<String> = Vec::new();
+    // ADE 整體系統提示：全域設定檔指定的檔案（只認全域，repo 內的設定不能指向任意檔案）。
+    if let Some(f) = cfg.collab.prompt_file.as_deref() {
+        let path = std::path::PathBuf::from(f);
+        let path = if path.is_absolute() {
+            path
+        } else {
+            global_dir.join(path)
+        };
+        match std::fs::read_to_string(&path) {
+            Ok(t) => parts.push(truncate_text(t, "collab.prompt_file")),
+            Err(e) => tracing::warn!("讀不到 collab.prompt_file {path:?}：{e}"),
+        }
+    }
     if let Some(e) = cfg.collab.extra.as_deref() {
         parts.push(e.trim().to_string());
     }
@@ -95,16 +121,8 @@ fn extra_text(cfg: &Config, role: Option<&Role>, project: &Path) -> String {
     {
         parts.push(r.trim().to_string());
     }
-    if let Ok(mut md) = std::fs::read_to_string(project.join(".termade").join("instructions.md")) {
-        if md.len() > MAX_REPO_INSTRUCTIONS {
-            let mut cut = MAX_REPO_INSTRUCTIONS;
-            while !md.is_char_boundary(cut) {
-                cut -= 1;
-            }
-            md.truncate(cut);
-            md.push_str("\n…（.termade/instructions.md 過長，已截斷）");
-        }
-        parts.push(md.trim().to_string());
+    if let Ok(md) = std::fs::read_to_string(project.join(".termade").join("instructions.md")) {
+        parts.push(truncate_text(md, ".termade/instructions.md"));
     }
     parts.retain(|p| !p.is_empty());
     parts.join("\n\n")
@@ -129,7 +147,7 @@ pub fn for_session(
     if cfg.collab.instructions == Some(false) {
         return None;
     }
-    let extra = extra_text(&cfg, me.map(|s| &s.role), project);
+    let extra = extra_text(&cfg, me.map(|s| &s.role), project, global_dir);
     Some(match me {
         Some(s) => {
             let parent = s.parent.as_ref().and_then(|p| state.sessions.get(p));
@@ -166,6 +184,8 @@ mod tests {
             budget_usd: None,
             over_budget: false,
             handed_off_to: None,
+            effort: None,
+            slash_commands: Vec::new(),
         }
     }
 
@@ -322,5 +342,20 @@ mod tests {
         let t = for_session(&State::new(), "x", &global, &cwd).unwrap();
         assert!(t.len() < MAX_REPO_INSTRUCTIONS + 2048);
         assert!(t.contains("已截斷"));
+    }
+
+    #[test]
+    fn global_prompt_file_is_included_before_extra() {
+        let dir = temp_dir("pf");
+        std::fs::write(dir.join("ade.md"), "全域規範：先寫測試").unwrap();
+        std::fs::write(
+            dir.join("config.toml"),
+            "[collab]\nprompt_file = \"ade.md\"\nextra = \"附註\"\n",
+        )
+        .unwrap();
+        let project = temp_dir("proj");
+        let t = for_session(&State::default(), "nope", &dir, &project).unwrap();
+        let (a, b) = (t.find("全域規範").unwrap(), t.find("附註").unwrap());
+        assert!(a < b, "{t}");
     }
 }

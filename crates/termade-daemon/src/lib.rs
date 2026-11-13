@@ -1,7 +1,7 @@
 //! `termade-daemon` — 常駐的狀態中心。
 //!
 //! 負責：
-//! * 持有 agent 子程序（透過 adapter）與其控制把手；
+//! * 持有 agent 子處理程序（透過 adapter）與其控制把手；
 //! * 把 adapter 事件正規化後寫入 append-only event log（含秘密遮罩）並廣播給所有 client；
 //! * 提供 Unix socket 與選配 TCP（M5 遠端）控制介面（[`termade_protocol`]）；
 //! * 提供 agent 之間的訊息匯流排、收件匣/阻塞等待、防呆斷路器與任務看板；
@@ -105,7 +105,7 @@ fn load_local_policy(dir: &Path) -> PolicyEngine {
     }
 }
 
-/// 審批決策順序：deny → allow → session 政策（auto／bypass 自動允許）→ 交給人（`None`）。
+/// 核准決策順序：deny → allow → session 政策（auto／bypass 自動允許）→ 交給人（`None`）。
 fn decide_permission(
     policy: &PolicyEngine,
     session_policy: PermissionPolicy,
@@ -183,7 +183,7 @@ fn replay_files(paths: &[PathBuf]) -> Result<(State, Vec<Record>)> {
 
 pub(crate) struct SessionEntry {
     pub(crate) ctl: Arc<dyn AgentControl>,
-    /// 這次程序執行的 id：接續會換新，用來擋掉舊程序遲到的事件。
+    /// 這次處理程序執行的 id：接續會換新，用來擋掉舊處理程序遲到的事件。
     pub(crate) run: String,
 }
 
@@ -274,7 +274,7 @@ pub(crate) struct Inner {
     /// 送達時收件者正忙、因此沒有喚醒的訊息（T25）；回到 `Idle` 時合併提醒一次。
     pub(crate) pending_nudge: HashMap<SessionId, Vec<MsgId>>,
     pub(crate) waiters: Vec<Waiter>,
-    /// 等待人類回覆的 MCP 審批請求：req id → 決定通道。
+    /// 等待人類回覆的 MCP 核准請求：req id → 決定通道。
     pub(crate) approval_waiters: HashMap<String, Sender<Decision>>,
     pub(crate) bus_guard: BusGuard,
     pub(crate) policy: PolicyEngine,
@@ -372,7 +372,7 @@ impl Shared {
             }
         });
 
-        // 重啟後子程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
+        // 重啟後子處理程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
         // 有原生對話 id 的可以接續，但不自動做（會在使用者沒注意時動用額度），只留一則說明。
         let orphans: Vec<(SessionId, bool)> = {
             let inner = lock(&shared.inner);
@@ -493,8 +493,8 @@ impl Shared {
         inner.clients.retain(|c| c.send_bounded(frame.clone()));
     }
 
-    /// 把 adapter 事件翻譯成核心事件（並在審批事件時先經過 PolicyEngine 規則過濾）。
-    /// 依規則引擎與 session 政策自動決定審批；`None` 表示要問人。
+    /// 把 adapter 事件翻譯成核心事件（並在核准事件時先經過 PolicyEngine 規則過濾）。
+    /// 依規則引擎與 session 政策自動決定核准；`None` 表示要問人。
     pub(crate) fn auto_decision(
         &self,
         sid: &SessionId,
@@ -577,6 +577,10 @@ impl Shared {
             AgentEvent::Model(m) => Event::SessionModel {
                 session: sid.clone(),
                 model: m,
+            },
+            AgentEvent::Commands(commands) => Event::SessionCommands {
+                session: sid.clone(),
+                commands,
             },
             AgentEvent::NativeId(native_id) => Event::SessionNativeId {
                 session: sid.clone(),
@@ -748,7 +752,7 @@ impl Shared {
         lock(&self.inner).default_cwd.clone()
     }
 
-    /// 關閉：先結束所有 agent 子程序，再移除 socket，最後離開。
+    /// 關閉：先結束所有 agent 子處理程序，再移除 socket，最後離開。
     pub(crate) fn shutdown(self: &Arc<Self>) {
         let ctls: Vec<Arc<dyn AgentControl>> = {
             let mut inner = lock(&self.inner);

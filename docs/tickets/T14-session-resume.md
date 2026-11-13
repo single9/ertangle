@@ -1,10 +1,10 @@
-# T14 — Session 接續（resume）：agent 程序死掉或 daemon 重啟後接回原對話
+# T14 — Session 接續（resume）：agent 處理程序死掉或 daemon 重啟後接回原對話
 
 優先度：P1　範圍：`termade-core`、`termade-protocol`、`termade-adapter`、`termade-daemon`、`termade-tui`、`src/cmd/session.rs`
 
 ## 問題
 
-agent 程序一旦結束（當掉、被 kill、daemon 重啟），該 session 的對話就接不回來：
+agent 處理程序一旦結束（當掉、被 kill、daemon 重啟），該 session 的對話就接不回來：
 
 - daemon 重啟時，log 裡還在跑的 session 一律標成 `Failed`。
 - 沒有任何入口能讓已結束的 session 用原本的對話繼續。
@@ -14,7 +14,7 @@ agent 程序一旦結束（當掉、被 kill、daemon 重啟），該 session �
 
 ## 證據
 
-- `crates/termade-daemon/src/lib.rs:356-371`：`restore_with` 把仍 live 的 session 收斂成 `Failed`，註解寫明「重啟後子程序已不受管」。
+- `crates/termade-daemon/src/lib.rs:356-371`：`restore_with` 把仍 live 的 session 收斂成 `Failed`，註解寫明「重啟後子處理程序已不受管」。
 - `crates/termade-core/src/lib.rs:232-262`：`Session` 沒有存 agent 原生 session id 的欄位。
 - `crates/termade-adapter/src/claude.rs:76-84`：`on_system` 只從 `init` 取 `model`；同一則訊息的 `session_id`（檔頭註解 `claude.rs:10` 有列出）被忽略。
 - `crates/termade-adapter/src/codex.rs:443-449`：thread id 只存在 `conn.thread`（記憶體）。
@@ -50,14 +50,14 @@ agent 程序一旦結束（當掉、被 kill、daemon 重啟），該 session �
      - `cwd`、`branch`、`repo_root`、`kind`、`permission`、`model` 取自既有的 `Session`；其餘（`bin`、`args`、`env`、工具限制）重新走 `Config::resolve`。`effort` 沒存在 `Session` 上，用設定檔解析的值。
      - 成功後送 `SessionStatus::Idle`；有 `prompt` 就當作第一則輸入。
      - 不送 `SessionStarted`（session 還在 state 裡）。
-   - daemon 重啟：仍把孤兒標成 `Failed`（程序確實不在了），但加一則 `SessionNote`「daemon 重啟，可用 :resume 接續」。**不要自動接續**，那會在使用者沒注意時動用額度。
+   - daemon 重啟：仍把孤兒標成 `Failed`（處理程序確實不在了），但加一則 `SessionNote`「daemon 重啟，可用 :resume 接續」。**不要自動接續**，那會在使用者沒注意時動用額度。
 4. **入口**
    - CLI：`termade resume <session-or-label> [prompt]`。
    - TUI：`:resume`、Space 選單 session 層加一項（先確認該層的 `key` 沒重複）。對已結束的 session 送 prompt 時，目前回「找不到 session」（`handle_prompt` 的 `None` 分支），改成提示可以 `:resume`。
    - MCP：先不開放給 agent，避免 agent 自己把被人中止的同伴叫回來。
 5. **和既有行為的交互**
    - `prune_ended_sessions`（`lib.rs:378`）會在重啟時清掉超過 1 小時、沒有分支的已結束 session，清掉後就不能接續。保留這個行為，寫進 README。
-   - Claude 的成本是程序內累計（`claude.rs:263-272` 取 `total_cost_usd`）。接續後是新程序，數字會從頭算，`Event::Cost` 會把舊值蓋掉。接續時要把舊的 `Session.cost` 當基底相加（T17 的預算也依賴這點）。
+   - Claude 的成本是處理程序內累計（`claude.rs:263-272` 取 `total_cost_usd`）。接續後是新處理程序，數字會從頭算，`Event::Cost` 會把舊值蓋掉。接續時要把舊的 `Session.cost` 當基底相加（T17 的預算也相依性這點）。
    - 交接（handoff）不變：接續是同一個 agent 接回原對話，交接是換 agent。
 
 ## 驗收條件

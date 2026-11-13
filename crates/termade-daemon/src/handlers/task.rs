@@ -7,7 +7,7 @@ use termade_protocol::Frame;
 
 use crate::{lock, new_id, ClientTx, Shared};
 
-/// 任務請求一次只處理一個：「檢查依賴 → 寫入狀態 → 解鎖後續任務」之間
+/// 任務請求一次只處理一個：「檢查相依性 → 寫入狀態 → 解鎖後續任務」之間
 /// 不能插進另一個任務更新，否則會漏掉解鎖或重複通知。
 static TASK_OPS: Mutex<()> = Mutex::new(());
 
@@ -70,7 +70,7 @@ fn notify_assignee(shared: &Arc<Shared>, task: &Task) {
     );
 }
 
-/// 任務是否還在等前置任務（`blocked` 且有依賴沒完成）。
+/// 任務是否還在等前置任務（`blocked` 且有相依性沒完成）。
 fn waiting_on_deps(state: &State, task: &Task) -> bool {
     task.status == TaskStatus::Blocked && !state.unfinished_deps(task).is_empty()
 }
@@ -140,7 +140,7 @@ pub(crate) fn handle_create(
         notify_assignee(shared, &task);
         let _ = reply.send(Frame::ok_note(format!("已建立任務 {id}")));
     } else {
-        // 還在等前置任務：先不通知負責人，等依賴完成再由 `unblock_dependents` 送。
+        // 還在等前置任務：先不通知負責人，等相依性完成再由 `unblock_dependents` 送。
         let _ = reply.send(Frame::ok_note(format!(
             "已建立任務 {id} （blocked：等待 {} 完成後自動解鎖並通知負責人）",
             waiting.join("、")
@@ -197,11 +197,11 @@ pub(crate) fn handle_update(
     }
 }
 
-/// `done_id` 完成後，把依賴它、狀態是 `blocked`、且所有依賴都已完成的任務
+/// `done_id` 完成後，把相依於它、狀態是 `blocked`、且所有相依性都已完成的任務
 /// 改回 `todo` 並通知負責人。
 ///
-/// 分不出「在等依賴」和「被人手動標成 blocked」：有依賴的任務只要是 `blocked`，
-/// 依賴全部完成時就會被解開。
+/// 分不出「在等相依性」和「被人手動標成 blocked」：有相依性的任務只要是 `blocked`，
+/// 相依性全部完成時就會被解開。
 fn unblock_dependents(shared: &Arc<Shared>, done_id: &str) {
     let ready: Vec<Task> = {
         let inner = lock(&shared.inner);

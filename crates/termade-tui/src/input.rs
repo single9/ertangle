@@ -25,6 +25,10 @@ pub(crate) fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) 
             crate::help::handle_help_key(app, key);
             return Ok(());
         }
+        Mode::Settings => {
+            crate::settings::handle_key(app, key);
+            return Ok(());
+        }
         Mode::Pick => return crate::menu::handle_pick_key(app, writer, key),
         Mode::Search => {
             crate::search::handle_search_key(app, key);
@@ -258,7 +262,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.status = if app.mouse_capture {
                 "滑鼠擷取：開（可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取）".into()
             } else {
-                "滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端 alternate scroll）".into()
+                "滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端機 alternate scroll）".into()
             };
         }
         KeyCode::Char('T') => toggle_thoughts(app),
@@ -515,7 +519,12 @@ pub(crate) fn handle_input_mode(
                     execute_command(app, writer, &text)?;
                 }
                 Mode::Jump => execute_jump(app, writer, &text)?,
-                Mode::Normal | Mode::Menu | Mode::Pick | Mode::Help | Mode::Search => {}
+                Mode::Normal
+                | Mode::Menu
+                | Mode::Pick
+                | Mode::Help
+                | Mode::Search
+                | Mode::Settings => {}
             }
         }
         _ => {}
@@ -543,7 +552,7 @@ pub(crate) fn at_candidates(app: &App) -> Option<(usize, Vec<String>)> {
     (!c.is_empty()).then_some((start, c))
 }
 
-/// 用選中的建議取代游標前的 `@token`（路徑含空白時加引號），後面補一個空白。
+/// 用選取的建議取代游標前的 `@token`（路徑含空白時加引號），後面補一個空白。
 fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
     let rep = if path.contains(char::is_whitespace) {
         format!("@\"{path}\" ")
@@ -598,8 +607,14 @@ fn complete_attachment_path(app: &mut App) {
 }
 
 /// `:` 命令列的 Tab 補全：輸入的第一個字若只符合一個命令就補完；多個則補到共同前綴並列出候選。
+#[cfg(test)]
+pub(crate) fn complete_command_for_test(app: &mut App) {
+    complete_command(app)
+}
+
 fn complete_command(app: &mut App) {
     if app.input.contains(char::is_whitespace) {
+        complete_arg(app);
         return;
     }
     let cands: Vec<&str> = crate::commands::COMMANDS
@@ -630,6 +645,37 @@ fn complete_command(app: &mut App) {
             app.status = format!("候選：{}", cands.join(" "));
         }
     }
+}
+
+/// 命令參數的 Tab 補全：唯一候選就補完（後面補空白，若還有下一個參數可接著打），多個補到共同前綴並列出。
+fn complete_arg(app: &mut App) {
+    let Some((cur, cands)) = crate::commands::arg_candidates(app, &app.input) else {
+        return;
+    };
+    let names: Vec<&str> = cands.iter().map(|(v, _)| v.as_str()).collect();
+    let Some(first) = names.first().copied() else {
+        return;
+    };
+    let common = names.iter().fold(first.len(), |n, c| {
+        n.min(
+            first
+                .bytes()
+                .zip(c.bytes())
+                .take_while(|(a, b)| a == b)
+                .count(),
+        )
+    });
+    let head_len = app.input.len() - cur.len();
+    let mut next = app.input[..head_len].to_string();
+    if names.len() == 1 {
+        next.push_str(first);
+        next.push(' ');
+    } else {
+        next.push_str(&first[..common]);
+        app.status = format!("候選：{}", names.join(" "));
+    }
+    app.input = next;
+    app.input_cursor = app.input.chars().count();
 }
 
 /// 以 Unicode 字元索引取得對應的 byte offset（超出長度時回傳字串長度）。

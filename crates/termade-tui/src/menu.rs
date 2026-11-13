@@ -44,6 +44,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 it('g', "git / worktree ▸", Act::Menu),
                 it('v', "view ▸", Act::Menu),
                 it('m', "message ▸", Act::Menu),
+                it(
+                    ',',
+                    "設定（預設 model／effort／權限…）",
+                    Act::Cmd("settings"),
+                ),
                 it('y', "複製目前畫面", Act::Cmd("copy")),
                 it('?', "說明（所有按鍵與命令）", Act::Cmd("help")),
                 it('q', "離開（保留 daemon）", Act::Cmd("quit")),
@@ -60,6 +65,16 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     'r',
                     "接續已結束的 session（接回原對話）",
                     Act::Cmd("resume"),
+                ),
+                it(
+                    'm',
+                    "切換 model（執行中）",
+                    Act::Prefill(Mode::Command, "model "),
+                ),
+                it(
+                    'e',
+                    "切換 effort（執行中）",
+                    Act::Prefill(Mode::Command, "effort "),
                 ),
                 it('c', "中斷目前回合", Act::Cmd("cancel")),
                 it('k', "結束 session", Act::Cmd("kill")),
@@ -329,7 +344,7 @@ pub(crate) fn model_choices(kind: &AgentKind) -> Vec<(String, String)> {
 
 /// 向 agent 的 CLI 查詢可用 model（`opencode models`、`agy models`），最多等 8 秒。
 /// 輸出每行第一欄是 model id，後面（以 tab 分隔）是顯示名稱。
-fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
+pub(crate) fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
     let (bin, args): (&str, &[&str]) = match kind {
         AgentKind::OpenCode => ("opencode", &["models"]),
         AgentKind::Antigravity => ("agy", &["models"]),
@@ -363,11 +378,55 @@ fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
         use std::io::Read;
         let _ = so.read_to_string(&mut out);
     }
-    if matches!(kind, AgentKind::Codex) {
-        parse_codex_models(&out)
-    } else {
-        parse_models(&out)
+    match kind {
+        AgentKind::Codex => parse_codex_models(&out),
+        // agy 的清單把 effort 寫進 model id（`xxx-high`），但 ACP 的 model 與 effort 是分開的選項。
+        AgentKind::Antigravity => split_effort_variants(parse_models(&out)),
+        _ => parse_models(&out),
     }
+}
+
+/// 把 `base-low／-medium／-high／-xhigh／-max` 這類「model + effort 合在一起」的 id 合併成 `base`
+/// （effort 另外選）。只有同一個 base 有兩個以上變體才合併，避免把 `gpt-oss-120b-medium`
+/// 這種單一 id 誤拆。輸入是 `(顯示文字, id)`，保留原本的順序。
+pub(crate) fn split_effort_variants(models: Vec<(String, String)>) -> Vec<(String, String)> {
+    let base_of = |id: &str| -> Option<String> {
+        let (base, last) = id.rsplit_once('-')?;
+        termade_adapter::EFFORT_LEVELS
+            .contains(&last)
+            .then(|| base.to_string())
+    };
+    let mut counts: std::collections::HashMap<String, usize> = Default::default();
+    for (_, id) in &models {
+        if let Some(b) = base_of(id) {
+            *counts.entry(b).or_default() += 1;
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for (label, id) in models {
+        match base_of(&id).filter(|b| counts.get(b).copied().unwrap_or(0) >= 2) {
+            Some(b) => {
+                if seen.insert(b.clone()) {
+                    // 顯示名稱 "Gemini 4 Argon (Medium)" → "Gemini 4 Argon"
+                    let name = label
+                        .split_once("  (")
+                        .map(|(_, n)| n.trim_end_matches(')'))
+                        .map(|n| match n.rsplit_once(" (") {
+                            Some((head, _)) => head.to_string(),
+                            None => n.to_string(),
+                        });
+                    let label = match name {
+                        Some(n) => format!("{b}  ({n})"),
+                        None => b.clone(),
+                    };
+                    out.push((label, b));
+                }
+            }
+            None => out.push((label, id)),
+        }
+    }
+    out
 }
 
 /// `codex debug models` 輸出 `{"models":[{slug,display_name,visibility}]}`；只取 `visibility == list`。

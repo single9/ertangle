@@ -1,7 +1,7 @@
 //! Claude Code 的原生 adapter（`--input-format stream-json --output-format stream-json`）。
 //!
 //! 這是雙向 NDJSON：我們往 stdin 寫「使用者訊息」，Claude 往 stdout 吐事件。
-//! 因為 Claude Code 沒有原生 ACP，這是它唯一「零額外依賴」的結構化介面。
+//! 因為 Claude Code 沒有原生 ACP，這是它唯一「零額外相依性」的結構化介面。
 //!
 //! 觀察到的 wire 形狀（claude 2.1.x）：
 //!
@@ -77,6 +77,15 @@ impl Conn {
         if msg["subtype"].as_str() == Some("init") {
             if let Some(model) = msg["model"].as_str() {
                 let _ = self.tx.send(AgentEvent::Model(model.to_string()));
+            }
+            if let Some(cmds) = msg["slash_commands"].as_array() {
+                let names: Vec<String> = cmds
+                    .iter()
+                    .filter_map(|c| c.as_str().map(str::to_string))
+                    .collect();
+                if !names.is_empty() {
+                    let _ = self.tx.send(AgentEvent::Commands(names));
+                }
             }
             // 每次都送：接續後 id 可能換新，以最新的為準。
             if let Some(id) = msg["session_id"].as_str().filter(|s| !s.is_empty()) {
@@ -292,6 +301,15 @@ fn truncate(s: &str, max: usize) -> String {
 // 控制把手
 // ---------------------------------------------------------------------------
 
+/// 切換 model 的控制訊息。
+fn set_model_request(model: &str) -> Value {
+    json!({
+        "type": "control_request",
+        "request_id": format!("termade-model-{}", std::process::id()),
+        "request": { "subtype": "set_model", "model": model }
+    })
+}
+
 struct ClaudeControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
@@ -335,13 +353,31 @@ impl AgentControl for ClaudeControl {
         crate::signal_pid(pid, "-CONT")
     }
 
-    /// M1 尚未支援逐項審批：Claude 的權限在啟動時以 `--permission-mode` 決定。
+    /// M1 尚未支援逐項核准：Claude 的權限在啟動時以 `--permission-mode` 決定。
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
-        bail!("claude adapter 尚未支援逐項審批（請用 --permission auto/bypass）")
+        bail!("claude adapter 尚未支援逐項核准（請用 --permission auto/bypass）")
     }
 
     fn transport(&self) -> &'static str {
         "stream-json"
+    }
+
+    /// `control_request` 的 `set_model`（實測可用）與 `apply_flag_settings`（effortLevel）。
+    fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
+        if let Some(e) = effort {
+            crate::check_effort(e)?;
+        }
+        if let Some(m) = model {
+            self.conn.send_raw(&set_model_request(m))?;
+        }
+        if let Some(e) = effort {
+            self.conn.send_raw(&json!({
+                "type": "control_request",
+                "request_id": format!("termade-effort-{}", std::process::id()),
+                "request": { "subtype": "apply_flag_settings", "settings": { "effortLevel": e } }
+            }))?;
+        }
+        Ok(model.map(str::to_string))
     }
 }
 
@@ -378,7 +414,7 @@ pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     } else {
         out.extend(spec.permission.claude_flags().into_iter().map(String::from));
     }
-    // 非 bypass 時，需要審批的工具呼叫交給 termade（規則引擎／使用者）決定。
+    // 非 bypass 時，需要核准的工具呼叫交給 termade（規則引擎／使用者）決定。
     if spec.mcp_exe.is_some() && spec.permission != termade_core::PermissionPolicy::Bypass {
         out.push("--permission-prompt-tool=mcp__termade__termade_approve".into());
     }
@@ -654,5 +690,13 @@ mod tests {
         let s = "x".repeat(10);
         assert_eq!(truncate(&s, 4), "xxxx…");
         assert_eq!(truncate("abc", 4), "abc");
+    }
+
+    #[test]
+    fn set_model_request_shape() {
+        let v = set_model_request("opus");
+        assert_eq!(v["type"], "control_request");
+        assert_eq!(v["request"]["subtype"], "set_model");
+        assert_eq!(v["request"]["model"], "opus");
     }
 }

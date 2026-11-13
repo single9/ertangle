@@ -1,7 +1,7 @@
-//! 子程序 stderr 的收集：固定大小的環狀緩衝，只留最後幾行。
+//! 子處理程序 stderr 的收集：固定大小的環狀緩衝，只留最後幾行。
 //!
 //! stderr 必須持續讀取，否則 agent 大量輸出時 pipe 塞滿會把 agent 卡死。
-//! 程序以非 0 結束時，把這幾行當成 `Output` 送出，讓使用者看得到原因。
+//! 處理程序以非 0 結束時，把這幾行當成 `Output` 送出，讓使用者看得到原因。
 
 use crate::ansi::AnsiStripper;
 use crate::AgentEvent;
@@ -86,7 +86,7 @@ impl StderrTail {
         self.inner.lock().unwrap().lines.iter().cloned().collect()
     }
 
-    /// 程序結束後呼叫：短暫等讀取執行緒收尾；非 0 結束且有內容時送出 `Output`。
+    /// 處理程序結束後呼叫：短暫等讀取執行緒收尾；非 0 結束且有內容時送出 `Output`。
     pub fn report_exit(&self, code: Option<i32>, tx: &Sender<AgentEvent>) {
         let _ = self
             .done
@@ -101,7 +101,7 @@ impl StderrTail {
             return;
         }
         let _ = tx.send(AgentEvent::Output(format!(
-            "⚠ 程序以代碼 {} 結束，stderr 最後 {} 行：\n{}\n",
+            "⚠ 處理程序以結束碼 {} 結束，stderr 最後 {} 行：\n{}\n",
             code.unwrap_or(-1),
             lines.len(),
             lines.join("\n")

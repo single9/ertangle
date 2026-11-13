@@ -1,4 +1,4 @@
-//! TUI 命令面板、跳轉、啟動與審批回覆。
+//! TUI 命令面板、跳轉、啟動與核准回覆。
 
 use anyhow::Result;
 use termade_core::{AgentKind, Decision, MsgKind, PermissionPolicy, Role, Target};
@@ -216,6 +216,19 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "resume",
         "[prompt]  接續選取的已結束 session（接回原對話，session 不變）",
     ),
+    (
+        "model",
+        "[名稱]  切換選取 session 的 model（下一回合起生效）；不帶參數列出目前與可選項",
+    ),
+    (
+        "effort",
+        "[low|medium|high|xhigh|max]  切換選取 session 的推理強度；不帶參數顯示目前值",
+    ),
+    ("settings", "開啟設定面板：用清單切換預設 model、effort、權限、agent 建立 session 的防呆"),
+    (
+        "set",
+        "不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml（空值＝刪除）",
+    ),
     ("kill", "結束選取的 session"),
     ("cancel", "中斷選取 session 的目前回合"),
     ("sleep", "休眠選取的 session"),
@@ -238,7 +251,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("scope", "[here|all]  只看本專案／顯示全部專案的 session"),
     (
         "notify",
-        "[on|off|test]  開關通知（回合結束／等待審批／失敗／額度用完）；不帶參數顯示狀態",
+        "[on|off|test]  開關通知（回合結束／等待核准／失敗／額度用完）；不帶參數顯示狀態",
     ),
     (
         "queue",
@@ -284,6 +297,14 @@ pub(crate) fn command_hints(input: &str) -> Vec<(&'static str, &'static str)> {
 }
 
 pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<()> {
+    // `//名稱 …`：強制轉發給 agent（即使跟 TUI 命令同名）。
+    if let Some(native) = raw.trim().strip_prefix('/').filter(|r| r.starts_with('/')) {
+        let native = native.trim_start_matches('/');
+        let mut p = native.splitn(2, char::is_whitespace);
+        let verb = p.next().unwrap_or("").to_string();
+        let rest = p.next().unwrap_or("").trim().to_string();
+        return forward_native(app, writer, &verb, &rest);
+    }
     let raw = raw.trim().trim_start_matches('/');
     let mut parts = raw.splitn(2, char::is_whitespace);
     let verb = parts.next().unwrap_or("").to_ascii_lowercase();
@@ -305,6 +326,10 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                     .join("   |   ")
             };
         }
+        "model" | "effort" => session_config_command(app, writer, &verb, rest)?,
+        "settings" => crate::settings::open(app),
+        "set" if rest.is_empty() => crate::settings::open(app),
+        "set" => set_default_command(app, rest),
         "budget" => {
             let tokens: Vec<&str> = rest.split_whitespace().collect();
             let (target, amount_str) = match tokens.as_slice() {
@@ -619,11 +644,71 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
         "q" | "quit" => {
             app.should_quit = true;
         }
-        other => {
-            app.status = format!("未知的命令：/{other}");
-        }
+        other => forward_native(app, writer, other, rest)?,
     }
     Ok(())
+}
+
+/// TUI 不認得的 `/指令` 是 agent 的原生斜線指令：原樣轉發給選取的 session。
+/// `/` 開頭的名稱若跟 TUI 命令同名（如 `/model`），TUI 的優先；要送給 agent 就打 `//名稱`。
+fn forward_native(app: &mut App, writer: &mut ConnStream, verb: &str, rest: &str) -> Result<()> {
+    let Some(id) = app.selected_id() else {
+        app.status = format!("未知的命令：/{verb}（沒有選取的 session 可轉發）");
+        return Ok(());
+    };
+    let known = app
+        .state
+        .sessions
+        .get(&id)
+        .map(|s| s.slash_commands.iter().any(|c| c == verb));
+    let text = if rest.is_empty() {
+        format!("/{verb}")
+    } else {
+        format!("/{verb} {rest}")
+    };
+    send(
+        writer,
+        &Request::Prompt {
+            session: id,
+            text,
+            attachments: vec![],
+            queue: false,
+        },
+    )?;
+    app.status = match known {
+        Some(false) => format!("已轉發 /{verb} 給 agent（它沒有回報這個指令，可能被當成一般文字）"),
+        _ => format!("已轉發原生指令 /{verb} 給 agent"),
+    };
+    Ok(())
+}
+
+/// 輸入框提示：TUI 命令加上選取 session 的原生斜線指令。
+pub(crate) fn hints_with_native(app: &App) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = command_hints(&app.input)
+        .into_iter()
+        .map(|(n, d)| (n.to_string(), d.to_string()))
+        .collect();
+    // 已打完命令名稱：用參數候選取代用法行（用法留在 `:help`）。
+    if let Some((_, cands)) = arg_candidates(app, &app.input) {
+        if !cands.is_empty() {
+            return cands;
+        }
+    }
+    let input = app.input.trim_start().trim_start_matches(['/', ':']);
+    if input.contains(char::is_whitespace) {
+        return out;
+    }
+    let native = app
+        .selected_id()
+        .and_then(|id| app.state.sessions.get(&id))
+        .map(|s| s.slash_commands.as_slice())
+        .unwrap_or(&[]);
+    for c in native {
+        if c.starts_with(input) && !out.iter().any(|(n, _)| n == c) {
+            out.push((c.clone(), "（agent 原生指令，原樣轉發）".to_string()));
+        }
+    }
+    out
 }
 
 pub(crate) fn execute_jump(app: &mut App, writer: &mut ConnStream, query: &str) -> Result<()> {
@@ -735,7 +820,7 @@ pub(crate) fn respond_permission(
         return Ok(());
     };
     let Some(req) = app.selected_permission() else {
-        app.status = "此 session 沒有待審批請求".into();
+        app.status = "此 session 沒有待核准請求".into();
         return Ok(());
     };
     send(
@@ -752,4 +837,218 @@ pub(crate) fn respond_permission(
         Decision::Deny => "已拒絕".into(),
     };
     Ok(())
+}
+
+/// `:model [名稱]`、`:effort [等級]`：對選取的 session 執行期切換；不帶參數只顯示。
+fn session_config_command(
+    app: &mut App,
+    writer: &mut ConnStream,
+    verb: &str,
+    rest: &str,
+) -> Result<()> {
+    let Some(id) = app.selected_id() else {
+        app.status = "沒有選取的 session".into();
+        return Ok(());
+    };
+    let Some(sess) = app.state.sessions.get(&id).cloned() else {
+        return Ok(());
+    };
+    if rest.is_empty() {
+        app.status = if verb == "model" {
+            let choices: Vec<String> = crate::menu::model_choices(&sess.kind)
+                .into_iter()
+                .filter(|(_, v)| !v.is_empty())
+                .map(|(_, v)| v)
+                .collect();
+            format!(
+                "model：{}　可選：{}",
+                sess.model.as_deref().unwrap_or("（未回報）"),
+                if choices.is_empty() {
+                    "（用 :model <名稱> 直接指定）".to_string()
+                } else {
+                    choices.join(", ")
+                }
+            )
+        } else {
+            format!(
+                "effort：{}　可選：{}",
+                sess.effort.as_deref().unwrap_or("（預設）"),
+                termade_adapter::EFFORT_LEVELS.join(", ")
+            )
+        };
+        return Ok(());
+    }
+    let value = rest.to_string();
+    let (model, effort) = if verb == "model" {
+        (Some(value.clone()), None)
+    } else {
+        (None, Some(value.clone()))
+    };
+    send(
+        writer,
+        &Request::SessionConfig {
+            session: id,
+            model,
+            effort,
+        },
+    )?;
+    app.status = format!("切換 {verb} → {value}（下一回合起生效）");
+    Ok(())
+}
+
+/// `:set [--repo] <key> <值>`：把預設值寫進 config.toml。只影響之後新建立的 session，
+/// 不動已在跑的；要改執行中的 session 用 `:model`／`:effort`。
+fn set_default_command(app: &mut App, rest: &str) {
+    let mut words: Vec<&str> = rest.split_whitespace().collect();
+    let repo = if let Some(i) = words.iter().position(|w| *w == "--repo") {
+        words.remove(i);
+        true
+    } else {
+        false
+    };
+    let cwd = app
+        .selected_cwd()
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_default();
+    let path = if repo {
+        cwd.join(".termade").join("config.toml")
+    } else {
+        termade_daemon::config_dir().join("config.toml")
+    };
+    let Some(key) = words.first().copied() else {
+        let cfg = termade_daemon::config::Config::load(&termade_daemon::config_dir(), &cwd);
+        let agent = app.selected_kind_id();
+        let a = agent.as_deref().and_then(|k| cfg.agents.get(k));
+        app.status = format!(
+            "預設：agent={} permission={} model={} effort={}（{}）",
+            cfg.defaults.agent.as_deref().unwrap_or("-"),
+            cfg.defaults.permission.as_deref().unwrap_or("-"),
+            a.and_then(|a| a.model.as_deref()).unwrap_or("-"),
+            a.and_then(|a| a.effort.as_deref()).unwrap_or("-"),
+            agent
+                .as_deref()
+                .unwrap_or("未選 session，model／effort 不顯示"),
+        );
+        return;
+    };
+    let value = words.get(1..).unwrap_or(&[]).join(" ");
+    let result = match key {
+        "agent" | "permission" => {
+            if !value.is_empty()
+                && key == "permission"
+                && !["ask", "auto", "bypass"].contains(&value.as_str())
+            {
+                app.status = "permission 只能是 ask、auto、bypass".into();
+                return;
+            }
+            termade_daemon::config::Config::set_value(&path, &["defaults"], key, &value)
+        }
+        "model" | "effort" => {
+            let Some(agent) = app.selected_kind_id() else {
+                app.status = "model／effort 預設是針對某個 agent；先選取一個 session".into();
+                return;
+            };
+            if key == "effort" && !value.is_empty() {
+                if let Err(e) = termade_adapter::check_effort(&value) {
+                    app.status = e.to_string();
+                    return;
+                }
+            }
+            termade_daemon::config::Config::set_value(&path, &["agents", &agent], key, &value)
+        }
+        _ => {
+            app.status = "可設定：agent、permission、model、effort".into();
+            return;
+        }
+    };
+    app.status = match result {
+        Ok(()) if value.is_empty() => format!("已移除 {key} 預設（{}）", path.display()),
+        Ok(()) => format!(
+            "已將預設 {key} 設為 {value}（{}），新建立的 session 起生效",
+            path.display()
+        ),
+        Err(e) => format!("寫入設定失敗：{e}"),
+    };
+}
+
+/// 命令第二個字以後的候選：`(目前正在打的字, [(值, 說明)])`。只列出以該字開頭的。
+/// 支援 `:set`（key 與各 key 的值）、`:model`、`:effort`。
+pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(String, String)>)> {
+    let input = input.trim_start().trim_start_matches(['/', ':']);
+    if !input.contains(char::is_whitespace) {
+        return None;
+    }
+    let ends_space = input.ends_with(char::is_whitespace);
+    let mut words: Vec<&str> = input.split_whitespace().collect();
+    let verb = words.remove(0);
+    let cur = if ends_space {
+        ""
+    } else {
+        words.pop().unwrap_or("")
+    };
+    let kind = app
+        .selected_id()
+        .and_then(|id| app.state.sessions.get(&id))
+        .map(|s| s.kind.clone());
+    let models = |kind: &Option<termade_core::AgentKind>| -> Vec<(String, String)> {
+        kind.as_ref()
+            .map(crate::menu::model_choices)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(label, v)| (v, label))
+            .collect()
+    };
+    let efforts = || -> Vec<(String, String)> {
+        termade_adapter::EFFORT_LEVELS
+            .iter()
+            .map(|l| (l.to_string(), "推理強度".to_string()))
+            .collect()
+    };
+    let list: Vec<(String, String)> = match verb {
+        "model" if words.is_empty() => models(&kind),
+        "effort" if words.is_empty() => efforts(),
+        "set" => {
+            words.retain(|w| *w != "--repo");
+            match words.first().copied() {
+                None => {
+                    let mut v: Vec<(String, String)> = vec![
+                        ("agent".into(), "預設的 agent".into()),
+                        ("permission".into(), "預設權限（ask／auto／bypass）".into()),
+                        ("model".into(), "選取 session 的 agent 的預設 model".into()),
+                        (
+                            "effort".into(),
+                            "選取 session 的 agent 的預設 effort".into(),
+                        ),
+                    ];
+                    if !input.contains("--repo") {
+                        v.push(("--repo".into(), "寫到 .termade/config.toml".into()));
+                    }
+                    v
+                }
+                Some("agent") if words.len() == 1 => ["opencode", "claude", "codex", "antigravity"]
+                    .iter()
+                    .map(|a| (a.to_string(), "agent".to_string()))
+                    .collect(),
+                Some("permission") if words.len() == 1 => [
+                    ("ask", "每個動作都要人同意"),
+                    ("auto", "自動核准一般動作"),
+                    ("bypass", "完全不問"),
+                ]
+                .iter()
+                .map(|(a, d)| (a.to_string(), d.to_string()))
+                .collect(),
+                Some("model") if words.len() == 1 => models(&kind),
+                Some("effort") if words.len() == 1 => efforts(),
+                _ => Vec::new(),
+            }
+        }
+        _ => return None,
+    };
+    let out: Vec<(String, String)> = list
+        .into_iter()
+        .filter(|(v, _)| v.starts_with(cur))
+        .collect();
+    Some((cur.to_string(), out))
 }

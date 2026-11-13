@@ -1,4 +1,4 @@
-//! 輸入歷史（↑↓ 回顧、跨重開保存）。
+//! 輸入歷史（↑↓ 回顧、跨重開儲存）。
 
 use std::io::Write;
 use std::path::PathBuf;

@@ -5,8 +5,8 @@
 ## 問題
 
 1. **鎖內做檔案 IO**：`emit` 持有全域 `inner` 鎖的期間做 JSON 序列化、秘密遮罩與寫檔。所有 session 的串流輸出都經過這裡，磁碟變慢時整個 daemon 一起卡住。
-2. **client 佇列無上限**：每個連線是無上限的 `mpsc::channel`。client 停止讀取（終端被暫停、網路卡住）時，`emit` 仍會成功送入，記憶體隨事件量無限成長。
-3. **鎖中毒連鎖**：daemon 內 34 處 `unwrap()`／`expect()`，多數是 `lock().unwrap()`。任何一個持鎖的執行緒 panic，之後所有執行緒都會在 `lock().unwrap()` 上 panic，daemon 等同全毀，而它持有所有 agent 子程序。
+2. **client 佇列無上限**：每個連線是無上限的 `mpsc::channel`。client 停止讀取（終端機被暫停、網路卡住）時，`emit` 仍會成功送入，記憶體隨事件量無限成長。
+3. **鎖中毒連鎖**：daemon 內 34 處 `unwrap()`／`expect()`，多數是 `lock().unwrap()`。任何一個持鎖的執行緒 panic，之後所有執行緒都會在 `lock().unwrap()` 上 panic，daemon 等同全毀，而它持有所有 agent 子處理程序。
 
 ## 證據
 
@@ -25,7 +25,7 @@
 
 1. **log 寫入移出鎖**：新增一個 log 寫入執行緒與一個 channel。`emit` 在鎖內只把 `Record`（或已序列化的字串）送進 channel，順序由持鎖時送出保證。寫入執行緒負責遮罩與寫檔。`shutdown` 時關閉 channel 並等待寫入執行緒結束，確保最後的事件落地。
 2. **client 佇列加上限**：改用 `mpsc::sync_channel(N)`（例如 4096）加 `try_send`。佇列滿時把該 client 移除並關閉連線；client 重連後以 `since` 補齊（backlog 有 20000 筆）。TUI 端確認斷線會自動重連。
-3. **鎖中毒**：加一個小輔助函式統一取鎖，中毒時取回內部資料繼續（`unwrap_or_else(PoisonError::into_inner)`），並記一筆 `tracing::error!`。不引入 `parking_lot`，維持依賴精簡。
+3. **鎖中毒**：加一個小輔助函式統一取鎖，中毒時取回內部資料繼續（`unwrap_or_else(PoisonError::into_inner)`），並記一筆 `tracing::error!`。不引入 `parking_lot`，維持相依性精簡。
 4. **連線執行緒不要帶走 daemon**：`handle_conn` 內對 `shared.handle` 包 `catch_unwind`，單一請求 panic 只斷該連線。
 
 ## 驗收條件

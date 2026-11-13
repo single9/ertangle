@@ -1,6 +1,6 @@
-//! 通知：回合結束、等待審批、失敗、額度用完時提醒不在畫面前的使用者。
+//! 通知：回合結束、等待核准、失敗、額度用完時提醒不在畫面前的使用者。
 //!
-//! 偵測（[`notices_for`]）是純函式；送出方式有終端 bell、OSC 9 與使用者自訂命令。
+//! 偵測（[`notices_for`]）是純函式；送出方式有終端機 bell、OSC 9 與使用者自訂命令。
 //! 通知由 TUI 發出（daemon 可能在遠端或沒有桌面環境），TUI 沒開就沒有通知。
 
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ pub(crate) enum NoticeKind {
     /// 回合結束（忙碌 → 閒置）。
     Done,
     Failed,
-    /// 等待審批。
+    /// 等待核准。
     Approval,
     /// 額度用完。
     Limited,
@@ -85,7 +85,7 @@ pub(crate) struct NotifyCtx<'a> {
     pub(crate) min_turn: Duration,
     /// 各 session 目前這個回合的開始時間；沒有紀錄的視為夠長。
     pub(crate) turn_started: &'a HashMap<SessionId, Instant>,
-    /// 終端是否有焦點（終端不回報時為 `false`）。
+    /// 終端機是否有焦點（終端機不回報時為 `false`）。
     pub(crate) focused: bool,
     /// 目前選取的 session。
     pub(crate) selected: Option<&'a str>,
@@ -158,9 +158,9 @@ pub(crate) fn notices_for(before: &State, record: &Record, ctx: &NotifyCtx) -> V
         (NoticeKind::Done, _) => "做完了".to_string(),
         (NoticeKind::Failed, _) => "失敗".to_string(),
         (NoticeKind::Approval, Some(tool)) if !tool.trim().is_empty() => {
-            format!("等待審批 {tool}")
+            format!("等待核准 {tool}")
         }
-        (NoticeKind::Approval, _) => "等待審批".to_string(),
+        (NoticeKind::Approval, _) => "等待核准".to_string(),
         (NoticeKind::Limited, _) => "額度用完".to_string(),
     };
     vec![Notice {
@@ -179,7 +179,7 @@ pub(crate) fn sanitize(s: &str) -> String {
         .collect()
 }
 
-/// 把 bell／OSC 9 寫到終端。`text` 會再清一次控制字元。
+/// 把 bell／OSC 9 寫到終端機。`text` 會再清一次控制字元。
 pub(crate) fn write_escape(out: &mut impl Write, method: Method, text: &str) -> io::Result<()> {
     match method {
         Method::Bell => out.write_all(b"\x07"),
@@ -197,7 +197,7 @@ pub(crate) fn notify_command(command: &str, notice: &Notice) -> Command {
         .env("TERMADE_NOTIFY_SESSION", &notice.session)
         .env("TERMADE_NOTIFY_LABEL", &notice.label)
         .env("TERMADE_NOTIFY_TEXT", &notice.text)
-        // 子程序不能碰 TUI 佔用的終端。
+        // 子處理程序不能碰 TUI 佔用的終端機。
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -213,7 +213,7 @@ pub(crate) struct Notifier {
     pub(crate) unknown: Vec<String>,
     pub(crate) command: Option<String>,
     pub(crate) min_turn: Duration,
-    /// 終端是否有焦點；收到第一個 focus 事件前當作沒有。
+    /// 終端機是否有焦點；收到第一個 focus 事件前當作沒有。
     pub(crate) focused: bool,
     pub(crate) turn_started: HashMap<SessionId, Instant>,
     pub(crate) last_sent: HashMap<(SessionId, NoticeKind), Instant>,
@@ -306,7 +306,7 @@ impl Notifier {
             Event::SessionStatus { session, status } => {
                 let prev = before.sessions.get(session).map(|s| s.status);
                 if *status == SessionStatus::Busy {
-                    // 審批後回到 Busy 仍是同一個回合，不重設起點。
+                    // 核准後回到 Busy 仍是同一個回合，不重設起點。
                     if !prev.is_some_and(is_busy) {
                         self.turn_started.insert(session.clone(), now);
                     }
@@ -351,13 +351,13 @@ impl Notifier {
                     if let Err(e) =
                         write_escape(out, *method, &notice.text).and_then(|()| out.flush())
                     {
-                        result = Err(format!("通知寫入終端失敗：{e}"));
+                        result = Err(format!("通知寫入終端機失敗：{e}"));
                     }
                 }
                 Method::Command => match &self.command {
                     None => result = Err("通知：notify_command 未設定".to_string()),
                     Some(command) => match notify_command(command, notice).spawn() {
-                        // 不等待結果；另開執行緒回收子程序，避免留下殭屍。
+                        // 不等待結果；另開執行緒回收子處理程序，避免留下殭屍。
                         Ok(mut child) => {
                             std::thread::spawn(move || {
                                 let _ = child.wait();
@@ -408,6 +408,8 @@ mod tests {
                     budget_usd: None,
                     over_budget: false,
                     handed_off_to: None,
+                    effort: None,
+                    slash_commands: Vec::new(),
                 },
             );
         }
@@ -506,7 +508,7 @@ mod tests {
             );
             assert!(got.is_empty(), "{prev:?} → Idle 不該通知");
         }
-        // 審批完直接結束也算回合結束。
+        // 核准完直接結束也算回合結束。
         let got = notices_for(
             &state_with(SessionStatus::WaitingApproval),
             &status("s1", SessionStatus::Idle),
@@ -522,7 +524,7 @@ mod tests {
         let got = notices_for(&busy, &approval("s1", "Bash"), &env.ctx());
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].kind, NoticeKind::Approval);
-        assert_eq!(got[0].text, "worker/a：等待審批 Bash");
+        assert_eq!(got[0].text, "worker/a：等待核准 Bash");
 
         let got = notices_for(&busy, &status("s1", SessionStatus::Failed), &env.ctx());
         assert_eq!(got[0].kind, NoticeKind::Failed);
@@ -723,7 +725,7 @@ mod tests {
             .and_then(|r| r.strip_suffix('\x07'))
             .expect("OSC 9 框架");
         assert!(!body.chars().any(char::is_control), "{body:?}");
-        assert_eq!(body, "wor]52;c;AAAAker：等待審批 Bash[31m");
+        assert_eq!(body, "wor]52;c;AAAAker：等待核准 Bash[31m");
 
         // 直接給未清理的文字也一樣。
         let mut out = Vec::new();
@@ -737,7 +739,7 @@ mod tests {
             kind: NoticeKind::Approval,
             session: "s1".into(),
             label: "worker/a".into(),
-            text: "worker/a：等待審批 $(touch /tmp/x)".into(),
+            text: "worker/a：等待核准 $(touch /tmp/x)".into(),
         };
         let cmd = notify_command("notify-send termade \"$TERMADE_NOTIFY_TEXT\"", &notice);
         let args: Vec<_> = cmd.get_args().map(|a| a.to_owned()).collect();
@@ -772,7 +774,7 @@ mod tests {
         n.observe(&st, &approval("s1", "Bash"), None, false, "/", NOW_MS);
         let mut out = Vec::new();
         assert_eq!(n.flush(&mut out), None);
-        assert!(out.is_empty(), "command 不寫終端");
+        assert!(out.is_empty(), "command 不寫終端機");
         let mut got = String::new();
         for _ in 0..100 {
             got = std::fs::read_to_string(&file).unwrap_or_default();
@@ -781,7 +783,7 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
-        assert_eq!(got, "approval|worker/a：等待審批 Bash");
+        assert_eq!(got, "approval|worker/a：等待核准 Bash");
         let _ = std::fs::remove_dir_all(&dir);
 
         let mut n = Notifier::from_cfg(&TuiCfg {

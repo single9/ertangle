@@ -65,7 +65,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         cwd.clone()
     };
     let cfg = config::Config::load(&global_dir, &cfg_dir);
-    let resolved = cfg.resolve(
+    let mut resolved = cfg.resolve(
         &spawn.kind,
         &role,
         spawn.model.as_deref(),
@@ -73,6 +73,60 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         &spawn.args,
         spawn.permission,
     );
+
+    // agent 自己建立 session：先檢查 model／effort 是否超出免確認範圍（避免自動開出高消耗的 session）。
+    let mut spawn_note: Option<String> = None;
+    if let Some(pid) = &parent {
+        let pol = &cfg.agent_spawn;
+        let check = pol.check(resolved.model.as_deref(), resolved.effort.as_deref());
+        let exceeds = !matches!(check, config::SpawnCheck::Fine);
+        let must_ask = pol.confirm() == "always" || (pol.confirm() == "costly" && exceeds);
+        if must_ask {
+            let reasons = match &check {
+                config::SpawnCheck::Exceeds { reasons, .. } => reasons.join("；"),
+                config::SpawnCheck::Fine => "設定要求每次都先確認".to_string(),
+            };
+            let detail = format!(
+                "agent {pid} 要建立 {} session：model={} effort={}\n原因：{reasons}\n任務：{}",
+                spawn.kind,
+                resolved.model.as_deref().unwrap_or("預設"),
+                resolved.effort.as_deref().unwrap_or("預設"),
+                spawn
+                    .prompt
+                    .as_deref()
+                    .unwrap_or("")
+                    .chars()
+                    .take(200)
+                    .collect::<String>(),
+            );
+            let d = ask_user(shared, pid, "建立子 agent".into(), detail, false);
+            if d == Decision::Deny {
+                let _ = reply.send(Frame::error(
+                    "使用者拒絕（或逾時未回應）建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立",
+                ));
+                return;
+            }
+        } else if let config::SpawnCheck::Exceeds {
+            effort_too_high,
+            model_not_allowed,
+            reasons,
+        } = check
+        {
+            // confirm = never：effort 調降，model 直接拒絕。
+            if model_not_allowed {
+                let _ = reply.send(Frame::error(format!(
+                    "{}（agent_spawn.confirm = never）",
+                    reasons.join("；")
+                )));
+                return;
+            }
+            if effort_too_high {
+                let max = pol.max_effort().to_string();
+                spawn_note = Some(format!("effort 已調降為 {max}"));
+                resolved.effort = Some(max);
+            }
+        }
+    }
 
     // 有 parent 時檢查子 agent 層數、同時執行數與整棵樹成本上限。
     let mut parent_remaining_usd: Option<f64> = None;
@@ -131,7 +185,12 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
     }
 
-    if spawn.worktree {
+    // agent 自己建立的 session 預設用 worktree（`[agent_spawn] worktree`）；不在 git repo 內就略過。
+    let forced_worktree = parent.is_some()
+        && spawn.inherit_from.is_none()
+        && cfg.agent_spawn.worktree()
+        && git_toplevel(&cwd).is_some();
+    if spawn.worktree || forced_worktree {
         let root = git_toplevel(&cwd).unwrap_or_else(|| cwd.clone());
         match make_worktree(&root, &id) {
             Ok((dir, br)) => {
@@ -200,6 +259,8 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         budget_usd,
         over_budget: false,
         handed_off_to: None,
+        effort: resolved.effort.clone(),
+        slash_commands: Vec::new(),
     };
     shared.emit(Event::SessionStarted {
         session: session.clone(),
@@ -236,6 +297,12 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                     to.id()
                 ));
             }
+            if let Some(n) = &spawn_note {
+                note.push_str(&format!("（{n}）"));
+            }
+            if forced_worktree && !spawn.worktree {
+                note.push_str("（依 agent_spawn.worktree 使用獨立 worktree）");
+            }
             let _ = reply.send(Frame::ok_note(note));
         }
         Err(e) => {
@@ -257,7 +324,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     }
 }
 
-/// 啟動（或接續）一個 agent 程序所需的資訊；`Session` 本身必須已經在 state 裡。
+/// 啟動（或接續）一個 agent 處理程序所需的資訊；`Session` 本身必須已經在 state 裡。
 struct Launch {
     id: String,
     kind: termade_core::AgentKind,
@@ -269,7 +336,7 @@ struct Launch {
     attachments: Vec<termade_core::Attachment>,
     /// 接續用的 agent 原生對話 id；`None` 表示開新對話。
     resume: Option<String>,
-    /// 接續前已累計的成本：agent 的成本是程序內累計時，新程序回報的數字要加上這個基底。
+    /// 接續前已累計的成本：agent 的成本是處理程序內累計時，新處理程序回報的數字要加上這個基底。
     cost_base: Cost,
 }
 
@@ -342,7 +409,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
     let transport = ctl.transport().to_string();
     let run = new_id("run");
     {
-        // 先登記再送 Idle：舊程序遲到的事件從這一刻起就會被擋掉（見下方的 ingest 執行緒）。
+        // 先登記再送 Idle：舊處理程序遲到的事件從這一刻起就會被擋掉（見下方的 ingest 執行緒）。
         let mut inner = lock(&shared.inner);
         if let Some(s) = inner.state.sessions.get_mut(&id) {
             s.transport = transport.clone();
@@ -371,7 +438,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
     let shared_worker = shared.clone();
     std::thread::spawn(move || {
         for mut ev in rx {
-            // 這個 session 已被接續成另一個程序：舊程序遲到的事件（尤其是 Exited）不能再套用，
+            // 這個 session 已被接續成另一個處理程序：舊處理程序遲到的事件（尤其是 Exited）不能再套用，
             // 否則會把剛接回來的 session 標成結束並拿掉新的控制把手。
             let superseded = lock(&shared_worker.inner)
                 .sessions
@@ -444,7 +511,7 @@ pub(crate) fn handle_resume(
         Some(s.permission),
     );
     resolved.permission = s.permission;
-    // 只有 Claude 的成本是程序內累計（新程序從 0 算）；Codex 回報的是 thread 累計的 token。
+    // 只有 Claude 的成本是處理程序內累計（新處理程序從 0 算）；Codex 回報的是 thread 累計的 token。
     let cost_base = if matches!(s.kind, termade_core::AgentKind::ClaudeCode) {
         s.cost
     } else {
@@ -907,8 +974,8 @@ pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
     match shared.control(&session) {
         Some((sid, ctl)) => {
             let _ = ctl.kill();
-            // 立刻拿掉控制把手：程序的結束事件要過一會才到，這段期間送來的 prompt
-            // 不該再寫進已經被殺掉的程序（會把剛標成結束的 session 又變回 busy，擋住接續）。
+            // 立刻拿掉控制把手：處理程序的結束事件要過一會才到，這段期間送來的 prompt
+            // 不該再寫進已經被殺掉的處理程序（會把剛標成結束的 session 又變回 busy，擋住接續）。
             lock(&shared.inner).sessions.remove(&sid);
             shared.emit(Event::SessionExited {
                 session: sid.clone(),
@@ -919,6 +986,55 @@ pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
         }
         None => {
             let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        }
+    }
+}
+
+pub(crate) fn handle_config(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    model: Option<String>,
+    effort: Option<String>,
+) {
+    let model = model.filter(|m| !m.trim().is_empty());
+    let effort = effort.filter(|e| !e.trim().is_empty());
+    if model.is_none() && effort.is_none() {
+        let _ = reply.send(Frame::error("請指定 model 或 effort"));
+        return;
+    }
+    let Some((sid, ctl)) = shared.control(&session) else {
+        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        return;
+    };
+    match ctl.set_config(model.as_deref(), effort.as_deref()) {
+        Ok(applied) => {
+            if let Some(m) = applied.or(model.clone()) {
+                shared.emit(Event::SessionModel {
+                    session: sid.clone(),
+                    model: m,
+                });
+            }
+            if let Some(e) = &effort {
+                shared.emit(Event::SessionEffort {
+                    session: sid.clone(),
+                    effort: e.clone(),
+                });
+            }
+            let mut parts = Vec::new();
+            if let Some(m) = &model {
+                parts.push(format!("model={m}"));
+            }
+            if let Some(e) = &effort {
+                parts.push(format!("effort={e}"));
+            }
+            let _ = reply.send(Frame::ok_note(format!(
+                "{sid} 已切換 {}（下一個回合起生效）",
+                parts.join(" ")
+            )));
+        }
+        Err(e) => {
+            let _ = reply.send(Frame::error(format!("切換失敗：{e}")));
         }
     }
 }
@@ -971,7 +1087,7 @@ pub(crate) fn handle_permission(
     req: String,
     decision: Decision,
 ) {
-    // MCP 審批請求：把決定交給等待中的 `handle_approval_ask`。
+    // MCP 核准請求：把決定交給等待中的 `handle_approval_ask`。
     let waiter = lock(&shared.inner).approval_waiters.remove(&req);
     if let Some(tx) = waiter {
         let _ = tx.send(decision);
@@ -994,7 +1110,7 @@ pub(crate) fn handle_permission(
                 let _ = reply.send(Frame::ok());
             }
             Err(e) => {
-                let _ = reply.send(Frame::error(format!("審批回覆失敗：{e}")));
+                let _ = reply.send(Frame::error(format!("核准回覆失敗：{e}")));
             }
         },
         None => {
@@ -1003,7 +1119,7 @@ pub(crate) fn handle_permission(
     }
 }
 
-/// MCP `termade_approve`：先套用規則與政策，沒有結論就發審批請求並等人回覆（逾時視為拒絕）。
+/// MCP `termade_approve`：先套用規則與政策，沒有結論就發核准請求並等人回覆（逾時視為拒絕）。
 pub(crate) fn handle_approval_ask(
     shared: &Arc<Shared>,
     reply: &ClientTx,
@@ -1011,26 +1127,42 @@ pub(crate) fn handle_approval_ask(
     tool: String,
     input: String,
 ) {
-    const APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
     let sid = shared.resolve_session(&session);
-    let p = termade_core::PermissionRequest {
-        req: termade_core::new_id("perm"),
-        session: sid.clone(),
-        title: tool,
-        detail: input,
-    };
-    let word = |d: Decision| match d {
+    let d = ask_user(shared, &sid, tool, input, true);
+    let word = match d {
         Decision::Deny => "deny",
         _ => "allow",
     };
-    if let Some(d) = shared.auto_decision(&sid, &p) {
-        shared.emit(Event::PermissionResolved {
-            session: sid,
-            req: p.req,
-            decision: d,
-        });
-        let _ = reply.send(Frame::ok_note(word(d)));
-        return;
+    let _ = reply.send(Frame::ok_note(word));
+}
+
+/// 向使用者請求核准並阻塞等待（最多 5 分鐘，逾時視為拒絕）。
+/// `use_policy` 為真時先讓政策引擎自動決定（agent 的工具核准用）；
+/// 對 spawn 這類「一定要問人」的確認傳 `false`。
+pub(crate) fn ask_user(
+    shared: &Arc<Shared>,
+    sid: &str,
+    title: String,
+    detail: String,
+    use_policy: bool,
+) -> Decision {
+    const APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+    let sid = sid.to_string();
+    let p = termade_core::PermissionRequest {
+        req: termade_core::new_id("perm"),
+        session: sid.clone(),
+        title,
+        detail,
+    };
+    if use_policy {
+        if let Some(d) = shared.auto_decision(&sid, &p) {
+            shared.emit(Event::PermissionResolved {
+                session: sid,
+                req: p.req,
+                decision: d,
+            });
+            return d;
+        }
     }
     let (tx, rx) = std::sync::mpsc::channel();
     lock(&shared.inner)
@@ -1038,7 +1170,7 @@ pub(crate) fn handle_approval_ask(
         .insert(p.req.clone(), tx);
     let req = p.req.clone();
     shared.emit(Event::PermissionRequested { request: p });
-    let d = match rx.recv_timeout(APPROVAL_TIMEOUT) {
+    match rx.recv_timeout(APPROVAL_TIMEOUT) {
         Ok(d) => d,
         Err(_) => {
             lock(&shared.inner).approval_waiters.remove(&req);
@@ -1049,8 +1181,7 @@ pub(crate) fn handle_approval_ask(
             });
             Decision::Deny
         }
-    };
-    let _ = reply.send(Frame::ok_note(word(d)));
+    }
 }
 
 pub(crate) fn handle_note(shared: &Arc<Shared>, reply: &ClientTx, session: String, note: String) {

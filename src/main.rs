@@ -2,7 +2,7 @@
 //!
 //! * `termade` / `termade tui`：確保 daemon 在跑，然後 attach TUI。
 //! * `termade daemon [--listen host:port] [--token secret]`：前景執行 daemon（支援 M5 遠端連線）。
-//! * `termade mcp`：stdio MCP server（供 agent 子程序呼叫協作原語）。
+//! * `termade mcp`：stdio MCP server（供 agent 子處理程序呼叫協作原語）。
 //! * M2 協作：`whoami`、`peers`/`sessions`、`spawn`、`prompt`、`send`、`inbox`、`wait`、`ask`、`tasks`、`task`、`task-update`、`status`、`artifact`
 //! * M3 工作區與審查：`worktrees`、`diff`、`review`、`merge`、`pr`、`gc`
 //! * M4 打磨：`sleep`、`wake`、`cost`、`replay`
@@ -51,7 +51,7 @@ enum Cmd {
         #[arg(long)]
         insecure_listen_public: bool,
     },
-    /// stdio MCP server 模式（供 agent 子程序設定為 MCP 工具）
+    /// stdio MCP server 模式（供 agent 子處理程序設定為 MCP 工具）
     Mcp {
         /// 此 MCP server 代表的 session id（預設讀 TERMADE_SESSION 環境變數）
         #[arg(long)]
@@ -136,18 +136,27 @@ enum Cmd {
     },
     /// 中斷正在執行的 turn
     Cancel { session: String },
-    /// 強制結束 agent 子程序
+    /// 強制結束 agent 子處理程序
     Kill { session: String },
-    /// 接續已結束的 session：agent 程序死掉或 daemon 重啟後，用原本的對話繼續（session id 不變）
+    /// 接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續（session id 不變）
     Resume {
         session: String,
         /// 接續後立刻送出的 prompt（可省略）
         text: Vec<String>,
     },
-    /// 讓 session 休眠（停止程序但保留對話紀錄，可隨時喚醒）
+    /// 讓 session 休眠（停止處理程序但保留對話紀錄，可隨時喚醒）
     Sleep { session: String },
     /// 喚醒已休眠的 session
     Wake { session: String },
+    /// 執行期切換 session 的 model 與／或 effort（下一個回合起生效）
+    Model {
+        session: String,
+        /// 新的 model；省略則不變
+        model: Option<String>,
+        /// 新的推理強度（low|medium|high|xhigh|max）
+        #[arg(long)]
+        effort: Option<String>,
+    },
     /// 把 session 的工作交接給另一個 agent（額度用完時）：沿用同一個工作目錄，附上交接簡報與 diff
     Handoff {
         session: String,
@@ -183,7 +192,7 @@ enum Cmd {
         /// 訊息種類：chat（預設）/ handoff / question / answer / status / artifact
         #[arg(long, default_value = "chat")]
         kind: String,
-        /// 回覆的訊息 id（形成對話線程）
+        /// 回覆的訊息 id（形成對話串）
         #[arg(long)]
         reply_to: Option<String>,
         #[arg(required = true)]
@@ -341,7 +350,7 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// 關閉常駐的 daemon 與所有受管 agent 子程序
+    /// 關閉常駐的 daemon 與所有受管 agent 子處理程序
     Shutdown,
     /// 產生 shell 補全腳本並印到 stdout（bash / zsh / fish）
     Completions { shell: clap_complete::Shell },
@@ -408,6 +417,11 @@ fn main() -> Result<()> {
         Cmd::Resume { session, text } => cmd_resume(session, text),
         Cmd::Sleep { session } => cmd_sleep(session),
         Cmd::Wake { session } => cmd_wake(session),
+        Cmd::Model {
+            session,
+            model,
+            effort,
+        } => cmd_model(session, model, effort),
         Cmd::Rm { session, force } => cmd_rm(session, force),
         Cmd::Handoff {
             session,

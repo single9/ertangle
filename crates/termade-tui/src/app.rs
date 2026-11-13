@@ -26,6 +26,8 @@ pub(crate) enum Mode {
     Pick,
     /// 在逐字稿或 diff 裡搜尋（`f` 或 `:find`）。
     Search,
+    /// 設定面板（`:settings`）。
+    Settings,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -75,7 +77,7 @@ impl LayoutMode {
     }
 }
 
-/// 窄終端自動降級：寬度不足以容納所選版面時改用較省空間的版面。
+/// 窄終端機自動降級：寬度不足以容納所選版面時改用較省空間的版面。
 /// `Tabs` 是使用者的明確選擇，不會被改動。
 pub(crate) fn effective_layout(mode: LayoutMode, width: u16) -> LayoutMode {
     match mode {
@@ -117,6 +119,7 @@ pub(crate) struct App {
     pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
     pub(crate) spawn_effort: Option<String>,
     pub(crate) help_scroll: usize,
+    pub(crate) settings: Option<crate::settings::Settings>,
     /// 選擇器用於交接時，來源 session。
     pub(crate) handoff_from: Option<SessionId>,
     /// `@` 檔案建議：上次的查詢與選取索引。
@@ -173,7 +176,7 @@ pub(crate) struct App {
     /// 滑鼠拖曳選取範圍：((起始行, 起始欄), (目前行, 目前欄))，
     /// 行是渲染後的絕對行索引，欄是顯示欄位。
     pub(crate) selection: Option<((usize, usize), (usize, usize))>,
-    /// 是否擷取滑鼠（預設開啟，支援應用內拖曳選取；`F2` 關閉以使用終端原生選取）。
+    /// 是否擷取滑鼠（預設開啟，支援應用內拖曳選取；`F2` 關閉以使用終端機原生選取）。
     pub(crate) mouse_capture: bool,
     /// 使用者選擇的版面模式（僅執行期；T11 的 config.toml 完成後再持久化）。
     pub(crate) layout: LayoutMode,
@@ -223,6 +226,7 @@ impl App {
             spawn_target: None,
             spawn_effort: None,
             help_scroll: 0,
+            settings: None,
             handoff_from: None,
             at_sel: (String::new(), 0),
             spawn_variants: Vec::new(),
@@ -310,11 +314,20 @@ impl App {
         crate::attach::search_root(self.selected_cwd().as_deref())
     }
 
+    /// 選取 session 的 agent 種類 id（設定檔 `[agents.<id>]` 的鍵）。
+    pub(crate) fn selected_kind_id(&self) -> Option<String> {
+        let id = self.selected_id()?;
+        self.state
+            .sessions
+            .get(&id)
+            .map(|s| s.kind.id().to_string())
+    }
+
     pub(crate) fn selected_id(&self) -> Option<SessionId> {
         self.session_ids().get(self.selected).cloned()
     }
 
-    /// 回傳目前選取 session 尚未回覆的審批請求 id。
+    /// 回傳目前選取 session 尚未回覆的核准請求 id。
     pub(crate) fn selected_permission(&self) -> Option<String> {
         let id = self.selected_id()?;
         self.state

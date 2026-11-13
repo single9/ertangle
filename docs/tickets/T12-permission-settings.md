@@ -55,10 +55,10 @@ T04 處理的是「規則引擎有沒有被呼叫到」。這張票處理的是�
 4. **細部選項的對應**：
    - Claude：`allowed_tools`／`disallowed_tools` → `--allowedTools`／`--disallowedTools`（與既有的 `mcp__termade__*` 合併）；`read_only` → `--permission-mode plan`。
    - Codex：`sandbox` → `thread/start` 的 sandbox 參數；`read_only` → `read-only`。欄位名稱要先以實機或文件確認，本機沒有安裝 Codex。
-   - ACP（OpenCode／Antigravity）：協定沒有對應的啟動參數，`read_only` 由 daemon 端達成——T04 完成後，在 `ingest` 對寫入類的審批請求自動拒絕。
+   - ACP（OpenCode／Antigravity）：協定沒有對應的啟動參數，`read_only` 由 daemon 端達成——T04 完成後，在 `ingest` 對寫入類的核准請求自動拒絕。
    - 某個 agent 不支援某選項時，spawn 回傳明確錯誤，不要靜默忽略。
 5. **TUI**：`n` 的建立流程增加權限切換（比照既有的 `Ctrl-W` 切換 worktree，例如 `Ctrl-E` 在 `ask`／`auto`／`bypass` 間循環），輸入框標題顯示目前選擇。選到 `bypass` 時送出前要再按一次確認。
-6. **Claude 的逐項審批**：本機 `claude --help` 有 `--permission-prompts host` 與 `--permission-prompt-tool`，T04 第 4 步提到的做法可行性較高了。實作留在 T04，這裡只確認 `ask` 對 Claude 最終要走那條路。
+6. **Claude 的逐項核准**：本機 `claude --help` 有 `--permission-prompts host` 與 `--permission-prompt-tool`，T04 第 4 步提到的做法可行性較高了。實作留在 T04，這裡只確認 `ask` 對 Claude 最終要走那條路。
 
 ## 驗收條件
 

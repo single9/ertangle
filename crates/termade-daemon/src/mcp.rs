@@ -333,7 +333,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     },
                     "worktree": {
                         "type": "boolean",
-                        "description": "Create a dedicated git worktree (default: false)"
+                        "description": "Create a dedicated git worktree. Agent-spawned sessions use one by default (config [agent_spawn] worktree)"
                     },
                     "permission": {
                         "type": "string",
@@ -343,11 +343,11 @@ pub fn tool_definitions() -> Vec<Value> {
                     "effort": {
                         "type": "string",
                         "enum": ["low", "medium", "high", "xhigh", "max"],
-                        "description": "Reasoning effort for the child agent (supported by claude, codex; others may reject it)"
+                        "description": "Reasoning effort for the child agent (supported by claude, codex; others may reject it). Omit unless needed: efforts above the user's configured limit make the user confirm, and cost them money"
                     },
                     "model": {
                         "type": "string",
-                        "description": "Model for the child agent (e.g. a cheaper model for workers). Defaults to config.toml"
+                        "description": "Model for the child agent. Omit to use the configured default; prefer cheaper models for workers. Models outside the user's allowed list make the user confirm, or be rejected"
                     },
                     "budget_usd": {
                         "type": "number",
@@ -895,6 +895,8 @@ mod tests {
                 budget_usd: None,
                 over_budget: false,
                 handed_off_to: None,
+                effort: None,
+                slash_commands: Vec::new(),
             },
         );
 

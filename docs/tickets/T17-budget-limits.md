@@ -24,7 +24,7 @@ termade 會統計每個 session 的成本，但沒有任何上限：
 ## 分析邏輯
 
 1. 從 `Event::Cost` 往下追，確認成本只用來顯示。
-2. 各家回報成本的情況：Claude 在每個回合的 `result` 帶 `total_cost_usd`（`claude.rs:263-272`），是**同一個程序內的累計值**。Codex 與 ACP 有沒有回報美金成本**沒有確認**，動手前先搜尋各 adapter 送 `AgentEvent::Cost` 的位置；沒有美金數字的要改用 token 數當上限。
+2. 各家回報成本的情況：Claude 在每個回合的 `result` 帶 `total_cost_usd`（`claude.rs:263-272`），是**同一個處理程序內的累計值**。Codex 與 ACP 有沒有回報美金成本**沒有確認**，動手前先搜尋各 adapter 送 `AgentEvent::Cost` 的位置；沒有美金數字的要改用 token 數當上限。
 3. `claude --help` 有 `--max-budget-usd`，可以當第二道防線，但觸發時 Claude 怎麼結束（錯誤訊息、結束碼）**沒有實測**。
 4. 上限要在 daemon 執行，不能只靠 TUI：TUI 可能沒開，agent 也可能是另一個 agent 產生的。
 
@@ -53,7 +53,7 @@ termade 會統計每個 session 的成本，但沒有任何上限：
    - 樹的上限：從這個 session 往上找到根，加總整棵樹，超過時中斷樹裡所有 live 的 session。
 5. **超過上限之後**：`handle_prompt` 與匯流排的自動喚醒對 `over_budget` 的 session 一律拒絕，回覆說明原因。解除方式是人調高上限：`termade budget <session> <金額>`、TUI `:budget <金額>`。調高後清掉 `over_budget`。agent 不能透過 MCP 調整自己的上限。
 6. **Claude 的第二道防線**：有上限時加 `--max-budget-usd`，數值設為上限的 1.2 倍，確保先觸發的是 daemon 的中斷。先實測它觸發時的行為再決定要不要加。
-7. **和 T14 的交互**：接續後 Claude 的累計值會歸零。成本必須是「舊值加新程序的累計」，否則接續等於把預算重設。
+7. **和 T14 的交互**：接續後 Claude 的累計值會歸零。成本必須是「舊值加新處理程序的累計」，否則接續等於把預算重設。
 8. **顯示**：sessions 清單與 `termade cost` 在有上限時顯示 `$1.20/$5`，達警告門檻黃色、超過紅色。
 
 ## 驗收條件

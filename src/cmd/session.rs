@@ -273,6 +273,25 @@ pub(crate) fn cmd_sleep(session: String) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn cmd_model(
+    session: String,
+    model: Option<String>,
+    effort: Option<String>,
+) -> Result<()> {
+    if model.is_none() && effort.is_none() {
+        anyhow::bail!("請指定 model 或 --effort");
+    }
+    let frame = roundtrip(&Request::SessionConfig {
+        session,
+        model,
+        effort,
+    })?;
+    if let Frame::Ok { note } = frame {
+        println!("{}", note.unwrap_or_else(|| "已切換".into()));
+    }
+    Ok(())
+}
+
 pub(crate) fn cmd_wake(session: String) -> Result<()> {
     let frame = roundtrip(&Request::Wake { session })?;
     if let Frame::Ok { note } = frame {

@@ -1,11 +1,11 @@
 //! 原生 Agent Client Protocol adapter。
 //!
-//! M0 用於 OpenCode（`opencode acp`），這是四家 agent 中唯一「原生、零額外依賴」
+//! M0 用於 OpenCode（`opencode acp`），這是四家 agent 中唯一「原生、零額外相依性」
 //! 就提供結構化協定的一條，因此當作第一個結構化 adapter。
 //!
 //! 涵蓋的 ACP 子集：`initialize`、`session/new`、`session/load`（接續）、`session/prompt`、
 //! `session/cancel`，
-//! 以及 server→client 的 `session/update`（串流）與 `session/request_permission`（審批）。
+//! 以及 server→client 的 `session/update`（串流）與 `session/request_permission`（核准）。
 
 use crate::stream::StreamBuf;
 use crate::{AgentControl, AgentEvent, SessionSpec};
@@ -33,7 +33,7 @@ struct Conn {
     stdin: Mutex<ChildStdin>,
     next_id: AtomicI64,
     pending: Mutex<HashMap<i64, Sender<Value>>>,
-    /// 審批：內部 req id -> (JSON-RPC id, options)
+    /// 核准：內部 req id -> (JSON-RPC id, options)
     perms: Mutex<HashMap<String, (Value, Vec<Value>)>>,
     /// 串流輸出的行緩衝（把 token 級 chunk 併成完整行）。
     stream: Mutex<StreamBuf>,
@@ -106,6 +106,16 @@ impl Conn {
         let update = &msg["params"]["update"];
         let kind = update["sessionUpdate"].as_str().unwrap_or("");
         match kind {
+            "available_commands_update" => {
+                let names: Vec<String> = update["availableCommands"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|c| c["name"].as_str())
+                    .map(|n| n.trim_start_matches('/').to_string())
+                    .collect();
+                let _ = self.tx.send(AgentEvent::Commands(names));
+            }
             "usage_update" => {
                 // ACP: `used`（目前 context 佔用）與 `size`（視窗大小）。
                 if let Some(used) = update["used"].as_u64() {
@@ -196,7 +206,7 @@ impl Conn {
     fn resolve(&self, req: &str, decision: Decision) -> Result<()> {
         let entry = self.perms.lock().unwrap().remove(req);
         let Some((jid, options)) = entry else {
-            bail!("未知的審批請求：{req}");
+            bail!("未知的核准請求：{req}");
         };
         self.respond(&jid, decision_result(decision, &options));
         Ok(())
@@ -266,6 +276,8 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
 struct AcpControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
+    /// 最近一次回報的 `configOptions`（包成 `{"configOptions": [...]}`），執行期切換時用來驗證與找 configId。
+    options: Mutex<Value>,
 }
 
 impl AgentControl for AcpControl {
@@ -286,6 +298,39 @@ impl AgentControl for AcpControl {
             }
         });
         Ok(())
+    }
+
+    /// `session/set_config_option`；回應帶完整 `configOptions`，順便更新快取。
+    fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
+        let sid = self.conn.acp_session.lock().unwrap().clone();
+        let mut applied = None;
+        let mut jobs = Vec::new();
+        {
+            let opts = self.options.lock().unwrap();
+            if let Some(m) = model {
+                jobs.push(("model", pick_model_option(&opts, m)?));
+            }
+            if let Some(e) = effort {
+                jobs.push(("effort", pick_effort_option(&opts, e)?));
+            }
+        }
+        for (what, (config_id, value)) in jobs {
+            let r = self
+                .conn
+                .call(
+                    "session/set_config_option",
+                    json!({ "sessionId": sid, "configId": config_id, "value": value }),
+                    CALL_TIMEOUT,
+                )
+                .with_context(|| format!("設定 {what} `{value}` 失敗"))?;
+            if r["configOptions"].is_array() {
+                *self.options.lock().unwrap() = json!({ "configOptions": r["configOptions"] });
+            }
+            if what == "model" {
+                applied = Some(value);
+            }
+        }
+        Ok(applied)
     }
 
     fn cancel(&self) -> Result<()> {
@@ -557,7 +602,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     }
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
-    let control = AcpControl { conn, child };
+    let control = AcpControl {
+        conn,
+        child,
+        options: Mutex::new(json!({ "configOptions": new["configOptions"] })),
+    };
 
     if let Some(p) = &spec.initial_prompt {
         control.send_input_with(p, &spec.initial_attachments)?;

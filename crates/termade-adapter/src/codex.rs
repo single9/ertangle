@@ -10,7 +10,7 @@
 //! * `turn/interrupt`
 //! * 通知：`item/agentMessage/delta`、`item/completed`、`turn/completed`、
 //!   `thread/tokenUsage/updated`
-//! * 審批（server→client 請求）：`item/commandExecution/requestApproval`、
+//! * 核准（server→client 請求）：`item/commandExecution/requestApproval`、
 //!   `item/fileChange/requestApproval`
 
 use crate::stream::StreamBuf;
@@ -33,7 +33,7 @@ struct Conn {
     stdin: Mutex<ChildStdin>,
     next_id: AtomicI64,
     pending: Mutex<HashMap<i64, Sender<Value>>>,
-    /// 審批：內部 req id -> JSON-RPC id。
+    /// 核准：內部 req id -> JSON-RPC id。
     perms: Mutex<HashMap<String, Value>>,
     /// 目前的 thread / turn id。
     thread: Mutex<String>,
@@ -308,6 +308,8 @@ impl ApprovalKind {
 struct CodexControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
+    /// 執行期切換的 model／effort；每個 `turn/start` 都帶上。
+    overrides: Mutex<(Option<String>, Option<String>)>,
 }
 
 impl CodexControl {
@@ -328,15 +330,34 @@ impl AgentControl for CodexControl {
     fn send_input_with(&self, text: &str, atts: &[termade_core::Attachment]) -> Result<()> {
         let thread_id = self.thread_id()?;
         let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
-        self.conn.call(
-            "turn/start",
-            json!({
-                "threadId": thread_id,
-                "input": turn_input(text, atts)
-            }),
-            CALL_TIMEOUT,
-        )?;
+        let mut params = json!({
+            "threadId": thread_id,
+            "input": turn_input(text, atts)
+        });
+        let (m, e) = self.overrides.lock().unwrap().clone();
+        if let Some(m) = m {
+            params["model"] = json!(m);
+        }
+        if let Some(e) = e {
+            params["effort"] = json!(e);
+        }
+        self.conn.call("turn/start", params, CALL_TIMEOUT)?;
         Ok(())
+    }
+
+    /// 存起來，下一個 `turn/start` 帶 `model`／`effort`（schema 已確認兩者都是 `TurnStartParams` 欄位）。
+    fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
+        if let Some(e) = effort {
+            crate::check_effort(e)?;
+        }
+        let mut o = self.overrides.lock().unwrap();
+        if let Some(m) = model {
+            o.0 = Some(m.to_string());
+        }
+        if let Some(e) = effort {
+            o.1 = Some(e.to_string());
+        }
+        Ok(model.map(str::to_string))
     }
 
     fn cancel(&self) -> Result<()> {
@@ -371,7 +392,7 @@ impl AgentControl for CodexControl {
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()> {
         let entry = self.conn.perms.lock().unwrap().remove(req);
         let Some(entry) = entry else {
-            bail!("未知的審批請求：{req}");
+            bail!("未知的核准請求：{req}");
         };
         let id = entry["id"].clone();
         let kind = match entry["kind"].as_str() {
@@ -455,7 +476,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                     Err(_) => break,
                 }
             }
-            // stdout 關閉＝程序已結束：丟掉等待中的請求，握手不必乾等逾時。
+            // stdout 關閉＝處理程序已結束：丟掉等待中的請求，握手不必乾等逾時。
             conn.pending.lock().unwrap().clear();
         });
     }
@@ -517,7 +538,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     }
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
-    let control = CodexControl { conn, child };
+    let control = CodexControl {
+        conn,
+        child,
+        overrides: Mutex::new((None, None)),
+    };
     if let Some(p) = &spec.initial_prompt {
         control.send_input_with(p, &spec.initial_attachments)?;
     }

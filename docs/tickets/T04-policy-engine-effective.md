@@ -7,7 +7,7 @@
 `policy.toml` 的 `deny` 規則在預設設定下擋不到任何東西：
 
 - 預設政策是 `auto`，ACP adapter 在這個政策下會自己核准，請求不會送到 daemon 的 `PolicyEngine`。
-- Claude adapter 完全不轉發審批。
+- Claude adapter 完全不轉發核准。
 - 規則是子字串比對，`allow` 可以被輕易誤觸發。
 - 規則只在 daemon 啟動時讀一次，而且只看 daemon 的啟動目錄。
 
@@ -44,7 +44,7 @@ README 與設計文件把它描述成已完成的「權限規則引擎」，使�
    - 內容比對至少做到以空白切詞後的前綴比對，避免 `Read` 命中 `README`。
    - 保留舊格式的解析，啟動時對舊格式印警告。
 3. **每個 repo 各自的規則**：以 session 的 repo 根目錄載入 `.termade/policy.toml`，疊在全域規則之上；`deny` 取聯集，repo 層級不能移除全域的 `deny`。
-4. **Claude**：研究以 `--permission-prompt-tool` 指向 `termade mcp` 的一個審批工具，讓 `-p` 模式的審批走到 daemon。本機 `claude --help` 確認有 `--permission-prompt-tool` 與 `--permission-prompts host`，但工具的輸入輸出格式仍要先查證再實作；若不可行，就在 spawn Claude 且 `deny` 非空時於 TUI 顯示「規則引擎不適用於此 session」。
+4. **Claude**：研究以 `--permission-prompt-tool` 指向 `termade mcp` 的一個核准工具，讓 `-p` 模式的核准走到 daemon。本機 `claude --help` 確認有 `--permission-prompt-tool` 與 `--permission-prompts host`，但工具的輸入輸出格式仍要先查證再實作；若不可行，就在 spawn Claude 且 `deny` 非空時於 TUI 顯示「規則引擎不適用於此 session」。
 5. **文件誠實**：README 說明規則引擎是防呆而非安全邊界，字串比對可以被改寫指令繞過；真正的隔離要靠 agent 自己的 sandbox。
 
 ## 驗收條件

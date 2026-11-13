@@ -115,7 +115,7 @@ pub enum Request {
     QueuePop {
         session: SessionId,
     },
-    /// 中斷當前回合（不殺程序）。
+    /// 中斷當前回合（不殺處理程序）。
     Cancel {
         session: SessionId,
     },
@@ -137,7 +137,7 @@ pub enum Request {
         #[serde(default)]
         note: Option<String>,
     },
-    /// 結束 session 並殺掉程序。
+    /// 結束 session 並殺掉處理程序。
     Kill {
         session: SessionId,
     },
@@ -148,27 +148,35 @@ pub enum Request {
         #[serde(default)]
         prompt: Option<String>,
     },
-    /// 暫停閒置 session 子程序（SIGSTOP）。
+    /// 暫停閒置 session 子處理程序（SIGSTOP）。
     Sleep {
         session: SessionId,
     },
-    /// 唤醒休眠中的 session 子程序（SIGCONT）。
+    /// 唤醒休眠中的 session 子處理程序（SIGCONT）。
     Wake {
         session: SessionId,
+    },
+    /// 執行期切換指定 session 的 model 與／或 effort（下一個回合起生效）。
+    SessionConfig {
+        session: SessionId,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        effort: Option<String>,
     },
     /// 設定或調高指定 session 的成本上限（美元），並解除 `over_budget`。
     SessionBudget {
         session: SessionId,
         budget_usd: f64,
     },
-    /// agent（經 MCP `termade_approve`）請求審批並等待結果；回覆 `Ok` 的 note 為 `allow` 或 `deny`。
+    /// agent（經 MCP `termade_approve`）請求核准並等待結果；回覆 `Ok` 的 note 為 `allow` 或 `deny`。
     ApprovalAsk {
         session: SessionId,
         tool: String,
         /// 工具輸入（JSON 字串）。
         input: String,
     },
-    /// 回覆審批請求。
+    /// 回覆核准請求。
     Permission {
         session: SessionId,
         req: String,

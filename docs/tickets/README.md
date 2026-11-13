@@ -19,11 +19,11 @@
 | [T11](T11-agent-config-and-model.md) | 設定檔與每個 agent 的 model／參數設定（已完成） | P1 | — |
 | [T12](T12-permission-settings.md) | 權限的設定、顯示與子 agent 上限（已完成） | P1 | T11 |
 | [T13](T13-tui-layout-modes.md) | TUI 版面模式：三欄／兩欄／上方 session 分頁（已完成） | P2 | —（持久化需 T11） |
-| [T14](T14-session-resume.md) | Session 接續：程序死掉或 daemon 重啟後接回原對話（已完成；Codex 只驗到協定層，見 `docs/VERIFICATION.md`） | P1 | — |
-| [T15](T15-notifications.md) | 回合結束、等待審批、額度用完時通知使用者（已完成） | P1 | — |
+| [T14](T14-session-resume.md) | Session 接續：處理程序死掉或 daemon 重啟後接回原對話（已完成；Codex 只驗到協定層，見 `docs/VERIFICATION.md`） | P1 | — |
+| [T15](T15-notifications.md) | 回合結束、等待核准、額度用完時通知使用者（已完成） | P1 | — |
 | [T16](T16-transcript-search.md) | 在逐字稿與 diff 裡搜尋（已完成） | P2 | — |
 | [T17](T17-budget-limits.md) | 成本與子 agent 數量上限（已完成；只用 mock 驗證，未用真實 agent 跑超限） | P1 | —（成本累計與 T14 有交互） |
-| [T18](T18-task-board.md) | 任務板：依賴解鎖與獨立視圖（已完成） | P2 | — |
+| [T18](T18-task-board.md) | 任務板：相依性解鎖與獨立視圖（已完成） | P2 | — |
 | [T19](T19-daemon-prompt-queue.md) | 把 prompt 排隊移到 daemon（已完成；超限時保留佇列、調高上限後恢復） | P2 | —（與 T17 有交互） |
 | [T20](T20-collab-instructions.md) | 把協作說明注入每個 agent（已完成） | P2 | — |
 | [T21](T21-shell-completions.md) | Shell 補全（已完成） | P3 | —（session 補全會用到 T14 的 `resume`） |
@@ -31,6 +31,7 @@
 | [T23](T23-surface-agent-errors.md) | agent 回合失敗時把錯誤原因顯示出來（已完成；TUI 目視未做，見 `docs/VERIFICATION.md`） | P1 | — |
 | [T24](T24-handoff-message-forwarding.md) | 交接後，發給舊 session 的訊息轉給接手的 session（已完成） | P2 | — |
 | [T25](T25-unread-nudge-on-idle.md) | 收件者忙完後提醒未讀訊息；超限判斷看實際收件者（已完成） | P2 | T24 |
+| [T26](T26-runtime-model-effort.md) | 執行期切換 model／effort，並可從 TUI 寫入預設值（已完成） | P1 | T11 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 
@@ -54,7 +55,7 @@ T14–T21 已於 2026-11-13 全部合併；T22、T23 是合併過程中實際遇
 1. T15：改動只在 TUI，最小，日常使用最有感。
 2. T14：影響最大。先做「記下原生 id」（第 1 步），那一步獨立、沒有風險，之後的 session 才有 id 可以接續。
 3. T17：放著讓 agent 自己跑之前要有的保護。排在 T14 之後，成本累計的處理才不用改兩次。
-4. T18 的 A（依賴解鎖）與 T20：兩者一起決定 agent 之間能不能不靠人就接力下去。
+4. T18 的 A（相依性解鎖）與 T20：兩者一起決定 agent 之間能不能不靠人就接力下去。
 5. T19、T16、T18 的 B（任務視圖）、T21。
 
 ## 這次檢視怎麼做的
@@ -63,7 +64,7 @@ T14–T21 已於 2026-11-13 全部合併；T22、T23 是合併過程中實際遇
 - 全部：`README.md`、`docs/DESIGN.md`、`Cargo.toml`、`Makefile`。
 - `crates/termade-daemon/src/lib.rs`：路徑、`replay_log`、`Shared::emit`／`ingest`、`Hello`／`Prompt`／`WorktreeMerge`／`WorktreeGc` 處理、所有 git 輔助函式、`handle_conn`、`run_with_options`。
 - `crates/termade-core/src/lib.rs`：`PolicyEngine`、`redact_secrets`。
-- `crates/termade-adapter/src/acp.rs`：`on_permission`。其餘 adapter 只用 grep 看審批相關的行。
+- `crates/termade-adapter/src/acp.rs`：`on_permission`。其餘 adapter 只用 grep 看核准相關的行。
 - 其餘檔案只看了函式／型別大綱與行數。
 
 **跑了什麼**
@@ -85,4 +86,4 @@ T14–T21 已於 2026-11-13 全部合併；T22、T23 是合併過程中實際遇
 
 ## 更正紀錄
 
-檢視當下的口頭結論說「Claude 和 Codex 都不轉發審批」。寫票時再看程式碼，Codex 其實有轉發路徑（`codex.rs:132` 送出 `AgentEvent::Permission`，`codex.rs:307` 實作 `resolve_permission`），只是 README 註明尚未實機驗證。不轉發的只有 Claude（`claude.rs:267-269`）。T04 以更正後的版本為準。
+檢視當下的口頭結論說「Claude 和 Codex 都不轉發核准」。寫票時再看程式碼，Codex 其實有轉發路徑（`codex.rs:132` 送出 `AgentEvent::Permission`，`codex.rs:307` 實作 `resolve_permission`），只是 README 註明尚未實機驗證。不轉發的只有 Claude（`claude.rs:267-269`）。T04 以更正後的版本為準。

@@ -41,7 +41,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("x", "中斷目前回合"),
             ("K", "結束 session"),
             ("z", "休眠／喚醒"),
-            ("a / A / d", "審批：允許／一律允許／拒絕"),
+            ("a / A / d", "核准：允許／一律允許／拒絕"),
             ("Space s h", "交接給其他 agent（額度用完時）"),
             ("Space s r", "接續已結束的 session：同一個 agent 接回原對話"),
             ("Space s x", "移除已結束的 session；Space s X 全部清除"),
@@ -98,7 +98,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             (":handoff", "交接給另一個 agent，如 :handoff codex 補充說明"),
             (
                 ":resume",
-                "接續已結束的 session（程序死掉或 daemon 重啟後）；可接 prompt",
+                "接續已結束的 session（處理程序死掉或 daemon 重啟後）；可接 prompt",
             ),
             (":rm :clean", "移除已結束的 session／全部清除"),
             (":kill :cancel", "結束／中斷選取的 session"),
@@ -114,7 +114,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             (":layout", "切換版面；:raw、:thoughts、:bus 切換顯示"),
             (
                 ":notify",
-                "on|off 開關通知（回合結束、等待審批、失敗、額度用完）；test 試發；方式在 config.toml [tui] notify",
+                "on|off 開關通知（回合結束、等待核准、失敗、額度用完）；test 試發；方式在 config.toml [tui] notify",
             ),
             (":find", "搜尋逐字稿或 diff，如 :find error（同 f）"),
             (":task :broadcast", "新增任務／廣播訊息"),

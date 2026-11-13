@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
 use termade_core::{AgentKind, PermissionPolicy, Role};
+pub use toml::Value as TomlValue;
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
@@ -45,6 +46,86 @@ pub struct RoleCfg {
     pub session_usd: Option<f64>,
 }
 
+/// agent 自己（經 MCP／帶 `parent`）建立 session 時的防呆。只認全域設定：
+/// repo 內的設定檔不可信，不能放寬使用者的成本防線。
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct AgentSpawnCfg {
+    /// 一律用獨立 worktree（預設 true；不在 git repo 內時略過）。
+    pub worktree: Option<bool>,
+    /// 免確認的 effort 上限（預設 `medium`）。
+    pub max_effort: Option<String>,
+    /// 免確認的 model 白名單（子字串比對，如 `["haiku", "sonnet"]`）；空 = 不限制。
+    pub allowed_models: Vec<String>,
+    /// 何時先問使用者：`never`（超標直接調降／拒絕）、`costly`（超標才問，預設）、`always`。
+    pub confirm: Option<String>,
+}
+
+/// 一次 agent spawn 的檢查結果。
+#[derive(Debug, Clone, PartialEq)]
+pub enum SpawnCheck {
+    /// 在範圍內。
+    Fine,
+    /// 超出免確認範圍，原因列表；呼叫端依 `confirm` 決定要問人、調降或拒絕。
+    Exceeds {
+        reasons: Vec<String>,
+        effort_too_high: bool,
+        model_not_allowed: bool,
+    },
+}
+
+impl AgentSpawnCfg {
+    pub fn worktree(&self) -> bool {
+        self.worktree.unwrap_or(true)
+    }
+    pub fn max_effort(&self) -> &str {
+        self.max_effort.as_deref().unwrap_or("medium")
+    }
+    pub fn confirm(&self) -> &str {
+        match self.confirm.as_deref() {
+            Some(c @ ("never" | "always")) => c,
+            _ => "costly",
+        }
+    }
+    pub fn check(&self, model: Option<&str>, effort: Option<&str>) -> SpawnCheck {
+        let rank = |e: &str| termade_adapter::EFFORT_LEVELS.iter().position(|x| *x == e);
+        let mut reasons = Vec::new();
+        let effort_too_high = match (effort.and_then(rank), rank(self.max_effort())) {
+            (Some(e), Some(max)) if e > max => {
+                reasons.push(format!(
+                    "effort {} 高於免確認上限 {}",
+                    effort.unwrap_or(""),
+                    self.max_effort()
+                ));
+                true
+            }
+            _ => false,
+        };
+        let model_not_allowed = match model {
+            Some(m) if !self.allowed_models.is_empty() => {
+                let ok = self.allowed_models.iter().any(|a| m.contains(a.as_str()));
+                if !ok {
+                    reasons.push(format!(
+                        "model {m} 不在免確認清單（{}）",
+                        self.allowed_models.join(", ")
+                    ));
+                }
+                !ok
+            }
+            _ => false,
+        };
+        if reasons.is_empty() {
+            SpawnCheck::Fine
+        } else {
+            SpawnCheck::Exceeds {
+                reasons,
+                effort_too_high,
+                model_not_allowed,
+            }
+        }
+    }
+}
+
 /// 注入每個 agent 的協作說明（`collab.rs`）。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
@@ -53,6 +134,8 @@ pub struct CollabCfg {
     pub instructions: Option<bool>,
     /// 附加在通則後面的文字。
     pub extra: Option<String>,
+    /// 全域的 ADE 系統提示檔（Markdown／文字），附加在每個 agent 的協作說明裡。只認全域設定。
+    pub prompt_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -106,6 +189,7 @@ pub struct Config {
     pub limits: LimitsCfg,
     pub handoff: HandoffCfg,
     pub collab: CollabCfg,
+    pub agent_spawn: AgentSpawnCfg,
     pub defaults: Defaults,
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
@@ -270,6 +354,50 @@ impl Config {
             out.tui.notify_min_turn_secs = local.tui.notify_min_turn_secs;
         }
         out
+    }
+
+    /// 把單一設定值寫進 `path`（不存在就建立）：`table` 是表格路徑（如 `["agents","claude"]`），
+    /// 值為空字串代表刪除該鍵。會以 TOML 重新序列化，檔案內的註解不會保留。
+    pub fn set_value(path: &Path, table: &[&str], key: &str, value: &str) -> anyhow::Result<()> {
+        let v = (!value.is_empty()).then(|| toml::Value::String(value.to_string()));
+        Config::set_toml(path, table, key, v)
+    }
+
+    /// 同 `set_value`，但可寫任意 TOML 值（布林、數字…）；`None` 代表刪除該鍵。
+    pub fn set_toml(
+        path: &Path,
+        table: &[&str],
+        key: &str,
+        value: Option<toml::Value>,
+    ) -> anyhow::Result<()> {
+        let mut root: toml::Table = match std::fs::read_to_string(path) {
+            Ok(src) => src.parse()?,
+            Err(_) => toml::Table::new(),
+        };
+        let mut cur = &mut root;
+        for t in table {
+            cur = cur
+                .entry(t.to_string())
+                .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+                .as_table_mut()
+                .ok_or_else(|| anyhow::anyhow!("`{t}` 不是表格"))?;
+        }
+        match value {
+            Some(v) => {
+                cur.insert(key.to_string(), v);
+            }
+            None => {
+                cur.remove(key);
+            }
+        }
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        // 先寫暫存檔再改名，避免寫到一半被讀到。
+        let tmp = path.with_extension("toml.tmp");
+        std::fs::write(&tmp, toml::to_string_pretty(&root)?)?;
+        std::fs::rename(&tmp, path)?;
+        Ok(())
     }
 
     /// 載入全域（`config_dir`）與 repo（`<cwd>/.termade/config.toml`）設定。
@@ -620,5 +748,60 @@ session_usd = 1.5
         assert_eq!(c2.resolve_budget_usd(&Role::Worker, None), Some(2.0));
         assert_eq!(c2.resolve_budget_usd(&Role::Coordinator, None), Some(1.5));
         assert_eq!(c2.resolve_budget_usd(&Role::Worker, Some(0.5)), Some(0.5));
+    }
+
+    #[test]
+    fn set_value_creates_updates_and_removes() {
+        let dir = std::env::temp_dir().join(format!("termade-cfg-{}", std::process::id()));
+        let path = dir.join("sub").join("config.toml");
+        Config::set_value(&path, &["agents", "claude"], "model", "opus").unwrap();
+        Config::set_value(&path, &["agents", "claude"], "effort", "high").unwrap();
+        Config::set_value(&path, &["defaults"], "permission", "ask").unwrap();
+        let c = Config::load_file(&path);
+        assert_eq!(c.agents["claude"].model.as_deref(), Some("opus"));
+        assert_eq!(c.agents["claude"].effort.as_deref(), Some("high"));
+        assert_eq!(c.defaults.permission.as_deref(), Some("ask"));
+        // 覆寫與刪除
+        Config::set_value(&path, &["agents", "claude"], "model", "haiku").unwrap();
+        Config::set_value(&path, &["agents", "claude"], "effort", "").unwrap();
+        let c = Config::load_file(&path);
+        assert_eq!(c.agents["claude"].model.as_deref(), Some("haiku"));
+        assert_eq!(c.agents["claude"].effort, None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn agent_spawn_check_flags_costly_requests() {
+        let c = Config::parse(
+            r#"
+[agent_spawn]
+max_effort = "medium"
+allowed_models = ["haiku", "sonnet"]
+"#,
+        )
+        .unwrap();
+        let a = &c.agent_spawn;
+        assert!(a.worktree());
+        assert_eq!(a.confirm(), "costly");
+        assert_eq!(
+            a.check(Some("claude-haiku-5-5"), Some("low")),
+            SpawnCheck::Fine
+        );
+        assert_eq!(a.check(None, None), SpawnCheck::Fine);
+        let SpawnCheck::Exceeds {
+            effort_too_high,
+            model_not_allowed,
+            ..
+        } = a.check(Some("opus"), Some("max"))
+        else {
+            panic!()
+        };
+        assert!(effort_too_high && model_not_allowed);
+        // repo 設定不能放寬
+        let local =
+            Config::parse("[agent_spawn]\nconfirm = \"never\"\nworktree = false\n").unwrap();
+        let merged = Config::layered(c, local);
+        assert_eq!(merged.agent_spawn.confirm(), "costly");
+        assert!(merged.agent_spawn.worktree());
     }
 }
