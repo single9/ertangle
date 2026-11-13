@@ -100,6 +100,17 @@ pub enum Request {
         /// 附件（檔案、圖片）。
         #[serde(default)]
         attachments: Vec<Attachment>,
+        /// 若為 `true`：session 忙或佇列非空時改進待送佇列，閒下來再依序送出。
+        #[serde(default)]
+        queue: bool,
+    },
+    /// 清空某個 session 的待送 prompt 佇列。
+    QueueClear {
+        session: SessionId,
+    },
+    /// 取出（移除）某個 session 待送佇列的最後一則，透過 `Frame::Ok { note }` 回傳原始文字。
+    QueuePop {
+        session: SessionId,
     },
     /// 中斷當前回合（不殺程序）。
     Cancel {

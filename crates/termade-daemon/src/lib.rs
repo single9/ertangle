@@ -62,6 +62,14 @@ const PAIR_RATE_CAP_PER_MIN: usize = 30;
 
 /// 每個 client 佇列中可累積的未送出 frame 上限；超過即視為卡住並斷線。
 const CLIENT_QUEUE_CAP: usize = 4096;
+/// 單一 session 的待送 prompt 佇列上限。
+pub(crate) const MAX_QUEUE_LEN: usize = 20;
+
+pub(crate) struct QueuedPrompt {
+    pub(crate) text: String,
+    pub(crate) attachments: Vec<termade_core::Attachment>,
+    pub(crate) raw_text: String,
+}
 
 /// 取鎖；鎖中毒時取回內部資料繼續，避免一個 panic 拖垮整個 daemon。
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -269,6 +277,8 @@ pub(crate) struct Inner {
     pub(crate) policy: PolicyEngine,
     pub(crate) default_cwd: PathBuf,
     pub(crate) clients: Vec<ClientTx>,
+    /// 各 session 的待送 prompt 佇列（含附件內容，只留記憶體）。
+    pub(crate) queues: HashMap<SessionId, VecDeque<QueuedPrompt>>,
 }
 
 pub(crate) struct Shared {
@@ -335,6 +345,7 @@ impl Shared {
                 policy,
                 default_cwd,
                 clients: Vec::new(),
+                queues: HashMap::new(),
             }),
             log_tx: Mutex::new(log_tx),
             log_ok,
@@ -378,6 +389,17 @@ impl Shared {
                 });
             }
         }
+        // daemon 重啟時記憶體內的 QueuedPrompt 已不在，清掉舊 log 殘留的排隊狀態。
+        let stale_queues: Vec<SessionId> = {
+            let inner = lock(&shared.inner);
+            inner.state.queues.keys().cloned().collect()
+        };
+        for sid in stale_queues {
+            shared.emit(Event::QueueChanged {
+                session: sid,
+                items: Vec::new(),
+            });
+        }
         shared.prune_ended_sessions(now_millis());
         Ok(shared)
     }
@@ -401,6 +423,7 @@ impl Shared {
         for id in stale {
             inner.state.sessions.remove(&id);
             inner.state.transcripts.remove(&id);
+            inner.state.queues.remove(&id);
         }
     }
 
@@ -557,6 +580,22 @@ impl Shared {
             },
         };
         let exited = matches!(event, Event::SessionExited { .. });
+        let became_idle = matches!(
+            event,
+            Event::SessionStatus {
+                status: SessionStatus::Idle,
+                ..
+            }
+        );
+        let ended = matches!(
+            event,
+            Event::SessionExited { .. }
+                | Event::SessionLimited { .. }
+                | Event::SessionStatus {
+                    status: SessionStatus::Exited | SessionStatus::Failed,
+                    ..
+                }
+        );
         let watch = matches!(
             event,
             Event::QuotaUpdated { .. } | Event::SessionLimited { .. }
@@ -568,6 +607,87 @@ impl Shared {
         }
         if exited {
             lock(&self.inner).sessions.remove(sid);
+        }
+        if ended {
+            self.clear_queue_for_ended(sid, false);
+        } else if became_idle {
+            self.flush_queue_if_idle(sid);
+        }
+    }
+
+    /// 當 session 回到 `Idle` 時，若佇列有待送 prompt，取第一則送出（一次一則）。
+    pub(crate) fn flush_queue_if_idle(self: &Arc<Self>, sid: &SessionId) {
+        let popped = {
+            let mut inner = lock(&self.inner);
+            let is_idle = inner
+                .state
+                .sessions
+                .get(sid)
+                .is_some_and(|s| s.status == SessionStatus::Idle);
+            if !is_idle {
+                return;
+            }
+            let item = inner.queues.get_mut(sid).and_then(|q| q.pop_front());
+            if inner.queues.get(sid).is_some_and(|q| q.is_empty()) {
+                inner.queues.remove(sid);
+            }
+            item
+        };
+        let Some(item) = popped else {
+            return;
+        };
+        match handlers::session::send_prompt(self, sid, &item.text, &item.attachments) {
+            Ok(()) => {
+                let items: Vec<String> = {
+                    let inner = lock(&self.inner);
+                    inner
+                        .queues
+                        .get(sid)
+                        .map(|q| q.iter().map(|p| p.raw_text.clone()).collect())
+                        .unwrap_or_default()
+                };
+                self.emit(Event::QueueChanged {
+                    session: sid.clone(),
+                    items,
+                });
+            }
+            Err(e) => {
+                {
+                    let mut inner = lock(&self.inner);
+                    inner
+                        .queues
+                        .entry(sid.clone())
+                        .or_default()
+                        .push_front(item);
+                }
+                self.emit(Event::SessionNote {
+                    session: sid.clone(),
+                    note: format!("排隊 prompt 送出失敗：{e}"),
+                });
+            }
+        }
+    }
+
+    /// session 結束或移除時清空待送佇列，並廣播 `QueueChanged`（與結束提示）。
+    pub(crate) fn clear_queue_for_ended(&self, sid: &SessionId, is_removed: bool) {
+        let (dropped, had_state) = {
+            let mut inner = lock(&self.inner);
+            let dropped = inner.queues.remove(sid).map_or(0, |q| q.len());
+            let had_state = inner.state.queues.contains_key(sid);
+            (dropped, had_state)
+        };
+        if dropped == 0 && !had_state {
+            return;
+        }
+        self.emit(Event::QueueChanged {
+            session: sid.clone(),
+            items: Vec::new(),
+        });
+        if !is_removed && dropped > 0 {
+            self.emit(Event::SessionNote {
+                session: sid.clone(),
+                note: format!("session 已結束，丟棄 {dropped} 則排隊 prompt"),
+            });
         }
     }
 

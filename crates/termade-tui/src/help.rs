@@ -102,6 +102,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ),
             (":rm :clean", "移除已結束的 session／全部清除"),
             (":kill :cancel", "結束／中斷選取的 session"),
+            (
+                ":queue :unqueue",
+                "排隊 prompt（查看／clear）／取消最後一則放回輸入框",
+            ),
             (":quota", "各 agent 帳號額度與重置時間"),
             (":layout", "切換版面；:raw、:thoughts、:bus 切換顯示"),
             (

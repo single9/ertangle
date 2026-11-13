@@ -82,7 +82,10 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             session,
             text,
             attachments,
-        } => session::handle_prompt(shared, reply, session, text, attachments),
+            queue,
+        } => session::handle_prompt(shared, reply, session, text, attachments, queue),
+        Request::QueueClear { session } => session::handle_queue_clear(shared, reply, session),
+        Request::QueuePop { session } => session::handle_queue_pop(shared, reply, session),
         Request::Cancel { session } => session::handle_cancel(shared, reply, session),
         Request::Kill { session } => session::handle_kill(shared, reply, session),
         Request::Resume { session, prompt } => {

@@ -321,6 +321,7 @@ fn resume_keeps_session_transcript_branch_and_cost(root: &std::path::Path) {
         session: before.id.clone(),
         text: "third-prompt".into(),
         attachments: vec![],
+        queue: false,
     });
     request_ok(&Request::Kill { session: after.id });
 }

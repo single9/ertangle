@@ -210,6 +210,7 @@ impl Shared {
                     if s.id == from_sid
                         || woken_by_waiter.contains(&s.id)
                         || !matches!(s.status, SessionStatus::Idle | SessionStatus::Sleeping)
+                        || inner.queues.get(&s.id).is_some_and(|q| !q.is_empty())
                         || !message.matches_recipient(&s.id, Some(&s.label))
                     {
                         continue;

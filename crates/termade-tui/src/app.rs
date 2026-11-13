@@ -157,7 +157,6 @@ pub(crate) struct App {
     pub(crate) input_inner_w: usize,
     pub(crate) prompt_history: crate::history::History,
     pub(crate) command_history: crate::history::History,
-    pub(crate) queues: crate::history::PromptQueues,
     pub(crate) md_cache: Option<MdCache>,
     /// 上次重算逐字稿的時間；串流期間用來節流（見 `MD_REBUILD_INTERVAL`）。
     pub(crate) last_rebuild: std::time::Instant,
@@ -248,7 +247,6 @@ impl App {
             input_inner_w: 80,
             prompt_history: crate::history::History::default(),
             command_history: crate::history::History::default(),
-            queues: crate::history::PromptQueues::default(),
             md_cache: None,
             last_rebuild: std::time::Instant::now(),
             rebuild_pending: false,

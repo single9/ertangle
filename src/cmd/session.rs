@@ -165,12 +165,47 @@ pub(crate) fn load_attachments(paths: &[String]) -> Result<Vec<termade_core::Att
         .collect()
 }
 
-pub(crate) fn cmd_prompt(session: String, text: Vec<String>, attach: Vec<String>) -> Result<()> {
-    roundtrip(&Request::Prompt {
+pub(crate) fn cmd_prompt(
+    session: String,
+    text: Vec<String>,
+    attach: Vec<String>,
+    queue: bool,
+) -> Result<()> {
+    if let Frame::Ok { note: Some(n) } = roundtrip(&Request::Prompt {
         session,
         text: join(text),
         attachments: load_attachments(&attach)?,
-    })?;
+        queue,
+    })? {
+        println!("{n}");
+    }
+    Ok(())
+}
+
+pub(crate) fn cmd_queue(session: String, clear: bool) -> Result<()> {
+    if clear {
+        if let Frame::Ok { note } = roundtrip(&Request::QueueClear { session })? {
+            println!("{}", note.unwrap_or_else(|| "已清空排隊".into()));
+        }
+        return Ok(());
+    }
+    let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
+        bail!("未取得快照");
+    };
+    let sid = state
+        .resolve_session_id(&session)
+        .unwrap_or_else(|| session.clone());
+    if !state.sessions.contains_key(&sid) {
+        bail!("找不到 session {session}");
+    }
+    match state.queues.get(&sid) {
+        Some(items) if !items.is_empty() => {
+            for (i, item) in items.iter().enumerate() {
+                println!("{}. {item}", i + 1);
+            }
+        }
+        _ => println!("(排隊為空)"),
+    }
     Ok(())
 }
 

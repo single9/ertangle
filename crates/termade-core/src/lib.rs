@@ -706,6 +706,11 @@ pub enum Event {
     LogHealth {
         ok: bool,
     },
+    /// session 的待送 prompt 佇列變動（`items` 為原始輸入文字清單，不含附件內容）。
+    QueueChanged {
+        session: SessionId,
+        items: Vec<String>,
+    },
 }
 
 /// 事件 + 序號 + 時間，是對外（socket / log）傳遞的單位。
@@ -752,6 +757,9 @@ pub struct State {
     /// 各 agent 最近一次回報的額度（agent id → 額度）。
     #[serde(default)]
     pub quotas: BTreeMap<String, Quota>,
+    /// 各 session 排隊中的 prompt 原始輸入文字清單（session id → items）。
+    #[serde(default)]
+    pub queues: BTreeMap<SessionId, Vec<String>>,
 }
 
 impl Default for State {
@@ -767,6 +775,7 @@ impl Default for State {
             transcripts: HashMap::new(),
             log_ok: true,
             quotas: BTreeMap::new(),
+            queues: BTreeMap::new(),
         }
     }
 }
@@ -830,6 +839,7 @@ impl State {
             Event::SessionRemoved { session } => {
                 self.sessions.remove(session);
                 self.transcripts.remove(session);
+                self.queues.remove(session);
                 self.pending_permissions
                     .retain(|_, p| &p.session != session);
             }
@@ -974,6 +984,13 @@ impl State {
             }
             Event::LogHealth { ok } => {
                 self.log_ok = *ok;
+            }
+            Event::QueueChanged { session, items } => {
+                if items.is_empty() {
+                    self.queues.remove(session);
+                } else {
+                    self.queues.insert(session.clone(), items.clone());
+                }
             }
         }
     }
@@ -1345,6 +1362,9 @@ pub struct Attachment {
     #[serde(default)]
     pub text: Option<String>,
     pub size: u64,
+    /// 使用者原始輸入文字（含 `@檔名`，供排隊預覽與 `:unqueue` 還原使用）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_prompt: Option<String>,
 }
 
 /// 圖片附件大小上限（5 MB）與文字檔內嵌上限（256 KB）。

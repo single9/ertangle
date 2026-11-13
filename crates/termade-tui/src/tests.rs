@@ -897,41 +897,76 @@ fn history_persists_across_loads() {
 }
 
 #[test]
-fn queue_sends_one_at_a_time_when_idle() {
-    use crate::history::{PromptQueues, Queued};
-    use std::time::{Duration, Instant};
-    use termade_core::SessionStatus::{Busy, Exited, Idle};
-    let q = |t: &str| Queued {
-        text: t.into(),
-        attachments: vec![],
-    };
-    let mut pq = PromptQueues::default();
-    pq.push("s", q("a"));
-    pq.push("s", q("b"));
-    let t0 = Instant::now();
-    // 忙碌：不送
-    assert!(pq.take_ready(|_| Some(Busy), t0).0.is_empty());
-    // 閒置：送第一則
-    let (r, _) = pq.take_ready(|_| Some(Idle), t0);
-    assert_eq!(r.len(), 1);
-    assert_eq!(r[0].1.text, "a");
-    // 還沒看到轉忙碌：不重複送
-    assert!(pq.take_ready(|_| Some(Idle), t0).0.is_empty());
-    // 轉忙碌再閒置：送第二則
-    assert!(pq.take_ready(|_| Some(Busy), t0).0.is_empty());
-    let (r, _) = pq.take_ready(|_| Some(Idle), t0);
-    assert_eq!(r[0].1.text, "b");
-    assert_eq!(pq.len("s"), 0);
-    // 沒看到忙碌但逾時：放行
-    pq.push("s", q("c"));
-    assert!(pq.take_ready(|_| Some(Idle), t0).0.is_empty());
-    let (r, _) = pq.take_ready(|_| Some(Idle), t0 + Duration::from_secs(5));
-    assert_eq!(r[0].1.text, "c");
-    // session 結束：丟棄
-    pq.push("s", q("d"));
-    let (r, dropped) = pq.take_ready(|_| Some(Exited), t0);
-    assert!(r.is_empty());
-    assert_eq!(dropped, 1);
+fn tui_queue_and_unqueue_preserve_original_input_with_at_filename() {
+    use std::io::{BufRead, BufReader};
+    let d = temp_dir_with(&[("foo.rs", b"fn main() {}\n")]);
+    let mut app = sample_app(&[]);
+    app.state.sessions.get_mut("ses_test").unwrap().cwd = d.to_string_lossy().to_string();
+    let (mut w, peer) = pair_writer();
+
+    // 排入含 `@foo.rs` 的原始文字
+    crate::commands::execute_command(&mut app, &mut w, "queue 請檢查 @foo.rs 的實作").unwrap();
+    assert_eq!(
+        app.state.queues.get("ses_test").map(Vec::as_slice),
+        Some(&["請檢查 @foo.rs 的實作".to_string()][..])
+    );
+
+    // 模擬 daemon 廣播 QueueChanged，確認 State.queues 保存原始輸入文字
+    app.state.apply(&termade_core::Record {
+        seq: 10,
+        ts: 10,
+        event: termade_core::Event::QueueChanged {
+            session: "ses_test".into(),
+            items: vec!["第一則".into(), "請檢查 @foo.rs 的實作".into()],
+        },
+    });
+    crate::commands::execute_command(&mut app, &mut w, "queue").unwrap();
+    assert!(app.status.contains("排隊 2 則"), "{}", app.status);
+
+    // `:unqueue` 取回最後一則，app.input 應為含 `@foo.rs` 的原始輸入文字並進入 Mode::Prompt
+    crate::commands::execute_command(&mut app, &mut w, "unqueue").unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "請檢查 @foo.rs 的實作");
+    assert_eq!(app.input_cursor, app.input.chars().count());
+    assert_eq!(
+        app.state.queues.get("ses_test").map(Vec::as_slice),
+        Some(&["第一則".to_string()][..])
+    );
+
+    // `:queue clear` 清空佇列並送出 QueueClear
+    crate::commands::execute_command(&mut app, &mut w, "queue clear").unwrap();
+    assert!(!app.state.queues.contains_key("ses_test"));
+
+    let mut reader = BufReader::new(peer);
+    let mut line1 = String::new();
+    let mut line2 = String::new();
+    let mut line3 = String::new();
+    reader.read_line(&mut line1).unwrap();
+    reader.read_line(&mut line2).unwrap();
+    reader.read_line(&mut line3).unwrap();
+    let req1: Request = termade_protocol::decode_line(&line1).unwrap();
+    let req2: Request = termade_protocol::decode_line(&line2).unwrap();
+    let req3: Request = termade_protocol::decode_line(&line3).unwrap();
+    match req1 {
+        Request::Prompt {
+            session,
+            text,
+            attachments,
+            queue,
+        } => {
+            assert_eq!(session, "ses_test");
+            assert_eq!(text, "請檢查 foo.rs 的實作");
+            assert!(queue);
+            assert_eq!(attachments.len(), 1);
+            assert_eq!(
+                attachments[0].raw_prompt.as_deref(),
+                Some("請檢查 @foo.rs 的實作")
+            );
+        }
+        other => panic!("unexpected req1: {other:?}"),
+    }
+    assert!(matches!(req2, Request::QueuePop { session } if session == "ses_test"));
+    assert!(matches!(req3, Request::QueueClear { session } if session == "ses_test"));
 }
 
 #[test]
