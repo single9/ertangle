@@ -113,3 +113,12 @@
 - 沒有在 TUI 裡目視確認錯誤文字與 status note 的呈現；也沒有用真實 `termade spawn --kind codex` 跑完整條路徑。
 - `willRetry: true` 的 `error` 通知目前直接略過（不顯示），沒有真實樣本。
 - Claude `is_error` 與 ACP 的錯誤只改了程式，沒有專屬測試；stderr 收集對它們共用同一個實作（只有 codex 有端到端測試）。
+
+## T22、T23 實機（2026-11-13）
+
+| 驗證項 | 做法 | 結果 |
+| --- | --- | --- |
+| T22：清掉舊版留下、分支已刪的 handoff session | 新版 daemon 啟動後對 8 筆卡住的 session 執行一般 `termade rm`（不加 `--force`） | 全部移除；沒有殘留 worktree 或 `termade/ses_*` 分支 |
+| T23：Codex 登入失效時顯示原因 | 未登入環境 `termade spawn --kind codex --prompt "say hi"` | session 變 `failed`；逐字稿與 status note 各一次「codex 錯誤：Your access token could not be refreshed…（請執行 `codex login`）」 |
+
+沒有驗證：TUI 畫面目視（只看了 `termade sessions` 與 event log）。
