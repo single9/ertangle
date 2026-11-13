@@ -10,7 +10,7 @@
 
 ## Why termade? (Terminal-Native vs. Heavy GUI IDEs)
 
-Modern AI IDEs (such as Orca) bundle worktrees, embedded web browsers, diff viewports, and terminals into a bulky Electron or native GUI app. `termade` focuses solely on the **collaboration, scheduling, and review core**, leaving editing and execution to the terminal and each agent's native CLI:
+GUI-based AI IDEs such as [Orca](https://github.com/stablyai/orca) integrate worktrees, embedded browsers, diff views, and terminals into a single desktop app. `termade` focuses solely on the **collaboration, scheduling, and review core**, leaving editing and execution to the terminal and each agent's native CLI:
 
 | Differentiator | How termade does it |
 | --- | --- |
@@ -329,4 +329,10 @@ extra = "Follow guidelines in CONTRIBUTING.md closely"
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Acknowledgements
+
+`termade` was inspired by [Orca](https://github.com/stablyai/orca) (MIT licensed); its full-handoff and review-loop concepts informed this design. This is an independent implementation and does not copy its code.

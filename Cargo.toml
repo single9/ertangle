@@ -4,6 +4,8 @@ description = "Terminal-native multi-agent development environment (TUI)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+readme = "README.md"
 
 [[bin]]
 name = "termade"
@@ -33,6 +35,7 @@ default-members = [".", "crates/*"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/single9/termade"
 
 [workspace.dependencies]
 termade-core = { path = "crates/termade-core" }

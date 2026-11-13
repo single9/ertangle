@@ -10,7 +10,7 @@
 
 ## 為什麼選擇 termade？ (終端機原生 vs. GUI IDE)
 
-現有方案 (如 Orca) 傾向將 Worktree、瀏覽器、Diff 視圖與終端機全部包進厚重的 Electron/原生 GUI。`termade` 的哲學是**只聚焦協作與排程核心，其餘交還給終端機與各家 Agent 的原生 CLI**：
+[Orca](https://github.com/stablyai/orca) 等 GUI IDE 將 Worktree、瀏覽器、Diff 視圖與終端機整合在同一個桌面應用程式中。`termade` 的哲學是**只聚焦協作與排程核心，其餘交還給終端機與各家 Agent 的原生 CLI**：
 
 | 特性 | 本專案的做法 |
 | --- | --- |
@@ -329,4 +329,10 @@ extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
 
 ## 授權條款
 
-本專案依 Apache-2.0 授權條款開源。
+本專案依 [MIT 授權條款](LICENSE) 開源。
+
+---
+
+## 致謝
+
+`termade` 的發想來自 [Orca](https://github.com/stablyai/orca) (MIT 授權)，其 full handoff 與 review 迴圈的概念啟發了本專案的設計。本專案為獨立實作，未複製其程式碼。
