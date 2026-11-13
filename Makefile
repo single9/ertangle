@@ -1,4 +1,4 @@
-# termade — Agent Development Environment Makefile
+# termade Makefile
 
 CARGO       ?= $(shell PATH="$(HOME)/.cargo/bin:$(PATH)" which cargo 2>/dev/null || echo cargo)
 # 自動偵測 pip 安裝的 ziglang；找不到時留空（可用 ZIG_DIR=... 覆寫）

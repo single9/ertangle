@@ -1,6 +1,6 @@
 # termade — 設計文件
 
-> 目標：用 **Rust + Ratatui** 做一個終端機原生的 termade（終端機版 Agent Development Environment）。
+> 目標：用 **Rust + Ratatui** 做一個終端機原生的 termade。
 > 核心價值是「**多個 agent 互相溝通、協作、平行工作**」，而不是複製 GUI IDE 的圖形功能。
 
 > **已定案的前提（v1）**

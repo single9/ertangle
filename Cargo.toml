@@ -1,6 +1,6 @@
 [package]
 name = "termade"
-description = "Terminal-native Agent Development Environment (TUI)"
+description = "Terminal-native multi-agent development environment (TUI)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

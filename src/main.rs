@@ -18,7 +18,7 @@ use cmd::{bus::*, cost::*, daemon::*, session::*, task::*, worktree::*};
 #[command(
     name = "termade",
     version,
-    about = "termade — 終端機原生的 Agent Development Environment"
+    about = "termade — 終端機原生的多 agent 開發環境"
 )]
 struct Cli {
     /// 連線遠端 daemon 位址（例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定）

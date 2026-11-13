@@ -1,6 +1,6 @@
-# termade — Agent Development Environment (TUI)
+# termade — 終端機原生的多 agent 開發環境
 
-一個以終端機為核心的 **termade（終端機版 Agent Development Environment）**：讓多個 coding agent
+一個以終端機為核心的 **termade**：讓多個 coding agent
 （OpenCode / Claude Code / Codex / Antigravity）在同一個 repo 上平行工作、彼此溝通、互相協作。
 
 - **TUI 前端**（Rust + Ratatui）：啟動快、記憶體足跡小、SSH 友善，沒有厚重的 GUI。
