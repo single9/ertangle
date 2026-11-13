@@ -23,7 +23,7 @@ pub(crate) fn submit_prompt_or_route(
         return execute_command(app, writer, cmd);
     }
     // `@存在的檔案` 是附件，不是 `@peer` 訊息。
-    if (trimmed.starts_with('@') && !crate::attach::leads_with_file(trimmed))
+    if (trimmed.starts_with('@') && !crate::attach::leads_with_file(trimmed, &app.search_root()))
         || trimmed.starts_with('#')
     {
         let mut parts = trimmed.splitn(2, char::is_whitespace);
@@ -45,13 +45,14 @@ pub(crate) fn submit_prompt_or_route(
         }
     }
     if let Some(id) = app.selected_id() {
-        let (body, attachments) = match crate::attach::extract_attachments(trimmed) {
-            Ok(r) => r,
-            Err(e) => {
-                app.status = format!("附件錯誤：{e}");
-                return Ok(());
-            }
-        };
+        let (body, attachments) =
+            match crate::attach::extract_attachments(trimmed, &app.search_root()) {
+                Ok(r) => r,
+                Err(e) => {
+                    app.status = format!("附件錯誤：{e}");
+                    return Ok(());
+                }
+            };
         let n = attachments.len();
         send(
             writer,
@@ -352,7 +353,11 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         (kind, model, prompt)
     };
     let prompt = prompt.filter(|p| !p.is_empty());
-    let (prompt, attachments) = match prompt.as_deref().map(crate::attach::extract_attachments) {
+    let root = app.search_root();
+    let (prompt, attachments) = match prompt
+        .as_deref()
+        .map(|p| crate::attach::extract_attachments(p, &root))
+    {
         Some(Ok((body, atts))) => (Some(body), atts),
         Some(Err(e)) => {
             app.status = format!("附件錯誤：{e}");

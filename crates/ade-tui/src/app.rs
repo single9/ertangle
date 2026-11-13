@@ -110,6 +110,8 @@ pub(crate) struct App {
     /// 選擇器選好的 (agent, model)；Spawn 模式的輸入就只是 prompt。
     pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
     pub(crate) spawn_effort: Option<String>,
+    /// `@` 檔案建議：上次的查詢與選取索引。
+    pub(crate) at_sel: (String, usize),
     /// 選到的 model 有哪些 effort 變體（Antigravity：effort 是 model id 的尾巴）。
     pub(crate) spawn_variants: Vec<String>,
     /// Space 選單目前走到的路徑。
@@ -188,6 +190,7 @@ impl App {
             spawn_bypass_armed: false,
             spawn_target: None,
             spawn_effort: None,
+            at_sel: (String::new(), 0),
             spawn_variants: Vec::new(),
             menu_path: Vec::new(),
             picker: None,
@@ -228,6 +231,16 @@ impl App {
             .iter()
             .map(|s| s.id.clone())
             .collect()
+    }
+
+    /// 選取中 session 的工作目錄（檔案搜尋與 `@` 補全的根）。
+    pub(crate) fn selected_cwd(&self) -> Option<String> {
+        let id = self.selected_id()?;
+        self.state.sessions.get(&id).map(|s| s.cwd.clone())
+    }
+
+    pub(crate) fn search_root(&self) -> std::path::PathBuf {
+        crate::attach::search_root(self.selected_cwd().as_deref())
     }
 
     pub(crate) fn selected_id(&self) -> Option<SessionId> {

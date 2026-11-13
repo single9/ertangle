@@ -699,7 +699,7 @@ fn at_tokens_become_attachments_and_unknown_stay() {
         d.display(),
         d.display()
     );
-    let (body, atts) = crate::attach::extract_attachments(&text).unwrap();
+    let (body, atts) = crate::attach::extract_attachments(&text, &d).unwrap();
     assert_eq!(atts.len(), 2);
     assert!(body.contains("notes.txt") && body.contains("pic.png"));
     assert!(body.contains("@nobody") && body.contains("a@b.com"));
@@ -711,21 +711,24 @@ fn at_tokens_become_attachments_and_unknown_stay() {
 #[test]
 fn leading_at_file_is_not_a_peer_message() {
     let d = temp_dir_with(&[("a.txt", b"x")]);
-    assert!(crate::attach::leads_with_file(&format!(
-        "@{}/a.txt 看一下",
-        d.display()
-    )));
-    assert!(!crate::attach::leads_with_file("@worker/a 嗨"));
+    assert!(crate::attach::leads_with_file(
+        &format!("@{}/a.txt 看一下", d.display()),
+        &d
+    ));
+    assert!(!crate::attach::leads_with_file("@worker/a 嗨", &d));
 }
 
 #[test]
 fn quoted_path_with_spaces_and_trailing_punctuation() {
     let d = temp_dir_with(&[("my file.txt", b"s"), ("b.txt", b"b")]);
-    let (_, atts) = crate::attach::extract_attachments(&format!(
-        "@\"{}/my file.txt\" 與 @{}/b.txt,",
-        d.display(),
-        d.display()
-    ))
+    let (_, atts) = crate::attach::extract_attachments(
+        &format!(
+            "@\"{}/my file.txt\" 與 @{}/b.txt,",
+            d.display(),
+            d.display()
+        ),
+        &d,
+    )
     .unwrap();
     assert_eq!(atts.len(), 2);
 }
@@ -734,11 +737,11 @@ fn quoted_path_with_spaces_and_trailing_punctuation() {
 fn oversized_image_is_rejected_and_binary_is_path_only() {
     let d = temp_dir_with(&[("bin.dat", &[0, 1, 2, 3])]);
     let (_, atts) =
-        crate::attach::extract_attachments(&format!("@{}/bin.dat", d.display())).unwrap();
+        crate::attach::extract_attachments(&format!("@{}/bin.dat", d.display()), &d).unwrap();
     assert!(atts[0].text.is_none() && atts[0].data.is_none());
     let big = d.join("big.png");
     std::fs::write(&big, vec![0u8; (ade_core::MAX_IMAGE_BYTES + 1) as usize]).unwrap();
-    assert!(crate::attach::extract_attachments(&format!("@{}", big.display())).is_err());
+    assert!(crate::attach::extract_attachments(&format!("@{}", big.display()), &d).is_err());
 }
 
 #[test]
@@ -757,4 +760,45 @@ fn path_completion_and_pasted_paths() {
         Some(format!("@{} ", p.display()))
     );
     assert!(crate::attach::pasted_file_ref("not a file").is_none());
+}
+
+#[test]
+fn fuzzy_search_ranks_basename_hits_first() {
+    use crate::attach::fuzzy_score;
+    let best = fuzzy_score("main", "src/main.rs").unwrap();
+    let worse = fuzzy_score("main", "docs/maintenance/index.md").unwrap();
+    assert!(best > worse);
+    assert!(fuzzy_score("zzz", "src/main.rs").is_none());
+    // 子序列比對：mrs 命中 main.rs
+    assert!(fuzzy_score("mrs", "src/main.rs").is_some());
+}
+
+#[test]
+fn project_search_finds_files_and_resolves_bare_names() {
+    let d = temp_dir_with(&[("top.txt", b"t")]);
+    std::fs::create_dir_all(d.join("src/deep")).unwrap();
+    std::fs::write(d.join("src/deep/needle.rs"), "fn x(){}").unwrap();
+    std::fs::write(d.join("src/other.rs"), "").unwrap();
+    let hits = crate::attach::suggestions(&d, "needle", 5);
+    assert_eq!(hits.first().map(String::as_str), Some("src/deep/needle.rs"));
+    // 只打檔名也能附上（唯一符合）
+    let (body, atts) = crate::attach::extract_attachments("看 @needle.rs 吧", &d).unwrap();
+    assert_eq!(atts.len(), 1);
+    assert_eq!(body, "看 needle.rs 吧");
+    // 沒有檔案時不亂猜
+    let (_, none) = crate::attach::extract_attachments("@nothing.rs", &d).unwrap();
+    assert!(none.is_empty());
+}
+
+#[test]
+fn current_at_token_reads_text_before_cursor() {
+    assert_eq!(
+        crate::attach::current_at_token("看 @src/ma", 9),
+        Some((2, "src/ma".to_string()))
+    );
+    assert_eq!(crate::attach::current_at_token("a@b", 3), None);
+    assert_eq!(
+        crate::attach::current_at_token("看 @a 然後", 4),
+        Some((2, "a".to_string()))
+    );
 }

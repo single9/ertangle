@@ -292,6 +292,38 @@ pub(crate) fn handle_input_mode(
     writer: &mut ConnStream,
     key: KeyEvent,
 ) -> Result<()> {
+    // `@` 檔案建議：查詢改變就把選取索引歸零；上下鍵／Ctrl-N／Ctrl-P 在建議間移動，Tab 採用。
+    if let Some((start, cands)) = at_candidates(app) {
+        let tok = at_token_text(app);
+        if app.at_sel.0 != tok {
+            app.at_sel = (tok, 0);
+        }
+        let n = cands.len();
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        match key.code {
+            KeyCode::Down => {
+                app.at_sel.1 = (app.at_sel.1 + 1) % n;
+                return Ok(());
+            }
+            KeyCode::Up => {
+                app.at_sel.1 = (app.at_sel.1 + n - 1) % n;
+                return Ok(());
+            }
+            KeyCode::Char('n') if ctrl => {
+                app.at_sel.1 = (app.at_sel.1 + 1) % n;
+                return Ok(());
+            }
+            KeyCode::Char('p') if ctrl => {
+                app.at_sel.1 = (app.at_sel.1 + n - 1) % n;
+                return Ok(());
+            }
+            KeyCode::Tab => {
+                accept_at_candidate(app, start, &cands[app.at_sel.1.min(n - 1)]);
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
     match key.code {
         KeyCode::Esc => {
             app.mode = Mode::Normal;
@@ -429,6 +461,40 @@ pub(crate) fn handle_input_mode(
         _ => {}
     }
     Ok(())
+}
+
+/// 目前 `@token` 的內容（不含 `@`）。
+fn at_token_text(app: &App) -> String {
+    crate::attach::current_at_token(&app.input, app.input_cursor)
+        .map(|(_, t)| t)
+        .unwrap_or_default()
+}
+
+/// 在 Prompt／Spawn／Message 輸入 `@xxx` 時的專案內模糊搜尋建議（相對路徑或 `~`、`/` 開頭的字面路徑不搜尋）。
+pub(crate) fn at_candidates(app: &App) -> Option<(usize, Vec<String>)> {
+    if !matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) {
+        return None;
+    }
+    let (start, tok) = crate::attach::current_at_token(&app.input, app.input_cursor)?;
+    if tok.is_empty() || tok.starts_with(['/', '~', '"']) {
+        return None;
+    }
+    let c = crate::attach::suggestions(&app.search_root(), &tok, 8);
+    (!c.is_empty()).then_some((start, c))
+}
+
+/// 用選中的建議取代游標前的 `@token`（路徑含空白時加引號），後面補一個空白。
+fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
+    let rep = if path.contains(char::is_whitespace) {
+        format!("@\"{path}\" ")
+    } else {
+        format!("@{path} ")
+    };
+    let s = byte_index(&app.input, start);
+    let e = byte_index(&app.input, app.input_cursor);
+    app.input.replace_range(s..e, &rep);
+    app.input_cursor = start + rep.chars().count();
+    app.status = format!("已選 {path}");
 }
 
 /// 游標前的 `@路徑` 做 Tab 補全：唯一符合就補完，多個則補到共同前綴並列出候選。

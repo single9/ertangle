@@ -99,6 +99,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     match app.mode {
         Mode::Menu => draw_menu(f, chunks[2], app),
         Mode::Command => draw_command_hints(f, chunks[2], app),
+        Mode::Prompt | Mode::Spawn | Mode::Message => draw_file_suggestions(f, chunks[2], app),
         Mode::Pick => draw_picker(f, app),
         _ => {}
     }
@@ -187,6 +188,54 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
                 .title(" 命令（Tab 補全） "),
+        ),
+        area,
+    );
+}
+
+/// `@` 檔案建議浮層：貼在輸入框上方左側，列出專案內模糊搜尋到的檔案。
+pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &App) {
+    let Some((_, cands)) = crate::input::at_candidates(app) else {
+        return;
+    };
+    let sel = if app.at_sel.0
+        == crate::attach::current_at_token(&app.input, app.input_cursor)
+            .map(|(_, t)| t)
+            .unwrap_or_default()
+    {
+        app.at_sel.1.min(cands.len() - 1)
+    } else {
+        0
+    };
+    let text_w = cands
+        .iter()
+        .map(|c| UnicodeWidthStr::width(c.as_str()))
+        .max()
+        .unwrap_or(10);
+    let w = (text_w + 6).min(f.area().width as usize).max(38) as u16;
+    let h = (cands.len() as u16 + 2).min(input_area.y);
+    let area = Rect::new(f.area().x, input_area.y.saturating_sub(h), w, h);
+    let lines: Vec<Line> = cands
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            Line::from(Span::styled(
+                format!("{} {c}", if i == sel { "▸" } else { " " }),
+                if i == sel {
+                    Style::default().fg(Color::Black).bg(Color::Cyan)
+                } else {
+                    Style::default()
+                },
+            ))
+        })
+        .collect();
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" 專案檔案（Tab 採用、↑↓ 選擇） "),
         ),
         area,
     );
