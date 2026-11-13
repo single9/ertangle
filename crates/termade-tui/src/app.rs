@@ -24,6 +24,8 @@ pub(crate) enum Mode {
     Help,
     /// 清單選擇器（spawn 的 agent／model）。
     Pick,
+    /// 在逐字稿或 diff 裡搜尋（`f` 或 `:find`）。
+    Search,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -181,6 +183,9 @@ pub(crate) struct App {
     pub(crate) bus_seen: usize,
     /// 分頁模式下每個分頁的區域與對應 session 索引（供滑鼠點選）。
     pub(crate) tab_areas: Vec<(Rect, usize)>,
+    /// 進行中的搜尋（只在 `Mode::Search` 期間存在）與上一次的查詢（供預填）。
+    pub(crate) search: Option<crate::search::Search>,
+    pub(crate) last_search: String,
     pub(crate) should_quit: bool,
 }
 
@@ -249,6 +254,8 @@ impl App {
             bus_visible: true,
             bus_seen: 0,
             tab_areas: Vec::new(),
+            search: None,
+            last_search: String::new(),
             should_quit: false,
         }
     }

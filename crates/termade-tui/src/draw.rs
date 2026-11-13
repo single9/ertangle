@@ -858,6 +858,8 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
             }
             None => app.md_cache = None,
         }
+        // 顯示行變了，搜尋的符合項要跟著重算。
+        crate::search::refresh(app);
     }
 
     let viewport = area.height.saturating_sub(2) as usize;
@@ -871,7 +873,8 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let off = match app.transcript_scroll {
         Some(o) => {
             let o = o.min(max_off);
-            if o >= max_off {
+            // 搜尋中不恢復跟隨，新輸出才不會把目前的符合項捲走。
+            if o >= max_off && app.search.is_none() {
                 app.transcript_scroll = None;
             }
             o
@@ -918,6 +921,10 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
             let line = match selection.and_then(|sel| selection_columns(sel, idx, inner_w)) {
                 Some((from, to)) => highlight_columns(line, from, to),
                 None => line.clone(),
+            };
+            let line = match crate::search::mark(app, idx) {
+                Some(current) => crate::search::highlight(&line, current),
+                None => line,
             };
             visible.push(line);
         }
@@ -1013,7 +1020,15 @@ pub(crate) fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
                         Style::default().fg(Color::Rgb(100, 150, 100)),
                     ),
                     Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(l.clone(), diff_line_style(l)),
+                    Span::styled(
+                        l.clone(),
+                        match crate::search::mark(app, i) {
+                            Some(current) => {
+                                diff_line_style(l).patch(crate::search::mark_style(current))
+                            }
+                            None => diff_line_style(l),
+                        },
+                    ),
                 ];
                 ListItem::new(Line::from(spans))
             })
@@ -1186,6 +1201,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         Mode::Review => " review 註解 → 選取的 session ".to_string(),
         Mode::Command => " 命令（Tab 補全） ".to_string(),
         Mode::Jump => " 跳轉 session ".to_string(),
+        Mode::Search => " 搜尋（Enter／↓ 下一個 · ↑ 上一個 · Esc 離開） ".to_string(),
     };
     let style = if app.mode == Mode::Normal {
         Style::default()
@@ -1233,7 +1249,12 @@ pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     };
     let text = Line::from(vec![
         Span::styled(
-            format!(" {} ", app.status),
+            format!(
+                " {} ",
+                crate::search::status_text(app)
+                    .as_deref()
+                    .unwrap_or(&app.status)
+            ),
             Style::default().fg(Color::Black).bg(Color::DarkGray),
         ),
         Span::raw(hints),

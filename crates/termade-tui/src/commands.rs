@@ -217,6 +217,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("gc", "[session]  清理已合併的 worktree"),
     ("worktrees", "顯示 worktree 清單"),
     ("overview", "回到 transcript 視圖"),
+    (
+        "find",
+        "[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容（同 f）",
+    ),
     ("layout", "[three|two|tabs]  切換版面"),
     ("raw", "原始文字／Markdown 切換"),
     ("thoughts", "顯示／隱藏思考"),
@@ -268,6 +272,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
 
     match verb.as_str() {
         "help" | "h" | "?" => crate::help::open_help(app),
+        "find" => crate::search::open(app, (!rest.is_empty()).then_some(rest)),
         "quota" => {
             let now = termade_core::now_millis();
             app.status = if app.state.quotas.is_empty() {

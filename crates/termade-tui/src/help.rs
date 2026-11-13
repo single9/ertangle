@@ -66,6 +66,14 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 "（輸入 prompt 時）排隊，session 閒下來自動送出",
             ),
             ("PgUp / PgDn", "捲動 transcript；End 回到最新"),
+            (
+                "f",
+                "搜尋逐字稿或 diff（邊打邊找）；Enter／↓ 下一個、↑ 上一個、Esc 離開",
+            ),
+            (
+                "f 的範圍",
+                "只找畫面上顯示的內容：摺疊的工具、隱藏的思考、超過 4000 行的舊內容找不到",
+            ),
             ("拖曳 / Y / F2", "選取複製；複製目前畫面；切換滑鼠擷取"),
         ],
     ),
@@ -90,6 +98,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             (":kill :cancel", "結束／中斷選取的 session"),
             (":quota", "各 agent 帳號額度與重置時間"),
             (":layout", "切換版面；:raw、:thoughts、:bus 切換顯示"),
+            (":find", "搜尋逐字稿或 diff，如 :find error（同 f）"),
             (":task :broadcast", "新增任務／廣播訊息"),
         ],
     ),

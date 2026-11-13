@@ -1083,3 +1083,330 @@ fn stop_only_kills_this_projects_sessions() {
         "other project untouched"
     );
 }
+
+// ---- T16：在逐字稿與 diff 裡搜尋 ----
+
+fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::NONE)
+}
+
+fn type_keys(app: &mut App, w: &mut ConnStream, text: &str) {
+    for c in text.chars() {
+        handle_key(app, w, key(KeyCode::Char(c))).unwrap();
+    }
+}
+
+/// 60 行逐字稿（畫面一次放不下），第 5、20、41 行含 `needle`，第 30 行含 `Needle`。
+fn search_app() -> App {
+    let lines: Vec<String> = (0..60)
+        .map(|i| match i {
+            5 | 20 | 41 => format!("row {i} needle here"),
+            30 => format!("row {i} Needle Upper"),
+            _ => format!("row {i} filler"),
+        })
+        .collect();
+    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let mut app = sample_app(&refs);
+    app.raw_md = true; // 一行來源對一行顯示，行號好對
+    render_size(&mut app, 120, 30); // 先建立 md_cache，後續設定 transcript_scroll 才不會被首繪重置
+    app
+}
+
+fn status_row(app: &mut App) -> String {
+    let (term, _) = render_size(app, 120, 30);
+    squash(&row_text(&term, 29))
+}
+
+#[test]
+fn search_jumps_to_first_match_and_shows_count() {
+    let mut app = search_app();
+    let (mut w, _peer) = pair_writer();
+    app.transcript_scroll = Some(0);
+    render_size(&mut app, 120, 30);
+
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    assert_eq!(app.mode, Mode::Search);
+    let (_, text) = render_size(&mut app, 120, 30);
+    assert!(squash(&text).contains("搜尋"), "輸入框標題要顯示搜尋");
+
+    type_keys(&mut app, &mut w, "needle");
+    assert_eq!(app.transcript_scroll, Some(5), "捲到第一個符合的行");
+    let s = app.search.as_ref().unwrap();
+    assert_eq!(s.matches, vec![5, 20, 30, 41], "全小寫查詢不分大小寫");
+    assert!(status_row(&mut app).contains("1/4"));
+    assert_eq!(app.transcript_offset, 5, "畫面第一行就是符合項");
+
+    // 目前這一個與其他符合項用不同底色，沒符合的行不加底色。
+    let (term, _) = render_size(&mut app, 120, 30);
+    let buf = term.backend().buffer();
+    let x = app.transcript_area.x + 1;
+    let y = app.transcript_area.y + 1;
+    assert_eq!(buf[(x, y)].bg, Color::Yellow);
+    assert_eq!(buf[(x, y + 1)].bg, Color::Reset);
+    assert_eq!(buf[(x, y + 15)].bg, Color::Rgb(70, 70, 120));
+}
+
+#[test]
+fn search_enter_cycles_forward_and_up_goes_back() {
+    let mut app = search_app();
+    let (mut w, _peer) = pair_writer();
+    app.transcript_scroll = Some(0);
+    render_size(&mut app, 120, 30);
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    type_keys(&mut app, &mut w, "needle");
+
+    let mut seen = vec![app.transcript_scroll];
+    for _ in 0..4 {
+        handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+        seen.push(app.transcript_scroll);
+    }
+    assert_eq!(
+        seen,
+        vec![Some(5), Some(20), Some(30), Some(41), Some(5)],
+        "最後一個之後繞回第一個"
+    );
+    assert!(status_row(&mut app).contains("1/4"));
+
+    handle_key(&mut app, &mut w, key(KeyCode::Up)).unwrap();
+    assert_eq!(
+        app.transcript_scroll,
+        Some(41),
+        "↑ 從第一個反向繞到最後一個"
+    );
+    assert!(status_row(&mut app).contains("4/4"));
+    handle_key(&mut app, &mut w, key(KeyCode::Up)).unwrap();
+    assert_eq!(app.transcript_scroll, Some(30));
+    handle_key(&mut app, &mut w, key(KeyCode::Down)).unwrap();
+    assert_eq!(app.transcript_scroll, Some(41), "↓ 等同 Enter");
+}
+
+#[test]
+fn search_starts_from_current_position() {
+    let mut app = search_app();
+    let (mut w, _peer) = pair_writer();
+    app.transcript_scroll = Some(10);
+    render_size(&mut app, 120, 30);
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    type_keys(&mut app, &mut w, "needle");
+    assert_eq!(app.transcript_scroll, Some(20), "從目前位置往後找");
+    assert!(status_row(&mut app).contains("2/4"));
+}
+
+#[test]
+fn search_is_smartcase() {
+    let mut app = search_app();
+    let (mut w, _peer) = pair_writer();
+    render_size(&mut app, 120, 30);
+
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    type_keys(&mut app, &mut w, "upper");
+    assert_eq!(
+        app.search.as_ref().unwrap().matches,
+        vec![30],
+        "全小寫查詢找得到大寫內容"
+    );
+    handle_key(&mut app, &mut w, key(KeyCode::Esc)).unwrap();
+
+    execute_command(&mut app, &mut w, "find Needle").unwrap();
+    assert_eq!(app.mode, Mode::Search, ":find 進入搜尋模式");
+    assert_eq!(
+        app.search.as_ref().unwrap().matches,
+        vec![30],
+        "含大寫的查詢區分大小寫"
+    );
+    handle_key(&mut app, &mut w, key(KeyCode::Esc)).unwrap();
+
+    execute_command(&mut app, &mut w, "find UPPER").unwrap();
+    assert!(app.search.as_ref().unwrap().matches.is_empty());
+    assert!(status_row(&mut app).contains("找不到"));
+}
+
+#[test]
+fn search_without_match_keeps_scroll_position() {
+    let mut app = search_app();
+    let (mut w, _peer) = pair_writer();
+    app.transcript_scroll = Some(12);
+    render_size(&mut app, 120, 30);
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    type_keys(&mut app, &mut w, "zzz-not-there");
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    handle_key(&mut app, &mut w, key(KeyCode::Up)).unwrap();
+    assert_eq!(app.transcript_scroll, Some(12));
+    assert!(status_row(&mut app).contains("找不到"));
+    assert_eq!(app.transcript_offset, 12);
+
+    // 跟隨最新時找不到，也不會變成暫停跟隨。
+    handle_key(&mut app, &mut w, key(KeyCode::Esc)).unwrap();
+    app.transcript_scroll = None;
+    render_size(&mut app, 120, 30);
+    execute_command(&mut app, &mut w, "find zzz-not-there").unwrap();
+    assert_eq!(app.transcript_scroll, None);
+}
+
+#[test]
+fn search_updates_matches_on_new_output_without_moving() {
+    let mut app = search_app();
+    let (mut w, _peer) = pair_writer();
+    app.transcript_scroll = Some(0);
+    render_size(&mut app, 120, 30);
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    type_keys(&mut app, &mut w, "needle");
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    render_size(&mut app, 120, 30);
+    assert_eq!(app.transcript_scroll, Some(41));
+    let off = app.transcript_offset;
+
+    let buf = app.state.transcripts.get_mut("ses_test").unwrap();
+    for i in 60..120 {
+        buf.push_back(if i == 100 {
+            "row 100 needle late".to_string()
+        } else {
+            format!("row {i} filler")
+        });
+    }
+    // 跳過串流節流，讓這次繪製就重算。
+    app.last_rebuild = std::time::Instant::now() - MD_REBUILD_INTERVAL * 2;
+    assert!(
+        status_row(&mut app).contains("4/5"),
+        "新輸出裡的符合項要算進來"
+    );
+    let s = app.search.as_ref().unwrap();
+    assert_eq!(s.matches, vec![5, 20, 30, 41, 100]);
+    assert_eq!(s.current_line(), Some(41), "目前位置不會跳走");
+    assert_eq!(app.transcript_scroll, Some(41));
+    assert_eq!(app.transcript_offset, 41);
+    assert!(off <= 41);
+}
+
+#[test]
+fn search_near_bottom_is_not_scrolled_away_by_new_output() {
+    let mut app = search_app();
+    let (mut w, _peer) = pair_writer();
+    app.transcript_scroll = Some(25);
+    render_size(&mut app, 120, 30);
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    type_keys(&mut app, &mut w, "needle");
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    // 第 41 行在最後一頁裡：畫面停在最底，但不恢復跟隨。
+    render_size(&mut app, 120, 30);
+    assert_eq!(app.transcript_scroll, Some(41));
+
+    let buf = app.state.transcripts.get_mut("ses_test").unwrap();
+    for i in 60..120 {
+        buf.push_back(format!("row {i} filler"));
+    }
+    app.last_rebuild = std::time::Instant::now() - MD_REBUILD_INTERVAL * 2;
+    let (_, text) = render_size(&mut app, 120, 30);
+    assert_eq!(app.transcript_offset, 41);
+    assert!(text.contains("row 41 needle here"));
+}
+
+#[test]
+fn search_in_diff_view_moves_cursor() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.view = CenterView::Diff;
+    app.diff_lines = vec![
+        "diff --git a/f b/f".into(),
+        "@@ -1,2 +1,3 @@".into(),
+        " ctx".into(),
+        "-old Target".into(),
+        "+new target".into(),
+        "+extra".into(),
+    ];
+    app.diff_gutter = build_gutter(&app.diff_lines);
+    render(&mut app);
+
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    type_keys(&mut app, &mut w, "target");
+    assert_eq!(app.diff_cursor, 3);
+    assert!(status_row(&mut app).contains("1/2"));
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    assert_eq!(app.diff_cursor, 4);
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    assert_eq!(app.diff_cursor, 3, "繞回第一個");
+    assert_eq!(app.transcript_scroll, None, "不該動到逐字稿的捲動");
+
+    // diff 重新載入：符合項跟著重算。
+    apply_frame(
+        &mut app,
+        Frame::Diff {
+            session: "ses_test".into(),
+            branch: None,
+            cwd: "/tmp".into(),
+            diff: "+only target\n ctx".into(),
+        },
+    );
+    assert_eq!(app.search.as_ref().unwrap().matches, vec![0]);
+}
+
+#[test]
+fn search_escape_restores_normal_keys_and_remembers_query() {
+    let mut app = search_app();
+    add_session(&mut app, "ses_b", "second", 2);
+    let (mut w, _peer) = pair_writer();
+    app.transcript_scroll = Some(0);
+    render_size(&mut app, 120, 30);
+    assert_eq!(app.selected, 0);
+
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    // 搜尋中 j／k／n／q 是查詢文字，不是 Normal 按鍵。
+    type_keys(&mut app, &mut w, "jknq");
+    assert_eq!(app.input, "jknq");
+    assert_eq!((app.selected, app.mode), (0, Mode::Search));
+    assert!(!app.should_quit);
+    for _ in 0..4 {
+        handle_key(&mut app, &mut w, key(KeyCode::Backspace)).unwrap();
+    }
+    type_keys(&mut app, &mut w, "needle");
+    handle_key(&mut app, &mut w, key(KeyCode::Enter)).unwrap();
+    assert_eq!(app.transcript_scroll, Some(20));
+
+    handle_key(&mut app, &mut w, key(KeyCode::Esc)).unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.search.is_none());
+    assert!(app.input.is_empty());
+    assert_eq!(app.transcript_scroll, Some(20), "Esc 停在目前位置");
+    assert!(app.status.contains("2/4"));
+
+    handle_key(&mut app, &mut w, key(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.selected, 1, "j 恢復選下一個 session");
+    handle_key(&mut app, &mut w, key(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.selected, 0);
+    handle_key(&mut app, &mut w, key(KeyCode::Char('n'))).unwrap();
+    assert_eq!(app.mode, Mode::Pick, "n 恢復建立 session");
+    handle_key(&mut app, &mut w, key(KeyCode::Esc)).unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+
+    // 再按 f 預填上一次的查詢。
+    render_size(&mut app, 120, 30);
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    assert_eq!(app.input, "needle");
+    assert_eq!(app.search.as_ref().unwrap().matches.len(), 4);
+}
+
+#[test]
+fn search_skips_hidden_lines_and_is_documented() {
+    let mut app = sample_app(&["💭 secret thought", "visible secret", "plain"]);
+    let (mut w, _peer) = pair_writer();
+    render(&mut app);
+    execute_command(&mut app, &mut w, "find secret").unwrap();
+    assert_eq!(
+        app.search.as_ref().unwrap().matches.len(),
+        1,
+        "隱藏的思考行不在搜尋範圍"
+    );
+    handle_key(&mut app, &mut w, key(KeyCode::Esc)).unwrap();
+
+    // Worktrees 視圖不支援搜尋。
+    app.view = CenterView::Worktrees;
+    handle_key(&mut app, &mut w, key(KeyCode::Char('f'))).unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+
+    assert!(COMMANDS.iter().any(|(n, _)| *n == "find"));
+    let help = crate::help::help_lines();
+    assert!(help.iter().any(|(_, k, _)| k == "f"));
+    assert!(help.iter().any(|(_, k, _)| k == ":find"));
+}
