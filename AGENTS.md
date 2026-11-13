@@ -50,3 +50,17 @@ Whenever generating, modifying, or reviewing documentation, comments, commit mes
    - Add a half-width space between Chinese characters and English letters, numbers, or inline code blocks (盤古之白).
    - Use full-width commas `，` and periods `。` for Chinese sentences.
    - Use Chinese quotation marks 「」 and 『』 instead of ASCII quotes `""` for Chinese text.
+
+## Agent skills
+
+### Issue tracker
+
+Tickets are local markdown files, one per ticket, at `docs/tickets/TNN-<slug>.md` with an index table in `docs/tickets/README.md`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as a `Status:` line in each ticket. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root (created lazily). See `docs/agents/domain.md`.
