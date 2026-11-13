@@ -18,6 +18,7 @@ mod git;
 mod handlers;
 mod handoff;
 mod logwriter;
+mod quota_watch;
 mod server;
 use logwriter::*;
 pub use logwriter::{rotated_log_path, LogConfig};
@@ -276,6 +277,8 @@ pub(crate) struct Shared {
     pub(crate) auth_token: Option<String>,
     /// 本次 daemon 啟動的世代 id。
     pub(crate) epoch: String,
+    /// 已經提醒過額度快滿的 agent（用量降回門檻以下才會重新提醒）。
+    pub(crate) quota_warned: Mutex<std::collections::HashSet<String>>,
 }
 
 impl Shared {
@@ -335,6 +338,7 @@ impl Shared {
             log_ok,
             auth_token,
             epoch: new_id("ep"),
+            quota_warned: Default::default(),
         });
 
         let weak_shared = Arc::downgrade(&shared);
@@ -462,7 +466,7 @@ impl Shared {
         )
     }
 
-    pub(crate) fn ingest(&self, sid: &SessionId, ev: AgentEvent) {
+    pub(crate) fn ingest(self: &Arc<Self>, sid: &SessionId, ev: AgentEvent) {
         if let AgentEvent::Permission(ref p) = ev {
             let decision_and_ctl = {
                 let inner = lock(&self.inner);
@@ -535,7 +539,15 @@ impl Shared {
             },
         };
         let exited = matches!(event, Event::SessionExited { .. });
+        let watch = matches!(
+            event,
+            Event::QuotaUpdated { .. } | Event::SessionLimited { .. }
+        )
+        .then(|| event.clone());
         self.emit(event);
+        if let Some(ev) = watch {
+            self.react_to_quota(&ev);
+        }
         if exited {
             lock(&self.inner).sessions.remove(sid);
         }

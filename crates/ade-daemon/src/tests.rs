@@ -967,3 +967,52 @@ fn session_remove_only_ended() {
     assert!(inner.state.sessions.contains_key("ses-live"));
     assert!(!inner.state.sessions.contains_key("ses-dead"));
 }
+
+#[test]
+fn high_quota_leaves_a_handoff_hint_once_per_crossing() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: restart_session("ses-c", SessionStatus::Idle),
+    });
+    let mk = |pct: f32| ade_core::Quota {
+        agent: "claude_code".into(),
+        windows: vec![ade_core::QuotaWindow {
+            name: "5h".into(),
+            used_percent: pct,
+            resets_at_ms: None,
+        }],
+        reached: false,
+        updated_ms: 0,
+    };
+    // restart_session 的 kind 是 ClaudeCode；agent id 要和 kind.id() 一致。
+    let id = AgentKind::ClaudeCode.id().to_string();
+    let mut high = mk(95.0);
+    high.agent = id.clone();
+    shared.react_to_quota(&Event::QuotaUpdated {
+        quota: high.clone(),
+    });
+    let note = lock(&shared.inner).state.sessions["ses-c"]
+        .status_note
+        .clone()
+        .unwrap();
+    assert!(note.contains("handoff") && note.contains("95"), "{note}");
+    // 再來一次不重複提醒（先清掉備註確認）
+    shared.emit(Event::SessionNote {
+        session: "ses-c".into(),
+        note: String::new(),
+    });
+    shared.react_to_quota(&Event::QuotaUpdated { quota: high });
+    assert!(lock(&shared.inner).state.sessions["ses-c"]
+        .status_note
+        .is_none());
+    // 降回門檻以下後，下次越線會再提醒
+    let mut low = mk(10.0);
+    low.agent = id.clone();
+    shared.react_to_quota(&Event::QuotaUpdated { quota: low });
+    let mut high2 = mk(92.0);
+    high2.agent = id;
+    shared.react_to_quota(&Event::QuotaUpdated { quota: high2 });
+    assert!(lock(&shared.inner).state.sessions["ses-c"]
+        .status_note
+        .is_some());
+}

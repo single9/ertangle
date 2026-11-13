@@ -48,9 +48,22 @@ pub struct TuiCfg {
     pub layout: Option<String>,
 }
 
+/// 額度提醒與自動交接。
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct HandoffCfg {
+    /// 帳號額度用量達到這個百分比就提醒（預設 90）。
+    pub warn_percent: Option<f32>,
+    /// 額度用完時自動交接給 `fallback` 裡第一個可用的 agent（預設關閉，因為會動用另一邊的額度）。
+    pub auto: Option<bool>,
+    /// 候選接手者，例如 `["codex", "claude:sonnet"]`。
+    pub fallback: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
+    pub handoff: HandoffCfg,
     pub defaults: Defaults,
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
@@ -154,6 +167,15 @@ impl Config {
             if v.effort.is_some() {
                 e.effort = v.effort;
             }
+        }
+        if local.handoff.warn_percent.is_some() {
+            out.handoff.warn_percent = local.handoff.warn_percent;
+        }
+        if local.handoff.auto.is_some() {
+            out.handoff.auto = local.handoff.auto;
+        }
+        if !local.handoff.fallback.is_empty() {
+            out.handoff.fallback = local.handoff.fallback;
         }
         if local.tui.layout.is_some() {
             out.tui.layout = local.tui.layout;
