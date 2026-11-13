@@ -134,3 +134,15 @@ opencode（本機 gemma4）在暫存 git repo：`spawn hx-a` → `handoff hx-a -
 | 傳送端回覆 | 「收件者 hx-a 已交接，訊息改投給接手的 hx-a→opencode（…）」 |
 
 沒有驗證：接手者正忙時訊息只留在收件匣、不會喚醒（既有的匯流排規則，非 T24 範圍）；自動交接路徑。
+
+## T25 忙碌時收到訊息的補提醒（實機，2026-11-14）
+
+opencode（本機 gemma4）：`spawn nx --prompt "用 shell 執行 sleep 25…"`，忙碌中 `termade send --to nx "ping-t25：請用 termade_send 回覆 human 一句 pong"`。
+
+| 驗證項 | 結果 |
+| --- | --- |
+| 忙碌時送達 | 不打斷，只留在收件匣 |
+| 回到 idle | 收到一則「[termade 未讀訊息提醒] … id=msg_… 來自 human (chat)」 |
+| agent 反應 | 呼叫 `termade_inbox` 後以 `termade_send` 回覆 human「pong」（`reply_to` 指向原訊息） |
+
+沒有驗證：調高成本上限後的補提醒（只有單元測試）。
