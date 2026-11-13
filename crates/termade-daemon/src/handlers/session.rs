@@ -225,15 +225,8 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                     from: from.clone(),
                     to: id.clone(),
                 });
-                // 舊 session 還沒提醒的未讀訊息併給接手者（T25）。
-                let mut inner = lock(&shared.inner);
-                if let Some(ids) = inner.pending_nudge.remove(&from) {
-                    inner
-                        .pending_nudge
-                        .entry(id.clone())
-                        .or_default()
-                        .extend(ids);
-                }
+                // 舊 session 還沒提醒的未讀訊息已列在交接簡報裡，不再另外提醒接手者（T25）。
+                lock(&shared.inner).pending_nudge.remove(&from);
             }
             let mut note = format!("已建立 session {id}");
             if let Some((from, to)) = downgraded {
@@ -829,7 +822,10 @@ pub(crate) fn handle_budget(
         budget_usd: Some(budget_usd),
     });
     // 超限期間保留的排隊 prompt（T19）在這裡恢復送出。
-    shared.flush_queue_if_idle(&sid);
+    // 佇列沒有送出東西時，補提醒超限期間累積的未讀訊息（T25）。
+    if !shared.flush_queue_if_idle(&sid) {
+        shared.nudge_unread_if_idle(&sid);
+    }
     let _ = reply.send(Frame::ok_note(format!(
         "已將 {} 的預算上限設為 ${budget_usd:.2}",
         s.label

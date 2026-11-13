@@ -2684,3 +2684,28 @@ fn over_budget_note_uses_successor_of_handed_off_session() {
     assert!(frames.contains("over_budget"), "{frames}");
     assert!(new.inputs().is_empty());
 }
+
+#[test]
+fn raising_budget_sends_nudge_held_while_over_budget() {
+    let (shared, ctl) = nudge_setup(SessionStatus::Busy);
+    let id = send_to_n(&shared, MsgKind::Chat, "ping");
+    shared.emit(Event::SessionOverBudget {
+        session: "ses_n".into(),
+        spent: 1.0,
+        limit: 1.0,
+    });
+    go_idle(&shared);
+    assert!(ctl.inputs().is_empty(), "超限時不提醒");
+
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::SessionBudget {
+            session: "ses_n".into(),
+            budget_usd: 5.0,
+        },
+    );
+    let inputs = ctl.inputs();
+    assert_eq!(inputs.len(), 1, "調高上限後補提醒");
+    assert!(inputs[0].contains(&id), "{}", inputs[0]);
+}
