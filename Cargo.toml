@@ -50,10 +50,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 uuid = { version = "1", features = ["v4", "serde"] }
-ratatui = "0.29"
-crossterm = "0.28"
+ratatui = "0.30"
+crossterm = "0.29"
 portable-pty = "0.9"
-unicode-width = "0.2"
+unicode-width = "0.2.3"
 
 [profile.release]
 opt-level = 3
