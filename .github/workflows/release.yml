@@ -58,8 +58,31 @@ jobs:
           name: ${{ matrix.asset }}
           path: dist/*
 
-  publish:
+  universal:
     needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: termade-macos-*
+          path: in
+          merge-multiple: true
+      - name: 合併為 universal2
+        run: |
+          mkdir -p arm x86 dist
+          tar -xzf in/termade-macos-arm64.tar.gz -C arm
+          tar -xzf in/termade-macos-x86_64.tar.gz -C x86
+          lipo -create arm/termade-macos-arm64 x86/termade-macos-x86_64 -output termade-macos-universal
+          lipo -info termade-macos-universal
+          tar -czf dist/termade-macos-universal.tar.gz termade-macos-universal
+          cd dist && shasum -a 256 termade-macos-universal.tar.gz > termade-macos-universal.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termade-macos-universal
+          path: dist/*
+
+  publish:
+    needs: [build, universal]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
