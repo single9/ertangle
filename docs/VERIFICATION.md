@@ -122,3 +122,15 @@
 | T23：Codex 登入失效時顯示原因 | 未登入環境 `termade spawn --kind codex --prompt "say hi"` | session 變 `failed`；逐字稿與 status note 各一次「codex 錯誤：Your access token could not be refreshed…（請執行 `codex login`）」 |
 
 沒有驗證：TUI 畫面目視（只看了 `termade sessions` 與 event log）。
+
+## T24 交接後訊息轉送（實機，2026-11-13）
+
+opencode（本機 gemma4）在暫存 git repo：`spawn hx-a` → `handoff hx-a --to opencode` → `termade send --to hx-a "ping-t24…"`。
+
+| 驗證項 | 結果 |
+| --- | --- |
+| `session_handed_off` 事件 | 有，`from` 舊 session、`to` 新 session |
+| 送給舊 label 的訊息 | log 裡 `to` 是接手的 session，body 開頭「（原收件者 hx-a，已交接）」 |
+| 傳送端回覆 | 「收件者 hx-a 已交接，訊息改投給接手的 hx-a→opencode（…）」 |
+
+沒有驗證：接手者正忙時訊息只留在收件匣、不會喚醒（既有的匯流排規則，非 T24 範圍）；自動交接路徑。
