@@ -181,6 +181,8 @@ pub(crate) struct App {
     pub(crate) bus_seen: usize,
     /// 分頁模式下每個分頁的區域與對應 session 索引（供滑鼠點選）。
     pub(crate) tab_areas: Vec<(Rect, usize)>,
+    /// 通知設定與狀態（T15）。
+    pub(crate) notify: crate::notify::Notifier,
     pub(crate) should_quit: bool,
 }
 
@@ -249,6 +251,7 @@ impl App {
             bus_visible: true,
             bus_seen: 0,
             tab_areas: Vec::new(),
+            notify: crate::notify::Notifier::from_cfg(&cfg.tui),
             should_quit: false,
         }
     }

@@ -46,6 +46,12 @@ pub struct RoleCfg {
 #[serde(default)]
 pub struct TuiCfg {
     pub layout: Option<String>,
+    /// 通知方式：`bell`、`osc9`、`command`；空陣列 = 關閉，省略 = `["bell"]`。
+    pub notify: Option<Vec<String>>,
+    /// `command` 方式執行的命令（`sh -c`），內容由 `TERMADE_NOTIFY_*` 環境變數帶入。
+    pub notify_command: Option<String>,
+    /// 回合短於這個秒數時，「做完了」不通知（預設 10）。
+    pub notify_min_turn_secs: Option<u64>,
 }
 
 /// 額度提醒與自動交接。
@@ -179,6 +185,15 @@ impl Config {
         }
         if local.tui.layout.is_some() {
             out.tui.layout = local.tui.layout;
+        }
+        if local.tui.notify.is_some() {
+            out.tui.notify = local.tui.notify;
+        }
+        if local.tui.notify_command.is_some() {
+            out.tui.notify_command = local.tui.notify_command;
+        }
+        if local.tui.notify_min_turn_secs.is_some() {
+            out.tui.notify_min_turn_secs = local.tui.notify_min_turn_secs;
         }
         out
     }
@@ -389,5 +404,42 @@ layout = "tabs"
         .unwrap();
         let layered = Config::layered(g, l);
         assert_eq!(layered.tui.layout.as_deref(), Some("tabs"));
+    }
+
+    #[test]
+    fn tui_notify_config_parsing_and_layered() {
+        assert_eq!(Config::parse("").unwrap().tui.notify, None);
+        let g = Config::parse(
+            r#"
+[tui]
+layout = "two"
+notify = ["bell", "command"]
+notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
+notify_min_turn_secs = 30
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            g.tui.notify,
+            Some(vec!["bell".to_string(), "command".to_string()])
+        );
+        assert_eq!(
+            g.tui.notify_command.as_deref(),
+            Some("notify-send termade \"$TERMADE_NOTIFY_TEXT\"")
+        );
+        assert_eq!(g.tui.notify_min_turn_secs, Some(30));
+
+        // repo 只覆寫有寫的欄位；空陣列也算有寫（用來關閉通知）。
+        let l = Config::parse("[tui]\nnotify = []\nnotify_min_turn_secs = 5\n").unwrap();
+        let c = Config::layered(g.clone(), l);
+        assert_eq!(c.tui.notify, Some(vec![]));
+        assert_eq!(c.tui.notify_min_turn_secs, Some(5));
+        assert!(c.tui.notify_command.is_some());
+        assert_eq!(c.tui.layout.as_deref(), Some("two"));
+
+        let l = Config::parse("[tui]\nnotify_command = \"true\"\n").unwrap();
+        let c = Config::layered(g, l);
+        assert_eq!(c.tui.notify_command.as_deref(), Some("true"));
+        assert_eq!(c.tui.notify.map(|v| v.len()), Some(2));
     }
 }

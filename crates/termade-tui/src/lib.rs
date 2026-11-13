@@ -21,6 +21,7 @@ mod inputbox;
 mod markdown;
 mod menu;
 mod mouse;
+mod notify;
 
 #[allow(unused_imports)]
 pub(crate) use app::*;
@@ -64,8 +65,8 @@ pub(crate) use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use anyhow::Result;
 use crossterm::event::{
-    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    Event as CtEvent,
+    self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+    EnableFocusChange, EnableMouseCapture, Event as CtEvent,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -116,7 +117,9 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
         stdout,
         EnterAlternateScreen,
         EnableBracketedPaste,
-        EnableMouseCapture
+        EnableMouseCapture,
+        // 焦點回報：有焦點且正在看的 session 不必通知。
+        EnableFocusChange
     )?;
     write!(stdout, "\x1b[?1007h")?;
     stdout.flush()?;
@@ -131,6 +134,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
         backend,
         DisableBracketedPaste,
         DisableMouseCapture,
+        DisableFocusChange,
         LeaveAlternateScreen
     )?;
     disable_raw_mode()?;
@@ -184,6 +188,13 @@ fn event_loop(
             }
         }
 
+        // 通知在兩次繪製之間直接寫 stdout（與 OSC 52 複製相同的做法）。
+        if !app.notify.pending.is_empty() {
+            if let Some(err) = app.notify.flush(&mut io::stdout().lock()) {
+                app.status = err;
+            }
+        }
+
         let before = app.status.clone();
         commands::flush_queues(&mut app, writer)?;
         dirty |= app.status != before;
@@ -218,6 +229,8 @@ fn event_loop(
                     }
                 }
                 CtEvent::Paste(text) => handle_paste(&mut app, &text),
+                CtEvent::FocusGained => app.notify.focused = true,
+                CtEvent::FocusLost => app.notify.focused = false,
                 _ => {}
             }
         }
@@ -236,9 +249,19 @@ fn apply_frame(app: &mut App, frame: Frame) {
         }
         Frame::Snapshot { state } => {
             app.state = *state;
+            app.notify.observe_snapshot(&app.state);
             app.clamp_selection();
         }
         Frame::Record { record } => {
+            let selected = app.selected_id();
+            app.notify.observe(
+                &app.state,
+                &record,
+                selected.as_deref(),
+                app.scope_here,
+                &app.home_project,
+                now_millis(),
+            );
             app.state.apply(&record);
             app.clamp_selection();
         }
