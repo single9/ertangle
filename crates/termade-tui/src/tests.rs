@@ -991,3 +991,43 @@ fn multiline_input_keys_and_paste() {
     handle_paste(&mut app, "a\nb");
     assert_eq!(app.input, "a b");
 }
+
+#[test]
+fn scope_filters_sessions_by_project_and_names_disambiguate() {
+    let mut app = App::new();
+    app.home_project = "/work/alpha".into();
+    let mk = |id: &str, cwd: &str, root: Option<&str>| termade_core::Session {
+        id: id.into(),
+        kind: AgentKind::OpenCode,
+        label: id.into(),
+        cwd: cwd.into(),
+        branch: None,
+        role: Role::Worker,
+        status: SessionStatus::Idle,
+        model: None,
+        cost: Cost::default(),
+        parent: None,
+        created_ms: 1,
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: root.map(String::from),
+        context: None,
+        permission: Default::default(),
+    };
+    for s in [
+        mk("a", "/work/alpha", None),
+        mk("b", "/work/alpha-wt/b", Some("/work/alpha")),
+        mk("c", "/work/beta", None),
+    ] {
+        app.state.sessions.insert(s.id.clone(), s);
+    }
+    assert_eq!(app.session_ids().len(), 3);
+    assert_eq!(app.project_count(), 2);
+    crate::app::toggle_scope(&mut app, Some(true));
+    let ids = app.session_ids();
+    assert_eq!(ids.len(), 2, "{ids:?}");
+    assert!(!ids.contains(&"c".to_string()));
+    let roots = ["/a/app", "/b/app", "/c/x"];
+    assert_eq!(crate::app::project_name("/a/app", &roots), "a/app");
+    assert_eq!(crate::app::project_name("/c/x", &roots), "x");
+}

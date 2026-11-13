@@ -143,6 +143,10 @@ pub(crate) struct App {
     pub(crate) show_thoughts: bool,
     /// 展開每一筆工具呼叫；預設把連續的工具行摺成一行。
     pub(crate) show_tools: bool,
+    /// TUI 啟動所在的專案根目錄（git 頂層，否則 cwd）。
+    pub(crate) home_project: String,
+    /// 只列出屬於 `home_project` 的 session。
+    pub(crate) scope_here: bool,
     /// 輸入框內寬（由繪製更新），供上下移動游標換算顯示列。
     pub(crate) input_inner_w: usize,
     pub(crate) prompt_history: crate::history::History,
@@ -221,6 +225,8 @@ impl App {
             raw_md: false,
             show_thoughts: false,
             show_tools: false,
+            home_project: home_project(&cwd),
+            scope_here: false,
             input_inner_w: 80,
             prompt_history: crate::history::History::default(),
             command_history: crate::history::History::default(),
@@ -248,8 +254,22 @@ impl App {
         self.state
             .sessions_sorted()
             .iter()
+            .filter(|s| !self.scope_here || s.project_root() == self.home_project)
             .map(|s| s.id.clone())
             .collect()
+    }
+
+    /// 目前有幾個不同的專案（含已結束的 session）。
+    pub(crate) fn project_count(&self) -> usize {
+        let mut roots: Vec<&str> = self
+            .state
+            .sessions
+            .values()
+            .map(|s| s.project_root())
+            .collect();
+        roots.sort_unstable();
+        roots.dedup();
+        roots.len()
     }
 
     /// 選取中 session 的工作目錄（檔案搜尋與 `@` 補全的根）。
@@ -470,4 +490,71 @@ pub(crate) fn short(id: &str) -> String {
         .chars()
         .take(6)
         .collect()
+}
+
+/// 專案根目錄：cwd 所在 git repo 的頂層，不在 repo 內就用 cwd 本身。
+fn home_project(cwd: &std::path::Path) -> String {
+    let top = std::process::Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty());
+    top.unwrap_or_else(|| cwd.to_string_lossy().to_string())
+}
+
+/// 專案顯示名稱：路徑最後一段；兩個專案同名時帶上上一層以區分。
+pub(crate) fn project_name(root: &str, all_roots: &[&str]) -> String {
+    let base = |p: &str| {
+        std::path::Path::new(p)
+            .file_name()
+            .map_or_else(|| p.to_string(), |n| n.to_string_lossy().to_string())
+    };
+    let name = base(root);
+    let clash = all_roots.iter().any(|r| *r != root && base(r) == name);
+    if clash {
+        let parent = std::path::Path::new(root)
+            .parent()
+            .map(|p| base(&p.to_string_lossy()))
+            .unwrap_or_default();
+        format!("{parent}/{name}")
+    } else {
+        name
+    }
+}
+
+/// 專案標籤顏色：同一專案永遠同色。
+pub(crate) fn project_color(root: &str) -> ratatui::style::Color {
+    use ratatui::style::Color;
+    const PALETTE: [Color; 6] = [
+        Color::LightBlue,
+        Color::LightMagenta,
+        Color::LightGreen,
+        Color::LightYellow,
+        Color::LightCyan,
+        Color::LightRed,
+    ];
+    let h = root
+        .bytes()
+        .fold(5381u32, |h, b| h.wrapping_mul(33).wrapping_add(b as u32));
+    PALETTE[h as usize % PALETTE.len()]
+}
+
+/// 切換「只看本專案／全部專案」。
+pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
+    app.scope_here = here.unwrap_or(!app.scope_here);
+    app.selected = 0;
+    app.md_cache = None;
+    app.selection = None;
+    app.status = if app.scope_here {
+        format!(
+            "只顯示本專案的 session（{}），P 顯示全部",
+            project_name(&app.home_project, &[])
+        )
+    } else {
+        "顯示全部專案的 session，P 只看本專案".into()
+    };
 }

@@ -561,6 +561,12 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
                 .bg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
+        Span::styled(
+            format!(" {} ", project_name(&app.home_project, &[])),
+            Style::default()
+                .fg(Color::Black)
+                .bg(project_color(&app.home_project)),
+        ),
         tab("Overview", app.view == CenterView::Transcript),
         tab("Diff (g)", app.view == CenterView::Diff),
         tab("Worktrees", app.view == CenterView::Worktrees),
@@ -622,6 +628,18 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
 pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.sessions_area = area;
     let ids = app.session_ids();
+    let roots: Vec<&str> = {
+        let mut r: Vec<&str> = app
+            .state
+            .sessions
+            .values()
+            .map(|s| s.project_root())
+            .collect();
+        r.sort_unstable();
+        r.dedup();
+        r
+    };
+    let multi_project = roots.len() > 1;
     let items: Vec<ListItem> = ids
         .iter()
         .filter_map(|id| app.state.sessions.get(id))
@@ -636,8 +654,18 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             };
             let branch = s.branch.as_deref().unwrap_or("");
             let note = s.status_note.as_deref().unwrap_or("");
-            let mut spans = vec![
-                Span::styled(format!("{} ", s.status.glyph()), Style::default().fg(color)),
+            let mut spans = vec![Span::styled(
+                format!("{} ", s.status.glyph()),
+                Style::default().fg(color),
+            )];
+            // 有多個專案時，每列標出所屬專案（同專案同色）。
+            if multi_project {
+                spans.push(Span::styled(
+                    format!("{} ", project_name(s.project_root(), &roots)),
+                    Style::default().fg(project_color(s.project_root())),
+                ));
+            }
+            spans.extend([
                 Span::raw(s.label.clone()),
                 Span::styled(
                     format!(
@@ -660,7 +688,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     ),
                     Style::default().fg(Color::DarkGray),
                 ),
-            ];
+            ]);
             if let Some(c) = s.context {
                 // context 越滿越醒目：≥80% 黃、≥92% 紅。
                 let pct = c.percent();
@@ -697,7 +725,17 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     }
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title(" Sessions "))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(if app.scope_here {
+                    " Sessions · 本專案 "
+                } else if multi_project {
+                    " Sessions · 全部專案 "
+                } else {
+                    " Sessions "
+                }),
+        )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("▸ ");
     f.render_stateful_widget(list, area, &mut list_state);
@@ -837,7 +875,12 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         Some(id) => {
             let s = &app.state.sessions[id];
             format!(
-                " Transcript: {} · {} · {}{} (${:.4}) · {}% · {} ",
+                " Transcript: {}{} · {} · {}{} (${:.4}) · {}% · {} ",
+                if multi_project_state(app) {
+                    format!("[{}] ", project_name(s.project_root(), &all_roots(app)))
+                } else {
+                    String::new()
+                },
                 s.label,
                 s.kind.id(),
                 if s.transport.is_empty() {
@@ -1184,4 +1227,20 @@ pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
         Span::raw(hints),
     ]);
     f.render_widget(Paragraph::new(text), area);
+}
+
+fn all_roots(app: &App) -> Vec<&str> {
+    let mut r: Vec<&str> = app
+        .state
+        .sessions
+        .values()
+        .map(|s| s.project_root())
+        .collect();
+    r.sort_unstable();
+    r.dedup();
+    r
+}
+
+fn multi_project_state(app: &App) -> bool {
+    app.project_count() > 1
 }

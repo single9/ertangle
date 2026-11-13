@@ -56,6 +56,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("t / T", "原始文字／Markdown；顯示／隱藏思考"),
             ("O", "展開／摺疊工具呼叫（預設摺疊）"),
             ("↑ / ↓", "（輸入 prompt 或命令時）回顧歷史輸入"),
+            ("P", "只看本專案／顯示全部專案的 session"),
             (
                 "Ctrl-J / Shift-Enter",
                 "（輸入 prompt 時）換行；輸入框隨行數長高，貼上保留換行",

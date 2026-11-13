@@ -5,7 +5,7 @@ use termade_core::{AgentKind, Decision, MsgKind, PermissionPolicy, Role, Target}
 use termade_daemon::ConnStream;
 use termade_protocol::{Request, SpawnRequest, Transport};
 
-use crate::app::{toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode};
+use crate::app::{toggle_scope, toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode};
 use crate::clipboard::copy_main_pane;
 use crate::{request_selected_diff, send};
 
@@ -221,6 +221,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("raw", "原始文字／Markdown 切換"),
     ("thoughts", "顯示／隱藏思考"),
     ("tools", "展開／摺疊工具呼叫"),
+    ("scope", "[here|all]  只看本專案／顯示全部專案的 session"),
     (
         "queue",
         "[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出",
@@ -416,6 +417,12 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
         }
         "thoughts" | "think" => toggle_thoughts(app),
         "tools" => toggle_tools(app),
+        "scope" | "project" => match rest {
+            "here" | "this" => toggle_scope(app, Some(true)),
+            "all" => toggle_scope(app, Some(false)),
+            "" => toggle_scope(app, None),
+            _ => app.status = "用法：:scope [here|all]".into(),
+        },
         "queue" => queue_command(app, writer, rest)?,
         "unqueue" => unqueue(app),
         "layout" => {

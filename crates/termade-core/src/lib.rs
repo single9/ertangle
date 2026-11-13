@@ -261,6 +261,13 @@ pub struct Session {
     pub context: Option<ContextUsage>,
 }
 
+impl Session {
+    /// 這個 session 屬於哪個專案：worktree 看主 repo，否則就是工作目錄。
+    pub fn project_root(&self) -> &str {
+        self.repo_root.as_deref().unwrap_or(&self.cwd)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Bus / Task / Artifact
 // ---------------------------------------------------------------------------
