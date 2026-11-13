@@ -336,6 +336,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
   - `Y` 或 `/copy` 以 OSC 52 複製中央主要區塊（不含側欄與邊框），在 SSH / tmux 下也不需終端原生選取。
   - Diff 視圖每行附舊／新檔行號邊欄，標題顯示 `+N -M` 統計，`{` / `}` 可跳 hunk。
 - **右**：bus 活動流 + 任務看板（可切 tab）。
+- **Tasks 視圖**（中央，`Tab` 或 `:tasks`）：任務依狀態分組，顯示負責人與前置任務，下方是選取任務的說明；`Enter` 跳到負責人，`:task-status` 改狀態。`Task` 沒有專案欄位，只看本專案時用負責人或建立者的 session 判斷，兩者都沒有就顯示。
 - **底**：輸入框。`@session` 指定對象、`#channel` 廣播、`/` 開命令面板（`/spawn`、`/merge`、`/task`）。
 - **標題列**：兩行——上排為視圖頁籤與 session/task 數，下排為成本、token 用量與 `md`／`think`／`mouse`／`follow` 狀態指示。
 - **Diff 視圖**：每個 worktree 的 `git diff`，可對行下註解並送回該 agent（借用 Antigravity/Orca 的 review 迴圈概念）。
@@ -350,7 +351,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標） |
 | `F2` | 切換滑鼠擷取（預設開啟；關閉後可用終端原生拖曳選取，`Shift`+拖曳在開啟時也可原生選取） |
 | `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
-| `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
+| `Tab` / `g` | 切換中央視圖（Overview → Diff → Worktrees → Tasks） |
 | `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
 | `T`（或 `/thoughts`） | 顯示 / 隱藏 agent 的思考行（`💭`；預設隱藏以減少渲染量） |
 | `Y` 或 `/copy` | 用 OSC 52 複製中央主要區塊（逐字稿 / diff / worktrees），不含側欄與邊框 |

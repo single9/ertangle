@@ -78,6 +78,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
             "SPC v · view",
             vec![
                 it('o', "overview", Act::Cmd("overview")),
+                it('k', "任務視圖", Act::Cmd("tasks")),
                 it('l', "切換版面", Act::Cmd("layout")),
                 it('r', "原始文字／Markdown", Act::Cmd("raw")),
                 it('t', "顯示／隱藏思考", Act::Cmd("thoughts")),

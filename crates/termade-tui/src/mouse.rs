@@ -20,6 +20,8 @@ pub(crate) fn handle_mouse(
         MouseEventKind::ScrollUp => {
             if app.view == CenterView::Diff {
                 app.diff_cursor = app.diff_cursor.saturating_sub(3);
+            } else if app.view == CenterView::Tasks {
+                crate::tasks::move_task_cursor(app, -1);
             } else {
                 scroll_transcript_lines(app, -3);
             }
@@ -28,6 +30,8 @@ pub(crate) fn handle_mouse(
             if app.view == CenterView::Diff {
                 let max = app.diff_lines.len().saturating_sub(1);
                 app.diff_cursor = (app.diff_cursor + 3).min(max);
+            } else if app.view == CenterView::Tasks {
+                crate::tasks::move_task_cursor(app, 1);
             } else {
                 scroll_transcript_lines(app, 3);
             }
@@ -58,6 +62,9 @@ pub(crate) fn handle_mouse(
                         request_selected_diff(app, writer)?;
                     }
                 }
+                return Ok(());
+            }
+            if crate::tasks::click_task(app, mouse.column, mouse.row) {
                 return Ok(());
             }
             // 逐字稿拖曳選取：只涵蓋中央區塊，不會選到左右側欄。

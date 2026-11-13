@@ -57,7 +57,7 @@ Orca 這類 termade 把 worktree、瀏覽器、diff、mobile 全部塞進一個 
 - **打磨與資源控制（M4）**：命令面板（`/` 或 `Ctrl-P`）、Jump-Anywhere（`Ctrl-K`）、即時成本與 token 統計（`termade cost`）、
   閒置休眠與自動喚醒（`SIGSTOP` / `SIGCONT`、`termade sleep` / `termade wake` / TUI `z` 鍵）、權限規則引擎（`.termade/policy.toml` 或 `~/.config/termade/policy.toml`）。
   規則引擎是防呆而非安全邊界：決策順序為 `deny`（子字串比對）→ `allow`（工具名稱或指令整詞前綴）→ session 政策（`auto`／`bypass` 自動允許）→ 詢問使用者；repo 的 `.termade/policy.toml` 只能新增 `deny`，不能移除全域規則。字串比對可被改寫指令繞過，真正的隔離要靠 agent 自己的 sandbox。ACP、Codex 與 Claude 都會經過它；Claude 是透過 `--permission-prompt-tool=mcp__termade__termade_approve` 轉發（非 bypass 時啟用），回應格式依官方 SDK 文件實作，但**尚未用真實 claude 驗證**，逾時 300 秒視為拒絕。
-- **TUI**：三種中央視圖（Overview / Diff / Worktrees）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
+- **TUI**：四種中央視圖（Overview / Diff / Worktrees / Tasks）、支援 `@peer` 與 `#channel` 智慧路由輸入框。
   逐字稿會顯示使用者送出的 prompt（`❯` 前綴）並即時渲染 Markdown（標題、粗體／斜體、行內程式碼、清單、引言、分隔線、圍籬程式碼區塊與 GFM 表格），
   可用 `t` 在渲染後與原始文字之間切換；支援滑鼠拖曳選取（只複製中央區塊）、滾輪捲動、OSC 52 複製，以及帶可見游標與中文 IME 的輸入框。agent 的 `💭` 思考行預設隱藏，按 `T` 顯示。
 - **檔案信箱後備**：自動同步寫入 `<cwd>/.termade/mailbox/<session>.jsonl`。
@@ -102,12 +102,13 @@ cargo test                     # 全部單元測試
 
 | 鍵 | 動作 |
 | --- | --- |
-| `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標） |
+| `j` / `k`、↑ / ↓ | 選擇 session（在 Diff 視圖則為移動 diff 行游標；在 Tasks 視圖則為移動任務游標） |
 | 滑鼠拖曳 | 在逐字稿上選取（只含中央區塊，不含側欄與邊框），放開即以 OSC 52 複製 |
-| 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標） |
+| 滑鼠滾輪 | 捲動逐字稿（Diff 視圖則移動 diff 游標；Tasks 視圖則移動任務游標，點任務列可選取） |
 | `F2` | 切換滑鼠擷取（預設開啟；關閉後可用終端原生拖曳選取，`Shift`+拖曳在開啟時也可原生選取） |
 | `[` / `]` | 在任何視圖切換上一個 / 下一個 session |
-| `Tab` / `g` | 切換中央視圖（Overview ↔ Diff ↔ Worktrees） |
+| `Tab` / `g` | `Tab` 循環中央視圖（Overview → Diff → Worktrees → Tasks）；`g` 在 Diff 與 Overview 之間切換 |
+| `:tasks`（或 `Tab`、`Space v k`） | Tasks 視圖：任務依狀態分組（doing、review、todo、blocked、done），每列顯示 id 尾碼、狀態、標題、負責人、多久前更新與前置任務（`⧗`，黃色是還沒完成的），下方是選取任務的完整說明；兩欄與分頁版面也看得到。`Enter` 跳到負責人的 session 並切回逐字稿；`:task-status <todo\|doing\|blocked\|review\|done>` 改選取任務的狀態（只在 Tasks 視圖有效）。只看本專案時，用負責人或建立者的 session 判斷任務屬於哪個專案，兩者都沒有的任務一律顯示；右側 Bus 欄的精簡清單不分專案。標題列的 `N tasks` 只算未完成的 |
 | `t` | 切換逐字稿顯示：Markdown 渲染 ↔ 原始文字 |
 | `T`（或 `/thoughts`） | 顯示 / 隱藏 agent 的思考行（`💭`；預設隱藏以減少渲染量） |
 | `O`（或 `:tools`） | 展開 / 摺疊工具呼叫（預設把連續的呼叫與成功結果摺成一行，失敗行保留） |
