@@ -3,7 +3,7 @@
 //! 做法參考 Orca 的「full handoff」：新 agent 以簡報當初始 prompt 啟動，舊的停止，不等結果。
 //! 差別是額度用完時舊 agent 已無法自己寫簡報，所以由 daemon 從事件狀態與 git 組出簡報。
 
-use termade_core::{Session, State, Task};
+use termade_core::{BusMessage, Session, State, Target, Task};
 
 /// 簡報裡最多帶幾行最近的 transcript。
 const TAIL_LINES: usize = 40;
@@ -14,6 +14,7 @@ pub(crate) fn build_handoff_brief(
     s: &Session,
     git_summary: &str,
     note: Option<&str>,
+    unread: &[BusMessage],
 ) -> String {
     let lines: Vec<&String> = state
         .transcripts
@@ -87,6 +88,24 @@ pub(crate) fn build_handoff_brief(
     if let Some(n) = &s.status_note {
         b.push_str(&format!("## 它最後回報的狀態\n{n}\n\n"));
     }
+    if !unread.is_empty() {
+        b.push_str("## 它收件匣裡尚未讀取的訊息\n");
+        for m in unread {
+            let to = match &m.to {
+                Target::Direct(_) => "直接",
+                Target::Broadcast => "廣播",
+                Target::Channel(_) => "頻道",
+            };
+            b.push_str(&format!(
+                "- 來自 {}（{}，{}）：{}\n",
+                m.from,
+                to,
+                m.kind.id(),
+                m.body.replace('\n', "\n  ")
+            ));
+        }
+        b.push_str("需要回覆時用 termade_send；之後送給舊 session 的訊息會自動轉給你。\n\n");
+    }
     if let Some(n) = note.filter(|n| !n.trim().is_empty()) {
         b.push_str(&format!("## 補充說明\n{n}\n\n"));
     }
@@ -129,6 +148,7 @@ mod tests {
             permission: PermissionPolicy::Auto,
             budget_usd: None,
             over_budget: false,
+            handed_off_to: None,
         }
     }
 
@@ -141,7 +161,7 @@ mod tests {
         t.push_back("▸ Bash: cargo test".into());
         t.push_back("  ✗ 3 failed".into());
         t.push_back("❯ 順便更新文件".into());
-        let b = build_handoff_brief(&st, &sess(), "M src/zip.rs", Some("先修失敗的測試"));
+        let b = build_handoff_brief(&st, &sess(), "M src/zip.rs", Some("先修失敗的測試"), &[]);
         assert!(
             b.contains("## 原始任務\n實作 EU 郵遞區號驗證\n含單元測試"),
             "{b}"
@@ -159,7 +179,30 @@ mod tests {
         for i in 0..200 {
             t.push_back(format!("line {i}"));
         }
-        let b = build_handoff_brief(&st, &sess(), "", None);
+        let b = build_handoff_brief(&st, &sess(), "", None, &[]);
         assert!(b.contains("line 199") && !b.contains("line 100\n"));
+    }
+
+    #[test]
+    fn brief_includes_unread_messages() {
+        use termade_core::{MsgKind, Target};
+        let msg = BusMessage {
+            id: "m1".into(),
+            from: "ses_other".into(),
+            to: Target::Direct("worker/a".into()),
+            kind: MsgKind::Chat,
+            body: "超限時佇列怎麼處理？\n請回覆".into(),
+            reply_to: None,
+            ts: 0,
+        };
+        let st = State::new();
+        let b = build_handoff_brief(&st, &sess(), "", None, &[msg]);
+        assert!(b.contains("尚未讀取的訊息"), "{b}");
+        assert!(
+            b.contains("ses_other") && b.contains("超限時佇列怎麼處理？"),
+            "{b}"
+        );
+        let none = build_handoff_brief(&st, &sess(), "", None, &[]);
+        assert!(!none.contains("尚未讀取的訊息"));
     }
 }

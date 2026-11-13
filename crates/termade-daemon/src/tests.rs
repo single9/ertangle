@@ -206,6 +206,7 @@ fn add_session(
             permission: Default::default(),
             budget_usd: None,
             over_budget: false,
+            handed_off_to: None,
         },
     );
     inner.sessions.insert(
@@ -329,6 +330,170 @@ fn direct_chat_wakes_idle_target() {
         .expect("直接訊息應成功");
 
     assert_eq!(target.inputs().len(), 1, "直接訊息應喚醒 idle 對象");
+}
+
+fn mark_handed_off(shared: &Arc<Shared>, from: &str, to: &str) {
+    shared.emit(Event::SessionExited {
+        session: from.into(),
+        code: None,
+    });
+    shared.emit(Event::SessionHandedOff {
+        from: from.into(),
+        to: to.into(),
+    });
+}
+
+#[test]
+fn direct_message_to_handed_off_session_goes_to_successor() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let old = MockCtl::default();
+    let new = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_a",
+        "t17",
+        SessionStatus::Idle,
+        old.as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "ses_b",
+        "t17→claude",
+        SessionStatus::Idle,
+        new.as_ctl(),
+        &dir,
+    );
+    mark_handed_off(&shared, "ses_a", "ses_b");
+
+    let (_, notes) = shared
+        .deliver_message_noted(
+            Some("human".into()),
+            Target::Direct("t17".into()),
+            MsgKind::Chat,
+            "提案".into(),
+            None,
+        )
+        .unwrap();
+    assert!(notes.iter().any(|n| n.contains("改投")), "{notes:?}");
+    assert_eq!(new.inputs().len(), 1, "接手者應被喚醒");
+    assert!(new.inputs()[0].contains("提案") && new.inputs()[0].contains("原收件者 t17"));
+    assert!(old.inputs().is_empty());
+    let inner = lock(&shared.inner);
+    assert_eq!(inner.state.inbox_for("ses_b", None).len(), 1);
+    assert!(
+        inner.state.inbox_for("ses_a", None).is_empty(),
+        "舊收件匣不該有新訊息"
+    );
+}
+
+#[test]
+fn direct_message_follows_handoff_chain() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let c = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_a",
+        "t17",
+        SessionStatus::Idle,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "ses_b",
+        "t17→x",
+        SessionStatus::Idle,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "ses_c",
+        "t17→x→y",
+        SessionStatus::Idle,
+        c.as_ctl(),
+        &dir,
+    );
+    mark_handed_off(&shared, "ses_a", "ses_b");
+    mark_handed_off(&shared, "ses_b", "ses_c");
+
+    shared
+        .deliver_message(
+            Some("human".into()),
+            Target::Direct("ses_a".into()),
+            MsgKind::Chat,
+            "hi".into(),
+            None,
+        )
+        .unwrap();
+    assert_eq!(c.inputs().len(), 1);
+}
+
+#[test]
+fn handoff_cycle_does_not_loop_and_warns_unreadable() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_a",
+        "a",
+        SessionStatus::Idle,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "ses_b",
+        "b",
+        SessionStatus::Idle,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    mark_handed_off(&shared, "ses_a", "ses_b");
+    mark_handed_off(&shared, "ses_b", "ses_a");
+    let (_, notes) = shared
+        .deliver_message_noted(
+            Some("human".into()),
+            Target::Direct("ses_a".into()),
+            MsgKind::Chat,
+            "hi".into(),
+            None,
+        )
+        .unwrap();
+    assert!(notes.iter().any(|n| n.contains("不會被讀取")), "{notes:?}");
+}
+
+#[test]
+fn message_to_ended_session_without_successor_is_logged_with_warning() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_a",
+        "a",
+        SessionStatus::Idle,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    shared.emit(Event::SessionExited {
+        session: "ses_a".into(),
+        code: None,
+    });
+    let (id, notes) = shared
+        .deliver_message_noted(
+            Some("human".into()),
+            Target::Direct("a".into()),
+            MsgKind::Chat,
+            "hi".into(),
+            None,
+        )
+        .unwrap();
+    assert!(notes.iter().any(|n| n.contains("不會被讀取")), "{notes:?}");
+    let inner = lock(&shared.inner);
+    assert!(inner.state.messages.iter().any(|m| m.id == id));
 }
 
 #[test]
@@ -681,6 +846,7 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         permission: Default::default(),
         budget_usd: None,
         over_budget: false,
+        handed_off_to: None,
     }
 }
 
@@ -817,6 +983,7 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         permission: Default::default(),
         budget_usd: None,
         over_budget: false,
+        handed_off_to: None,
     }
 }
 

@@ -25,6 +25,7 @@ fn sample_app(lines: &[&str]) -> App {
         permission: Default::default(),
         budget_usd: None,
         over_budget: false,
+        handed_off_to: None,
     };
     app.state.sessions.insert(s.id.clone(), s);
     let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();
@@ -1057,6 +1058,7 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
         permission: Default::default(),
         budget_usd: None,
         over_budget: false,
+        handed_off_to: None,
     };
     for s in [
         mk("a", "/work/alpha", None),

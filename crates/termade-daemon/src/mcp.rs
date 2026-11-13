@@ -170,7 +170,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "termade_send",
-            "description": "Send a message to another session (by id or label), a channel (#channel), or broadcast to everyone (*). Idle or sleeping recipients are woken automatically; status and artifact messages only land in the inbox without waking them.",
+            "description": "Send a message to another session (by id or label), a channel (#channel), or broadcast to everyone (*). Idle or sleeping recipients are woken automatically; status and artifact messages only land in the inbox without waking them. If the recipient has ended and was handed off, the message is rerouted to its successor; if it ended with no successor the reply says the message will not be read.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -894,6 +894,7 @@ mod tests {
                 native_id: None,
                 budget_usd: None,
                 over_budget: false,
+                handed_off_to: None,
             },
         );
 
