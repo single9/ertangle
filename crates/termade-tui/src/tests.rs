@@ -1083,3 +1083,230 @@ fn stop_only_kills_this_projects_sessions() {
         "other project untouched"
     );
 }
+
+// ---- T18：任務視圖 ----
+
+fn add_task(
+    app: &mut App,
+    id: &str,
+    title: &str,
+    status: termade_core::TaskStatus,
+    assignee: Option<&str>,
+    deps: &[&str],
+) {
+    app.state.tasks.insert(
+        id.into(),
+        termade_core::Task {
+            id: id.into(),
+            title: title.into(),
+            detail: format!("detail-of-{id}"),
+            status,
+            assignee: assignee.map(String::from),
+            created_by: None,
+            depends_on: deps.iter().map(|d| d.to_string()).collect(),
+            updated_ms: 1,
+        },
+    );
+}
+
+fn key(app: &mut App, w: &mut ConnStream, code: KeyCode) {
+    handle_key(app, w, KeyEvent::new(code, KeyModifiers::NONE)).unwrap();
+}
+
+#[test]
+fn tasks_view_groups_by_status_in_every_layout() {
+    use termade_core::TaskStatus::*;
+    let mut app = sample_app(&["hi"]);
+    add_task(
+        &mut app,
+        "tsk_aaa111",
+        "alpha-task",
+        Doing,
+        Some("ses_test"),
+        &[],
+    );
+    add_task(&mut app, "tsk_bbb222", "beta-task", Review, None, &[]);
+    add_task(&mut app, "tsk_ccc333", "gamma-task", Todo, None, &[]);
+    add_task(
+        &mut app,
+        "tsk_ddd444",
+        "delta-task",
+        Blocked,
+        None,
+        &["tsk_ccc333"],
+    );
+    add_task(&mut app, "tsk_eee555", "epsilon-task", Done, None, &[]);
+    app.view = CenterView::Tasks;
+
+    for layout in [LayoutMode::Three, LayoutMode::Two, LayoutMode::Tabs] {
+        app.layout = layout;
+        let (_, text) = render_size(&mut app, 120, 40);
+        let mut last = 0;
+        for group in [
+            "doing (1)",
+            "review (1)",
+            "todo (1)",
+            "blocked (1)",
+            "done (1)",
+        ] {
+            let at = text
+                .find(group)
+                .unwrap_or_else(|| panic!("{layout:?}: 缺 {group}"));
+            assert!(at > last, "{layout:?}: {group} 順序不對");
+            last = at;
+        }
+        for title in [
+            "alpha-task",
+            "beta-task",
+            "gamma-task",
+            "delta-task",
+            "epsilon-task",
+        ] {
+            assert!(text.contains(title), "{layout:?}: 缺 {title}");
+        }
+        assert!(text.contains("worker"), "{layout:?}: 缺負責人 label");
+        assert!(text.contains("ccc333"), "{layout:?}: 缺依賴");
+        assert!(
+            text.contains("detail-of-tsk_aaa111"),
+            "{layout:?}: 缺選取任務的說明"
+        );
+    }
+    // 標題列只算未完成的任務。
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(text.contains("4 tasks"), "{text}");
+}
+
+#[test]
+fn tab_cycles_through_tasks_view_and_clears_click_area() {
+    let mut app = sample_app(&["hi"]);
+    add_task(
+        &mut app,
+        "tsk_a",
+        "one",
+        termade_core::TaskStatus::Todo,
+        None,
+        &[],
+    );
+    let (mut w, _peer) = pair_writer();
+    for expect in [
+        CenterView::Diff,
+        CenterView::Worktrees,
+        CenterView::Tasks,
+        CenterView::Transcript,
+    ] {
+        key(&mut app, &mut w, KeyCode::Tab);
+        assert_eq!(app.view, expect);
+    }
+    execute_command(&mut app, &mut w, "tasks").unwrap();
+    assert_eq!(app.view, CenterView::Tasks);
+    let _ = render_size(&mut app, 120, 40);
+    assert!(app.tasks_area.width > 0);
+    app.view = CenterView::Transcript;
+    let _ = render_size(&mut app, 120, 40);
+    assert_eq!(app.tasks_area, Rect::default(), "沒畫任務視圖時要清空區域");
+}
+
+#[test]
+fn task_cursor_moves_and_enter_jumps_to_assignee() {
+    use termade_core::TaskStatus::*;
+    let mut app = sample_app(&["hi"]);
+    add_session(&mut app, "ses_other", "helper", 2);
+    add_task(&mut app, "tsk_a", "first", Doing, Some("ses_test"), &[]);
+    add_task(&mut app, "tsk_b", "second", Todo, Some("ses_other"), &[]);
+    app.view = CenterView::Tasks;
+    let (mut w, _peer) = pair_writer();
+    assert_eq!(app.selected_id().as_deref(), Some("ses_test"));
+
+    key(&mut app, &mut w, KeyCode::Char('j'));
+    key(&mut app, &mut w, KeyCode::Char('j'));
+    assert_eq!(app.task_cursor, 1, "游標不超過最後一個任務");
+    assert_eq!(app.selected, 0, "任務視圖的 j/k 不動 session 選取");
+    key(&mut app, &mut w, KeyCode::Char('k'));
+    assert_eq!(app.task_cursor, 0);
+
+    // 滑鼠滾輪也移動任務游標。
+    let _ = render_size(&mut app, 120, 40);
+    let wheel = MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 50,
+        row: 10,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(&mut app, &mut w, wheel).unwrap();
+    assert_eq!(app.task_cursor, 1);
+
+    key(&mut app, &mut w, KeyCode::Enter);
+    assert_eq!(app.selected_id().as_deref(), Some("ses_other"));
+    assert_eq!(app.view, CenterView::Transcript);
+    assert_eq!(app.mode, Mode::Normal, "Enter 在任務視圖不該開 prompt");
+}
+
+#[test]
+fn task_status_command_updates_selected_task() {
+    use std::io::Read;
+    let mut app = sample_app(&["hi"]);
+    add_task(
+        &mut app,
+        "tsk_a",
+        "first",
+        termade_core::TaskStatus::Todo,
+        None,
+        &[],
+    );
+    let (mut w, mut peer) = pair_writer();
+    let mut buf = [0u8; 512];
+
+    execute_command(&mut app, &mut w, "task-status done").unwrap();
+    assert!(peer.read(&mut buf).is_err(), "不在任務視圖時不送出");
+
+    app.view = CenterView::Tasks;
+    execute_command(&mut app, &mut w, "task-status nonsense").unwrap();
+    assert!(peer.read(&mut buf).is_err(), "狀態無效時不送出");
+
+    execute_command(&mut app, &mut w, "task-status done").unwrap();
+    let n = peer.read(&mut buf).unwrap();
+    let sent = String::from_utf8_lossy(&buf[..n]).to_string();
+    assert!(sent.contains("tsk_a") && sent.contains("done"), "{sent}");
+    assert!(COMMANDS.iter().any(|(n, _)| *n == "task-status"));
+}
+
+#[test]
+fn scope_here_hides_tasks_of_other_projects() {
+    use termade_core::TaskStatus::Todo;
+    let mut app = sample_app(&["hi"]);
+    app.home_project = "/work/alpha".into();
+    app.state.sessions.get_mut("ses_test").unwrap().cwd = "/work/alpha".into();
+    add_session(&mut app, "ses_beta", "beta-worker", 2);
+    app.state.sessions.get_mut("ses_beta").unwrap().cwd = "/work/beta".into();
+    add_task(&mut app, "tsk_a", "mine-task", Todo, Some("ses_test"), &[]);
+    add_task(
+        &mut app,
+        "tsk_b",
+        "theirs-task",
+        Todo,
+        Some("ses_beta"),
+        &[],
+    );
+    add_task(&mut app, "tsk_c", "orphan-task", Todo, None, &[]);
+    // 建立者在別的專案、還沒指派：也算別的專案。
+    add_task(&mut app, "tsk_d", "theirs-created", Todo, None, &[]);
+    app.state.tasks.get_mut("tsk_d").unwrap().created_by = Some("ses_beta".into());
+    app.view = CenterView::Tasks;
+    // Bus 欄的精簡清單不分專案，用兩欄版面只看任務視圖。
+    app.layout = LayoutMode::Two;
+
+    app.scope_here = true;
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(
+        text.contains("mine-task") && text.contains("orphan-task"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("theirs-task") && !text.contains("theirs-created"),
+        "{text}"
+    );
+
+    app.scope_here = false;
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(text.contains("theirs-task") && text.contains("theirs-created"));
+}

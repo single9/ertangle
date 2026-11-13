@@ -233,6 +233,11 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("unqueue", "取消最後一則排隊並放回輸入框"),
     ("bus", "顯示／隱藏 Bus 浮層"),
     ("task", "<標題>  新增任務"),
+    ("tasks", "任務視圖：依狀態分組，Enter 跳到負責人"),
+    (
+        "task-status",
+        "<todo|doing|blocked|review|done>  改任務視圖選取任務的狀態",
+    ),
     ("broadcast", "<訊息>  廣播給所有 session"),
     ("copy", "複製目前畫面內容"),
     ("quit", "離開（保留 daemon）"),
@@ -426,6 +431,11 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             app.selection = None;
             send(writer, &Request::WorktreeList)?;
         }
+        "tasks" => {
+            app.view = CenterView::Tasks;
+            app.selection = None;
+        }
+        "task-status" => crate::tasks::set_selected_status(app, writer, rest)?,
         "thoughts" | "think" => toggle_thoughts(app),
         "tools" => toggle_tools(app),
         "scope" | "project" => match rest {

@@ -31,6 +31,8 @@ pub(crate) enum CenterView {
     Transcript,
     Diff,
     Worktrees,
+    /// T18：依狀態分組的任務清單。
+    Tasks,
 }
 
 /// 主區版面模式。
@@ -183,6 +185,12 @@ pub(crate) struct App {
     pub(crate) tab_areas: Vec<(Rect, usize)>,
     /// 通知設定與狀態（T15）。
     pub(crate) notify: crate::notify::Notifier,
+    /// 任務視圖：游標（`tasks::visible_task_ids` 的索引）與清單捲動起點。
+    pub(crate) task_cursor: usize,
+    pub(crate) task_offset: usize,
+    /// 最近一次繪製時任務清單的區域，以及每個可見列對應的任務索引（供滑鼠）。
+    pub(crate) tasks_area: Rect,
+    pub(crate) task_rows: Vec<Option<usize>>,
     pub(crate) should_quit: bool,
 }
 
@@ -252,6 +260,10 @@ impl App {
             bus_seen: 0,
             tab_areas: Vec::new(),
             notify: crate::notify::Notifier::from_cfg(&cfg.tui),
+            task_cursor: 0,
+            task_offset: 0,
+            tasks_area: Rect::default(),
+            task_rows: Vec::new(),
             should_quit: false,
         }
     }
@@ -376,6 +388,7 @@ pub(crate) fn main_pane_text(app: &App) -> String {
             })
             .collect::<Vec<_>>()
             .join("\n"),
+        CenterView::Tasks => crate::tasks::tasks_text(app),
     }
 }
 

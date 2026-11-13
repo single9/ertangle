@@ -2,7 +2,7 @@
 //!
 //! 提供三欄式（或依視窗寬度降級為雙欄／分頁）互動介面：
 //! * 左側：所有 session 的清單、狀態符號與未讀標示；
-//! * 中央：逐字稿（支援 Markdown 渲染）、worktree diff 或 worktrees 清單；
+//! * 中央：逐字稿（支援 Markdown 渲染）、worktree diff、worktrees 清單或任務視圖；
 //! * 右側：匯流排訊息、任務看板與待審批清單。
 //!
 //! 逐字稿區支援 Markdown 渲染（見 [`markdown`]）、翻頁捲動與「跟隨最新」，
@@ -22,6 +22,7 @@ mod markdown;
 mod menu;
 mod mouse;
 mod notify;
+mod tasks;
 
 #[allow(unused_imports)]
 pub(crate) use app::*;

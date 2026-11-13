@@ -85,7 +85,8 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                     send(writer, &Request::WorktreeList)?;
                     CenterView::Worktrees
                 }
-                CenterView::Worktrees => CenterView::Transcript,
+                CenterView::Worktrees => CenterView::Tasks,
+                CenterView::Tasks => CenterView::Transcript,
             };
         }
         KeyCode::Char('g') => {
@@ -104,11 +105,13 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 }
             }
             CenterView::Transcript => scroll_transcript_lines(app, 1),
+            CenterView::Tasks => crate::tasks::move_task_cursor(app, 1),
             CenterView::Worktrees => {}
         },
         KeyCode::Up => match app.view {
             CenterView::Diff => app.diff_cursor = app.diff_cursor.saturating_sub(1),
             CenterView::Transcript => scroll_transcript_lines(app, -1),
+            CenterView::Tasks => crate::tasks::move_task_cursor(app, -1),
             CenterView::Worktrees => {}
         },
         KeyCode::Char('j') => {
@@ -116,6 +119,8 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 if app.diff_cursor + 1 < app.diff_lines.len() {
                     app.diff_cursor += 1;
                 }
+            } else if app.view == CenterView::Tasks {
+                crate::tasks::move_task_cursor(app, 1);
             } else if app.selected + 1 < app.session_ids().len() {
                 app.selected += 1;
             }
@@ -123,6 +128,8 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         KeyCode::Char('k') => {
             if app.view == CenterView::Diff {
                 app.diff_cursor = app.diff_cursor.saturating_sub(1);
+            } else if app.view == CenterView::Tasks {
+                crate::tasks::move_task_cursor(app, -1);
             } else {
                 app.selected = app.selected.saturating_sub(1);
             }
@@ -190,6 +197,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.input_cursor = 0;
             app.status = "命令（Tab 補全）：spawn rm clean kill merge diff gc task …".into();
         }
+        KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
         KeyCode::Enter | KeyCode::Char('i') => {
             app.mode = Mode::Prompt;
             app.input.clear();
@@ -271,6 +279,8 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         KeyCode::Home => {
             if app.view == CenterView::Diff {
                 app.diff_cursor = 0;
+            } else if app.view == CenterView::Tasks {
+                app.task_cursor = 0;
             } else {
                 app.transcript_scroll = Some(0);
                 app.status = "逐字稿：已到最前".into();
@@ -279,6 +289,8 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         KeyCode::End => {
             if app.view == CenterView::Diff {
                 app.diff_cursor = app.diff_lines.len().saturating_sub(1);
+            } else if app.view == CenterView::Tasks {
+                crate::tasks::move_task_cursor(app, i32::MAX);
             } else {
                 app.transcript_scroll = None;
                 app.status = "逐字稿：跟隨最新".into();

@@ -986,6 +986,16 @@ impl State {
         total
     }
 
+    /// 任務還沒完成的前置任務（`depends_on` 裡存在且狀態不是 `done` 的）。
+    /// 找不到的 id 不算：它永遠不會完成，算進去會讓任務卡死。
+    pub fn unfinished_deps(&self, task: &Task) -> Vec<&Task> {
+        task.depends_on
+            .iter()
+            .filter_map(|id| self.tasks.get(id))
+            .filter(|t| t.status != TaskStatus::Done)
+            .collect()
+    }
+
     /// 以 `id` 或 `label` 解析 session id（優先回傳完全匹配的 id，其次為存活中的同 label session）。
     pub fn resolve_session_id(&self, id_or_label: &str) -> Option<SessionId> {
         let needle = id_or_label.trim().trim_start_matches('@');

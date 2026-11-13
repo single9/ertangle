@@ -22,8 +22,18 @@ pub(crate) fn cmd_tasks(json: bool) -> Result<()> {
     }
     for t in state.tasks.values() {
         let assignee = t.assignee.as_deref().unwrap_or("-");
+        let waiting: Vec<&str> = state
+            .unfinished_deps(t)
+            .iter()
+            .map(|d| d.id.as_str())
+            .collect();
+        let waiting = if waiting.is_empty() {
+            String::new()
+        } else {
+            format!("  （等待 {}）", waiting.join("、"))
+        };
         println!(
-            "{}  {:<9} {:<16} {}",
+            "{}  {:<9} {:<16} {}{waiting}",
             t.id,
             t.status.id(),
             assignee,

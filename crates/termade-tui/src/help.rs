@@ -49,7 +49,8 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
     (
         "檢視",
         &[
-            ("Tab", "切換 Overview／Diff／Worktrees"),
+            ("Tab", "切換 Overview／Diff／Worktrees／Tasks"),
+            ("j k / Enter", "（Tasks 視圖）選任務／跳到負責人的 session"),
             ("g", "Diff 檢視"),
             ("L", "切換版面：三欄／兩欄／分頁"),
             ("b", "顯示／隱藏 Bus 浮層"),
@@ -95,6 +96,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 "on|off 開關通知（回合結束、等待審批、失敗、額度用完）；test 試發；方式在 config.toml [tui] notify",
             ),
             (":task :broadcast", "新增任務／廣播訊息"),
+            (
+                ":tasks :task-status",
+                "任務視圖／改選取任務的狀態（todo doing blocked review done）",
+            ),
         ],
     ),
     (
@@ -107,6 +112,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 "agent:model；!bypass 表示跳過所有權限檢查",
             ),
             ("● ○ ✗ ✓", "忙碌／閒置／失敗／結束"),
+            ("⧗a1b2c3", "（Tasks 視圖）任務的前置任務；黃色是還沒完成的"),
         ],
     ),
 ];

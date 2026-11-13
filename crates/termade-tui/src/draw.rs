@@ -26,6 +26,8 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     // 隱藏的欄位要清掉區域，避免滑鼠命中上一次的位置。
     app.sessions_area = Rect::default();
     app.tab_areas.clear();
+    app.tasks_area = Rect::default();
+    app.task_rows.clear();
 
     draw_header(f, chunks[0], app);
 
@@ -88,6 +90,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         CenterView::Transcript => draw_transcript(f, center, app),
         CenterView::Diff => draw_diff(f, center, app),
         CenterView::Worktrees => draw_worktrees(f, center, app),
+        CenterView::Tasks => crate::tasks::draw_tasks(f, center, app),
     }
     if let Some(a) = bus_area {
         draw_bus(f, a, app);
@@ -570,13 +573,14 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         tab("Overview", app.view == CenterView::Transcript),
         tab("Diff (g)", app.view == CenterView::Diff),
         tab("Worktrees", app.view == CenterView::Worktrees),
+        tab("Tasks", app.view == CenterView::Tasks),
         Span::raw("   "),
         Span::styled(
             format!("{live}/{} live", app.state.sessions.len()),
             Style::default().fg(Color::Green),
         ),
         Span::styled(
-            format!("  · {} tasks", app.state.tasks.len()),
+            format!("  · {} tasks", crate::tasks::open_task_count(app)),
             Style::default().fg(Color::Gray),
         ),
     ]);
@@ -1230,6 +1234,7 @@ pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
         CenterView::Transcript => "  ? 說明  Space 選單  : 命令  q 離開",
         CenterView::Diff => "  ? 說明  c 註解  M 合併  q 離開",
         CenterView::Worktrees => "  ? 說明  M 合併  G 清理  q 離開",
+        CenterView::Tasks => "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明",
     };
     let text = Line::from(vec![
         Span::styled(

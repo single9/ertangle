@@ -23,7 +23,7 @@
 | [T15](T15-notifications.md) | 回合結束、等待審批、額度用完時通知使用者 | P1 | — |
 | [T16](T16-transcript-search.md) | 在逐字稿與 diff 裡搜尋 | P2 | — |
 | [T17](T17-budget-limits.md) | 成本與子 agent 數量上限 | P1 | —（成本累計與 T14 有交互） |
-| [T18](T18-task-board.md) | 任務板：依賴解鎖與獨立視圖 | P2 | — |
+| [T18](T18-task-board.md) | 任務板：依賴解鎖與獨立視圖（已完成） | P2 | — |
 | [T19](T19-daemon-prompt-queue.md) | 把 prompt 排隊移到 daemon | P2 | —（與 T17 有交互） |
 | [T20](T20-collab-instructions.md) | 把協作說明注入每個 agent | P2 | — |
 | [T21](T21-shell-completions.md) | Shell 補全 | P3 | —（session 補全會用到 T14 的 `resume`） |
