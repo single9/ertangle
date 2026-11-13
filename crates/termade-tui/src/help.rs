@@ -43,6 +43,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("z", "休眠／喚醒"),
             ("a / A / d", "審批：允許／一律允許／拒絕"),
             ("Space s h", "交接給其他 agent（額度用完時）"),
+            ("Space s r", "接續已結束的 session：同一個 agent 接回原對話"),
             ("Space s x", "移除已結束的 session；Space s X 全部清除"),
         ],
     ),
@@ -86,6 +87,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 "啟動 agent，如 :spawn claude:opus 做某事；不帶參數開選擇器",
             ),
             (":handoff", "交接給另一個 agent，如 :handoff codex 補充說明"),
+            (
+                ":resume",
+                "接續已結束的 session（程序死掉或 daemon 重啟後）；可接 prompt",
+            ),
             (":rm :clean", "移除已結束的 session／全部清除"),
             (":kill :cancel", "結束／中斷選取的 session"),
             (":quota", "各 agent 帳號額度與重置時間"),

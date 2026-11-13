@@ -173,6 +173,7 @@ ssh -L 7420:127.0.0.1:7420 host                         # 本機端轉發
 TERMADE_TOKEN=<secret> termade --remote 127.0.0.1:7420 ...      # 連線至遠端 daemon
 termade mcp [--session <id>]                    # stdio MCP 協作伺服器（由 adapter 自動注入）
 termade cancel <session-id> ; termade kill <session-id>
+termade resume <session-or-label> ["接續後的 prompt"]  # 已結束的 session 接回原對話
 termade shutdown
 ```
 
@@ -197,6 +198,13 @@ termade shutdown
   限制：圖片上限 5 MB、文字檔內嵌上限 256 KB（超過只帶路徑）；其他二進位檔只帶路徑。Claude／Codex／Antigravity 以圖片區塊送出，OpenCode 的 ACP 沒宣告圖片支援時改成路徑說明（實測它的 gemma 模型看不到圖）。
 * 交接（額度用完時）：Claude／ACP／Codex 回報額度用完或被限流時，session 會標成 failed 並註明「額度用完」。用 `termade handoff <session> --to codex[:model] [--note "補充"]`、TUI 的 `Space s h` 或 `:handoff` 交接：舊 session 若還在跑會先停掉，worktree 的未 commit 變更自動 commit，daemon 用事件紀錄產生簡報（原始任務、追加指示、指派的 task、最後輸出、git 現況）加上完整 diff 附件，新 agent 沿用**同一個工作目錄與分支**接手。兩個 session 共用 worktree 時，`gc`／`rm` 不會刪掉仍在使用中的那個。目前只有手動觸發，沒有自動 fallback。
 * 額度查詢：agent 自己回報帳號額度，termade 只是顯示（不估算）。Claude 在每個回合的串流裡帶 5 小時／7 天視窗用量與重置時間；Codex 在啟動時用 `account/rateLimits/read` 查、之後收更新通知。標題列顯示最吃緊的視窗（≥70% 黃、≥90% 或已滿紅），`:quota` 或 `termade quota [--json]` 看全部視窗與重置倒數。Claude 的資料要有一個回合跑過才有；OpenCode／Antigravity 目前沒有額度資訊來源。
+* 接續（resume）：agent 程序結束（當掉、被 kill、daemon 重啟）後，用 `termade resume <session> [prompt]`、TUI 的 `:resume [prompt]` 或 `Space s r` 讓**同一個 agent 接回原本的對話**。session id、label、逐字稿、worktree 分支、被指派的 task 都不變；交接則是換一個 agent 開新對話。
+  * 靠的是各家原生的機制：Claude `--resume <id>`、Codex `thread/resume`、OpenCode／Antigravity 的 ACP `session/load`（載入時 agent 重播的歷史不會再寫進逐字稿）。對話內容存在 agent 自己那邊，agent 把它清掉就接不回來。
+  * 只有結構化模式、且 agent 回報過對話 id 的 session 能接續：PTY 模式不行；Claude 要跑過至少一個回合才有 id；這個功能之前建立的 session 沒有記 id。不能接續時會回明確的錯誤，不會悄悄開新對話。
+  * 工作目錄、分支、權限、model 沿用原本的 session；執行檔、參數、環境變數、工具限制與 effort 重新讀 `config.toml`。
+  * daemon 重啟後，原本在跑的 session 仍標成 failed，並註明「可用 :resume 接續」；**不會自動接續**（會動用額度）。重啟時超過 1 小時、已結束又沒有分支的 session 會從清單清掉，清掉後就不能接續。
+  * 對已結束的 session 送 prompt 會提示改用 `:resume`。MCP 沒有開放接續，agent 不能自己把被人停掉的同伴叫回來。
+  * 成本：Claude 每個程序從 0 累計，接續後顯示的是舊值加新值。Codex 回報的是 thread 累計的 token，不另外相加（接續後的數字未實機驗證）。
 * 額度提醒與自動交接（`config.toml`）：`[handoff] warn_percent = 90` 時，agent 帳號額度越過門檻，該 agent 還在跑的 session 會留下「建議 :handoff」的備註（每次越線只提醒一次）。`auto = true` 加 `fallback = ["codex", "claude:sonnet"]` 則在額度用完時自動交接給第一個可用的候選（跳過同一個 agent、額度也滿了的、連續交接超過 3 次的）；預設關閉，因為會動用另一邊的額度。
 * context 用量：agent 回報的對話佔用 token 數與模型視窗（Claude 由每則訊息的 usage 加上 `result.modelUsage.contextWindow`；Codex 由 `thread/tokenUsage/updated`；ACP 若送 `usage_update` 也會用）。sessions 清單顯示 `ctx 4%`（≥80% 黃、≥92% 紅），transcript 標題與 `termade sessions` 顯示 `41k/1M 4%`。視窗大小要 agent 回報過才知道，之前只顯示 token 數。
 

@@ -184,6 +184,16 @@ pub(crate) fn cmd_kill(session: String) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn cmd_resume(session: String, text: Vec<String>) -> Result<()> {
+    let prompt = Some(join(text)).filter(|t| !t.trim().is_empty());
+    match roundtrip(&Request::Resume { session, prompt })? {
+        Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| "已接續".into())),
+        Frame::Error { message } => bail!("{message}"),
+        _ => {}
+    }
+    Ok(())
+}
+
 pub(crate) fn cmd_handoff(
     session: String,
     to: String,

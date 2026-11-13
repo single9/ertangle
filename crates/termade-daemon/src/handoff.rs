@@ -125,6 +125,7 @@ mod tests {
             status_note: Some("額度用完：limit".into()),
             repo_root: None,
             context: None,
+            native_id: None,
             permission: PermissionPolicy::Auto,
         }
     }

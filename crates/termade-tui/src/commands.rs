@@ -206,6 +206,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "handoff",
         "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 agent",
     ),
+    (
+        "resume",
+        "[prompt]  接續選取的已結束 session（接回原對話，session 不變）",
+    ),
     ("kill", "結束選取的 session"),
     ("cancel", "中斷選取 session 的目前回合"),
     ("sleep", "休眠選取的 session"),
@@ -323,6 +327,19 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             if let Some(id) = app.selected_id() {
                 send(writer, &Request::Kill { session: id })?;
                 app.status = "已送出結束".into();
+            }
+        }
+        "resume" => {
+            if let Some(id) = app.selected_id() {
+                let prompt = Some(rest.to_string()).filter(|p| !p.is_empty());
+                send(
+                    writer,
+                    &Request::Resume {
+                        session: id,
+                        prompt,
+                    },
+                )?;
+                app.status = "已要求接續".into();
             }
         }
         "cancel" => {

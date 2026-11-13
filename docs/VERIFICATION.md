@@ -53,3 +53,23 @@
 | 遠端 TCP + Token 連線 | `termade daemon --listen 127.0.0.1:17429 --token ...` | 透過 `--remote` + `--token` 建立任務與查詢狀態成功 |
 | TUI Markdown 渲染與捲動 | `cargo test -p termade-tui`（TestBackend 全畫面渲染） | 標題／粗體／程式碼／表格正確渲染、`t` 切換原始文字、Diff 邊欄與 `+N -M` 統計、翻頁後恢復跟隨 |
 
+## T14 Session 接續（實機，2026-11-13）
+
+版本：Claude Code 2.1.322（model `haiku`）、OpenCode 2.2.5（本機 ollama `gemma4:26b-code`）、Antigravity `agy` 1.5.7、codex-cli 0.167.2。
+做法：隔離的 daemon（獨立 socket 與 state），`termade spawn --prompt "記住某個字"` → 結束 → `termade resume <label> "剛剛要你記的字是什麼？"`，看回答是否正確。
+
+| 驗證項 | 做法 | 結果 |
+| --- | --- | --- |
+| Claude `--resume` 搭配 stream-json | `termade kill` → `termade resume cl`，再送 prompt | 答出原本的字；`init` 的 `session_id` 接續前後相同；agent 不重播歷史；成本由 $0.0083 變 $0.0088（舊值加新值） |
+| Antigravity ACP `session/load` | `termade kill` → `termade resume ag "<問題>"` | 答出原本的字；`initialize` 宣告 `loadSession: true`；載入時重播的 user／agent 訊息沒有進逐字稿 |
+| OpenCode ACP `session/load`（daemon 重啟） | `termade shutdown` → 重新啟動 daemon → `termade resume oc "<問題>"` | 重啟後三個 session 都是 failed 且備註「daemon 重啟，可用 :resume 接續」，沒有自動接續；接續後答出原本的字，備註清除 |
+| 對已結束的 session 送 prompt | `termade prompt oc hi` | 回「已結束；可用 :resume…接續原對話」 |
+| 對執行中的 session 接續 | `termade resume cl`（狀態 busy） | 回「仍在執行，不需要接續」 |
+| Codex `thread/resume`（只到協定層） | 直接對 `codex app-server` 送 `thread/start` → 另一個程序 `thread/resume` | 回傳同一個 thread id，且帶回先前的 1 個回合；本機 codex 的登入已失效（回合回 `unauthorized`），所以**沒有驗證**模型接續後的回答 |
+
+未驗證：
+
+- Codex 經由 `termade resume` 的完整流程（需要有效登入），以及接續後 `thread/tokenUsage/updated` 的 `total` 是否包含接續前的用量。目前假設包含，所以 Codex 不另外加上舊值；如果實際上是從 0 算，接續後顯示的 token 會偏少。
+- `thread/resume` 帶 `excludeTurns: true`：欄位取自 0.167.2 的 schema，沒有在較舊的 codex 上試過。
+- TUI 的 `:resume` 與 `Space s r` 只跑了自動測試，沒有在終端機裡手動操作。
+- 對話很長時 ACP `session/load` 的耗時（逾時設為 180 秒；實測只用了一個回合的短對話）。

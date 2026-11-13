@@ -124,6 +124,12 @@ enum Cmd {
     Cancel { session: String },
     /// 強制結束 agent 子程序
     Kill { session: String },
+    /// 接續已結束的 session：agent 程序死掉或 daemon 重啟後，用原本的對話繼續（session id 不變）
+    Resume {
+        session: String,
+        /// 接續後立刻送出的 prompt（可省略）
+        text: Vec<String>,
+    },
     /// 讓 session 休眠（停止程序但保留對話紀錄，可隨時喚醒）
     Sleep { session: String },
     /// 喚醒已休眠的 session
@@ -368,6 +374,7 @@ fn main() -> Result<()> {
         } => cmd_prompt(session, text, attach),
         Cmd::Cancel { session } => cmd_cancel(session),
         Cmd::Kill { session } => cmd_kill(session),
+        Cmd::Resume { session, text } => cmd_resume(session, text),
         Cmd::Sleep { session } => cmd_sleep(session),
         Cmd::Wake { session } => cmd_wake(session),
         Cmd::Rm { session, force } => cmd_rm(session, force),

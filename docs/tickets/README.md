@@ -19,7 +19,7 @@
 | [T11](T11-agent-config-and-model.md) | 設定檔與每個 agent 的 model／參數設定 | P1 | — |
 | [T12](T12-permission-settings.md) | 權限的設定、顯示與子 agent 上限 | P1 | T11 |
 | [T13](T13-tui-layout-modes.md) | TUI 版面模式：三欄／兩欄／上方 session 分頁 | P2 | —（持久化需 T11） |
-| [T14](T14-session-resume.md) | Session 接續：程序死掉或 daemon 重啟後接回原對話 | P1 | — |
+| [T14](T14-session-resume.md) | Session 接續：程序死掉或 daemon 重啟後接回原對話（已完成；Codex 只驗到協定層，見 `docs/VERIFICATION.md`） | P1 | — |
 | [T15](T15-notifications.md) | 回合結束、等待審批、額度用完時通知使用者 | P1 | — |
 | [T16](T16-transcript-search.md) | 在逐字稿與 diff 裡搜尋 | P2 | — |
 | [T17](T17-budget-limits.md) | 成本與子 agent 數量上限 | P1 | —（成本累計與 T14 有交互） |

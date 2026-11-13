@@ -127,6 +127,13 @@ pub enum Request {
     Kill {
         session: SessionId,
     },
+    /// 接續已結束的 session：用 agent 原生的對話 id 接回原對話（session id 不變）。
+    Resume {
+        session: SessionId,
+        /// 接續成功後立刻送出的 prompt。
+        #[serde(default)]
+        prompt: Option<String>,
+    },
     /// 暫停閒置 session 子程序（SIGSTOP）。
     Sleep {
         session: SessionId,

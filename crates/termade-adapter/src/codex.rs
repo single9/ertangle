@@ -440,14 +440,21 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     )
     .context("codex `initialize` 失敗")?;
 
+    // 接續時改用 `thread/resume`（歷史回合放在回應裡，不會以通知重播）。
+    let method = if spec.resume.is_some() {
+        "thread/resume"
+    } else {
+        "thread/start"
+    };
     let started = conn
-        .call("thread/start", thread_start_params(&spec), CALL_TIMEOUT)
-        .context("codex `thread/start` 失敗")?;
+        .call(method, thread_open_params(&spec), CALL_TIMEOUT)
+        .with_context(|| format!("codex `{method}` 失敗"))?;
     let tid = started["thread"]["id"]
         .as_str()
-        .context("`thread/start` 未回傳 thread id")?
+        .with_context(|| format!("`{method}` 未回傳 thread id"))?
         .to_string();
-    *conn.thread.lock().unwrap() = tid;
+    *conn.thread.lock().unwrap() = tid.clone();
+    let _ = tx.send(AgentEvent::NativeId(tid));
     if let Some(model) = started["model"].as_str() {
         let _ = tx.send(AgentEvent::Model(model.to_string()));
     }
@@ -508,6 +515,17 @@ fn turn_input(text: &str, atts: &[termade_core::Attachment]) -> Value {
         }
     }
     Value::Array(items)
+}
+
+/// `thread/start` 或（`spec.resume` 有值時）`thread/resume` 的參數。
+/// 兩者接受同一組覆寫欄位；接續時多帶 `threadId`，並用 `excludeTurns` 省掉回應裡的歷史回合。
+fn thread_open_params(spec: &SessionSpec) -> Value {
+    let mut p = thread_start_params(spec);
+    if let Some(id) = &spec.resume {
+        p["threadId"] = json!(id);
+        p["excludeTurns"] = json!(true);
+    }
+    p
 }
 
 fn thread_start_params(spec: &SessionSpec) -> Value {
@@ -579,6 +597,7 @@ mod tests {
             mcp_exe: None,
             initial_prompt: None,
             initial_attachments: vec![],
+            resume: None,
             cols: 80,
             rows: 24,
         };
@@ -589,6 +608,14 @@ mod tests {
         let mut ro = spec.clone();
         ro.read_only = true;
         assert_eq!(thread_start_params(&ro)["sandbox"], "read-only");
+        // 開新對話不帶 threadId；接續時帶上，其餘覆寫欄位照舊。
+        assert!(thread_open_params(&spec)["threadId"].is_null());
+        let mut re = spec.clone();
+        re.resume = Some("thr-1".into());
+        let p = thread_open_params(&re);
+        assert_eq!(p["threadId"], "thr-1");
+        assert_eq!(p["excludeTurns"], true);
+        assert_eq!(p["model"], "m1");
     }
 
     #[test]
