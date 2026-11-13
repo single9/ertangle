@@ -22,9 +22,9 @@
 | [T14](T14-session-resume.md) | Session 接續：程序死掉或 daemon 重啟後接回原對話（已完成；Codex 只驗到協定層，見 `docs/VERIFICATION.md`） | P1 | — |
 | [T15](T15-notifications.md) | 回合結束、等待審批、額度用完時通知使用者（已完成） | P1 | — |
 | [T16](T16-transcript-search.md) | 在逐字稿與 diff 裡搜尋（已完成） | P2 | — |
-| [T17](T17-budget-limits.md) | 成本與子 agent 數量上限 | P1 | —（成本累計與 T14 有交互） |
+| [T17](T17-budget-limits.md) | 成本與子 agent 數量上限（已完成；只用 mock 驗證，未用真實 agent 跑超限） | P1 | —（成本累計與 T14 有交互） |
 | [T18](T18-task-board.md) | 任務板：依賴解鎖與獨立視圖（已完成） | P2 | — |
-| [T19](T19-daemon-prompt-queue.md) | 把 prompt 排隊移到 daemon | P2 | —（與 T17 有交互） |
+| [T19](T19-daemon-prompt-queue.md) | 把 prompt 排隊移到 daemon（已完成；超限時保留佇列、調高上限後恢復） | P2 | —（與 T17 有交互） |
 | [T20](T20-collab-instructions.md) | 把協作說明注入每個 agent（已完成） | P2 | — |
 | [T21](T21-shell-completions.md) | Shell 補全（已完成） | P3 | —（session 補全會用到 T14 的 `resume`） |
 
@@ -43,7 +43,7 @@ T14–T21 也是缺少的功能，於 2026-11-13 對 `main`（`f3fc576`）再檢
 5. T12、T04、T05：權限與安全。
 6. T07、T08、T09、T10。
 
-已完成：T15（直接在終端模擬器的手動驗證尚未做，見 `docs/VERIFICATION.md`）。
+T14–T21 已於 2026-11-13 全部合併；各票未做的手動／實機驗證見 `docs/VERIFICATION.md`。
 
 ### T14–T21 的建議順序
 
