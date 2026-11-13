@@ -618,3 +618,11 @@ fn command_hints_list_matches_then_usage() {
     assert!(usage[0].1.contains("dry-run"));
     assert!(crate::commands::command_hints("zzz").is_empty());
 }
+
+#[test]
+fn parses_codex_model_catalog_visible_only() {
+    let out = r#"{"models":[{"slug":"a","display_name":"A","visibility":"list"},{"slug":"b","display_name":"B","visibility":"hide"}]}"#;
+    let m = crate::menu::parse_codex_models(out);
+    assert_eq!(m, vec![("a  (A)".to_string(), "a".to_string())]);
+    assert!(crate::menu::parse_codex_models("not json").is_empty());
+}

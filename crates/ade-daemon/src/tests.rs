@@ -909,11 +909,13 @@ fn restore_prunes_old_ended_sessions_but_keeps_branches_and_recent() {
 #[test]
 fn failed_spawn_leaves_no_session() {
     let shared = test_shared();
+    // 指向不存在的執行檔，讓啟動必定失敗（與本機是否安裝 agent 無關）。
+    std::env::set_var("ADE_CLAUDE_BIN", "/nonexistent/claude-for-test");
     let (tx, rx) = client_channel(None);
     shared.handle(
         &tx,
         Request::Spawn(ade_protocol::SpawnRequest {
-            kind: AgentKind::Codex,
+            kind: AgentKind::ClaudeCode,
             cwd: Some(std::env::temp_dir().to_string_lossy().to_string()),
             label: None,
             role: Default::default(),
@@ -928,6 +930,7 @@ fn failed_spawn_leaves_no_session() {
     );
     let frames: Vec<Frame> = rx.try_iter().collect();
     assert!(frames.iter().any(|f| matches!(f, Frame::Error { .. })));
+    std::env::remove_var("ADE_CLAUDE_BIN");
     assert!(lock(&shared.inner).state.sessions.is_empty());
 }
 

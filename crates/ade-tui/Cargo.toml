@@ -9,6 +9,7 @@ ade-core.workspace = true
 ade-protocol.workspace = true
 ade-daemon.workspace = true
 anyhow.workspace = true
+serde_json.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
 unicode-width.workspace = true

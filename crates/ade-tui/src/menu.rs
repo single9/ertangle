@@ -228,6 +228,7 @@ fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
     let (bin, args): (&str, &[&str]) = match kind {
         AgentKind::OpenCode => ("opencode", &["models"]),
         AgentKind::Antigravity => ("agy", &["models"]),
+        AgentKind::Codex => ("codex", &["debug", "models"]),
         _ => return Vec::new(),
     };
     let Ok(mut child) = std::process::Command::new(bin)
@@ -257,7 +258,32 @@ fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
         use std::io::Read;
         let _ = so.read_to_string(&mut out);
     }
-    parse_models(&out)
+    if matches!(kind, AgentKind::Codex) {
+        parse_codex_models(&out)
+    } else {
+        parse_models(&out)
+    }
+}
+
+/// `codex debug models` 輸出 `{"models":[{slug,display_name,visibility}]}`；只取 `visibility == list`。
+pub(crate) fn parse_codex_models(out: &str) -> Vec<(String, String)> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(out) else {
+        return Vec::new();
+    };
+    v["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|m| m["visibility"] == "list")
+        .filter_map(|m| {
+            let slug = m["slug"].as_str()?;
+            let label = match m["display_name"].as_str() {
+                Some(n) if !n.is_empty() => format!("{slug}  ({n})"),
+                _ => slug.to_string(),
+            };
+            Some((label, slug.to_string()))
+        })
+        .collect()
 }
 
 /// 解析 `models` 子命令的輸出：忽略空行與沒有 id 樣子的提示行。
@@ -357,7 +383,10 @@ pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
                     // 向 CLI 查詢可用 model（不阻塞介面）。
                     let (tx, rx) = std::sync::mpsc::channel();
                     let k = kind.clone();
-                    if matches!(k, AgentKind::OpenCode | AgentKind::Antigravity) {
+                    if matches!(
+                        k,
+                        AgentKind::OpenCode | AgentKind::Antigravity | AgentKind::Codex
+                    ) {
                         std::thread::spawn(move || {
                             let _ = tx.send(query_models(&k));
                         });
