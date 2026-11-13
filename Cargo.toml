@@ -16,9 +16,13 @@ termade-daemon = { workspace = true }
 termade-tui = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
+clap_complete = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+termade-adapter = { workspace = true }
 
 [workspace]
 resolver = "2"
@@ -44,6 +48,7 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 uuid = { version = "1", features = ["v4", "serde"] }
 ratatui = "0.29"
 crossterm = "0.28"
