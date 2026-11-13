@@ -27,6 +27,7 @@ fn fake_spec(resume: Option<&str>, prompt: Option<&str>, no_load: bool) -> Sessi
         },
         permission: PermissionPolicy::default(),
         mcp_exe: None,
+        system_append: None,
         initial_prompt: prompt.map(str::to_string),
         initial_attachments: vec![],
         resume: resume.map(str::to_string),

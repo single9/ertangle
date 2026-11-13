@@ -360,11 +360,14 @@ fn user_content(text: &str, atts: &[termade_core::Attachment]) -> Value {
     Value::Array(blocks)
 }
 
-/// 權限相關的命令列參數（唯讀、放行／禁止工具，與固定放行的 termade MCP 工具合併）。
-fn permission_args(spec: &SessionSpec) -> Vec<String> {
+/// 權限與系統提示相關的命令列參數（唯讀、放行／禁止工具、固定放行的 termade MCP 工具、附加系統提示）。
+pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     if let Some(e) = &spec.effort {
         out.extend(["--effort".to_string(), e.clone()]);
+    }
+    if let Some(s) = spec.system_append.as_deref().filter(|s| !s.is_empty()) {
+        out.extend(["--append-system-prompt".to_string(), s.to_string()]);
     }
     if spec.read_only {
         out.extend(["--permission-mode".into(), "plan".into()]);
@@ -529,6 +532,7 @@ mod tests {
             env: vec![],
             permission: termade_core::PermissionPolicy::Auto,
             mcp_exe: Some("/bin/termade".into()),
+            system_append: None,
             initial_prompt: None,
             initial_attachments: vec![],
             resume: None,
@@ -608,6 +612,22 @@ mod tests {
         s.effort = Some("high".into());
         let a = permission_args(&s);
         assert!(a.windows(2).any(|w| w == ["--effort", "high"]), "{a:?}");
+    }
+
+    #[test]
+    fn system_append_flag_added_only_when_present() {
+        let s = spec_for_args();
+        let a = permission_args(&s);
+        assert!(!a.iter().any(|x| x == "--append-system-prompt"), "{a:?}");
+
+        let mut s2 = spec_for_args();
+        s2.system_append = Some("collab text".into());
+        let a2 = permission_args(&s2);
+        assert!(
+            a2.windows(2)
+                .any(|w| w == ["--append-system-prompt", "collab text"]),
+            "{a2:?}"
+        );
     }
 
     #[test]

@@ -1379,3 +1379,139 @@ fn high_quota_leaves_a_handoff_hint_once_per_crossing() {
         .status_note
         .is_some());
 }
+
+#[test]
+fn acp_prepends_collab_instructions_to_first_prompt_only_and_hides_from_user_prompt_event() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let shared = test_shared();
+    let dir = temp_cwd();
+    fs::create_dir_all(dir.join(".termade")).unwrap();
+    let inbox_file = dir.join("acp_prompts.jsonl");
+    let script = dir.join("fake_acp.sh");
+    fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '{{"jsonrpc":"2.0","id":%s,"result":{{"protocolVersion":1,"agentCapabilities":{{}}}}}}\n' "$id"
+      ;;
+    *'"method":"session/new"'*)
+      printf '{{"jsonrpc":"2.0","id":%s,"result":{{"sessionId":"acp-fake"}}}}\n' "$id"
+      ;;
+    *'"method":"session/prompt"'*)
+      printf '%s\n' "$line" >> "{}"
+      printf '{{"jsonrpc":"2.0","id":%s,"result":{{"stopReason":"end_turn"}}}}\n' "$id"
+      ;;
+  esac
+done
+"#,
+            inbox_file.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(
+        dir.join(".termade/config.toml"),
+        format!(
+            "[collab]\ninstructions = true\n[agents.opencode]\nbin = {:?}\n",
+            script.to_string_lossy()
+        ),
+    )
+    .unwrap();
+
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Spawn(termade_protocol::SpawnRequest {
+            kind: AgentKind::OpenCode,
+            cwd: Some(dir.to_string_lossy().to_string()),
+            label: Some("worker/acp-t20".into()),
+            role: Role::Worker,
+            prompt: Some("只做第一件事".into()),
+            worktree: false,
+            transport: termade_protocol::Transport::Structured,
+            permission: None,
+            parent: None,
+            model: None,
+            effort: None,
+            attachments: vec![],
+            inherit_from: None,
+            args: vec![],
+        }),
+    );
+
+    // 等待 fake_acp.sh 收到第一則 session/prompt。
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if inbox_file.is_file()
+            && fs::read_to_string(&inbox_file)
+                .unwrap_or_default()
+                .lines()
+                .count()
+                >= 1
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    // 再送第二則 prompt，確認前置說明不會重複附上。
+    shared.handle(
+        &tx,
+        Request::Prompt {
+            session: "worker/acp-t20".into(),
+            text: "只做第二件事".into(),
+            attachments: vec![],
+        },
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if fs::read_to_string(&inbox_file)
+            .unwrap_or_default()
+            .lines()
+            .count()
+            >= 2
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let raw = fs::read_to_string(&inbox_file).expect("應收到兩則 session/prompt");
+    let lines: Vec<&str> = raw.lines().collect();
+    assert_eq!(lines.len(), 2, "{raw}");
+    let first: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    let first_text = first["params"]["prompt"][0]["text"].as_str().unwrap();
+    assert!(
+        first_text.contains("[termade 協作說明]") && first_text.contains("worker/acp-t20"),
+        "{first_text}"
+    );
+    assert!(first_text.ends_with("只做第一件事"), "{first_text}");
+
+    let second: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+    let second_text = second["params"]["prompt"][0]["text"].as_str().unwrap();
+    assert_eq!(second_text, "只做第二件事");
+
+    // 檢查 UserPrompt 事件與 transcript：只含使用者原本的文字，不含協作說明。
+    drop(rx);
+    let inner = lock(&shared.inner);
+    let sid = inner.state.resolve_session_id("worker/acp-t20").unwrap();
+    let transcript: Vec<String> = inner.state.transcripts[&sid].iter().cloned().collect();
+    let joined = transcript.join("\n");
+    assert!(joined.contains("❯ 只做第一件事"), "{joined}");
+    assert!(joined.contains("❯ 只做第二件事"), "{joined}");
+    assert!(!joined.contains("[termade 協作說明]"), "{joined}");
+    drop(inner);
+
+    let (tx_k, _rx_k) = client_channel(None);
+    shared.handle(
+        &tx_k,
+        Request::Kill {
+            session: "worker/acp-t20".into(),
+        },
+    );
+}

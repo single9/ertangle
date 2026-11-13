@@ -27,6 +27,7 @@ fn fake_spec(resume: Option<&str>) -> SessionSpec {
         env: vec![],
         permission: PermissionPolicy::default(),
         mcp_exe: None,
+        system_append: None,
         initial_prompt: Some("ping".into()),
         initial_attachments: vec![],
         resume: resume.map(str::to_string),

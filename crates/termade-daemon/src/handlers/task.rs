@@ -49,10 +49,7 @@ fn assignment_body(state: &State, task: &Task) -> String {
             ));
         }
     }
-    body.push_str(
-        "請先用 termade_task_update 把狀態改為 doing，完成後改為 done 並用 termade_send 回報。",
-    );
-    body
+    body.trim_end().to_string()
 }
 
 /// 把指派訊息投遞給負責人（閒置中的負責人會被喚醒）。自己指派給自己不通知。

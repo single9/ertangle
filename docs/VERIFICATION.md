@@ -85,3 +85,14 @@
 - `thread/resume` 帶 `excludeTurns: true`：欄位取自 0.167.2 的 schema，沒有在較舊的 codex 上試過。
 - TUI 的 `:resume` 與 `Space s r` 只跑了自動測試，沒有在終端機裡手動操作。
 - 對話很長時 ACP `session/load` 的耗時（逾時設為 180 秒；實測只用了一個回合的短對話）。
+
+## 協作說明注入（T20）實機驗證
+
+以只回傳 `initialize.instructions` 的探測 MCP server 單獨測試第一層是否進入模型 context，並以隔離 daemon 啟動子 session（`--parent coord`、prompt 不含 `termade_send` 提示）驗證主動回報：
+
+| Agent | 第一層（MCP `initialize.instructions`） | 第二層（adapter 補強） | 子 agent 主動回報實測 |
+| --- | --- | --- | --- |
+| **Claude Code** | ✅ 有效（模型可直接讀到 `initialize.instructions`） | `--append-system-prompt` | ✅ 完成 `17+25=42` 後主動呼叫 `termade_send(to="coord")` 回報 |
+| **OpenCode** | ✅ 有效（`opencode acp` 會將 `initialize.instructions` 放進 context） | ACP 首則 prompt 前置（`UserPrompt` 事件不含） | ✅ 主動呼叫 `termade_status` 與 `termade_send(to="coord")` 回報 |
+| **Antigravity** | ❌ 無效（`agy acp` 忽略 `initialize.instructions`） | ✅ ACP 首則 prompt 前置生效（`UserPrompt` 事件不含） | ✅ 靠第二層前置說明主動呼叫 `termade_status` 與 `termade_send(to="coord")` 回報 |
+| **Codex** | 未單獨實測（受限於回合授權） | `thread/start` 的 `developerInstructions`（schema 查證支援，握手成功） | ⚠️ `initialize` + `thread/start`（含 `developerInstructions`）成功；`turn/start` 因本機無有效授權停止 |

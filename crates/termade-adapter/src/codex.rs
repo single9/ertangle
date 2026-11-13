@@ -548,6 +548,9 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
     if let Some(s) = sandbox {
         p["sandbox"] = json!(s);
     }
+    if let Some(inst) = spec.system_append.as_deref().filter(|s| !s.is_empty()) {
+        p["developerInstructions"] = json!(inst);
+    }
     p
 }
 
@@ -595,6 +598,7 @@ mod tests {
             env: vec![],
             permission: termade_core::PermissionPolicy::Auto,
             mcp_exe: None,
+            system_append: None,
             initial_prompt: None,
             initial_attachments: vec![],
             resume: None,
@@ -605,6 +609,7 @@ mod tests {
         assert_eq!(p["model"], "m1");
         assert_eq!(p["sandbox"], "workspace-write");
         assert_eq!(p["config"]["model_reasoning_effort"], "high");
+        assert!(p.get("developerInstructions").is_none());
         let mut ro = spec.clone();
         ro.read_only = true;
         assert_eq!(thread_start_params(&ro)["sandbox"], "read-only");
@@ -616,6 +621,10 @@ mod tests {
         assert_eq!(p["threadId"], "thr-1");
         assert_eq!(p["excludeTurns"], true);
         assert_eq!(p["model"], "m1");
+        ro.system_append = Some("collab".into());
+        let p_ro = thread_start_params(&ro);
+        assert_eq!(p_ro["sandbox"], "read-only");
+        assert_eq!(p_ro["developerInstructions"], "collab");
     }
 
     #[test]

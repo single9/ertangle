@@ -119,7 +119,6 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     shared.emit(Event::SessionStarted {
         session: session.clone(),
     });
-
     let launch = Launch {
         id: id.clone(),
         kind: spawn.kind.clone(),
@@ -194,6 +193,11 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
         resume,
         cost_base,
     } = launch;
+    // 協作說明（T20）：spawn 與 resume 都重新組，接續時 agent 的系統提示不會保留上一次的。
+    let system_append = {
+        let inner = lock(&shared.inner);
+        crate::collab::for_session(&inner.state, &id, &config_dir(), &cwd)
+    };
     let mcp_exe = std::env::current_exe().ok();
     let mut env = vec![
         ("TERMADE_SESSION".to_string(), id.clone()),
@@ -231,6 +235,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
         read_only: resolved.read_only,
         sandbox: resolved.sandbox.clone(),
         mcp_exe,
+        system_append,
         initial_prompt: prompt.clone(),
         initial_attachments: attachments.clone(),
         resume,

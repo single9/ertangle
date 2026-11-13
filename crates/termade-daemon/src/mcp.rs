@@ -63,16 +63,7 @@ pub fn handle_rpc(session: &str, msg: &Value) -> Option<Value> {
             let client_ver = params["protocolVersion"]
                 .as_str()
                 .unwrap_or(MCP_PROTOCOL_VERSION);
-            Ok(json!({
-                "protocolVersion": client_ver,
-                "capabilities": {
-                    "tools": { "listChanged": false }
-                },
-                "serverInfo": {
-                    "name": "termade",
-                    "version": VERSION
-                }
-            }))
+            Ok(initialize_result(client_ver, session_instructions(session)))
         }
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({ "tools": tool_definitions() })),
@@ -114,6 +105,48 @@ pub fn handle_rpc(session: &str, msg: &Value) -> Option<Value> {
             "error": { "code": code, "message": message }
         }),
     })
+}
+
+/// `initialize` 的回應；`instructions` 是給模型看的協作說明（MCP 規格的選用欄位）。
+fn initialize_result(client_ver: &str, instructions: Option<String>) -> Value {
+    let mut res = json!({
+        "protocolVersion": client_ver,
+        "capabilities": {
+            "tools": { "listChanged": false }
+        },
+        "serverInfo": {
+            "name": "termade",
+            "version": VERSION
+        }
+    });
+    if let Some(text) = instructions {
+        res["instructions"] = json!(text);
+    }
+    res
+}
+
+/// 向 daemon 查自己的 session 後組出協作說明；連不上 daemon 或查不到就只有通則。
+fn session_instructions(session: &str) -> Option<String> {
+    let state = match roundtrip(&Request::Snapshot) {
+        Ok(Frame::Snapshot { state }) => state,
+        _ => Box::default(),
+    };
+    let cwd = std::env::current_dir().unwrap_or_default();
+    crate::collab::for_session(&state, session, &crate::config_dir(), &cwd)
+}
+
+#[cfg(test)]
+fn initialize_for_state(
+    client_ver: &str,
+    state: &termade_core::State,
+    session: &str,
+    global_dir: &std::path::Path,
+    cwd: &std::path::Path,
+) -> Value {
+    initialize_result(
+        client_ver,
+        crate::collab::for_session(state, session, global_dir, cwd),
+    )
 }
 
 /// 曝露給 agent 的協作工具清單。
@@ -822,6 +855,87 @@ mod tests {
         ] {
             assert!(names.contains(&expected), "missing tool {expected}");
         }
+    }
+
+    #[test]
+    fn mcp_initialize_includes_session_label_and_respects_disable_config() {
+        use termade_core::{AgentKind, Role, Session, SessionStatus, State};
+
+        let global = std::env::temp_dir().join(termade_core::new_id("mcp-g"));
+        let repo = std::env::temp_dir().join(termade_core::new_id("mcp-r"));
+        std::fs::create_dir_all(&global).unwrap();
+        std::fs::create_dir_all(repo.join(".termade")).unwrap();
+
+        let mut st = State::new();
+        st.sessions.insert(
+            "ses_42".into(),
+            Session {
+                id: "ses_42".into(),
+                kind: AgentKind::ClaudeCode,
+                label: "worker/alpha".into(),
+                cwd: repo.to_string_lossy().to_string(),
+                branch: Some("termade/ses_42".into()),
+                role: Role::Worker,
+                status: SessionStatus::Idle,
+                model: None,
+                cost: Default::default(),
+                parent: Some("ses_coord".into()),
+                created_ms: 0,
+                transport: "stream-json".into(),
+                status_note: None,
+                repo_root: None,
+                permission: Default::default(),
+                context: None,
+                native_id: None,
+            },
+        );
+
+        let res = initialize_for_state("2024-11-05", &st, "ses_42", &global, &repo);
+        let inst = res["instructions"].as_str().expect("應包含 instructions");
+        assert!(
+            inst.contains("worker/alpha") && inst.contains("ses_42"),
+            "{inst}"
+        );
+
+        // [collab] instructions = false 時，MCP initialize 無 instructions，Claude 參數也無 --append-system-prompt。
+        std::fs::write(
+            repo.join(".termade/config.toml"),
+            "[collab]\ninstructions = false\n",
+        )
+        .unwrap();
+        let res_off = initialize_for_state("2024-11-05", &st, "ses_42", &global, &repo);
+        assert!(res_off.get("instructions").is_none(), "{res_off}");
+
+        let sys_append = crate::collab::for_session(&st, "ses_42", &global, &repo);
+        assert!(sys_append.is_none());
+        let spec = termade_adapter::SessionSpec {
+            id: "ses_42".into(),
+            kind: AgentKind::ClaudeCode,
+            cwd: repo,
+            transport: termade_protocol::Transport::Structured,
+            bin: None,
+            args: vec![],
+            model: None,
+            effort: None,
+            allowed_tools: vec![],
+            disallowed_tools: vec![],
+            read_only: false,
+            sandbox: None,
+            env: vec![],
+            permission: Default::default(),
+            mcp_exe: None,
+            system_append: sys_append,
+            initial_prompt: None,
+            initial_attachments: vec![],
+            resume: None,
+            cols: 80,
+            rows: 24,
+        };
+        let flags = termade_adapter::claude::permission_args(&spec);
+        assert!(
+            !flags.iter().any(|f| f == "--append-system-prompt"),
+            "{flags:?}"
+        );
     }
 }
 

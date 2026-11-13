@@ -40,6 +40,18 @@ pub struct RoleCfg {
     pub permission: Option<String>,
     pub read_only: Option<bool>,
     pub effort: Option<String>,
+    /// 這個角色專屬的協作說明，附加在通則後面。
+    pub instructions: Option<String>,
+}
+
+/// 注入每個 agent 的協作說明（`collab.rs`）。
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct CollabCfg {
+    /// 是否注入（預設開啟）。
+    pub instructions: Option<bool>,
+    /// 附加在通則後面的文字。
+    pub extra: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -70,6 +82,7 @@ pub struct HandoffCfg {
 #[serde(default)]
 pub struct Config {
     pub handoff: HandoffCfg,
+    pub collab: CollabCfg,
     pub defaults: Defaults,
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
@@ -173,6 +186,15 @@ impl Config {
             if v.effort.is_some() {
                 e.effort = v.effort;
             }
+            if v.instructions.is_some() {
+                e.instructions = v.instructions;
+            }
+        }
+        if local.collab.instructions.is_some() {
+            out.collab.instructions = local.collab.instructions;
+        }
+        if local.collab.extra.is_some() {
+            out.collab.extra = local.collab.extra;
         }
         if local.handoff.warn_percent.is_some() {
             out.handoff.warn_percent = local.handoff.warn_percent;
@@ -443,5 +465,24 @@ notify_min_turn_secs = 30
             "repo 不能覆寫 notify_command"
         );
         assert_eq!(c.tui.notify.map(|v| v.len()), Some(2));
+    }
+
+    #[test]
+    fn collab_config_parsing_and_layered() {
+        let g = Config::parse(
+            "[collab]\nextra = \"全域\"\n[roles.reviewer]\ninstructions = \"只讀\"\nmodel = \"m\"\n",
+        )
+        .unwrap();
+        assert_eq!(g.collab.instructions, None); // 沒寫＝預設開啟
+        assert_eq!(g.roles["reviewer"].instructions.as_deref(), Some("只讀"));
+        let l = Config::parse(
+            "[collab]\ninstructions = false\n[roles.reviewer]\ninstructions = \"repo\"\n",
+        )
+        .unwrap();
+        let c = Config::layered(g, l);
+        assert_eq!(c.collab.instructions, Some(false));
+        assert_eq!(c.collab.extra.as_deref(), Some("全域")); // repo 沒寫的欄位保留全域
+        assert_eq!(c.roles["reviewer"].instructions.as_deref(), Some("repo"));
+        assert_eq!(c.roles["reviewer"].model.as_deref(), Some("m"));
     }
 }

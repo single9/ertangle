@@ -13,6 +13,7 @@ mod bus;
 pub use bus::BusGuard;
 use bus::*;
 mod client;
+pub mod collab;
 pub mod config;
 mod git;
 mod handlers;
