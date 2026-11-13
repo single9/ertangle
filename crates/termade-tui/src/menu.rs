@@ -281,22 +281,48 @@ impl Picker {
     }
 }
 
-/// 某個 agent 可選的 model：預設 + 內建建議 + config.toml 的 `models`／`model`。
+/// Claude Code 可用的 model。`claude` CLI 沒有列出 model 的子命令，只能內建：
+/// 前段是別名 (永遠指向該系列最新版)，後段是完整 id (固定版本)。新模型推出時要更新這裡。
+const CLAUDE_MODELS: &[(&str, &str)] = &[
+    ("fable", "最新 Fable"),
+    ("opus", "最新 Opus"),
+    ("sonnet", "最新 Sonnet"),
+    ("haiku", "最新 Haiku"),
+    ("claude-fable-5-2", "Claude Fable 5.2"),
+    ("claude-fable-5-1", "Claude Fable 5.1"),
+    ("claude-fable-5", "Claude Fable 5"),
+    ("claude-opus-5-5", "Claude Opus 5.5"),
+    ("claude-opus-5", "Claude Opus 5"),
+    ("claude-opus-4-8", "Claude Opus 4.8"),
+    ("claude-opus-4-7", "Claude Opus 4.7"),
+    ("claude-opus-4-6", "Claude Opus 4.6"),
+    ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+    ("claude-sonnet-5", "Claude Sonnet 5"),
+    ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+    ("claude-haiku-5-5", "Claude Haiku 5.5"),
+    ("claude-haiku-4-5", "Claude Haiku 4.5"),
+];
+
+/// 某個 agent 可選的 model：預設 + 內建清單 + config.toml 的 `models`／`model`。
 pub(crate) fn model_choices(kind: &AgentKind) -> Vec<(String, String)> {
-    let mut values: Vec<String> = match kind {
-        AgentKind::ClaudeCode => ["sonnet", "opus", "haiku"].map(String::from).to_vec(),
-        _ => Vec::new(),
-    };
+    let mut out = vec![("預設（依 config.toml）".to_string(), String::new())];
+    if matches!(kind, AgentKind::ClaudeCode) {
+        out.extend(
+            CLAUDE_MODELS
+                .iter()
+                .map(|(id, name)| (format!("{id}  ({name})"), id.to_string())),
+        );
+    }
+    let mut values: Vec<String> = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_default();
     let cfg = termade_daemon::config::Config::load(&termade_daemon::config_dir(), &cwd);
     if let Some(a) = cfg.agents.get(kind.id()) {
         for m in a.model.iter().chain(a.models.iter()) {
-            if !values.contains(m) {
+            if !values.contains(m) && !out.iter().any(|(_, v)| v == m) {
                 values.push(m.clone());
             }
         }
     }
-    let mut out = vec![("預設（依 config.toml）".to_string(), String::new())];
     out.extend(values.into_iter().map(|v| (v.clone(), v)));
     out
 }

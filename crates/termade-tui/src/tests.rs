@@ -583,6 +583,10 @@ fn picker_filters_and_offers_default_model() {
     let choices = crate::menu::model_choices(&AgentKind::ClaudeCode);
     assert_eq!(choices[0].1, "");
     assert!(choices.iter().any(|(_, v)| v == "opus"));
+    // 別名與固定版本都要能選。
+    assert!(choices.iter().any(|(_, v)| v == "fable"));
+    assert!(choices.iter().any(|(_, v)| v == "claude-opus-5-5"));
+    assert!(choices.iter().any(|(_, v)| v == "claude-sonnet-4-6"));
     let p = crate::menu::Picker {
         stage: crate::menu::PickStage::Agent,
         title: "t".into(),
