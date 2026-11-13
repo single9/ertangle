@@ -60,7 +60,7 @@ install -m 755 termade-linux-x86_64 ~/.local/bin/termade
 cargo install --git https://github.com/single9/termade
 
 # Pin a specific version
-cargo install --git https://github.com/single9/termade --tag v0.1.0
+cargo install --git https://github.com/single9/termade --tag v0.1.1
 ```
 
 **Option 3: Build from source**

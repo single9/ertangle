@@ -60,7 +60,7 @@ install -m 755 termade-linux-x86_64 ~/.local/bin/termade
 cargo install --git https://github.com/single9/termade
 
 # 指定版本
-cargo install --git https://github.com/single9/termade --tag v0.1.0
+cargo install --git https://github.com/single9/termade --tag v0.1.1
 ```
 
 **方式三：從原始碼建置**
