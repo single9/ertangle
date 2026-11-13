@@ -1,0 +1,76 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 確認 tag 與 Cargo.toml 版本一致
+        run: |
+          ver=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+          if [ "${GITHUB_REF_NAME}" != "v${ver}" ]; then
+            echo "tag ${GITHUB_REF_NAME} 與 Cargo.toml 版本 v${ver} 不一致" >&2
+            exit 1
+          fi
+
+  build:
+    needs: verify
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-latest,    target: x86_64-unknown-linux-gnu,  asset: termade-linux-x86_64 }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, asset: termade-linux-arm64 }
+          - { os: macos-latest,     target: aarch64-apple-darwin,      asset: termade-macos-arm64 }
+          - { os: macos-15-intel,   target: x86_64-apple-darwin,       asset: termade-macos-x86_64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: 打包
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/termade dist/${{ matrix.asset }}
+          tar -C dist -czf dist/${{ matrix.asset }}.tar.gz ${{ matrix.asset }}
+          rm dist/${{ matrix.asset }}
+          cd dist && (sha256sum ${{ matrix.asset }}.tar.gz 2>/dev/null || shasum -a 256 ${{ matrix.asset }}.tar.gz) > ${{ matrix.asset }}.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 建立 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
