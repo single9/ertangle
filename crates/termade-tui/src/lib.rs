@@ -17,6 +17,7 @@ mod draw;
 mod help;
 mod history;
 mod input;
+mod inputbox;
 mod markdown;
 mod menu;
 mod mouse;

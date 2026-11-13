@@ -404,7 +404,20 @@ pub(crate) fn handle_input_mode(
             }
         }
         KeyCode::Up | KeyCode::Down if matches!(app.mode, Mode::Prompt | Mode::Command) => {
-            recall_history(app, key.code == KeyCode::Up);
+            let up = key.code == KeyCode::Up;
+            if !move_cursor_row(app, up) {
+                recall_history(app, up);
+            }
+        }
+        KeyCode::Enter
+            if is_multiline(app.mode) && (key.modifiers.contains(KeyModifiers::SHIFT)) =>
+        {
+            insert_input(app, '\n');
+        }
+        KeyCode::Char('j')
+            if key.modifiers.contains(KeyModifiers::CONTROL) && is_multiline(app.mode) =>
+        {
+            insert_input(app, '\n');
         }
         KeyCode::Char(c @ ('p' | 'n'))
             if key.modifiers.contains(KeyModifiers::CONTROL)
@@ -419,13 +432,17 @@ pub(crate) fn handle_input_mode(
             let n = app.input.chars().count();
             app.input_cursor = (app.input_cursor + 1).min(n);
         }
-        KeyCode::Home => app.input_cursor = 0,
-        KeyCode::End => app.input_cursor = app.input.chars().count(),
+        KeyCode::Home => {
+            app.input_cursor = crate::inputbox::line_bounds(&app.input, app.input_cursor).0
+        }
+        KeyCode::End => {
+            app.input_cursor = crate::inputbox::line_bounds(&app.input, app.input_cursor).1
+        }
         KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.input_cursor = 0;
+            app.input_cursor = crate::inputbox::line_bounds(&app.input, app.input_cursor).0;
         }
         KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.input_cursor = app.input.chars().count();
+            app.input_cursor = crate::inputbox::line_bounds(&app.input, app.input_cursor).1;
         }
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             let b = byte_index(&app.input, app.input_cursor);
@@ -652,7 +669,12 @@ pub(crate) fn handle_paste(app: &mut App, text: &str) {
             return;
         }
     }
-    let sanitized = text.replace(['\r', '\n'], " ");
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    let sanitized = if is_multiline(app.mode) {
+        normalized
+    } else {
+        normalized.replace('\n', " ")
+    };
     insert_str_input(app, &sanitized);
 }
 
@@ -669,4 +691,33 @@ pub(crate) fn recall_history(app: &mut App, older: bool) {
         app.input_cursor = t.chars().count();
         app.input = t;
     }
+}
+
+/// 這些模式的輸入框允許多行（Ctrl-J／Shift-Enter 換行、貼上保留換行）。
+pub(crate) fn is_multiline(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::Prompt | Mode::Spawn | Mode::Message | Mode::Review
+    )
+}
+
+/// 在多行內容裡上下移動游標；已在最上／最下一列（或只有一列）回傳 `false`，交給歷史處理。
+pub(crate) fn move_cursor_row(app: &mut App, up: bool) -> bool {
+    if !is_multiline(app.mode) {
+        return false;
+    }
+    let rows = crate::inputbox::rows(&app.input, app.input_inner_w);
+    let (r, col) = crate::inputbox::cursor_pos(&app.input, &rows, app.input_cursor);
+    let target = if up {
+        match r.checked_sub(1) {
+            Some(t) => t,
+            None => return false,
+        }
+    } else if r + 1 < rows.len() {
+        r + 1
+    } else {
+        return false;
+    };
+    app.input_cursor = crate::inputbox::index_at(&app.input, &rows, target, col);
+    true
 }

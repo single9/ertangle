@@ -3,13 +3,16 @@
 use super::*;
 
 pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
+    app.input_inner_w = f.area().width.saturating_sub(2) as usize;
+    let input_h = crate::inputbox::height_for(&app.input, f.area().width)
+        .min(f.area().height.saturating_sub(10).max(3));
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // 標題、頁籤與成本
-            Constraint::Min(6),    // 主區
-            Constraint::Length(3), // 輸入
-            Constraint::Length(1), // 狀態
+            Constraint::Length(2),       // 標題、頁籤與成本
+            Constraint::Min(6),          // 主區
+            Constraint::Length(input_h), // 輸入
+            Constraint::Length(1),       // 狀態
         ])
         .split(f.area());
 
@@ -1135,19 +1138,20 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         Style::default().fg(Color::Cyan)
     };
 
-    // 水平捲動：讓游標永遠留在可見範圍內（支援中文等寬字元）。
+    // 軟換行排版；超過 MAX_ROWS 時只顯示游標附近的視窗。
     let inner_w = area.width.saturating_sub(2) as usize;
-    let chars: Vec<char> = app.input.chars().collect();
-    let cursor = app.input_cursor.min(chars.len());
-    let before: String = chars[..cursor].iter().collect();
-    let mut cursor_col = UnicodeWidthStr::width(before.as_str());
-    let mut start = 0usize;
-    while inner_w > 0 && cursor_col >= inner_w && start < cursor {
-        let w = chars[start].width().unwrap_or(0).max(1);
-        cursor_col = cursor_col.saturating_sub(w);
-        start += 1;
-    }
-    let visible: String = chars[start..].iter().collect();
+    let rows = crate::inputbox::rows(&app.input, inner_w);
+    let (cur_row, cursor_col) = crate::inputbox::cursor_pos(&app.input, &rows, app.input_cursor);
+    let visible_rows = (area.height.saturating_sub(2) as usize).max(1);
+    let first = (cur_row + 1)
+        .saturating_sub(visible_rows)
+        .min(rows.len().saturating_sub(visible_rows));
+    let visible: Vec<Line> = rows
+        .iter()
+        .skip(first)
+        .take(visible_rows)
+        .map(|r| Line::raw(crate::inputbox::row_text(&app.input, *r)))
+        .collect();
 
     let para = Paragraph::new(visible)
         .style(style)
@@ -1161,7 +1165,8 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
             .saturating_add(1)
             .saturating_add(cursor_col as u16)
             .min(area.x + area.width.saturating_sub(2));
-        f.set_cursor_position((x, area.y + 1));
+        let y = area.y + 1 + (cur_row - first) as u16;
+        f.set_cursor_position((x, y));
     }
 }
 

@@ -932,3 +932,62 @@ fn queue_sends_one_at_a_time_when_idle() {
     assert!(r.is_empty());
     assert_eq!(dropped, 1);
 }
+
+#[test]
+fn inputbox_wraps_and_tracks_cursor() {
+    use crate::inputbox::{cursor_pos, index_at, line_bounds, rows};
+    // 寬 4：中文字佔 2 欄，每列 2 字
+    let t = "一二三四五";
+    let r = rows(t, 4);
+    assert_eq!(r.len(), 3);
+    assert_eq!(cursor_pos(t, &r, 0), (0, 0));
+    assert_eq!(
+        cursor_pos(t, &r, 2),
+        (1, 0),
+        "wrap boundary belongs to next row"
+    );
+    assert_eq!(
+        cursor_pos(t, &r, 5),
+        (2, 2),
+        "end of input stays on the last row"
+    );
+    // 明確換行
+    let t = "ab\ncd\n";
+    let r = rows(t, 10);
+    assert_eq!(r.len(), 3);
+    assert_eq!(
+        cursor_pos(t, &r, 2),
+        (0, 2),
+        "cursor before newline is on the first row"
+    );
+    assert_eq!(cursor_pos(t, &r, 3), (1, 0));
+    assert_eq!(cursor_pos(t, &r, 6), (2, 0));
+    assert_eq!(index_at(t, &r, 1, 1), 4);
+    assert_eq!(index_at(t, &r, 1, 9), 5, "clamps to row end");
+    assert_eq!(line_bounds(t, 4), (3, 5));
+    assert_eq!(rows("", 10).len(), 1);
+}
+
+#[test]
+fn multiline_input_keys_and_paste() {
+    let mut app = App::new();
+    app.mode = Mode::Prompt;
+    app.input_inner_w = 20;
+    handle_paste(&mut app, "line1\r\nline2\nline3");
+    assert_eq!(app.input, "line1\nline2\nline3");
+    // ↑ 在多行內先移動游標，而不是回顧歷史
+    app.prompt_history.push("old");
+    assert!(crate::input::move_cursor_row(&mut app, true));
+    assert!(crate::input::move_cursor_row(&mut app, true));
+    assert!(
+        !crate::input::move_cursor_row(&mut app, true),
+        "top row falls through to history"
+    );
+    assert!(crate::input::move_cursor_row(&mut app, false));
+    // 命令列維持單行：換行轉成空白
+    app.mode = Mode::Command;
+    app.input.clear();
+    app.input_cursor = 0;
+    handle_paste(&mut app, "a\nb");
+    assert_eq!(app.input, "a b");
+}

@@ -143,6 +143,8 @@ pub(crate) struct App {
     pub(crate) show_thoughts: bool,
     /// 展開每一筆工具呼叫；預設把連續的工具行摺成一行。
     pub(crate) show_tools: bool,
+    /// 輸入框內寬（由繪製更新），供上下移動游標換算顯示列。
+    pub(crate) input_inner_w: usize,
     pub(crate) prompt_history: crate::history::History,
     pub(crate) command_history: crate::history::History,
     pub(crate) queues: crate::history::PromptQueues,
@@ -219,6 +221,7 @@ impl App {
             raw_md: false,
             show_thoughts: false,
             show_tools: false,
+            input_inner_w: 80,
             prompt_history: crate::history::History::default(),
             command_history: crate::history::History::default(),
             queues: crate::history::PromptQueues::default(),
