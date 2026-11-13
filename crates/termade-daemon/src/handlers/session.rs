@@ -21,6 +21,15 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         .cwd
         .as_ref()
         .map(PathBuf::from)
+        // 沒指定就沿用父 session 所在的專案，最後才是 daemon 啟動的目錄。
+        .or_else(|| {
+            let pid = shared.resolve_session(spawn.parent.as_ref()?);
+            lock(&shared.inner)
+                .state
+                .sessions
+                .get(&pid)
+                .map(|s| PathBuf::from(s.project_root()))
+        })
         .unwrap_or_else(|| shared.default_cwd());
     let mut branch = None;
     let mut repo_root = None;

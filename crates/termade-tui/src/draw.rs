@@ -640,6 +640,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         r
     };
     let multi_project = roots.len() > 1;
+    let hidden = app.state.sessions.len().saturating_sub(ids.len());
     let items: Vec<ListItem> = ids
         .iter()
         .filter_map(|id| app.state.sessions.get(id))
@@ -729,11 +730,14 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(if app.scope_here {
-                    " Sessions · 本專案 "
+                    match hidden {
+                        0 => " Sessions · 本專案 ".to_string(),
+                        n => format!(" Sessions · 本專案（另 {n} 個在別處，P 顯示） "),
+                    }
                 } else if multi_project {
-                    " Sessions · 全部專案 "
+                    " Sessions · 全部專案 ".to_string()
                 } else {
-                    " Sessions "
+                    " Sessions ".to_string()
                 }),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))

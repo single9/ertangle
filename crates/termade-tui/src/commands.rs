@@ -575,7 +575,9 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         writer,
         &Request::Spawn(SpawnRequest {
             kind: kind.clone(),
-            cwd: None,
+            cwd: std::env::current_dir()
+                .ok()
+                .map(|p| p.to_string_lossy().to_string()),
             label: None,
             role: Role::Worker,
             prompt,

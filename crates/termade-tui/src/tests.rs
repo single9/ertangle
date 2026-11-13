@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use termade_core::{Cost, Role, Session};
 
 fn sample_app(lines: &[&str]) -> App {
-    let mut app = App::new();
+    let mut app = test_app();
     let s = Session {
         id: "ses_test".into(),
         kind: AgentKind::OpenCode,
@@ -170,7 +170,7 @@ fn main_pane_text_excludes_sidebars() {
 
 #[test]
 fn input_editing_respects_unicode_cursor() {
-    let mut app = App::new();
+    let mut app = test_app();
     app.mode = Mode::Prompt;
     insert_str_input(&mut app, "你好");
     assert_eq!(app.input, "你好");
@@ -970,7 +970,7 @@ fn inputbox_wraps_and_tracks_cursor() {
 
 #[test]
 fn multiline_input_keys_and_paste() {
-    let mut app = App::new();
+    let mut app = test_app();
     app.mode = Mode::Prompt;
     app.input_inner_w = 20;
     handle_paste(&mut app, "line1\r\nline2\nline3");
@@ -994,7 +994,7 @@ fn multiline_input_keys_and_paste() {
 
 #[test]
 fn scope_filters_sessions_by_project_and_names_disambiguate() {
-    let mut app = App::new();
+    let mut app = test_app();
     app.home_project = "/work/alpha".into();
     let mk = |id: &str, cwd: &str, root: Option<&str>| termade_core::Session {
         id: id.into(),
@@ -1030,4 +1030,11 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
     let roots = ["/a/app", "/b/app", "/c/x"];
     assert_eq!(crate::app::project_name("/a/app", &roots), "a/app");
     assert_eq!(crate::app::project_name("/c/x", &roots), "x");
+}
+
+/// 測試用 App：session 的 cwd 是任意值，所以預設不套用「只看本專案」。
+fn test_app() -> App {
+    let mut app = App::new();
+    app.scope_here = false;
+    app
 }

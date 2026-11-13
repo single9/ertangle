@@ -226,7 +226,7 @@ impl App {
             show_thoughts: false,
             show_tools: false,
             home_project: home_project(&cwd),
-            scope_here: false,
+            scope_here: true,
             input_inner_w: 80,
             prompt_history: crate::history::History::default(),
             command_history: crate::history::History::default(),

@@ -124,6 +124,12 @@ pub(crate) fn cmd_spawn(
         None => None,
     };
     let parent = parent.or_else(|| std::env::var("TERMADE_SESSION").ok());
+    // 沒指定 --cwd 時用呼叫者所在的目錄（daemon 是共用的，它的 cwd 不一定是這個專案）。
+    let cwd = cwd.or_else(|| {
+        std::env::current_dir()
+            .ok()
+            .map(|p| p.to_string_lossy().to_string())
+    });
     let req = Request::Spawn(SpawnRequest {
         kind,
         cwd,
