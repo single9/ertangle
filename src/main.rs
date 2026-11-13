@@ -6,13 +6,14 @@
 //! * M2 協作：`whoami`、`peers`/`sessions`、`spawn`、`prompt`、`send`、`inbox`、`wait`、`ask`、`tasks`、`task`、`task-update`、`status`、`artifact`
 //! * M3 工作區與審查：`worktrees`、`diff`、`review`、`merge`、`pr`、`gc`
 //! * M4 打磨：`sleep`、`wake`、`cost`、`replay`
+//! * Shell 補全：`completions <bash|zsh|fish>`（隱藏的 `__complete sessions` 供補全腳本查 session）
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod cmd;
-use cmd::{bus::*, cost::*, daemon::*, session::*, task::*, worktree::*};
+use cmd::{bus::*, completions::*, cost::*, daemon::*, session::*, task::*, worktree::*};
 
 #[derive(Parser)]
 #[command(
@@ -72,7 +73,7 @@ enum Cmd {
     /// 建立新的 agent session
     Spawn {
         /// Agent 種類：opencode / claude / codex / antigravity；可加 `:model`（例如 claude:opus）
-        #[arg(long, default_value = "opencode")]
+        #[arg(long, default_value = "opencode", value_parser = KindParser)]
         kind: String,
         /// 啟動後立刻送出的 prompt
         #[arg(long)]
@@ -90,10 +91,10 @@ enum Cmd {
         #[arg(long)]
         worktree: bool,
         /// 傳輸通道：auto（預設）/ structured / pty
-        #[arg(long, default_value = "auto")]
+        #[arg(long, default_value = "auto", value_parser = transport_values())]
         transport: String,
         /// 權限政策：ask / auto / bypass（省略則依 config.toml，預設 auto）
-        #[arg(long)]
+        #[arg(long, value_parser = permission_values(), ignore_case = true)]
         permission: Option<String>,
         /// 父 session id 或標籤（未指定時若有 TERMADE_SESSION 則自動繼承）
         #[arg(long)]
@@ -102,7 +103,7 @@ enum Cmd {
         #[arg(long)]
         model: Option<String>,
         /// 推理強度：low / medium / high / xhigh / max（省略則依 config.toml）
-        #[arg(long)]
+        #[arg(long, value_parser = EFFORT_VALUES)]
         effort: Option<String>,
         /// 附加檔案或圖片到初始 prompt（可重複）
         #[arg(short = 'a', long = "attach")]
@@ -132,9 +133,9 @@ enum Cmd {
     Handoff {
         session: String,
         /// 接手的 agent，可加 `:model`，例如 codex、claude:sonnet
-        #[arg(long)]
+        #[arg(long, value_parser = KindParser)]
         to: String,
-        #[arg(long)]
+        #[arg(long, value_parser = EFFORT_VALUES)]
         effort: Option<String>,
         /// 補充給接手者的說明
         #[arg(long)]
@@ -317,6 +318,14 @@ enum Cmd {
     },
     /// 關閉常駐的 daemon 與所有受管 agent 子程序
     Shutdown,
+    /// 產生 shell 補全腳本並印到 stdout（bash / zsh / fish）
+    Completions { shell: clap_complete::Shell },
+    /// 補全腳本用的查詢（不會啟動 daemon）
+    #[command(name = "__complete", hide = true)]
+    Complete {
+        #[arg(value_parser = ["sessions"])]
+        what: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -443,6 +452,8 @@ fn main() -> Result<()> {
             json,
         } => cmd_replay(since, file, all, json),
         Cmd::Shutdown => cmd_shutdown(),
+        Cmd::Completions { shell } => cmd_completions(shell),
+        Cmd::Complete { .. } => cmd_complete_sessions(),
     }
 }
 
