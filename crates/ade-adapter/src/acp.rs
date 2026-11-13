@@ -259,6 +259,9 @@ impl AgentControl for AcpControl {
         std::thread::spawn(move || {
             if let Err(e) = conn.prompt(&text, &atts) {
                 tracing::warn!("ACP prompt 失敗：{e}");
+                if ade_core::looks_like_limit(&e.to_string()) {
+                    let _ = conn.tx.send(AgentEvent::Limited(e.to_string()));
+                }
             }
         });
         Ok(())

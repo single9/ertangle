@@ -67,6 +67,9 @@ pub struct SpawnRequest {
     /// 初始 prompt 的附件。
     #[serde(default)]
     pub attachments: Vec<Attachment>,
+    /// 沿用該 session 的工作目錄、分支與 repo（交接用，不建立新 worktree）。
+    #[serde(default)]
+    pub inherit_from: Option<SessionId>,
     /// 一次性額外命令列參數（附加在設定檔的 args 之後）。
     #[serde(default)]
     pub args: Vec<String>,
@@ -107,6 +110,18 @@ pub enum Request {
         session: SessionId,
         #[serde(default)]
         force: bool,
+    },
+    /// 把 session 的工作交接給另一個 agent：產生交接簡報，新 agent 沿用同一個工作目錄。
+    Handoff {
+        session: SessionId,
+        kind: AgentKind,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        effort: Option<String>,
+        /// 額外補充給接手者的說明。
+        #[serde(default)]
+        note: Option<String>,
     },
     /// 結束 session 並殺掉程序。
     Kill {
@@ -326,6 +341,7 @@ mod tests {
             model: None,
             effort: None,
             attachments: vec![],
+            inherit_from: None,
             args: vec![],
         });
         let line = encode_line(&req).unwrap();

@@ -128,6 +128,18 @@ enum Cmd {
     Sleep { session: String },
     /// 喚醒已休眠的 session
     Wake { session: String },
+    /// 把 session 的工作交接給另一個 agent（額度用完時）：沿用同一個工作目錄，附上交接簡報與 diff
+    Handoff {
+        session: String,
+        /// 接手的 agent，可加 `:model`，例如 codex、claude:sonnet
+        #[arg(long)]
+        to: String,
+        #[arg(long)]
+        effort: Option<String>,
+        /// 補充給接手者的說明
+        #[arg(long)]
+        note: Option<String>,
+    },
     /// 從清單移除已結束的 session（有 worktree 分支時需已合併，或加 --force）
     Rm {
         session: String,
@@ -354,6 +366,12 @@ fn main() -> Result<()> {
         Cmd::Sleep { session } => cmd_sleep(session),
         Cmd::Wake { session } => cmd_wake(session),
         Cmd::Rm { session, force } => cmd_rm(session, force),
+        Cmd::Handoff {
+            session,
+            to,
+            effort,
+            note,
+        } => cmd_handoff(session, to, effort, note),
         Cmd::Send {
             to,
             channel,

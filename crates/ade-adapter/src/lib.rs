@@ -42,6 +42,8 @@ pub enum AgentEvent {
     Permission(PermissionRequest),
     Cost(Cost),
     Model(String),
+    /// 額度用完／被限流。
+    Limited(String),
     /// 程序結束。
     Exited(Option<i32>),
 }

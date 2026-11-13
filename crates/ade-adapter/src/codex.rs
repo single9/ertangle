@@ -192,6 +192,10 @@ impl Conn {
             }
             "error" => {
                 tracing::warn!("codex error 通知：{}", p);
+                let text = p.to_string();
+                if ade_core::looks_like_limit(&text) {
+                    let _ = self.tx.send(AgentEvent::Limited(text));
+                }
             }
             _ => {}
         }

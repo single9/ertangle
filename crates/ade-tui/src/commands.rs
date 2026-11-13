@@ -80,6 +80,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "[agent[:model] prompt]  新增 agent；不帶參數開選擇器",
     ),
     ("new", "開選擇器：agent → model → prompt"),
+    (
+        "handoff",
+        "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 agent",
+    ),
     ("kill", "結束選取的 session"),
     ("cancel", "中斷選取 session 的目前回合"),
     ("sleep", "休眠選取的 session"),
@@ -127,6 +131,41 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
     let rest = parts.next().unwrap_or("").trim();
 
     match verb.as_str() {
+        "handoff" => {
+            let Some(src) = app.selected_id() else {
+                app.status = "沒有選取的 session".into();
+                return Ok(());
+            };
+            if rest.is_empty() {
+                crate::menu::start_handoff_picker(app);
+                return Ok(());
+            }
+            let mut parts = rest.splitn(2, char::is_whitespace);
+            let head = parts.next().unwrap_or("");
+            let note = parts
+                .next()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            let (kind_str, model) = match head.split_once(':') {
+                Some((k, m)) if !m.is_empty() => (k, Some(m.to_string())),
+                _ => (head, None),
+            };
+            let Some(kind) = AgentKind::parse(kind_str) else {
+                app.status = format!("未知的 agent：{kind_str}");
+                return Ok(());
+            };
+            send(
+                writer,
+                &Request::Handoff {
+                    session: src,
+                    kind: kind.clone(),
+                    model,
+                    effort: None,
+                    note,
+                },
+            )?;
+            app.status = format!("已要求交接給 {kind}");
+        }
         "spawn" if rest.is_empty() => crate::menu::start_spawn_picker(app),
         "new" => crate::menu::start_spawn_picker(app),
         "spawn" => submit_spawn(app, writer, rest)?,
@@ -395,6 +434,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
             model,
             effort,
             attachments,
+            inherit_from: None,
             args: vec![],
         }),
     )?;

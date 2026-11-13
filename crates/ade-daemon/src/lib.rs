@@ -16,6 +16,7 @@ mod client;
 pub mod config;
 mod git;
 mod handlers;
+mod handoff;
 mod logwriter;
 mod server;
 use logwriter::*;
@@ -390,6 +391,16 @@ impl Shared {
         }
     }
 
+    /// 另一個仍在執行的 session 是否正在使用這個工作目錄（交接後新舊 session 共用同一個 worktree）。
+    pub(crate) fn cwd_in_use_by_other(&self, s: &Session) -> Option<String> {
+        lock(&self.inner)
+            .state
+            .sessions
+            .values()
+            .find(|o| o.id != s.id && o.cwd == s.cwd && o.status.is_live())
+            .map(|o| o.label.clone())
+    }
+
     pub(crate) fn set_log_health(&self, ok: bool) {
         let mut inner = lock(&self.inner);
         if inner.state.log_ok == ok {
@@ -512,6 +523,10 @@ impl Shared {
             AgentEvent::Model(m) => Event::SessionModel {
                 session: sid.clone(),
                 model: m,
+            },
+            AgentEvent::Limited(detail) => Event::SessionLimited {
+                session: sid.clone(),
+                detail,
             },
             AgentEvent::Exited(code) => Event::SessionExited {
                 session: sid.clone(),

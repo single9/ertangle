@@ -20,7 +20,7 @@ pub(crate) fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) 
     match app.mode {
         Mode::Normal => {}
         Mode::Menu => return crate::menu::handle_menu_key(app, writer, key),
-        Mode::Pick => return crate::menu::handle_pick_key(app, key),
+        Mode::Pick => return crate::menu::handle_pick_key(app, writer, key),
         _ => return handle_input_mode(app, writer, key),
     }
 

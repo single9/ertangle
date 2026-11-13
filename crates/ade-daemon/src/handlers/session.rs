@@ -24,6 +24,15 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         .unwrap_or_else(|| shared.default_cwd());
     let mut branch = None;
     let mut repo_root = None;
+    // 交接：沿用來源 session 的工作目錄、分支與 repo（不建立新 worktree）。
+    if let Some(src) = &spawn.inherit_from {
+        let sid = shared.resolve_session(src);
+        if let Some(s) = lock(&shared.inner).state.sessions.get(&sid) {
+            cwd = PathBuf::from(&s.cwd);
+            branch = s.branch.clone();
+            repo_root = s.repo_root.clone();
+        }
+    }
 
     if spawn.worktree {
         let root = git_toplevel(&cwd).unwrap_or_else(|| cwd.clone());
@@ -189,7 +198,8 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
         Err(e) => {
             // 啟動失敗：不留殘影。剛建立的 worktree 與分支一併清掉，session 直接移除。
-            if session.branch.is_some() {
+            // 交接時 worktree 屬於來源 session，不能因為新 agent 啟動失敗就刪掉。
+            if session.branch.is_some() && spawn.inherit_from.is_none() {
                 let repo = session
                     .repo_root
                     .as_deref()
@@ -251,6 +261,93 @@ fn with_attachment_summary(text: &str, atts: &[ade_core::Attachment]) -> String 
     out
 }
 
+/// 交接：停掉舊 session、組簡報、讓新 agent 沿用同一個工作目錄接手。
+pub(crate) fn handle_handoff(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    kind: ade_core::AgentKind,
+    model: Option<String>,
+    effort: Option<String>,
+    note: Option<String>,
+) {
+    let sid = shared.resolve_session(&session);
+    let Some(src) = lock(&shared.inner).state.sessions.get(&sid).cloned() else {
+        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        return;
+    };
+    // 舊 agent 還在跑就先停掉，避免兩個 agent 同時改同一個目錄。
+    if let Some((_, ctl)) = shared.control(&sid) {
+        let _ = ctl.kill();
+        shared.emit(Event::SessionExited {
+            session: sid.clone(),
+            code: None,
+        });
+    }
+    let wt = std::path::Path::new(&src.cwd);
+    let mut git_note = String::new();
+    if src.branch.is_some() && wt.is_dir() {
+        if let Err(e) = crate::git::auto_commit_worktree(wt, &src.label) {
+            git_note = format!("（自動 commit 失敗：{e}）\n");
+        }
+    }
+    let (_, status) = crate::git::git_status_summary(wt);
+    let log = crate::git::git_output(wt, &["log", "--oneline", "-8"])
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    let stat = crate::git::git_output(wt, &["diff", "--stat", "HEAD~1", "HEAD"])
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    let git_summary = format!("{git_note}工作區狀態：{status}\n最近的 commit：\n{log}\n最後一個 commit 的變更：\n{stat}\n");
+    let brief = {
+        let inner = lock(&shared.inner);
+        crate::handoff::build_handoff_brief(&inner.state, &src, &git_summary, note.as_deref())
+    };
+    let mut attachments = Vec::new();
+    if wt.is_dir() {
+        if let Ok(diff) = crate::git::compute_worktree_diff(wt) {
+            let mut text = diff;
+            if text.len() > 200 * 1024 {
+                text.truncate(200 * 1024);
+                text.push_str("\n…(diff 過長已截斷)\n");
+            }
+            attachments.push(ade_core::Attachment {
+                name: "handoff.diff".into(),
+                mime: "text/plain".into(),
+                size: text.len() as u64,
+                text: Some(text),
+                ..Default::default()
+            });
+        }
+    }
+    shared.emit(Event::SessionNote {
+        session: sid.clone(),
+        note: format!("已交接給 {}", kind.id()),
+    });
+    handle_spawn(
+        shared,
+        reply,
+        SpawnRequest {
+            kind: kind.clone(),
+            cwd: Some(src.cwd.clone()),
+            label: Some(format!("{}→{}", src.label, kind.id())),
+            role: src.role.clone(),
+            prompt: Some(brief),
+            worktree: false,
+            transport: Default::default(),
+            permission: Some(src.permission),
+            parent: src.parent.clone(),
+            model,
+            effort,
+            attachments,
+            inherit_from: Some(sid),
+            args: vec![],
+        },
+    );
+}
+
 pub(crate) fn handle_cancel(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
     match shared.control(&session) {
         Some((_, ctl)) => {
@@ -274,6 +371,10 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         let _ = reply.send(Frame::error(
             "session 仍在執行，請先結束（kill）".to_string(),
         ));
+        return;
+    }
+    if let Some(user) = shared.cwd_in_use_by_other(&s) {
+        let _ = reply.send(Frame::error(format!("worktree 仍被 {user} 使用，不能移除")));
         return;
     }
     if s.branch.is_some() {

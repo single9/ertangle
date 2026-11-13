@@ -927,6 +927,7 @@ fn failed_spawn_leaves_no_session() {
             model: None,
             effort: None,
             attachments: vec![],
+            inherit_from: None,
             args: vec![],
         }),
     );
@@ -943,7 +944,11 @@ fn session_remove_only_ended() {
         session: restart_session("ses-live", SessionStatus::Idle),
     });
     shared.emit(Event::SessionStarted {
-        session: restart_session("ses-dead", SessionStatus::Failed),
+        session: {
+            let mut d = restart_session("ses-dead", SessionStatus::Failed);
+            d.cwd = "/tmp/other-dead".into();
+            d
+        },
     });
     let (tx, rx) = client_channel(None);
     for id in ["ses-live", "ses-dead"] {

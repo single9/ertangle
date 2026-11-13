@@ -53,6 +53,7 @@ fn spawn_prompt_output_shutdown() {
         model: None,
         effort: None,
         attachments: vec![],
+        inherit_from: None,
         args: vec![],
     }))
     .unwrap();
@@ -84,6 +85,7 @@ fn spawn_prompt_output_shutdown() {
             model: None,
             effort: None,
             attachments: vec![],
+            inherit_from: None,
             args: vec![],
         }))
         .unwrap();
@@ -115,6 +117,59 @@ fn spawn_prompt_output_shutdown() {
     let perms: Vec<_> = state.sessions.values().map(|s| s.permission).collect();
     assert!(perms.contains(&ade_core::PermissionPolicy::Bypass));
     assert!(perms.contains(&ade_core::PermissionPolicy::Ask));
+
+    // 交接：舊 session 停止，新 session 沿用同一個工作目錄，簡報含原始任務。
+    let mut h = Client::connect().unwrap();
+    let old_id = {
+        let mut snap = Client::connect().unwrap();
+        snap.send(&Request::Snapshot).unwrap();
+        let state = loop {
+            if let Frame::Snapshot { state } = snap.recv().unwrap() {
+                break state;
+            }
+        };
+        state
+            .sessions
+            .values()
+            .find(|s| s.label == "e2e")
+            .unwrap()
+            .id
+            .clone()
+    };
+    h.send(&Request::Handoff {
+        session: old_id.clone(),
+        kind: AgentKind::ClaudeCode,
+        model: None,
+        effort: None,
+        note: Some("先看測試".into()),
+    })
+    .unwrap();
+    loop {
+        match h.recv().unwrap() {
+            Frame::Ok { .. } => break,
+            Frame::Error { message } => panic!("交接失敗：{message}"),
+            _ => {}
+        }
+    }
+    let mut snap = Client::connect().unwrap();
+    snap.send(&Request::Snapshot).unwrap();
+    let state = loop {
+        if let Frame::Snapshot { state } = snap.recv().unwrap() {
+            break state;
+        }
+    };
+    let old = &state.sessions[&old_id];
+    assert!(!old.status.is_live(), "舊 session 應已停止");
+    let new = state
+        .sessions
+        .values()
+        .find(|s| s.label == "e2e→claude_code" || s.label.starts_with("e2e→"))
+        .expect("應有接手的新 session");
+    assert_eq!(new.cwd, old.cwd);
+    let echoed = state.transcripts[&new.id]
+        .iter()
+        .any(|l| l.contains("接手"));
+    assert!(echoed, "新 session 的第一個 prompt 應是交接簡報");
 
     let mut s = Client::connect().unwrap();
     s.send(&Request::Shutdown).unwrap();

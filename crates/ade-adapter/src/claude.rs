@@ -188,6 +188,10 @@ impl Conn {
             let _ = self.tx.send(AgentEvent::Cost(cost));
         }
         if msg["is_error"].as_bool().unwrap_or(false) {
+            let detail = msg["result"].as_str().unwrap_or("").to_string();
+            if ade_core::looks_like_limit(&detail) {
+                let _ = self.tx.send(AgentEvent::Limited(detail));
+            }
             let _ = self.tx.send(AgentEvent::Status(SessionStatus::Failed));
         } else {
             let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));

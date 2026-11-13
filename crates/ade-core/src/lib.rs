@@ -560,6 +560,11 @@ pub enum Event {
         session: SessionId,
         status: SessionStatus,
     },
+    /// agent 回報額度用完／被限流（可交接給其他 agent）。
+    SessionLimited {
+        session: SessionId,
+        detail: String,
+    },
     /// session 從清單移除（啟動失敗或使用者清除已結束的 session）。
     SessionRemoved {
         session: SessionId,
@@ -718,6 +723,13 @@ impl State {
             Event::SessionStatus { session, status } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = *status;
+                }
+            }
+            Event::SessionLimited { session, detail } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.status = SessionStatus::Failed;
+                    let d: String = detail.chars().take(80).collect();
+                    s.status_note = Some(format!("額度用完：{d}（可用 handoff 交接）"));
                 }
             }
             Event::SessionRemoved { session } => {
@@ -1109,6 +1121,22 @@ pub fn tool_summary(input: &str) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// 錯誤文字是否像額度用完／被限流（各 agent 的訊息不一，採保守的關鍵字比對）。
+pub fn looks_like_limit(text: &str) -> bool {
+    let t = text.to_ascii_lowercase();
+    (t.contains("limit")
+        && (t.contains("hit your")
+            || t.contains("usage")
+            || t.contains("rate")
+            || t.contains("resets")))
+        || t.contains("rate_limit")
+        || t.contains("rate limit")
+        || t.contains("insufficient_quota")
+        || t.contains("quota exceeded")
+        || t.contains("exceeded your current quota")
+        || t.contains("429")
 }
 
 /// 隨 prompt 一起送出的附件（檔案或圖片）。內容由送出端（TUI／CLI）讀好並內嵌，
@@ -1598,6 +1626,17 @@ mod tests {
 #[cfg(test)]
 mod attachment_tests {
     use super::*;
+
+    #[test]
+    fn limit_detection_matches_real_messages_but_not_normal_errors() {
+        assert!(looks_like_limit(
+            "You've hit your 5-hour limit · resets 4:30am (Asia/Taipei)"
+        ));
+        assert!(looks_like_limit("Error: 429 Too Many Requests"));
+        assert!(looks_like_limit("exceeded your current quota"));
+        assert!(!looks_like_limit("File not found: limits.rs"));
+        assert!(!looks_like_limit("compile error"));
+    }
 
     #[test]
     fn base64_matches_known_vectors() {

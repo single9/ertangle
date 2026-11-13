@@ -17,6 +17,8 @@ pub(crate) enum Act {
     Cmd(&'static str),
     /// 開啟 spawn 選擇器。
     Spawn,
+    /// 開啟交接選擇器（選接手的 agent 與 model）。
+    Handoff,
     /// 切到輸入模式並預填文字。
     Prefill(Mode, &'static str),
 }
@@ -51,6 +53,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
             "SPC s · session",
             vec![
                 it('n', "新增 agent…（選 agent 與 model）", Act::Spawn),
+                it('h', "交接給其他 agent（額度用完時）", Act::Handoff),
                 it('c', "中斷目前回合", Act::Cmd("cancel")),
                 it('k', "結束 session", Act::Cmd("kill")),
                 it('z', "休眠", Act::Cmd("sleep")),
@@ -136,6 +139,10 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
                 Act::Spawn => {
                     close(app);
                     start_spawn_picker(app);
+                }
+                Act::Handoff => {
+                    close(app);
+                    start_handoff_picker(app);
                 }
                 Act::Prefill(mode, text) => {
                     close(app);
@@ -366,7 +373,21 @@ pub(crate) fn parse_models(out: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// 交接：選接手的 agent 與 model，選完直接送出（簡報由 daemon 產生）。
+pub(crate) fn start_handoff_picker(app: &mut App) {
+    let Some(src) = app.selected_id() else {
+        app.status = "沒有選取的 session".into();
+        return;
+    };
+    start_spawn_picker(app);
+    app.handoff_from = Some(src);
+    if let Some(p) = app.picker.as_mut() {
+        p.title = "交接給哪個 agent".into();
+    }
+}
+
 pub(crate) fn start_spawn_picker(app: &mut App) {
+    app.handoff_from = None;
     let items = AgentKind::builtins()
         .iter()
         .map(|k| (k.id().to_string(), k.id().to_string()))
@@ -385,8 +406,34 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
     app.mode = Mode::Pick;
 }
 
-fn finish_picker(app: &mut App, kind: AgentKind, model: Option<String>, effort: Option<String>) {
+fn finish_picker(
+    app: &mut App,
+    writer: &mut ConnStream,
+    kind: AgentKind,
+    model: Option<String>,
+    effort: Option<String>,
+) -> Result<()> {
     app.picker = None;
+    app.mode = Mode::Normal;
+    if let Some(src) = app.handoff_from.take() {
+        crate::send(
+            writer,
+            &ade_protocol::Request::Handoff {
+                session: src,
+                kind: kind.clone(),
+                model: model.clone(),
+                effort,
+                note: None,
+            },
+        )?;
+        app.status = format!(
+            "已要求交接給 {}{}（舊 session 會停止，新 agent 沿用同一個工作目錄）",
+            kind.id(),
+            model.map(|m| format!(":{m}")).unwrap_or_default()
+        );
+        app.spawn_variants.clear();
+        return Ok(());
+    }
     app.status = format!(
         "spawn → {}{}{}：輸入 prompt 後 Enter（可留空）",
         kind.id(),
@@ -407,9 +454,10 @@ fn finish_picker(app: &mut App, kind: AgentKind, model: Option<String>, effort: 
     app.spawn_worktree = false;
     app.spawn_permission = None;
     app.spawn_bypass_armed = false;
+    Ok(())
 }
 
-pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
+pub(crate) fn handle_pick_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<()> {
     let Some(p) = app.picker.as_mut() else {
         app.mode = Mode::Normal;
         return Ok(());
@@ -496,7 +544,7 @@ pub(crate) fn handle_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
                         .as_deref()
                         .and_then(|m| p.variants.get(m).cloned())
                         .unwrap_or_default();
-                    finish_picker(app, kind, model, None);
+                    finish_picker(app, writer, kind, model, None)?;
                 }
             }
         }

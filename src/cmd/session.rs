@@ -136,6 +136,7 @@ pub(crate) fn cmd_spawn(
         model,
         effort,
         attachments: load_attachments(&attach)?,
+        inherit_from: None,
         args: extra,
     });
     match roundtrip(&req)? {
@@ -173,6 +174,33 @@ pub(crate) fn cmd_cancel(session: String) -> Result<()> {
 
 pub(crate) fn cmd_kill(session: String) -> Result<()> {
     roundtrip(&Request::Kill { session })?;
+    Ok(())
+}
+
+pub(crate) fn cmd_handoff(
+    session: String,
+    to: String,
+    effort: Option<String>,
+    note: Option<String>,
+) -> Result<()> {
+    let (kind_str, model) = match to.split_once(':') {
+        Some((k, m)) if !m.is_empty() => (k.to_string(), Some(m.to_string())),
+        _ => (to.clone(), None),
+    };
+    let kind = AgentKind::parse(&kind_str).with_context(|| {
+        format!("未知的 agent：{kind_str}（opencode/claude/codex/antigravity）")
+    })?;
+    match roundtrip(&Request::Handoff {
+        session,
+        kind,
+        model,
+        effort,
+        note,
+    })? {
+        Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| "已交接".into())),
+        Frame::Error { message } => bail!("{message}"),
+        _ => {}
+    }
     Ok(())
 }
 

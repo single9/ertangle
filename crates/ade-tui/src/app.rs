@@ -110,6 +110,8 @@ pub(crate) struct App {
     /// 選擇器選好的 (agent, model)；Spawn 模式的輸入就只是 prompt。
     pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
     pub(crate) spawn_effort: Option<String>,
+    /// 選擇器用於交接時，來源 session。
+    pub(crate) handoff_from: Option<SessionId>,
     /// `@` 檔案建議：上次的查詢與選取索引。
     pub(crate) at_sel: (String, usize),
     /// 選到的 model 有哪些 effort 變體（Antigravity：effort 是 model id 的尾巴）。
@@ -190,6 +192,7 @@ impl App {
             spawn_bypass_armed: false,
             spawn_target: None,
             spawn_effort: None,
+            handoff_from: None,
             at_sel: (String::new(), 0),
             spawn_variants: Vec::new(),
             menu_path: Vec::new(),

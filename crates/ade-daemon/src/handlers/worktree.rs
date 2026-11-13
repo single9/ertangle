@@ -142,6 +142,10 @@ pub(crate) fn handle_gc(
     let mut skipped: Vec<String> = Vec::new();
     for s in candidates {
         let repo = session_repo(&default_cwd, &s);
+        if let Some(user) = shared.cwd_in_use_by_other(&s) {
+            skipped.push(format!("{}（worktree 仍被 {user} 使用）", s.label));
+            continue;
+        }
         if !force {
             if let Some(reason) = gc_block_reason(&repo, &s) {
                 skipped.push(format!("{}（{reason}）", s.label));
