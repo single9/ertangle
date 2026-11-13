@@ -14,6 +14,7 @@ mod clipboard;
 mod commands;
 mod diff;
 mod draw;
+mod help;
 mod input;
 mod markdown;
 mod menu;

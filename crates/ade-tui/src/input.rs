@@ -20,6 +20,10 @@ pub(crate) fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) 
     match app.mode {
         Mode::Normal => {}
         Mode::Menu => return crate::menu::handle_menu_key(app, writer, key),
+        Mode::Help => {
+            crate::help::handle_help_key(app, key);
+            return Ok(());
+        }
         Mode::Pick => return crate::menu::handle_pick_key(app, writer, key),
         _ => return handle_input_mode(app, writer, key),
     }
@@ -182,6 +186,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             }
         }
         KeyCode::Char(' ') => crate::menu::open_menu(app),
+        KeyCode::Char('?') => crate::help::open_help(app),
         KeyCode::Char('/') | KeyCode::Char(':') => {
             app.mode = Mode::Command;
             app.input.clear();
@@ -455,7 +460,7 @@ pub(crate) fn handle_input_mode(
                 }
                 Mode::Command => execute_command(app, writer, &text)?,
                 Mode::Jump => execute_jump(app, writer, &text)?,
-                Mode::Normal | Mode::Menu | Mode::Pick => {}
+                Mode::Normal | Mode::Menu | Mode::Pick | Mode::Help => {}
             }
         }
         _ => {}

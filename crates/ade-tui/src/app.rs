@@ -20,6 +20,8 @@ pub(crate) enum Mode {
     Jump,
     /// Space 選單（which-key）。
     Menu,
+    /// 說明面板。
+    Help,
     /// 清單選擇器（spawn 的 agent／model）。
     Pick,
 }
@@ -110,6 +112,7 @@ pub(crate) struct App {
     /// 選擇器選好的 (agent, model)；Spawn 模式的輸入就只是 prompt。
     pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
     pub(crate) spawn_effort: Option<String>,
+    pub(crate) help_scroll: usize,
     /// 選擇器用於交接時，來源 session。
     pub(crate) handoff_from: Option<SessionId>,
     /// `@` 檔案建議：上次的查詢與選取索引。
@@ -192,6 +195,7 @@ impl App {
             spawn_bypass_armed: false,
             spawn_target: None,
             spawn_effort: None,
+            help_scroll: 0,
             handoff_from: None,
             at_sel: (String::new(), 0),
             spawn_variants: Vec::new(),

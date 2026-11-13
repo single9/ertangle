@@ -101,6 +101,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         Mode::Command => draw_command_hints(f, chunks[2], app),
         Mode::Prompt | Mode::Spawn | Mode::Message => draw_file_suggestions(f, chunks[2], app),
         Mode::Pick => draw_picker(f, app),
+        Mode::Help => draw_help(f, app),
         _ => {}
     }
 }
@@ -236,6 +237,61 @@ pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &Ap
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
                 .title(" 專案檔案（Tab 採用、↑↓ 選擇） "),
+        ),
+        area,
+    );
+}
+
+/// 說明面板：置中的大浮層，可捲動。
+pub(crate) fn draw_help(f: &mut TuiFrame, app: &App) {
+    let full = f.area();
+    let w = full.width.saturating_sub(6).clamp(40, 110);
+    let h = full.height.saturating_sub(4).max(8);
+    let area = Rect::new(
+        full.x + full.width.saturating_sub(w) / 2,
+        full.y + full.height.saturating_sub(h) / 2,
+        w.min(full.width),
+        h.min(full.height),
+    );
+    let key_w = crate::help::help_lines()
+        .iter()
+        .filter(|(title, _, _)| !title)
+        .map(|(_, k, _)| UnicodeWidthStr::width(k.as_str()))
+        .max()
+        .unwrap_or(10)
+        .min(18);
+    let lines: Vec<Line> = crate::help::help_lines()
+        .into_iter()
+        .skip(app.help_scroll)
+        .map(|(is_title, k, d)| {
+            if is_title {
+                Line::from(Span::styled(
+                    format!(" ▎{k}"),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ))
+            } else if k.is_empty() {
+                Line::raw("")
+            } else {
+                let pad = key_w.saturating_sub(UnicodeWidthStr::width(k.as_str()));
+                Line::from(vec![
+                    Span::styled(
+                        format!("   {k}{}  ", " ".repeat(pad)),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                    Span::raw(d),
+                ])
+            }
+        })
+        .collect();
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(" 說明（j/k 捲動 · Esc 或 ? 關閉） "),
         ),
         area,
     );
@@ -516,15 +572,6 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         ),
     ]);
 
-    let md_mode = if app.raw_md { "raw" } else { "md" };
-    let follow = if app.view == CenterView::Transcript {
-        match app.transcript_scroll {
-            None => "▼ follow",
-            Some(_) => "⏸ paused",
-        }
-    } else {
-        ""
-    };
     let stats = Line::from(vec![
         Span::styled("  cost ", Style::default().fg(Color::DarkGray)),
         Span::styled(
@@ -533,10 +580,6 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         ),
         Span::styled(
             format!("  ({} in / {} out)", cost.input_tokens, cost.output_tokens),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            format!("   layout:{}", app.layout.id()),
             Style::default().fg(Color::DarkGray),
         ),
         quota_span(app),
@@ -548,37 +591,20 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
             },
             Style::default().fg(Color::Magenta),
         ),
+        // 只顯示偏離預設的狀態，預設值不佔版面。
         Span::styled(
-            format!("   md:{md_mode}"),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            format!("   think:{}", if app.show_thoughts { "on" } else { "off" }),
-            Style::default().fg(if app.show_thoughts {
-                Color::Yellow
-            } else {
-                Color::DarkGray
-            }),
-        ),
-        Span::styled(
-            format!("   mouse:{}", if app.mouse_capture { "on" } else { "off" }),
-            Style::default().fg(if app.mouse_capture {
-                Color::Yellow
-            } else {
-                Color::DarkGray
-            }),
-        ),
-        Span::styled(
-            if follow.is_empty() {
-                String::new()
-            } else {
-                format!("   {follow}")
-            },
-            Style::default().fg(if app.transcript_scroll.is_none() {
-                Color::Green
-            } else {
-                Color::Yellow
-            }),
+            [
+                app.raw_md.then_some("raw"),
+                app.show_thoughts.then_some("思考"),
+                (!app.mouse_capture).then_some("滑鼠關"),
+                (app.view == CenterView::Transcript && app.transcript_scroll.is_some())
+                    .then_some("⏸暫停跟隨"),
+            ]
+            .into_iter()
+            .flatten()
+            .map(|t| format!("  [{t}]"))
+            .collect::<String>(),
+            Style::default().fg(Color::Yellow),
         ),
         Span::styled(
             if app.state.log_ok { "" } else { "   log ✗" },
@@ -1077,10 +1103,8 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
-        Mode::Normal => {
-            " 輸入（Space=選單, :=命令, i=prompt/@peer/#ch, n=新增 agent, Ctrl-K=跳轉, g=Diff, t=原始/渲染, T=思考, PgUp/PgDn=捲動, F2=滑鼠） "
-                .to_string()
-        }
+        Mode::Normal => " 輸入（i 開始輸入 · n 新增 agent · ? 說明） ".to_string(),
+        Mode::Help => " 說明 ".to_string(),
         Mode::Prompt => " prompt（@檔案/圖片 附件、Tab 補全、Ctrl-V 貼剪貼簿圖片；@peer／#channel 傳訊息；Enter 送出） ".to_string(),
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => format!(
@@ -1139,13 +1163,9 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     let hints = match app.view {
-        CenterView::Transcript => {
-            "  q 離開(保留 daemon)  Q 關閉 daemon  Tab 切換  i prompt  n spawn  t 原始/渲染  T 思考  PgUp/PgDn 捲動  / 命令"
-        }
-        CenterView::Diff => {
-            "  q 離開  Q 關閉 daemon  j/k 選行  {/} hunk  c 審查註解  M 合併  [ ] 換 session  r 重整"
-        }
-        CenterView::Worktrees => "  q 離開  Q 關閉 daemon  M 合併選取  G 清理已結束  r 重整",
+        CenterView::Transcript => "  ? 說明  Space 選單  : 命令  Tab 換檢視  q 離開",
+        CenterView::Diff => "  ? 說明  j/k 選行  { } hunk  c 註解  M 合併  Tab 換檢視  q 離開",
+        CenterView::Worktrees => "  ? 說明  M 合併  G 清理  r 重整  Tab 換檢視  q 離開",
     };
     let text = Line::from(vec![
         Span::styled(

@@ -80,6 +80,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "[agent[:model] prompt]  新增 agent；不帶參數開選擇器",
     ),
     ("new", "開選擇器：agent → model → prompt"),
+    ("help", "說明面板：所有按鍵與命令"),
     ("quota", "顯示各 agent 帳號的額度與重置時間"),
     (
         "handoff",
@@ -132,6 +133,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
     let rest = parts.next().unwrap_or("").trim();
 
     match verb.as_str() {
+        "help" | "h" | "?" => crate::help::open_help(app),
         "quota" => {
             let now = ade_core::now_millis();
             app.status = if app.state.quotas.is_empty() {

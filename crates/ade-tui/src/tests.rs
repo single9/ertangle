@@ -63,11 +63,12 @@ fn transcript_renders_markdown_and_toggles_raw() {
     assert!(rendered.contains("bold"), "bold text missing");
     assert!(!rendered.contains("**bold**"), "markdown not stripped");
     assert!(rendered.contains("let x = 1;"), "code block missing");
-    assert!(rendered.contains("md"), "mode indicator missing");
+    assert!(!rendered.contains("[raw]"), "md 是預設，不該標示 raw");
 
     app.raw_md = true;
     let raw = render(&mut app);
     assert!(raw.contains("**bold**"), "raw mode should show markup");
+    assert!(raw.contains("[raw]"), "偏離預設時要在標題列標示");
 }
 
 #[test]
@@ -801,5 +802,33 @@ fn current_at_token_reads_text_before_cursor() {
     assert_eq!(
         crate::attach::current_at_token("看 @a 然後", 4),
         Some((2, "a".to_string()))
+    );
+}
+
+#[test]
+fn help_panel_lists_sections_and_closes() {
+    let mut app = sample_app(&["x"]);
+    crate::help::open_help(&mut app);
+    assert_eq!(app.mode, Mode::Help);
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(
+        squash(&text).contains("說明") && text.contains("Space"),
+        "{text}"
+    );
+    crate::help::handle_help_key(&mut app, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(app.mode, Mode::Normal);
+}
+
+#[test]
+fn header_hides_default_flags_and_shows_deviations() {
+    let mut app = sample_app(&["x"]);
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(!text.contains("layout:") && !text.contains("mouse:") && !text.contains("think:"));
+    app.show_thoughts = true;
+    app.raw_md = true;
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(
+        squash(&text).contains("[思考]") && text.contains("[raw]"),
+        "{text}"
     );
 }
