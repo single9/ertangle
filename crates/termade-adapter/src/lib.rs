@@ -16,6 +16,7 @@ pub mod ansi;
 pub mod claude;
 pub mod codex;
 pub mod pty;
+pub mod stderr;
 pub mod stream;
 
 use anyhow::{bail, Context, Result};
@@ -46,6 +47,8 @@ pub enum AgentEvent {
     NativeId(String),
     /// 額度用完／被限流。
     Limited(String),
+    /// 設定 session 的狀態備註（例如失敗原因）。
+    Note(String),
     /// session 的 context 用量。
     Context {
         used: u64,

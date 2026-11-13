@@ -589,6 +589,10 @@ impl Shared {
                 session: sid.clone(),
                 detail,
             },
+            AgentEvent::Note(note) => Event::SessionNote {
+                session: sid.clone(),
+                note,
+            },
             AgentEvent::Exited(code) => Event::SessionExited {
                 session: sid.clone(),
                 code,

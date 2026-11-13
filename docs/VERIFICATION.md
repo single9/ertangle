@@ -96,3 +96,20 @@
 | **OpenCode** | ✅ 有效（`opencode acp` 會將 `initialize.instructions` 放進 context） | ACP 首則 prompt 前置（`UserPrompt` 事件不含） | ✅ 主動呼叫 `termade_status` 與 `termade_send(to="coord")` 回報 |
 | **Antigravity** | ❌ 無效（`agy acp` 忽略 `initialize.instructions`） | ✅ ACP 首則 prompt 前置生效（`UserPrompt` 事件不含） | ✅ 靠第二層前置說明主動呼叫 `termade_status` 與 `termade_send(to="coord")` 回報 |
 | **Codex** | 未單獨實測（受限於回合授權） | `thread/start` 的 `developerInstructions`（schema 查證支援，握手成功） | ⚠️ `initialize` + `thread/start`（含 `developerInstructions`）成功；`turn/start` 因本機無有效授權停止 |
+
+## Agent 錯誤顯示（T23）
+
+2026-11-13，codex-cli 0.167.2，登入已失效（refresh token 被撤銷）。直接對 `codex app-server` 送 `initialize` → `thread/start` → `turn/start`，握手都成功，`turn/start` 的回應也是成功（`turn.error: null`、`status: inProgress`）。錯誤在回合開始後約 0.7 秒才出現，**兩條路徑都會來，內容相同**，順序為：
+
+1. `thread/status/changed`（`status.type = "systemError"`）
+2. `error` 通知：`params.error = {"message": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.", "codexErrorInfo": "unauthorized", "additionalDetails": null, "misalignment": null}`，另有 `willRetry: false`、`threadId`、`turnId`
+3. `turn/completed`：`turn.status = "failed"`，`turn.error` 與上面的 `params.error` 同形同內容
+
+注意 `error` 通知的訊息在 `params.error.message`（不是 `params.message`）。stderr 只有 tracing 日誌（含 ANSI 色碼），例如 `401 Unauthorized … auth error code: token_revoked`，沒有人類可讀的錯誤摘要。
+
+自動測試（假 codex／假 agent，`crates/termade-adapter/tests/codex_fake.rs`）：`error` 通知＋`turn/completed` 只回報一次；認證錯誤附 `codex login`；非 0 結束帶出 stderr 最後幾行（ANSI 已剝除）；stderr 灌 20000 行不會卡住握手。
+
+未驗證：
+- 沒有在 TUI 裡目視確認錯誤文字與 status note 的呈現；也沒有用真實 `termade spawn --kind codex` 跑完整條路徑。
+- `willRetry: true` 的 `error` 通知目前直接略過（不顯示），沒有真實樣本。
+- Claude `is_error` 與 ACP 的錯誤只改了程式，沒有專屬測試；stderr 收集對它們共用同一個實作（只有 codex 有端到端測試）。

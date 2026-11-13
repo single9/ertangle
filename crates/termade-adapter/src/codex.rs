@@ -39,6 +39,8 @@ struct Conn {
     thread: Mutex<String>,
     turn: Mutex<String>,
     stream: Mutex<StreamBuf>,
+    /// 本回合已回報過的錯誤文字（`error` 通知與 `turn/completed` 不重複送）。
+    last_error: Mutex<Option<String>>,
     tx: Sender<AgentEvent>,
 }
 
@@ -164,11 +166,15 @@ impl Conn {
                 if let Some(id) = p["turn"]["id"].as_str() {
                     *self.turn.lock().unwrap() = id.to_string();
                 }
+                *self.last_error.lock().unwrap() = None;
                 let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
             }
             "turn/completed" => {
                 self.flush_stream();
                 let failed = !p["turn"]["error"].is_null();
+                if failed {
+                    self.report_error(&p["turn"]["error"]);
+                }
                 let _ = self.tx.send(AgentEvent::Status(if failed {
                     SessionStatus::Failed
                 } else {
@@ -204,13 +210,37 @@ impl Conn {
             }
             "error" => {
                 tracing::warn!("codex error 通知：{}", p);
-                let text = p.to_string();
-                if termade_core::looks_like_limit(&text) {
-                    let _ = self.tx.send(AgentEvent::Limited(text));
+                // `willRetry: true` 時 codex 會自己重試，不算失敗，不打擾使用者。
+                if p["willRetry"].as_bool() != Some(true) {
+                    let err = if p["error"].is_null() { p } else { &p["error"] };
+                    self.report_error(err);
                 }
             }
             _ => {}
         }
+    }
+
+    /// 把 codex 的錯誤（`error` 通知的 `error`，或 `turn.error`）送到逐字稿與 status note。
+    /// 同一個回合內相同文字只回報一次。
+    fn report_error(&self, err: &Value) {
+        let text = error_text(err);
+        {
+            let mut last = self.last_error.lock().unwrap();
+            if last.as_deref() == Some(text.as_str()) {
+                return;
+            }
+            *last = Some(text.clone());
+        }
+        if termade_core::looks_like_limit(&text) {
+            let _ = self.tx.send(AgentEvent::Limited(text));
+            return;
+        }
+        let mut note = format!("codex 錯誤：{text}");
+        if is_auth_error(err) {
+            note.push_str("（請執行 `codex login`）");
+        }
+        let _ = self.tx.send(AgentEvent::Output(format!("⚠ {note}\n")));
+        let _ = self.tx.send(AgentEvent::Note(note));
     }
 
     fn on_item_completed(&self, item: &Value) {
@@ -240,6 +270,20 @@ impl Conn {
             _ => {}
         }
     }
+}
+
+/// 錯誤文字：優先取 `message`，沒有就用整個 JSON 的前 300 字。
+fn error_text(err: &Value) -> String {
+    match err["message"].as_str().filter(|m| !m.is_empty()) {
+        Some(m) => m.to_string(),
+        None => err.to_string().chars().take(300).collect(),
+    }
+}
+
+/// 是否為認證錯誤（401、token 失效、未授權）。
+fn is_auth_error(err: &Value) -> bool {
+    let t = err.to_string().to_ascii_lowercase();
+    t.contains("401") || t.contains("token_revoked") || t.contains("unauthorized")
 }
 
 #[derive(Clone, Copy)]
@@ -378,13 +422,14 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     cmd.current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }
 
     let mut child = cmd.spawn().context("無法啟動 `codex app-server`")?;
     let stdin = child.stdin.take().context("取得 codex stdin 失敗")?;
+    let stderr_tail = child.stderr.take().map(crate::stderr::StderrTail::spawn);
     let stdout = child.stdout.take().context("取得 codex stdout 失敗")?;
 
     let conn = Arc::new(Conn {
@@ -396,6 +441,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         thread: Mutex::new(String::new()),
         turn: Mutex::new(String::new()),
         stream: Mutex::new(StreamBuf::default()),
+        last_error: Mutex::new(None),
         tx: tx.clone(),
     });
 
@@ -409,6 +455,8 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                     Err(_) => break,
                 }
             }
+            // stdout 關閉＝程序已結束：丟掉等待中的請求，握手不必乾等逾時。
+            conn.pending.lock().unwrap().clear();
         });
     }
 
@@ -428,6 +476,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                     Err(_) => break None,
                 }
             };
+            if let Some(t) = &stderr_tail {
+                t.report_exit(code, &tx);
+            }
             let _ = tx.send(AgentEvent::Exited(code));
         });
     }
@@ -625,6 +676,18 @@ mod tests {
         let p_ro = thread_start_params(&ro);
         assert_eq!(p_ro["sandbox"], "read-only");
         assert_eq!(p_ro["developerInstructions"], "collab");
+    }
+
+    #[test]
+    fn error_text_and_auth_detection() {
+        let e = json!({"message":"boom","codexErrorInfo":"other"});
+        assert_eq!(error_text(&e), "boom");
+        assert!(!is_auth_error(&e));
+        let a = json!({"message":"x","codexErrorInfo":"unauthorized"});
+        assert!(is_auth_error(&a));
+        assert!(is_auth_error(&json!({"message":"HTTP 401"})));
+        let long = json!({"detail":"y".repeat(1000)});
+        assert_eq!(error_text(&long).chars().count(), 300);
     }
 
     #[test]

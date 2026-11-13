@@ -416,7 +416,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }
@@ -425,6 +425,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| format!("無法啟動 `{} acp`", prog.display()))?;
 
     let stdin = child.stdin.take().context("取得 stdin 失敗")?;
+    let stderr_tail = child.stderr.take().map(crate::stderr::StderrTail::spawn);
     let stdout = child.stdout.take().context("取得 stdout 失敗")?;
 
     let conn = Arc::new(Conn {
@@ -463,6 +464,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                     Err(_) => break None,
                 }
             };
+            if let Some(t) = &stderr_tail {
+                t.report_exit(code, &tx);
+            }
             let _ = tx.send(AgentEvent::Exited(code));
         });
     }

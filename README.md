@@ -82,7 +82,9 @@ Orca 這類 termade 把 worktree、瀏覽器、diff、mobile 全部塞進一個 
   只能還原出零碎文字。要可讀的結構化輸出請用原生協定。
 - **`--worktree` 需要 git repo**：非 git 目錄會回報錯誤並中止 spawn。
 - **Codex 需 OpenAI 授權**：`codex app-server` 的 `initialize` / `thread/start` 免授權即可完成，
-  但送出回合會回 `401 Unauthorized`；授權後即可正常使用。
+  但送出回合會回 `401 Unauthorized`；授權後即可正常使用。登入失效時 session 變 `failed`，
+  原因（含「請執行 `codex login`」）會出現在逐字稿與 status note。agent 以非 0 結束時，
+  stderr 的最後 20 行也會寫進逐字稿（四種 adapter 皆然）。
 - **Claude 取消是盡力而為**：Claude 沒有公開的取消 API，`cancel` 送 `control_request: interrupt`，
   不保證立即生效。
 

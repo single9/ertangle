@@ -220,6 +220,10 @@ impl Conn {
             let detail = msg["result"].as_str().unwrap_or("").to_string();
             if termade_core::looks_like_limit(&detail) {
                 let _ = self.tx.send(AgentEvent::Limited(detail));
+            } else if !detail.trim().is_empty() {
+                let note = format!("claude 錯誤：{}", detail.trim());
+                let _ = self.tx.send(AgentEvent::Output(format!("⚠ {note}\n")));
+                let _ = self.tx.send(AgentEvent::Note(note));
             }
             let _ = self.tx.send(AgentEvent::Status(SessionStatus::Failed));
         } else {
@@ -441,13 +445,14 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .env_remove("CLAUDECODE")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }
 
     let mut child = cmd.spawn().context("無法啟動 `claude`")?;
     let stdin = child.stdin.take().context("取得 claude stdin 失敗")?;
+    let stderr_tail = child.stderr.take().map(crate::stderr::StderrTail::spawn);
     let stdout = child.stdout.take().context("取得 claude stdout 失敗")?;
 
     let conn = Arc::new(Conn {
@@ -487,6 +492,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                     Err(_) => break None,
                 }
             };
+            if let Some(t) = &stderr_tail {
+                t.report_exit(code, &tx);
+            }
             let _ = tx.send(AgentEvent::Exited(code));
         });
     }
