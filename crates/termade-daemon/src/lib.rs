@@ -271,6 +271,8 @@ pub(crate) struct Inner {
     pub(crate) backlog: VecDeque<Record>,
     pub(crate) sessions: HashMap<SessionId, SessionEntry>,
     pub(crate) inbox_cursors: HashMap<SessionId, MsgId>,
+    /// 送達時收件者正忙、因此沒有喚醒的訊息（T25）；回到 `Idle` 時合併提醒一次。
+    pub(crate) pending_nudge: HashMap<SessionId, Vec<MsgId>>,
     pub(crate) waiters: Vec<Waiter>,
     /// 等待人類回覆的 MCP 審批請求：req id → 決定通道。
     pub(crate) approval_waiters: HashMap<String, Sender<Decision>>,
@@ -342,6 +344,7 @@ impl Shared {
                 backlog,
                 sessions: HashMap::new(),
                 inbox_cursors: HashMap::new(),
+                pending_nudge: HashMap::new(),
                 waiters: Vec::new(),
                 approval_waiters: HashMap::new(),
                 bus_guard: BusGuard::default(),
@@ -632,14 +635,19 @@ impl Shared {
             lock(&self.inner).sessions.remove(sid);
         }
         if ended {
+            lock(&self.inner).pending_nudge.remove(sid);
             self.clear_queue_for_ended(sid, false);
         } else if became_idle {
-            self.flush_queue_if_idle(sid);
+            // 使用者排的 prompt 是明確指示，先送；佇列沒送出東西才補未讀訊息提醒（T25）。
+            if !self.flush_queue_if_idle(sid) {
+                self.nudge_unread_if_idle(sid);
+            }
         }
     }
 
     /// 當 session 回到 `Idle` 時，若佇列有待送 prompt，取第一則送出（一次一則）。
-    pub(crate) fn flush_queue_if_idle(self: &Arc<Self>, sid: &SessionId) {
+    /// 回傳是否真的送出了 prompt。
+    pub(crate) fn flush_queue_if_idle(self: &Arc<Self>, sid: &SessionId) -> bool {
         let popped = {
             let mut inner = lock(&self.inner);
             let is_idle = inner
@@ -649,7 +657,7 @@ impl Shared {
                 .is_some_and(|s| s.status == SessionStatus::Idle && !s.over_budget);
             // 超過成本上限（T17）時佇列保留不送；調高上限後由 handle_budget 再觸發。
             if !is_idle {
-                return;
+                return false;
             }
             let item = inner.queues.get_mut(sid).and_then(|q| q.pop_front());
             if inner.queues.get(sid).is_some_and(|q| q.is_empty()) {
@@ -658,7 +666,7 @@ impl Shared {
             item
         };
         let Some(item) = popped else {
-            return;
+            return false;
         };
         match handlers::session::send_prompt(self, sid, &item.text, &item.attachments) {
             Ok(()) => {
@@ -674,6 +682,7 @@ impl Shared {
                     session: sid.clone(),
                     items,
                 });
+                true
             }
             Err(e) => {
                 {
@@ -688,6 +697,7 @@ impl Shared {
                     session: sid.clone(),
                     note: format!("排隊 prompt 送出失敗：{e}"),
                 });
+                false
             }
         }
     }

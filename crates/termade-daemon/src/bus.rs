@@ -119,13 +119,25 @@ impl Shared {
         body: String,
         reply_to: Option<MsgId>,
     ) {
+        // 已交接的收件者會改投給接手者（T24），超限判斷要看實際收件者（T25）。
         let over_budget_target = match &to {
             Target::Direct(t) => {
                 let sid = self.resolve_session(t);
-                lock(&self.inner)
+                let inner = lock(&self.inner);
+                let live = inner
                     .state
                     .sessions
                     .get(&sid)
+                    .is_some_and(|s| s.status.is_live());
+                let actual = if live {
+                    sid
+                } else {
+                    inner.state.successor_of(&sid)
+                };
+                inner
+                    .state
+                    .sessions
+                    .get(&actual)
                     .is_some_and(|s| s.over_budget)
             }
             _ => false,
@@ -154,7 +166,10 @@ impl Shared {
     /// 喚醒規則：
     /// * 直接訊息（`Direct`）與廣播／頻道（`Broadcast` / `Channel`）都會喚醒收件者。
     /// * 只喚醒狀態為 `Idle` / `Sleeping` 的 session；`Busy` 代表正在工作，
-    ///   訊息留在收件匣即可。
+    ///   訊息留在收件匣，並記入 `pending_nudge`：該 session 回到 `Idle`、
+    ///   且排隊的 prompt（T19）送完後，由 [`Self::nudge_unread_if_idle`] 把
+    ///   仍未讀的訊息合併成一則提醒（每則訊息只提醒一次；已被 waiter 取走或
+    ///   `termade_inbox` 讀過的、`over_budget` 的 session 不提醒）。
     /// * 已經透過 `termade_wait` / `termade_ask` 取得訊息的 session 不重複打擾。
     /// * `Status` / `Artifact` 屬於被動資訊，不主動喚醒任何人。
     pub(crate) fn deliver_message(
@@ -269,6 +284,19 @@ impl Shared {
 
             if kind_wakes_recipient(kind) {
                 for s in state_clone.sessions.values() {
+                    if s.status == SessionStatus::Busy
+                        && s.id != from_sid
+                        && !s.over_budget
+                        && !woken_by_waiter.contains(&s.id)
+                        && message.matches_recipient(&s.id, Some(&s.label))
+                    {
+                        inner
+                            .pending_nudge
+                            .entry(s.id.clone())
+                            .or_default()
+                            .push(message.id.clone());
+                        continue;
+                    }
                     if s.id == from_sid
                         || s.over_budget
                         || woken_by_waiter.contains(&s.id)
@@ -310,6 +338,54 @@ impl Shared {
         }
 
         Ok((msg_id, route_notes))
+    }
+
+    /// 回到 `Idle` 時，把忙碌期間收到、至今仍未讀的訊息合併成一則提醒 prompt（T25）。
+    ///
+    /// 已被 `inbox_cursors` 涵蓋（waiter 取走或 `termade_inbox` 讀過）的不提醒；
+    /// `over_budget` 的 session 保留記錄不送，調高上限後下一次回到 `Idle` 再補。
+    pub(crate) fn nudge_unread_if_idle(self: &Arc<Self>, sid: &SessionId) {
+        let (ids, text) = {
+            let mut inner = lock(&self.inner);
+            let idle = inner
+                .state
+                .sessions
+                .get(sid)
+                .is_some_and(|s| s.status == SessionStatus::Idle && !s.over_budget);
+            if !idle {
+                return;
+            }
+            let Some(ids) = inner.pending_nudge.remove(sid) else {
+                return;
+            };
+            let pos = |id: &str| inner.state.messages.iter().position(|m| m.id == id);
+            let cursor = inner.inbox_cursors.get(sid).and_then(|c| pos(c));
+            let unread: Vec<&BusMessage> = ids
+                .iter()
+                .filter(|id| match (pos(id), cursor) {
+                    (Some(i), Some(c)) => i > c,
+                    (Some(_), None) => true,
+                    (None, _) => false,
+                })
+                .filter_map(|id| inner.state.messages.iter().find(|m| &m.id == id))
+                .collect();
+            if unread.is_empty() {
+                return;
+            }
+            let list: Vec<String> = unread
+                .iter()
+                .map(|m| format!("id={} 來自 {} ({})", m.id, m.from, m.kind.id()))
+                .collect();
+            let text = format!(
+                "[termade 未讀訊息提醒] 你忙碌時收到 {} 則訊息：{}。\n請呼叫 termade_inbox 查看並用 termade_send 回覆。",
+                unread.len(),
+                list.join("；"),
+            );
+            (ids, text)
+        };
+        if handlers::session::send_prompt(self, sid, &text, &[]).is_err() {
+            lock(&self.inner).pending_nudge.insert(sid.clone(), ids);
+        }
     }
 
     pub(crate) fn handle_bus_wait(
