@@ -45,6 +45,10 @@ Orca 這類 termade 把 worktree、瀏覽器、diff、mobile 全部塞進一個 
   增量事件同步（`since`）、事件重播（`termade replay`）與秘密遮罩（`sk-...` / `ghp_...` 自動轉 `<REDACTED>`）、
   訊息匯流排、收件匣游標與阻塞等待（`BusInbox` / `BusWait`）、防呆斷路器（速率限制 + 連續重複迴圈偵測）、任務板。
   `termade_send` 直接訊息與廣播（`*`）都會喚醒狀態為 `idle` 或休眠中的收件者；指派任務（`termade_task_create` / 改派負責人）也會自動喚醒對方。
+  任務依賴：建立任務時帶 `depends_on`（`termade task --depends-on <id>`，可重複），前置任務還沒全部 `done` 時任務會是 `blocked`，
+  先不通知負責人；前置任務全部完成後自動改成 `todo`，並把指派訊息（附前置任務的標題與負責人）送給負責人、喚醒閒置中的對方。
+  `depends_on` 裡有不存在的 id 會建立失敗；建立後不能再改依賴。有依賴的任務若被手動標成 `blocked`，依賴完成時一樣會被解開。
+  `termade_task_list` 與 `termade tasks` 會列出每個任務還在等哪些前置任務。
 - **MCP 協作伺服器（`termade mcp`，M2/M3）**：spawn session 時自動注入每個 agent，提供 14 個協作工具
   （`termade_whoami`、`termade_peers`、`termade_send`、`termade_inbox`、`termade_wait`、`termade_ask`、
   `termade_task_list`、`termade_task_create`、`termade_task_update`、`termade_spawn`、`termade_artifact_share`、`termade_status`、`termade_diff`、`termade_merge`）。
@@ -154,6 +158,7 @@ termade inbox [--session <id>] [--all] [--json] # 讀取未讀訊息並推進游
 termade wait [--from <peer>] [--timeout-ms 30000]
 termade ask <peer> "請問驗證函式的簽名？"        # 送出問題並阻塞等待回覆
 termade task "修正 EU 郵遞區號驗證" --detail "..." --assignee worker/a
+termade task "接上新的驗證函式" --assignee worker/b --depends-on <task-id>  # 前置任務完成後才通知 worker/b
 termade task-update <task-id> --status done
 termade tasks [--json]
 termade status "正在跑整合測試"

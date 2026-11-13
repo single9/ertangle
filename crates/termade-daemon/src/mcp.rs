@@ -216,7 +216,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "termade_task_list",
-            "description": "List every task on the shared task board.",
+            "description": "List every task on the shared task board. Each task carries `depends_on` (prerequisite task ids) and `waiting_on` (the prerequisites that are not done yet, with title, status and assignee); a `blocked` task with a non-empty `waiting_on` is unblocked automatically when they finish.",
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -224,7 +224,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "termade_task_create",
-            "description": "Create a task on the shared task board. When an assignee is given, a handoff message is delivered and an idle assignee is woken.",
+            "description": "Create a task on the shared task board. When an assignee is given, a handoff message is delivered and an idle assignee is woken. With `depends_on`, a task whose prerequisites are not all done is created as `blocked` and the assignee is NOT notified yet; once every prerequisite is done it turns `todo` and the assignee is notified and woken automatically, so you do not need to wait and re-send.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -243,7 +243,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "depends_on": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Ids of prerequisite tasks"
+                        "description": "Ids of prerequisite tasks (must exist). The task stays blocked until all of them are done."
                     }
                 },
                 "required": ["title"]
@@ -251,7 +251,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "termade_task_update",
-            "description": "Update a task's status, assignee, or details. Reassigning wakes the new assignee.",
+            "description": "Update a task's status, assignee, or details. Reassigning wakes the new assignee. Setting a task to `done` unblocks the tasks that depend on it and notifies their assignees.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -491,7 +491,10 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 Frame::Ok { note } => note.unwrap_or_default(),
                 _ => String::new(),
             };
-            let id = note.rsplit_once(' ').map(|(_, id)| id).unwrap_or(&note);
+            let id = note
+                .split_whitespace()
+                .find(|t| t.starts_with("task_"))
+                .unwrap_or(&note);
             Ok(json!({ "ok": true, "id": id, "note": note }))
         }
 
@@ -574,8 +577,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
                 bail!("failed to fetch state snapshot");
             };
-            let tasks: Vec<_> = state.tasks.values().cloned().collect();
-            Ok(json!({ "tasks": tasks }))
+            Ok(task_list_json(&state))
         }
 
         "termade_task_create" => {
@@ -605,7 +607,10 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 Frame::Ok { note } => note.unwrap_or_default(),
                 _ => String::new(),
             };
-            let id = note.rsplit_once(' ').map(|(_, id)| id).unwrap_or(&note);
+            let id = note
+                .split_whitespace()
+                .find(|t| t.starts_with("task_"))
+                .unwrap_or(&note);
             Ok(json!({ "ok": true, "id": id, "note": note }))
         }
 
@@ -670,7 +675,10 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 Frame::Ok { note } => note.unwrap_or_default(),
                 _ => String::new(),
             };
-            let id = note.rsplit_once(' ').map(|(_, id)| id).unwrap_or(&note);
+            let id = note
+                .split_whitespace()
+                .find(|t| t.starts_with("task_"))
+                .unwrap_or(&note);
             Ok(json!({ "ok": true, "id": id, "note": note }))
         }
 
@@ -814,6 +822,83 @@ mod tests {
         ] {
             assert!(names.contains(&expected), "missing tool {expected}");
         }
+    }
+}
+
+/// `termade_task_list` 的回傳：每個任務加上 `waiting_on`（還沒完成的前置任務），
+/// 讓 agent 看得出任務為什麼被擋住、該去問誰。
+fn task_list_json(state: &termade_core::State) -> Value {
+    let tasks: Vec<Value> = state
+        .tasks
+        .values()
+        .map(|t| {
+            let mut v = serde_json::to_value(t).unwrap_or_else(|_| json!({}));
+            let waiting: Vec<Value> = state
+                .unfinished_deps(t)
+                .iter()
+                .map(|d| {
+                    json!({
+                        "id": d.id,
+                        "title": d.title,
+                        "status": d.status.id(),
+                        "assignee": d.assignee,
+                    })
+                })
+                .collect();
+            v["waiting_on"] = Value::Array(waiting);
+            v
+        })
+        .collect();
+    json!({ "tasks": tasks })
+}
+
+#[cfg(test)]
+mod task_list_tests {
+    use super::*;
+    use termade_core::{State, Task};
+
+    fn task(id: &str, status: TaskStatus, deps: &[&str]) -> Task {
+        Task {
+            id: id.into(),
+            title: format!("title-{id}"),
+            detail: String::new(),
+            status,
+            assignee: None,
+            created_by: None,
+            depends_on: deps.iter().map(|d| d.to_string()).collect(),
+            updated_ms: 0,
+        }
+    }
+
+    #[test]
+    fn task_list_reports_dependencies_and_unfinished_ones() {
+        let mut state = State::default();
+        for t in [
+            task("task_a", TaskStatus::Done, &[]),
+            task("task_b", TaskStatus::Doing, &[]),
+            task("task_c", TaskStatus::Blocked, &["task_a", "task_b"]),
+        ] {
+            state.tasks.insert(t.id.clone(), t);
+        }
+        let out = task_list_json(&state);
+        let c = out["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == "task_c")
+            .unwrap();
+        assert_eq!(c["depends_on"], json!(["task_a", "task_b"]));
+        let waiting = c["waiting_on"].as_array().unwrap();
+        assert_eq!(waiting.len(), 1, "只列還沒完成的");
+        assert_eq!(waiting[0]["id"], "task_b");
+        assert_eq!(waiting[0]["status"], "doing");
+        let a = out["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == "task_a")
+            .unwrap();
+        assert_eq!(a["waiting_on"], json!([]));
     }
 }
 

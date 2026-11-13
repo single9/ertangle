@@ -245,7 +245,7 @@ daemon 開一個 MCP server（`termade mcp`）。spawn agent 時，透過該 age
 | `termade_inbox()` | 讀取尚未處理的訊息 |
 | `termade_wait(timeout_ms)` | 阻塞等待下一則訊息（協作交握用） |
 | `termade_ask(peer, question, timeout_ms)` | 送出問題並等回覆（request/response） |
-| `termade_task_list()` / `termade_task_create()` / `termade_task_update()` | 共用任務看板 |
+| `termade_task_list()` / `termade_task_create()` / `termade_task_update()` | 共用任務看板。`depends_on` 未完成的任務建立為 `blocked` 且不通知負責人，前置任務全部 `done` 後由 daemon 改回 `todo` 並送指派訊息；`task_list` 的 `waiting_on` 列出還沒完成的前置任務 |
 | `termade_spawn(kind?, prompt, worktree?, role?)` | **agent 產生子 agent**（協調者 → 工作者） |
 | `termade_artifact_share(path\|branch\|diff)` | 分享產出（檔案、分支、diff）給他人或看板 |
 | `termade_status(text)` | 更新自己在 TUI 上的狀態字串（輕量進度回報） |

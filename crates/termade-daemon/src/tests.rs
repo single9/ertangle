@@ -1,6 +1,6 @@
 use super::*;
 use crate::git::*;
-use termade_core::{AgentKind, Cost, Decision, Role};
+use termade_core::{AgentKind, Cost, Decision, Role, TaskStatus};
 
 // -----------------------------------------------------------------------
 // T05：遠端與 socket 安全
@@ -356,6 +356,234 @@ fn task_assignment_wakes_idle_assignee() {
         .inbox_for("ses_assignee", None);
     assert_eq!(inbox.len(), 1, "任務通知應進負責人的收件匣");
     assert_eq!(inbox[0].kind, MsgKind::Handoff);
+}
+
+// ---- T18：任務依賴解鎖 ----
+
+/// 建立任務並回傳 (回覆 frame, 任務 id)。任務 id 取狀態裡最新建立的那個。
+fn create_task(
+    shared: &Arc<Shared>,
+    title: &str,
+    assignee: Option<&str>,
+    depends_on: &[&str],
+) -> (Frame, Option<String>) {
+    let before: HashSet<String> = lock(&shared.inner).state.tasks.keys().cloned().collect();
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::TaskCreate {
+            title: title.into(),
+            detail: String::new(),
+            assignee: assignee.map(|a| a.to_string()),
+            created_by: Some("human".into()),
+            depends_on: depends_on.iter().map(|d| d.to_string()).collect(),
+        },
+    );
+    let frame = rx.rx.try_recv().expect("建立任務應有回覆");
+    let id = lock(&shared.inner)
+        .state
+        .tasks
+        .keys()
+        .find(|k| !before.contains(*k))
+        .cloned();
+    (frame, id)
+}
+
+fn set_task_status(shared: &Arc<Shared>, id: &str, status: TaskStatus) {
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::TaskUpdate {
+            id: id.into(),
+            status: Some(status),
+            assignee: None,
+            detail: None,
+        },
+    );
+}
+
+fn task_status(shared: &Arc<Shared>, id: &str) -> TaskStatus {
+    lock(&shared.inner).state.tasks[id].status
+}
+
+#[test]
+fn task_with_unfinished_dependency_is_blocked_and_silent() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let worker = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_dep_w",
+        "worker/dep",
+        SessionStatus::Idle,
+        worker.as_ctl(),
+        &dir,
+    );
+
+    let (_, first) = create_task(&shared, "前置", None, &[]);
+    let first = first.unwrap();
+    let (frame, second) = create_task(&shared, "後續", Some("worker/dep"), &[&first]);
+    let second = second.unwrap();
+
+    assert_eq!(task_status(&shared, &second), TaskStatus::Blocked);
+    assert!(worker.inputs().is_empty(), "依賴未完成時不該通知負責人");
+    assert!(lock(&shared.inner)
+        .state
+        .inbox_for("ses_dep_w", None)
+        .is_empty());
+    let Frame::Ok { note: Some(note) } = frame else {
+        panic!("應回 ok：{frame:?}");
+    };
+    assert!(note.contains(&first), "回覆要註明在等哪個任務：{note}");
+}
+
+#[test]
+fn finishing_dependency_unblocks_and_wakes_assignee() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let first_owner = MockCtl::default();
+    let worker = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_first",
+        "worker/first",
+        SessionStatus::Busy,
+        first_owner.as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "ses_next",
+        "worker/next",
+        SessionStatus::Idle,
+        worker.as_ctl(),
+        &dir,
+    );
+
+    let (_, first) = create_task(&shared, "設計 API", Some("worker/first"), &[]);
+    let first = first.unwrap();
+    let (_, second) = create_task(&shared, "實作 client", Some("worker/next"), &[&first]);
+    let second = second.unwrap();
+    assert!(worker.inputs().is_empty());
+
+    set_task_status(&shared, &first, TaskStatus::Doing);
+    assert_eq!(task_status(&shared, &second), TaskStatus::Blocked);
+    assert!(worker.inputs().is_empty(), "前置只是 doing，還不能解鎖");
+
+    set_task_status(&shared, &first, TaskStatus::Done);
+    assert_eq!(task_status(&shared, &second), TaskStatus::Todo);
+
+    let inbox = lock(&shared.inner).state.inbox_for("ses_next", None);
+    assert_eq!(inbox.len(), 1, "解鎖後剛好一則指派訊息");
+    assert_eq!(inbox[0].kind, MsgKind::Handoff);
+    assert!(inbox[0].body.contains("實作 client"));
+    assert!(inbox[0].body.contains("設計 API"), "附上前置任務標題");
+    assert!(
+        inbox[0].body.contains("worker/first"),
+        "附上前置負責人 label"
+    );
+
+    let inputs = worker.inputs();
+    assert_eq!(inputs.len(), 1, "閒置中的負責人應被喚醒一次");
+    assert!(inputs[0].contains("任務指派"));
+
+    // 前置任務重複標 done 不會再通知一次。
+    set_task_status(&shared, &first, TaskStatus::Done);
+    assert_eq!(worker.inputs().len(), 1);
+}
+
+#[test]
+fn two_dependencies_need_both_done() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let worker = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_two",
+        "worker/two",
+        SessionStatus::Idle,
+        worker.as_ctl(),
+        &dir,
+    );
+    let (_, a) = create_task(&shared, "A", None, &[]);
+    let (_, b) = create_task(&shared, "B", None, &[]);
+    let (a, b) = (a.unwrap(), b.unwrap());
+    let (_, c) = create_task(&shared, "C", Some("worker/two"), &[&a, &b]);
+    let c = c.unwrap();
+
+    set_task_status(&shared, &a, TaskStatus::Done);
+    assert_eq!(task_status(&shared, &c), TaskStatus::Blocked);
+    assert!(worker.inputs().is_empty(), "只完成一個依賴不該解鎖");
+
+    set_task_status(&shared, &b, TaskStatus::Done);
+    assert_eq!(task_status(&shared, &c), TaskStatus::Todo);
+    assert_eq!(worker.inputs().len(), 1);
+}
+
+#[test]
+fn unknown_dependency_is_rejected() {
+    let shared = test_shared();
+    let (frame, id) = create_task(&shared, "孤兒", None, &["task_nope"]);
+    assert!(
+        matches!(&frame, Frame::Error { message, .. } if message.contains("task_nope")),
+        "應回錯誤：{frame:?}"
+    );
+    assert!(id.is_none(), "不該建立任務");
+}
+
+#[test]
+fn dependency_already_done_behaves_like_no_dependency() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let worker = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_ready",
+        "worker/ready",
+        SessionStatus::Idle,
+        worker.as_ctl(),
+        &dir,
+    );
+    let (_, a) = create_task(&shared, "A", None, &[]);
+    let a = a.unwrap();
+    set_task_status(&shared, &a, TaskStatus::Done);
+    let (_, b) = create_task(&shared, "B", Some("worker/ready"), &[&a]);
+    assert_eq!(task_status(&shared, &b.unwrap()), TaskStatus::Todo);
+    assert_eq!(worker.inputs().len(), 1, "依賴都完成時立刻通知");
+}
+
+#[test]
+fn reassigning_task_waiting_on_dependency_stays_silent() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let worker = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_late",
+        "worker/late",
+        SessionStatus::Idle,
+        worker.as_ctl(),
+        &dir,
+    );
+    let (_, a) = create_task(&shared, "A", None, &[]);
+    let a = a.unwrap();
+    let (_, b) = create_task(&shared, "B", None, &[&a]);
+    let b = b.unwrap();
+
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::TaskUpdate {
+            id: b.clone(),
+            status: None,
+            assignee: Some("worker/late".into()),
+            detail: None,
+        },
+    );
+    assert!(worker.inputs().is_empty(), "還在等依賴，改派也先不通知");
+
+    set_task_status(&shared, &a, TaskStatus::Done);
+    assert_eq!(worker.inputs().len(), 1, "解鎖時通知後來指派的負責人");
 }
 
 #[test]
