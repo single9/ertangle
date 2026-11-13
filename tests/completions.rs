@@ -29,7 +29,9 @@ fn cmd_with_env(root: &Path, sock: &Path) -> Command {
 
 #[test]
 fn cli_completions_and_complete_sessions_e2e() {
-    let root = std::env::temp_dir().join(format!("termade-compl-{}", std::process::id()));
+    // macOS 的 temp_dir 經過符號連結 (/var → /private/var)，先正規化讓路徑比較一致。
+    let tmp = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+    let root = tmp.join(format!("termade-compl-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let proj_a = root.join("proj-a");
     let proj_b = root.join("proj-b");
