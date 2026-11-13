@@ -44,6 +44,8 @@ pub enum AgentEvent {
     Model(String),
     /// 額度用完／被限流。
     Limited(String),
+    /// 帳號額度狀態更新。
+    Quota(ade_core::Quota),
     /// 程序結束。
     Exited(Option<i32>),
 }

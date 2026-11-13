@@ -7,6 +7,29 @@ use anyhow::{bail, Result};
 
 use super::roundtrip;
 
+pub(crate) fn cmd_quota(json: bool) -> Result<()> {
+    let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
+        bail!("未取得快照");
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&state.quotas)?);
+        return Ok(());
+    }
+    if state.quotas.is_empty() {
+        println!("(尚無額度資料：agent 執行過一個回合後才會回報)");
+        return Ok(());
+    }
+    let now = ade_core::now_millis();
+    for q in state.quotas.values() {
+        println!(
+            "{}   （{} 前更新）",
+            q.summary(now),
+            ade_core::format_remaining(now.saturating_sub(q.updated_ms))
+        );
+    }
+    Ok(())
+}
+
 pub(crate) fn cmd_cost(json: bool) -> Result<()> {
     let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
         bail!("未取得快照");

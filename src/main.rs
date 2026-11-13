@@ -291,6 +291,11 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
+    /// 顯示各 agent 帳號的額度（5 小時／7 天視窗與重置時間）
+    Quota {
+        #[arg(long)]
+        json: bool,
+    },
     /// 查看各 session 與整體 token / USD 成本統計
     Cost {
         #[arg(long)]
@@ -430,6 +435,7 @@ fn main() -> Result<()> {
         } => cmd_pr(session, title, body),
         Cmd::Gc { session, force } => cmd_gc(session, force),
         Cmd::Cost { json } => cmd_cost(json),
+        Cmd::Quota { json } => cmd_quota(json),
         Cmd::Replay {
             since,
             file,

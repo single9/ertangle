@@ -63,6 +63,11 @@ impl Conn {
             "assistant" => self.on_assistant(&msg),
             "user" => self.on_tool_results(&msg),
             "result" => self.on_result(&msg),
+            "rate_limit_event" => {
+                if let Some(q) = parse_rate_limit_event(&msg) {
+                    let _ = self.tx.send(AgentEvent::Quota(q));
+                }
+            }
             // hook_started / hook_response / rate_limit_event / system.status…
             _ => {}
         }
@@ -197,6 +202,41 @@ impl Conn {
             let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
         }
     }
+}
+
+/// 解析 `rate_limit_event`：`unifiedWindows` 每個視窗有 `utilization`（0..1）與 `resetsAt`（秒）。
+pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<ade_core::Quota> {
+    let info = &msg["rate_limit_info"];
+    let mut windows: Vec<ade_core::QuotaWindow> = Vec::new();
+    let mut reached = info["status"].as_str().is_some_and(|s| s != "allowed");
+    if let Some(map) = info["unifiedWindows"].as_object() {
+        for (key, w) in map {
+            let name = match key.as_str() {
+                "five_hour" => "5h".to_string(),
+                "seven_day" => "7d".to_string(),
+                other => other.to_string(),
+            };
+            let used = w["utilization"].as_f64()? as f32 * 100.0;
+            if w["status"].as_str().is_some_and(|s| s != "allowed") {
+                reached = true;
+            }
+            windows.push(ade_core::QuotaWindow {
+                name,
+                used_percent: used,
+                resets_at_ms: w["resetsAt"].as_u64().map(|s| s * 1000),
+            });
+        }
+    }
+    if windows.is_empty() {
+        return None;
+    }
+    windows.sort_by(|a, b| a.name.cmp(&b.name));
+    Some(ade_core::Quota {
+        agent: "claude".into(),
+        windows,
+        reached,
+        updated_ms: ade_core::now_millis(),
+    })
 }
 
 /// 從 Anthropic 的 usage 區塊估算成本（Claude 只在 `result` 給總額）。
@@ -497,6 +537,23 @@ mod tests {
         assert_eq!(arr[1]["type"], "image");
         assert_eq!(arr[1]["source"]["media_type"], "image/png");
         assert_eq!(arr[1]["source"]["data"], "QUJD");
+    }
+
+    #[test]
+    fn parses_real_rate_limit_event() {
+        let msg: Value = serde_json::from_str(
+            r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1794543000,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.39,"resetsAt":1794543000,"status":"allowed"},"seven_day":{"utilization":0.22,"resetsAt":1795042800,"status":"allowed"}}}}"#,
+        )
+        .unwrap();
+        let q = parse_rate_limit_event(&msg).unwrap();
+        assert_eq!(q.agent, "claude");
+        assert_eq!(q.windows.len(), 2);
+        let h5 = q.windows.iter().find(|w| w.name == "5h").unwrap();
+        assert!((h5.used_percent - 39.0).abs() < 0.01);
+        assert_eq!(h5.resets_at_ms, Some(1794543000 * 1000));
+        assert!(!q.reached);
+        let blocked = serde_json::json!({"rate_limit_info":{"status":"rejected","unifiedWindows":{"five_hour":{"utilization":1.0,"resetsAt":1,"status":"rejected"}}}});
+        assert!(parse_rate_limit_event(&blocked).unwrap().reached);
     }
 
     #[test]

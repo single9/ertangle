@@ -524,6 +524,7 @@ impl Shared {
                 session: sid.clone(),
                 model: m,
             },
+            AgentEvent::Quota(quota) => Event::QuotaUpdated { quota },
             AgentEvent::Limited(detail) => Event::SessionLimited {
                 session: sid.clone(),
                 detail,

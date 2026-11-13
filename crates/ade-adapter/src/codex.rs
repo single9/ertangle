@@ -185,6 +185,11 @@ impl Conn {
                 };
                 let _ = self.tx.send(AgentEvent::Cost(cost));
             }
+            "account/rateLimits/updated" => {
+                if let Some(q) = parse_rate_limits(&p["rateLimits"]) {
+                    let _ = self.tx.send(AgentEvent::Quota(q));
+                }
+            }
             "thread/started" => {
                 if let Some(id) = p["thread"]["id"].as_str() {
                     *self.thread.lock().unwrap() = id.to_string();
@@ -436,6 +441,12 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if let Some(model) = started["model"].as_str() {
         let _ = tx.send(AgentEvent::Model(model.to_string()));
     }
+    // 啟動時查一次帳號額度（沒登入或舊版 codex 不支援就略過）。
+    if let Ok(r) = conn.call("account/rateLimits/read", json!({}), CALL_TIMEOUT) {
+        if let Some(q) = parse_rate_limits(&r["rateLimits"]) {
+            let _ = tx.send(AgentEvent::Quota(q));
+        }
+    }
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
     let control = CodexControl { conn, child };
@@ -443,6 +454,36 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         control.send_input_with(p, &spec.initial_attachments)?;
     }
     Ok(Box::new(control))
+}
+
+/// 解析 Codex 的 `RateLimitSnapshot`（`account/rateLimits/read` 與更新通知共用）。
+pub(crate) fn parse_rate_limits(snap: &Value) -> Option<ade_core::Quota> {
+    let mut windows = Vec::new();
+    for key in ["primary", "secondary"] {
+        let w = &snap[key];
+        let Some(pct) = w["usedPercent"].as_f64() else {
+            continue;
+        };
+        windows.push(ade_core::QuotaWindow {
+            name: w["windowDurationMins"]
+                .as_u64()
+                .map(ade_core::window_name)
+                .unwrap_or_else(|| key.to_string()),
+            used_percent: pct as f32,
+            resets_at_ms: w["resetsAt"].as_u64().map(|s| s * 1000),
+        });
+    }
+    if windows.is_empty() {
+        return None;
+    }
+    let reached = !snap["rateLimitReachedType"].is_null()
+        || snap["spendControlReached"].as_bool() == Some(true);
+    Some(ade_core::Quota {
+        agent: "codex".into(),
+        windows,
+        reached,
+        updated_ms: ade_core::now_millis(),
+    })
 }
 
 /// `thread/start` 參數：cwd、approvalPolicy，加上可選的 model 與 sandbox（官方文件範例：
@@ -538,5 +579,20 @@ mod tests {
         let mut ro = spec.clone();
         ro.read_only = true;
         assert_eq!(thread_start_params(&ro)["sandbox"], "read-only");
+    }
+
+    #[test]
+    fn parses_codex_rate_limit_snapshot() {
+        let snap = json!({"primary":{"usedPercent":42,"windowDurationMins":300,"resetsAt":1797125904},
+            "secondary":{"usedPercent":7,"windowDurationMins":10080,"resetsAt":1797725904},
+            "rateLimitReachedType":null,"spendControlReached":false});
+        let q = parse_rate_limits(&snap).unwrap();
+        assert_eq!(q.agent, "codex");
+        assert_eq!(q.windows[0].name, "5h");
+        assert_eq!(q.windows[1].name, "7d");
+        assert!(!q.reached);
+        let hit = json!({"primary":{"usedPercent":100,"windowDurationMins":300},"rateLimitReachedType":"rate_limit_reached"});
+        assert!(parse_rate_limits(&hit).unwrap().reached);
+        assert!(parse_rate_limits(&json!({})).is_none());
     }
 }

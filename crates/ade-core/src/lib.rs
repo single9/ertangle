@@ -560,6 +560,10 @@ pub enum Event {
         session: SessionId,
         status: SessionStatus,
     },
+    /// agent 回報帳號額度（用量百分比與重置時間）。
+    QuotaUpdated {
+        quota: Quota,
+    },
     /// agent 回報額度用完／被限流（可交接給其他 agent）。
     SessionLimited {
         session: SessionId,
@@ -678,6 +682,9 @@ pub struct State {
     /// event log 寫入健康狀態（預設正常）。
     #[serde(default = "default_true")]
     pub log_ok: bool,
+    /// 各 agent 最近一次回報的額度（agent id → 額度）。
+    #[serde(default)]
+    pub quotas: BTreeMap<String, Quota>,
 }
 
 impl Default for State {
@@ -692,6 +699,7 @@ impl Default for State {
             pending_permissions: BTreeMap::new(),
             transcripts: HashMap::new(),
             log_ok: true,
+            quotas: BTreeMap::new(),
         }
     }
 }
@@ -724,6 +732,9 @@ impl State {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = *status;
                 }
+            }
+            Event::QuotaUpdated { quota } => {
+                self.quotas.insert(quota.agent.clone(), quota.clone());
             }
             Event::SessionLimited { session, detail } => {
                 if let Some(s) = self.sessions.get_mut(session) {
@@ -1120,6 +1131,84 @@ pub fn tool_summary(input: &str) -> Option<String> {
             }
         }
         _ => None,
+    }
+}
+
+/// 某個額度視窗（例如 Claude 的 5 小時／7 天）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QuotaWindow {
+    /// 顯示名稱：`5h`、`7d`、`30d`…
+    pub name: String,
+    pub used_percent: f32,
+    /// 重置時間（epoch 毫秒）。
+    pub resets_at_ms: Option<u64>,
+}
+
+/// 某個 agent 帳號目前的額度狀態（由 agent 自己回報，非 ADE 估算）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Quota {
+    /// agent 種類 id，例如 `claude`、`codex`。
+    pub agent: String,
+    pub windows: Vec<QuotaWindow>,
+    /// 已達上限／被限流。
+    pub reached: bool,
+    pub updated_ms: u64,
+}
+
+/// 把剩餘毫秒轉成 `2h13m`／`45m`／`3d4h`。
+pub fn format_remaining(ms: u64) -> String {
+    let mins = ms / 60_000;
+    match mins {
+        0 => "<1m".into(),
+        1..=59 => format!("{mins}m"),
+        60..=1439 => format!("{}h{:02}m", mins / 60, mins % 60),
+        _ => format!("{}d{}h", mins / 1440, (mins % 1440) / 60),
+    }
+}
+
+impl Quota {
+    /// 單行摘要：`claude 5h 39% (重置 1h20m) 7d 22%`。已過重置時間的視窗顯示 `已重置`。
+    pub fn summary(&self, now_ms: u64) -> String {
+        let parts: Vec<String> = self
+            .windows
+            .iter()
+            .map(|w| match w.resets_at_ms {
+                Some(r) if r <= now_ms => format!("{} 已重置", w.name),
+                Some(r) => format!(
+                    "{} {:.0}% (重置 {})",
+                    w.name,
+                    w.used_percent,
+                    format_remaining(r - now_ms)
+                ),
+                None => format!("{} {:.0}%", w.name, w.used_percent),
+            })
+            .collect();
+        format!(
+            "{}{} {}",
+            self.agent,
+            if self.reached { " ✗額度已滿" } else { "" },
+            parts.join(" · ")
+        )
+    }
+
+    /// 最吃緊的視窗用量（百分比）。
+    pub fn max_used(&self) -> f32 {
+        self.windows
+            .iter()
+            .map(|w| w.used_percent)
+            .fold(0.0, f32::max)
+    }
+}
+
+/// 視窗長度（分鐘）轉成顯示名稱。
+pub fn window_name(mins: u64) -> String {
+    match mins {
+        300 => "5h".into(),
+        10080 => "7d".into(),
+        43200 => "30d".into(),
+        m if m % 1440 == 0 => format!("{}d", m / 1440),
+        m if m % 60 == 0 => format!("{}h", m / 60),
+        m => format!("{m}m"),
     }
 }
 
@@ -1636,6 +1725,35 @@ mod attachment_tests {
         assert!(looks_like_limit("exceeded your current quota"));
         assert!(!looks_like_limit("File not found: limits.rs"));
         assert!(!looks_like_limit("compile error"));
+    }
+
+    #[test]
+    fn quota_summary_and_reset_handling() {
+        let q = Quota {
+            agent: "claude".into(),
+            windows: vec![
+                QuotaWindow {
+                    name: "5h".into(),
+                    used_percent: 39.0,
+                    resets_at_ms: Some(10_000_000 + 80 * 60_000),
+                },
+                QuotaWindow {
+                    name: "7d".into(),
+                    used_percent: 22.0,
+                    resets_at_ms: Some(1),
+                },
+            ],
+            reached: false,
+            updated_ms: 0,
+        };
+        let s = q.summary(10_000_000);
+        assert!(s.contains("5h 39% (重置 1h20m)"), "{s}");
+        assert!(s.contains("7d 已重置"));
+        assert_eq!(window_name(300), "5h");
+        assert_eq!(window_name(43200), "30d");
+        assert_eq!(format_remaining(30_000), "<1m");
+        assert_eq!(format_remaining(90 * 60_000), "1h30m");
+        assert_eq!(format_remaining(50 * 3_600_000), "2d2h");
     }
 
     #[test]

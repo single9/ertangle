@@ -80,6 +80,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "[agent[:model] prompt]  新增 agent；不帶參數開選擇器",
     ),
     ("new", "開選擇器：agent → model → prompt"),
+    ("quota", "顯示各 agent 帳號的額度與重置時間"),
     (
         "handoff",
         "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 agent",
@@ -131,6 +132,19 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
     let rest = parts.next().unwrap_or("").trim();
 
     match verb.as_str() {
+        "quota" => {
+            let now = ade_core::now_millis();
+            app.status = if app.state.quotas.is_empty() {
+                "尚無額度資料（agent 執行過一個回合後才會有）".into()
+            } else {
+                app.state
+                    .quotas
+                    .values()
+                    .map(|q| q.summary(now))
+                    .collect::<Vec<_>>()
+                    .join("   |   ")
+            };
+        }
         "handoff" => {
             let Some(src) = app.selected_id() else {
                 app.status = "沒有選取的 session".into();

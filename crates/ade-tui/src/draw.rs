@@ -455,6 +455,41 @@ pub(crate) fn tab(label: &str, active: bool) -> Span<'static> {
     }
 }
 
+/// 標題列的額度摘要：每個 agent 一段，用量 ≥70% 變黃、≥90% 或已滿變紅。
+fn quota_span(app: &App) -> Span<'static> {
+    let now = ade_core::now_millis();
+    let mut text = String::new();
+    let mut worst = 0.0f32;
+    let mut reached = false;
+    for q in app.state.quotas.values() {
+        // 已過重置時間的視窗不再算數。
+        let live: Vec<_> = q
+            .windows
+            .iter()
+            .filter(|w| w.resets_at_ms.is_none_or(|r| r > now))
+            .collect();
+        if live.is_empty() {
+            continue;
+        }
+        let used = live.iter().map(|w| w.used_percent).fold(0.0, f32::max);
+        worst = worst.max(used);
+        reached |= q.reached;
+        let w = live
+            .iter()
+            .max_by(|a, b| a.used_percent.total_cmp(&b.used_percent))
+            .unwrap();
+        text.push_str(&format!("  {}:{} {:.0}%", q.agent, w.name, w.used_percent));
+    }
+    let color = if reached || worst >= 90.0 {
+        Color::Red
+    } else if worst >= 70.0 {
+        Color::Yellow
+    } else {
+        Color::DarkGray
+    };
+    Span::styled(text, Style::default().fg(color))
+}
+
 pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
     let live = app.state.live_sessions().count();
     let cost = app.state.total_cost();
@@ -504,6 +539,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
             format!("   layout:{}", app.layout.id()),
             Style::default().fg(Color::DarkGray),
         ),
+        quota_span(app),
         Span::styled(
             if app.unread_bus() > 0 {
                 format!("  bus:{} 未讀", app.unread_bus())
