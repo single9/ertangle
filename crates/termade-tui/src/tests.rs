@@ -21,6 +21,7 @@ fn sample_app(lines: &[&str]) -> App {
         status_note: None,
         repo_root: None,
         context: None,
+        native_id: None,
         permission: Default::default(),
     };
     app.state.sessions.insert(s.id.clone(), s);
@@ -1012,6 +1013,7 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
         status_note: None,
         repo_root: root.map(String::from),
         context: None,
+        native_id: None,
         permission: Default::default(),
     };
     for s in [
@@ -1636,4 +1638,34 @@ fn search_skips_hidden_lines_and_is_documented() {
     let help = crate::help::help_lines();
     assert!(help.iter().any(|(_, k, _)| k == "f"));
     assert!(help.iter().any(|(_, k, _)| k == ":find"));
+}
+
+#[test]
+fn resume_command_sends_request_and_is_discoverable() {
+    let mut app = sample_app(&["hi"]);
+    let (mut w, mut peer) = pair_writer();
+    peer.set_read_timeout(Some(std::time::Duration::from_secs(2)))
+        .unwrap();
+    crate::commands::execute_command(&mut app, &mut w, "resume 繼續做").unwrap();
+    let mut line = String::new();
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(&mut peer), &mut line).unwrap();
+    let req: Request = serde_json::from_str(line.trim()).unwrap();
+    match req {
+        Request::Resume { session, prompt } => {
+            assert_eq!(session, "ses_test");
+            assert_eq!(prompt.as_deref(), Some("繼續做"));
+        }
+        other => panic!("應送出 Resume，得到 {other:?}"),
+    }
+    // Tab 補全表與 Space 選單都找得到，且 session 層的快捷鍵不重複。
+    assert!(crate::commands::COMMANDS
+        .iter()
+        .any(|(n, _)| *n == "resume"));
+    let (_, items) = crate::menu::menu_items(&['s']).unwrap();
+    assert!(items.iter().any(|i| i.key == 'r'));
+    let mut keys: Vec<char> = items.iter().map(|i| i.key).collect();
+    keys.sort_unstable();
+    let n = keys.len();
+    keys.dedup();
+    assert_eq!(keys.len(), n, "Space s 選單有重複的快捷鍵");
 }

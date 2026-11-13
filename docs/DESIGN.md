@@ -282,6 +282,17 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 - **Channels**：`#build`、`#review`、`#alerts` 廣播。
 - **Handoff**（僅有 `kind=handoff` 訊息類型，會喚醒對方；**未實作**連同 worktree 轉交 session）：一個 agent 把 session 連同 worktree 交給另一個（換模型/換工具續做）。
 
+### 接續（resume）
+
+`Session.native_id` 記下 agent 原生的對話 id（adapter 送 `AgentEvent::NativeId` → `Event::SessionNativeId`）。
+`Request::Resume` 讓已結束的 session 以 `SessionSpec.resume` 重新啟動 adapter：Claude 加 `--resume`、Codex 改呼叫 `thread/resume`、ACP 改呼叫 `session/load`（回應前的 `session/update` 是歷史重播，一律丟掉）。
+
+- 沿用同一個 termade session id，不送 `SessionStarted`；label、worktree、task、收件匣游標都綁在這個 id 上。
+- spawn 與 resume 共用 `handlers/session.rs` 的 `launch_session`。每次啟動有一個 run id（`SessionEntry.run`），ingest 執行緒發現自己不是目前的 run 就停手，舊程序遲到的 `Exited` 才不會把剛接回來的 session 標成結束。
+- 沒有 `native_id` 等於不能接續：PTY 不送；ACP 只有 agent 宣告 `loadSession` 時才送。
+- Claude 的成本是程序內累計，接續時以舊的 `Session.cost` 為基底相加（在 `launch_session` 的 ingest 執行緒裡加，`Event::Cost` 仍是「目前累計值」）。
+- daemon 重啟不自動接續，只留 `SessionNote`。
+
 ### 防呆（避免 agent 無限互傳）
 - 每對 session 的訊息速率限制 + 迴圈偵測（相同 body 連續出現 N 次即斷路）。
 - 每個 task 的訊息預算（token/回合上限）：**未實作**。

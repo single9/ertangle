@@ -174,6 +174,8 @@ fn replay_files(paths: &[PathBuf]) -> Result<(State, Vec<Record>)> {
 
 pub(crate) struct SessionEntry {
     pub(crate) ctl: Arc<dyn AgentControl>,
+    /// 這次程序執行的 id：接續會換新，用來擋掉舊程序遲到的事件。
+    pub(crate) run: String,
 }
 
 impl ConnStream {
@@ -353,21 +355,28 @@ impl Shared {
         });
 
         // 重啟後子程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
-        let orphans: Vec<SessionId> = {
+        // 有原生對話 id 的可以接續，但不自動做（會在使用者沒注意時動用額度），只留一則說明。
+        let orphans: Vec<(SessionId, bool)> = {
             let inner = lock(&shared.inner);
             inner
                 .state
                 .sessions
                 .values()
                 .filter(|s| s.status.is_live())
-                .map(|s| s.id.clone())
+                .map(|s| (s.id.clone(), s.native_id.is_some()))
                 .collect()
         };
-        for sid in orphans {
+        for (sid, resumable) in orphans {
             shared.emit(Event::SessionStatus {
-                session: sid,
+                session: sid.clone(),
                 status: SessionStatus::Failed,
             });
+            if resumable {
+                shared.emit(Event::SessionNote {
+                    session: sid,
+                    note: "daemon 重啟，可用 :resume 接續".into(),
+                });
+            }
         }
         shared.prune_ended_sessions(now_millis());
         Ok(shared)
@@ -527,6 +536,10 @@ impl Shared {
             AgentEvent::Model(m) => Event::SessionModel {
                 session: sid.clone(),
                 model: m,
+            },
+            AgentEvent::NativeId(native_id) => Event::SessionNativeId {
+                session: sid.clone(),
+                native_id,
             },
             AgentEvent::Context { used, window } => Event::SessionContext {
                 session: sid.clone(),

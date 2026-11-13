@@ -42,6 +42,8 @@ pub enum AgentEvent {
     Permission(PermissionRequest),
     Cost(Cost),
     Model(String),
+    /// agent 原生的對話 id（接續用）。只有之後能用這個 id 接續時才會送出。
+    NativeId(String),
     /// 額度用完／被限流。
     Limited(String),
     /// session 的 context 用量。
@@ -87,6 +89,8 @@ pub struct SessionSpec {
     pub initial_prompt: Option<String>,
     /// 初始 prompt 的附件。
     pub initial_attachments: Vec<termade_core::Attachment>,
+    /// 接續既有對話：agent 原生的對話 id。`None` 表示開新對話。
+    pub resume: Option<String>,
     pub cols: u16,
     pub rows: u16,
 }
@@ -181,7 +185,17 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if spec.sandbox.is_some() && !is_codex {
         bail!("sandbox 只適用於 codex");
     }
+    // 接續只走原生協定；不能靜默開新對話。
+    if spec.resume.is_some() {
+        if spec.transport == Transport::Pty {
+            bail!("PTY 模式無法接續對話");
+        }
+        if matches!(spec.kind, AgentKind::Custom(_)) {
+            bail!("{} 沒有原生結構化協定，無法接續對話", spec.kind);
+        }
+    }
     let want_structured = match spec.transport {
+        _ if spec.resume.is_some() => true,
         Transport::Pty => false,
         Transport::Structured => true,
         Transport::Auto => supports_structured(&spec.kind),
@@ -190,7 +204,11 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if want_structured {
         match structured_start(spec.clone(), tx.clone()) {
             Ok(ctl) => return Ok(ctl),
-            Err(e) if spec.transport == Transport::Auto && spec.model.is_none() => {
+            Err(e)
+                if spec.transport == Transport::Auto
+                    && spec.model.is_none()
+                    && spec.resume.is_none() =>
+            {
                 tracing::warn!("{} 原生協定啟動失敗，退回 PTY：{e}", spec.kind);
             }
             Err(e) => return Err(e),

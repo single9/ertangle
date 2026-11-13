@@ -3,7 +3,8 @@
 //! M0 用於 OpenCode（`opencode acp`），這是四家 agent 中唯一「原生、零額外依賴」
 //! 就提供結構化協定的一條，因此當作第一個結構化 adapter。
 //!
-//! 涵蓋的 ACP 子集：`initialize`、`session/new`、`session/prompt`、`session/cancel`，
+//! 涵蓋的 ACP 子集：`initialize`、`session/new`、`session/load`（接續）、`session/prompt`、
+//! `session/cancel`，
 //! 以及 server→client 的 `session/update`（串流）與 `session/request_permission`（審批）。
 
 use crate::stream::StreamBuf;
@@ -21,6 +22,8 @@ use termade_core::{new_id, Decision, PermissionRequest, SessionStatus};
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
+/// `session/load` 要等 agent 把整段歷史重播完，對話長時比一般呼叫久。
+const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 
 struct Conn {
     /// 我們自己的 session id（事件關聯用）。
@@ -36,6 +39,9 @@ struct Conn {
     stream: Mutex<StreamBuf>,
     /// agent 在 initialize 宣告支援圖片區塊（`promptCapabilities.image`）。
     image_ok: std::sync::atomic::AtomicBool,
+    /// `session/load` 進行中：agent 會把歷史以 `session/update` 重播，這段期間的更新一律丟掉，
+    /// 否則逐字稿會重複。由 reader 在收到 load 的回應時清除（重播一定在回應之前）。
+    loading: std::sync::atomic::AtomicBool,
     /// 權限政策：`Auto` / `Bypass` 時由 adapter 直接代為核准。
     tx: Sender<AgentEvent>,
 }
@@ -239,10 +245,13 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
                     "session/request_permission" => conn.on_permission(&msg),
                     _ => conn.respond_error(msg.get("id").unwrap(), -32601, "not supported"),
                 }
-            } else if method == "session/update" {
+            } else if method == "session/update" && !conn.loading.load(Ordering::SeqCst) {
                 conn.on_update(&msg);
             }
         } else if let Some(id) = msg.get("id").and_then(|v| v.as_i64()) {
+            // 載入期間唯一在等的請求就是 `session/load`；在同一條讀取執行緒上清旗標，
+            // 回應之後的更新才不會被誤丟。
+            conn.loading.store(false, Ordering::SeqCst);
             if let Some(s) = conn.pending.lock().unwrap().remove(&id) {
                 let _ = s.send(msg);
             }
@@ -414,6 +423,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         perms: Mutex::new(HashMap::new()),
         stream: Mutex::new(StreamBuf::default()),
         image_ok: std::sync::atomic::AtomicBool::new(false),
+        loading: std::sync::atomic::AtomicBool::new(false),
         tx: tx.clone(),
     });
 
@@ -469,17 +479,46 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         }]),
         None => json!([]),
     };
-    let new = conn.call(
-        "session/new",
-        json!({ "cwd": spec.cwd.to_string_lossy(), "mcpServers": mcp_servers }),
-        CALL_TIMEOUT,
-    )?;
-    let sid = new["sessionId"]
-        .as_str()
-        .context("`session/new` 未回傳 sessionId")?
-        .to_string();
+    // 只有宣告 `loadSession` 的 agent 之後才接得回來。
+    let can_load = init["agentCapabilities"]["loadSession"]
+        .as_bool()
+        .unwrap_or(false);
+    let (sid, new) = match &spec.resume {
+        Some(id) => {
+            if !can_load {
+                bail!("{} 沒有宣告 loadSession，無法接續對話", spec.kind);
+            }
+            conn.loading.store(true, Ordering::SeqCst);
+            let loaded = conn.call(
+                "session/load",
+                json!({ "sessionId": id, "cwd": spec.cwd.to_string_lossy(), "mcpServers": mcp_servers }),
+                LOAD_TIMEOUT,
+            );
+            conn.loading.store(false, Ordering::SeqCst);
+            // 重播的片段可能有一部分已進了行緩衝，丟掉。
+            let _ = conn.stream.lock().unwrap().flush();
+            (id.clone(), loaded?)
+        }
+        None => {
+            let new = conn.call(
+                "session/new",
+                json!({ "cwd": spec.cwd.to_string_lossy(), "mcpServers": mcp_servers }),
+                CALL_TIMEOUT,
+            )?;
+            let sid = new["sessionId"]
+                .as_str()
+                .context("`session/new` 未回傳 sessionId")?
+                .to_string();
+            (sid, new)
+        }
+    };
     *conn.acp_session.lock().unwrap() = sid.clone();
-    if let Some(wanted) = &spec.model {
+    if can_load {
+        let _ = tx.send(AgentEvent::NativeId(sid.clone()));
+    }
+    // 接續時 model／effort 已存在 agent 的對話裡；回應沒帶 configOptions 就不重設。
+    let has_options = spec.resume.is_none() || new["configOptions"].is_array();
+    if let Some(wanted) = spec.model.as_ref().filter(|_| has_options) {
         let (config_id, value) = pick_model_option(&new, wanted)?;
         conn.call(
             "session/set_config_option",
@@ -489,7 +528,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| format!("設定 model `{value}` 失敗"))?;
         let _ = tx.send(AgentEvent::Model(value));
     }
-    if let Some(e) = &spec.effort {
+    if let Some(e) = spec.effort.as_ref().filter(|_| has_options) {
         let (config_id, value) = pick_effort_option(&new, e)?;
         conn.call(
             "session/set_config_option",

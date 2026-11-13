@@ -197,10 +197,17 @@ fn add_session(
             status_note: None,
             repo_root: None,
             context: None,
+            native_id: None,
             permission: Default::default(),
         },
     );
-    inner.sessions.insert(id.to_string(), SessionEntry { ctl });
+    inner.sessions.insert(
+        id.to_string(),
+        SessionEntry {
+            ctl,
+            run: new_id("run"),
+        },
+    );
 }
 
 #[test]
@@ -663,6 +670,7 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         status_note: None,
         repo_root: Some(repo.to_string_lossy().to_string()),
         context: None,
+        native_id: None,
         permission: Default::default(),
     }
 }
@@ -796,6 +804,7 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         status_note: None,
         repo_root: None,
         context: None,
+        native_id: None,
         permission: Default::default(),
     }
 }
@@ -833,6 +842,129 @@ fn restart_restores_state_and_continues_seq() {
     let (_, recs) = replay_log(&log).unwrap();
     assert!(recs.windows(2).all(|w| w[1].seq == w[0].seq + 1));
     assert_eq!(recs.len() as u64, n + 2);
+}
+
+// ---- 接續（T14）----
+
+#[test]
+fn native_id_survives_flush_and_replay_and_restart_leaves_resume_hint() {
+    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("termade-native")));
+    let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    for id in ["ses-with-id", "ses-no-id"] {
+        first.emit(Event::SessionStarted {
+            session: restart_session(id, SessionStatus::Idle),
+        });
+    }
+    // 走 adapter 事件的路徑，確認 ingest 有對應。
+    first.ingest(
+        &"ses-with-id".to_string(),
+        AgentEvent::NativeId("nat-1".into()),
+    );
+    assert_eq!(
+        lock(&first.inner).state.sessions["ses-with-id"]
+            .native_id
+            .as_deref(),
+        Some("nat-1")
+    );
+    first.flush_log();
+    drop(first);
+
+    let (state, _) = replay_log(&log).unwrap();
+    assert_eq!(
+        state.sessions["ses-with-id"].native_id.as_deref(),
+        Some("nat-1")
+    );
+
+    // daemon 重啟：孤兒標成 Failed；有原生 id 的留下接續提示，不會自動接續。
+    let second =
+        Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    let inner = lock(&second.inner);
+    let with = &inner.state.sessions["ses-with-id"];
+    assert_eq!(with.status, SessionStatus::Failed);
+    assert_eq!(with.native_id.as_deref(), Some("nat-1"));
+    assert!(
+        with.status_note
+            .as_deref()
+            .is_some_and(|n| n.contains(":resume")),
+        "{:?}",
+        with.status_note
+    );
+    let without = &inner.state.sessions["ses-no-id"];
+    assert_eq!(without.status, SessionStatus::Failed);
+    assert_eq!(without.status_note, None);
+    assert!(inner.sessions.is_empty(), "不該自動啟動任何程序");
+}
+
+#[test]
+fn resume_rejects_live_missing_and_idless_sessions_without_changing_state() {
+    let shared = test_shared();
+    let mut live = restart_session("ses-live", SessionStatus::Idle);
+    live.native_id = Some("nat-live".into());
+    shared.emit(Event::SessionStarted { session: live });
+    shared.emit(Event::SessionStarted {
+        session: restart_session("ses-noid", SessionStatus::Exited),
+    });
+    let before = lock(&shared.inner).state.sessions.clone();
+    let seq = lock(&shared.inner).seq;
+
+    let (tx, rx) = client_channel(None);
+    for id in ["ses-live", "ses-noid", "ses-missing"] {
+        shared.handle(
+            &tx,
+            Request::Resume {
+                session: id.into(),
+                prompt: Some("繼續".into()),
+            },
+        );
+    }
+    let errors: Vec<String> = rx
+        .try_iter()
+        .map(|f| match f {
+            Frame::Error { message } => message,
+            other => panic!("應回錯誤，得到 {other:?}"),
+        })
+        .collect();
+    assert_eq!(errors.len(), 3);
+    assert!(errors[0].contains("仍在執行"), "{}", errors[0]);
+    assert!(errors[1].contains("沒有可接續"), "{}", errors[1]);
+    assert!(errors[2].contains("找不到"), "{}", errors[2]);
+
+    let inner = lock(&shared.inner);
+    assert_eq!(inner.seq, seq, "不該送出任何事件");
+    assert!(inner.sessions.is_empty());
+    for (id, s) in &before {
+        let now = &inner.state.sessions[id];
+        assert_eq!(now.status, s.status);
+        assert_eq!(now.native_id, s.native_id);
+    }
+}
+
+#[test]
+fn prompt_to_ended_session_points_to_resume() {
+    let shared = test_shared();
+    let mut done = restart_session("ses-done", SessionStatus::Exited);
+    done.native_id = Some("nat".into());
+    shared.emit(Event::SessionStarted { session: done });
+    let (tx, rx) = client_channel(None);
+    for id in ["ses-done", "ses-nope"] {
+        shared.handle(
+            &tx,
+            Request::Prompt {
+                session: id.into(),
+                text: "hi".into(),
+                attachments: vec![],
+            },
+        );
+    }
+    let msgs: Vec<String> = rx
+        .try_iter()
+        .filter_map(|f| match f {
+            Frame::Error { message } => Some(message),
+            _ => None,
+        })
+        .collect();
+    assert!(msgs[0].contains(":resume"), "{}", msgs[0]);
+    assert!(msgs[1].contains("找不到"), "{}", msgs[1]);
 }
 
 #[test]

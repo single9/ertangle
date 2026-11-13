@@ -259,6 +259,10 @@ pub struct Session {
     /// context 用量（agent 回報；舊 log 沒有此欄位）。
     #[serde(default)]
     pub context: Option<ContextUsage>,
+    /// agent 原生的對話 id（Claude session id、Codex thread id、ACP sessionId），接續用。
+    /// `None` 表示這個 session 不能接續（舊 log、PTY，或 agent 沒有宣告載入能力）。
+    #[serde(default)]
+    pub native_id: Option<String>,
 }
 
 impl Session {
@@ -636,6 +640,11 @@ pub enum Event {
         session: SessionId,
         model: String,
     },
+    /// agent 回報的原生對話 id（接續用）。
+    SessionNativeId {
+        session: SessionId,
+        native_id: String,
+    },
     SessionLabel {
         session: SessionId,
         label: String,
@@ -827,6 +836,11 @@ impl State {
             Event::SessionModel { session, model } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.model = Some(model.clone());
+                }
+            }
+            Event::SessionNativeId { session, native_id } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.native_id = Some(native_id.clone());
                 }
             }
             Event::SessionLabel { session, label } => {
@@ -1523,6 +1537,7 @@ pub(crate) mod tests {
             status_note: None,
             repo_root: None,
             context: None,
+            native_id: None,
             permission: Default::default(),
         }
     }
@@ -1711,6 +1726,41 @@ pub(crate) mod tests {
             },
         });
         assert_eq!(st.sessions["s1"].model.as_deref(), Some("opus"));
+    }
+
+    #[test]
+    fn native_id_event_updates_state_and_old_json_parses_without_it() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::SessionStarted {
+                session: sample_session("s1"),
+            },
+        ));
+        assert_eq!(st.sessions["s1"].native_id, None);
+        st.apply(&rec(
+            2,
+            Event::SessionNativeId {
+                session: "s1".into(),
+                native_id: "abc".into(),
+            },
+        ));
+        assert_eq!(st.sessions["s1"].native_id.as_deref(), Some("abc"));
+        // 接續後 agent 換了 id：以最新的為準。
+        st.apply(&rec(
+            3,
+            Event::SessionNativeId {
+                session: "s1".into(),
+                native_id: "def".into(),
+            },
+        ));
+        assert_eq!(st.sessions["s1"].native_id.as_deref(), Some("def"));
+
+        // 舊 log 的 Session 沒有 native_id 欄位。
+        let mut v = serde_json::to_value(sample_session("old")).unwrap();
+        v.as_object_mut().unwrap().remove("native_id");
+        let s: Session = serde_json::from_value(v).unwrap();
+        assert_eq!(s.native_id, None);
     }
 
     #[test]

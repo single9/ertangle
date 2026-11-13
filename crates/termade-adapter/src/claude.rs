@@ -78,6 +78,10 @@ impl Conn {
             if let Some(model) = msg["model"].as_str() {
                 let _ = self.tx.send(AgentEvent::Model(model.to_string()));
             }
+            // 每次都送：接續後 id 可能換新，以最新的為準。
+            if let Some(id) = msg["session_id"].as_str().filter(|s| !s.is_empty()) {
+                let _ = self.tx.send(AgentEvent::NativeId(id.to_string()));
+            }
             // 狀態由 daemon 在啟動完成時設為 Idle，回合結束由 `result` 設回 Idle；
             // 這裡不能送 Idle，否則初始 prompt 還在處理時畫面會顯示閒置。
         }
@@ -387,13 +391,9 @@ fn permission_args(spec: &SessionSpec) -> Vec<String> {
     out
 }
 
-pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
-    let prog = match spec.bin.as_deref() {
-        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
-        None => crate::agent_bin("claude", "TERMADE_CLAUDE_BIN").context("找不到 `claude`")?,
-    };
-    let mut cmd = Command::new(prog);
-    cmd.args([
+/// 固定的 stream-json 參數，加上 model 與接續（`--resume <id>`：接回原對話，實測 id 不變）。
+fn base_args(spec: &SessionSpec) -> Vec<String> {
+    let mut out: Vec<String> = [
         "-p",
         "--input-format",
         "stream-json",
@@ -401,10 +401,26 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         "stream-json",
         "--verbose",
         "--include-partial-messages",
-    ]);
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
     if let Some(m) = &spec.model {
-        cmd.args(["--model", m]);
+        out.extend(["--model".to_string(), m.clone()]);
     }
+    if let Some(id) = &spec.resume {
+        out.extend(["--resume".to_string(), id.clone()]);
+    }
+    out
+}
+
+pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
+    let prog = match spec.bin.as_deref() {
+        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
+        None => crate::agent_bin("claude", "TERMADE_CLAUDE_BIN").context("找不到 `claude`")?,
+    };
+    let mut cmd = Command::new(prog);
+    cmd.args(base_args(&spec));
     cmd.args(permission_args(&spec));
     if let Some(exe) = &spec.mcp_exe {
         let mcp_cfg = json!({
@@ -515,6 +531,7 @@ mod tests {
             mcp_exe: Some("/bin/termade".into()),
             initial_prompt: None,
             initial_attachments: vec![],
+            resume: None,
             cols: 80,
             rows: 24,
         }
@@ -574,6 +591,15 @@ mod tests {
         assert!(!q.reached);
         let blocked = serde_json::json!({"rate_limit_info":{"status":"rejected","unifiedWindows":{"five_hour":{"utilization":1.0,"resetsAt":1,"status":"rejected"}}}});
         assert!(parse_rate_limit_event(&blocked).unwrap().reached);
+    }
+
+    #[test]
+    fn resume_flag_added_only_when_resuming() {
+        let mut s = spec_for_args();
+        assert!(!base_args(&s).iter().any(|a| a == "--resume"));
+        s.resume = Some("abc-123".into());
+        let a = base_args(&s);
+        assert!(a.windows(2).any(|w| w == ["--resume", "abc-123"]), "{a:?}");
     }
 
     #[test]

@@ -56,6 +56,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
             vec![
                 it('n', "新增 agent…（選 agent 與 model）", Act::Spawn),
                 it('h', "交接給其他 agent（額度用完時）", Act::Handoff),
+                it(
+                    'r',
+                    "接續已結束的 session（接回原對話）",
+                    Act::Cmd("resume"),
+                ),
                 it('c', "中斷目前回合", Act::Cmd("cancel")),
                 it('k', "結束 session", Act::Cmd("kill")),
                 it('z', "休眠", Act::Cmd("sleep")),

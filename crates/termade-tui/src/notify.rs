@@ -404,6 +404,7 @@ mod tests {
                     repo_root: None,
                     permission: Default::default(),
                     context: None,
+                    native_id: None,
                 },
             );
         }
