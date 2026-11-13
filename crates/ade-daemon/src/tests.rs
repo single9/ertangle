@@ -196,6 +196,7 @@ fn add_session(
             transport: "mock".to_string(),
             status_note: None,
             repo_root: None,
+            context: None,
             permission: Default::default(),
         },
     );
@@ -433,6 +434,7 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         transport: String::new(),
         status_note: None,
         repo_root: Some(repo.to_string_lossy().to_string()),
+        context: None,
         permission: Default::default(),
     }
 }
@@ -565,6 +567,7 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         transport: String::new(),
         status_note: None,
         repo_root: None,
+        context: None,
         permission: Default::default(),
     }
 }

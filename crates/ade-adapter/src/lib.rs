@@ -44,6 +44,11 @@ pub enum AgentEvent {
     Model(String),
     /// 額度用完／被限流。
     Limited(String),
+    /// session 的 context 用量。
+    Context {
+        used: u64,
+        window: Option<u64>,
+    },
     /// 帳號額度狀態更新。
     Quota(ade_core::Quota),
     /// 程序結束。

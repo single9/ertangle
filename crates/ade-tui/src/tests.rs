@@ -20,6 +20,7 @@ fn sample_app(lines: &[&str]) -> App {
         transport: "acp".into(),
         status_note: None,
         repo_root: None,
+        context: None,
         permission: Default::default(),
     };
     app.state.sessions.insert(s.id.clone(), s);

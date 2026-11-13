@@ -185,6 +185,48 @@ pub struct Cost {
     pub output_tokens: u64,
 }
 
+/// session 目前的 context 用量（對話已佔用的 token 數與模型的 context 視窗）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextUsage {
+    pub used: u64,
+    /// 模型的 context 視窗大小；agent 尚未回報時為 `None`。
+    pub window: Option<u64>,
+}
+
+impl ContextUsage {
+    pub fn percent(&self) -> Option<f32> {
+        self.window
+            .filter(|w| *w > 0)
+            .map(|w| self.used as f32 * 100.0 / w as f32)
+    }
+
+    /// `36k/1M 4%`；視窗未知時只顯示 `36k`。
+    pub fn short(&self) -> String {
+        match (self.window, self.percent()) {
+            (Some(w), Some(p)) => {
+                format!("{}/{} {:.0}%", human_tokens(self.used), human_tokens(w), p)
+            }
+            _ => human_tokens(self.used),
+        }
+    }
+}
+
+/// token 數的簡短寫法：`950`、`36k`、`1.5M`。
+pub fn human_tokens(n: u64) -> String {
+    match n {
+        0..=999 => n.to_string(),
+        1_000..=999_999 => format!("{}k", (n as f64 / 1000.0).round() as u64),
+        _ => {
+            let m = n as f64 / 1_000_000.0;
+            if (m - m.round()).abs() < 0.05 {
+                format!("{}M", m.round() as u64)
+            } else {
+                format!("{m:.1}M")
+            }
+        }
+    }
+}
+
 /// 一個 agent 的執行實例。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -214,6 +256,9 @@ pub struct Session {
     /// 此 session 的權限政策（舊 log 沒有此欄位時為 `auto`）。
     #[serde(default)]
     pub permission: PermissionPolicy,
+    /// context 用量（agent 回報；舊 log 沒有此欄位）。
+    #[serde(default)]
+    pub context: Option<ContextUsage>,
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +605,12 @@ pub enum Event {
         session: SessionId,
         status: SessionStatus,
     },
+    /// agent 回報 session 的 context 用量。
+    SessionContext {
+        session: SessionId,
+        used: u64,
+        window: Option<u64>,
+    },
     /// agent 回報帳號額度（用量百分比與重置時間）。
     QuotaUpdated {
         quota: Quota,
@@ -731,6 +782,23 @@ impl State {
             Event::SessionStatus { session, status } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = *status;
+                }
+            }
+            Event::SessionContext {
+                session,
+                used,
+                window,
+            } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    // 視窗大小只在 agent 回報時更新，沒回報就沿用上一次的。
+                    let window = window.or(s.context.and_then(|c| c.window));
+                    // used == 0 表示這次只補視窗大小，沿用上一次的用量。
+                    let used = if *used == 0 {
+                        s.context.map_or(0, |c| c.used)
+                    } else {
+                        *used
+                    };
+                    s.context = Some(ContextUsage { used, window });
                 }
             }
             Event::QuotaUpdated { quota } => {
@@ -1414,14 +1482,14 @@ pub fn redact_secrets(input: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn rec(seq: u64, event: Event) -> Record {
         Record { seq, ts: 0, event }
     }
 
-    fn sample_session(id: &str) -> Session {
+    pub(crate) fn sample_session(id: &str) -> Session {
         Session {
             id: id.to_string(),
             kind: AgentKind::OpenCode,
@@ -1437,6 +1505,7 @@ mod tests {
             transport: "acp".into(),
             status_note: None,
             repo_root: None,
+            context: None,
             permission: Default::default(),
         }
     }
@@ -1447,7 +1516,7 @@ mod tests {
         st.apply(&rec(
             1,
             Event::SessionStarted {
-                session: sample_session("s1"),
+                session: crate::tests::sample_session("s1"),
             },
         ));
         st.apply(&rec(
@@ -1477,7 +1546,7 @@ mod tests {
         st.apply(&rec(
             1,
             Event::SessionStarted {
-                session: sample_session("s1"),
+                session: crate::tests::sample_session("s1"),
             },
         ));
         st.apply(&rec(
@@ -1613,7 +1682,7 @@ mod tests {
             seq: 1,
             ts: 0,
             event: Event::SessionStarted {
-                session: sample_session("s1"),
+                session: crate::tests::sample_session("s1"),
             },
         });
         st.apply(&Record {
@@ -1683,7 +1752,7 @@ mod tests {
         st.apply(&rec(
             1,
             Event::SessionStarted {
-                session: sample_session("s1"),
+                session: crate::tests::sample_session("s1"),
             },
         ));
         st.apply(&rec(
@@ -1754,6 +1823,66 @@ mod attachment_tests {
         assert_eq!(format_remaining(30_000), "<1m");
         assert_eq!(format_remaining(90 * 60_000), "1h30m");
         assert_eq!(format_remaining(50 * 3_600_000), "2d2h");
+    }
+
+    #[test]
+    fn context_usage_formats_and_keeps_last_used_when_only_window_arrives() {
+        assert_eq!(human_tokens(950), "950");
+        assert_eq!(human_tokens(36_267), "36k");
+        assert_eq!(human_tokens(1_000_000), "1M");
+        assert_eq!(human_tokens(1_500_000), "1.5M");
+        let c = ContextUsage {
+            used: 36_000,
+            window: Some(1_000_000),
+        };
+        assert_eq!(c.short(), "36k/1M 4%");
+        assert_eq!(
+            ContextUsage {
+                used: 5_000,
+                window: None
+            }
+            .short(),
+            "5k"
+        );
+        let mut st = State::new();
+        st.apply(&Record {
+            seq: 1,
+            ts: 0,
+            event: Event::SessionStarted {
+                session: crate::tests::sample_session("s1"),
+            },
+        });
+        st.apply(&Record {
+            seq: 2,
+            ts: 0,
+            event: Event::SessionContext {
+                session: "s1".into(),
+                used: 36_000,
+                window: None,
+            },
+        });
+        st.apply(&Record {
+            seq: 3,
+            ts: 0,
+            event: Event::SessionContext {
+                session: "s1".into(),
+                used: 0,
+                window: Some(200_000),
+            },
+        });
+        let c = st.sessions["s1"].context.unwrap();
+        assert_eq!((c.used, c.window), (36_000, Some(200_000)));
+        // 之後只有用量更新時沿用視窗
+        st.apply(&Record {
+            seq: 4,
+            ts: 0,
+            event: Event::SessionContext {
+                session: "s1".into(),
+                used: 50_000,
+                window: None,
+            },
+        });
+        assert_eq!(st.sessions["s1"].context.unwrap().window, Some(200_000));
     }
 
     #[test]

@@ -102,6 +102,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         transport: String::new(),
         status_note: None,
         repo_root,
+        context: None,
         permission,
     };
     shared.emit(Event::SessionStarted {

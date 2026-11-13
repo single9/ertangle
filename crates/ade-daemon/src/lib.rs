@@ -528,6 +528,11 @@ impl Shared {
                 session: sid.clone(),
                 model: m,
             },
+            AgentEvent::Context { used, window } => Event::SessionContext {
+                session: sid.clone(),
+                used,
+                window,
+            },
             AgentEvent::Quota(quota) => Event::QuotaUpdated { quota },
             AgentEvent::Limited(detail) => Event::SessionLimited {
                 session: sid.clone(),

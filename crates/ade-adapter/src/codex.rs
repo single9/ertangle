@@ -177,6 +177,13 @@ impl Conn {
             }
             "item/completed" => self.on_item_completed(&p["item"]),
             "thread/tokenUsage/updated" => {
+                let last = &p["tokenUsage"]["last"];
+                if let Some(used) = last["totalTokens"].as_u64() {
+                    let _ = self.tx.send(AgentEvent::Context {
+                        used,
+                        window: p["tokenUsage"]["modelContextWindow"].as_u64(),
+                    });
+                }
                 let total = &p["tokenUsage"]["total"];
                 let cost = Cost {
                     usd: 0.0,

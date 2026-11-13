@@ -97,6 +97,15 @@ impl Conn {
         let update = &msg["params"]["update"];
         let kind = update["sessionUpdate"].as_str().unwrap_or("");
         match kind {
+            "usage_update" => {
+                // ACP: `used`（目前 context 佔用）與 `size`（視窗大小）。
+                if let Some(used) = update["used"].as_u64() {
+                    let _ = self.tx.send(AgentEvent::Context {
+                        used,
+                        window: update["size"].as_u64(),
+                    });
+                }
+            }
             "agent_message_chunk" => {
                 if let Some(t) = update["content"]["text"].as_str() {
                     let text = self.stream.lock().unwrap().push("msg", t);

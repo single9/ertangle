@@ -631,6 +631,22 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::DarkGray),
                 ),
             ];
+            if let Some(c) = s.context {
+                // context 越滿越醒目：≥80% 黃、≥92% 紅。
+                let pct = c.percent();
+                let color = match pct {
+                    Some(p) if p >= 92.0 => Color::Red,
+                    Some(p) if p >= 80.0 => Color::Yellow,
+                    _ => Color::DarkGray,
+                };
+                spans.push(Span::styled(
+                    format!(
+                        " ctx {}",
+                        pct.map_or_else(|| ade_core::human_tokens(c.used), |p| format!("{p:.0}%"))
+                    ),
+                    Style::default().fg(color),
+                ));
+            }
             if !note.is_empty() {
                 spans.push(Span::styled(
                     format!(" · {}", truncate(note, 16)),
@@ -792,7 +808,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         Some(id) => {
             let s = &app.state.sessions[id];
             format!(
-                " Transcript: {} · {} · {} (${:.4}) · {}% · {} ",
+                " Transcript: {} · {} · {}{} (${:.4}) · {}% · {} ",
                 s.label,
                 s.kind.id(),
                 if s.transport.is_empty() {
@@ -800,6 +816,9 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 } else {
                     &s.transport
                 },
+                s.context
+                    .map(|c| format!(" · ctx {}", c.short()))
+                    .unwrap_or_default(),
                 s.cost.usd,
                 pct,
                 if app.raw_md { "raw" } else { "md" },

@@ -153,6 +153,16 @@ impl Conn {
                 _ => {}
             }
         }
+        // context 用量 = 這一則 assistant 訊息的輸入側 token（含快取）；視窗大小在 `result` 才知道。
+        let u = &msg["message"]["usage"];
+        if !u.is_null() {
+            let used = u["input_tokens"].as_u64().unwrap_or(0)
+                + u["cache_creation_input_tokens"].as_u64().unwrap_or(0)
+                + u["cache_read_input_tokens"].as_u64().unwrap_or(0);
+            if used > 0 {
+                let _ = self.tx.send(AgentEvent::Context { used, window: None });
+            }
+        }
         // 不在這裡送逐訊息的 usage：它只有單則訊息的 token 數，會把累計值蓋成很小的數字，
         // 讓畫面上的成本與 token 在回合中途往回跳。累計值只以 `result` 為準。
     }
@@ -189,6 +199,16 @@ impl Conn {
 
     fn on_result(&self, msg: &Value) {
         self.flush_stream();
+        if let Some(window) = msg["modelUsage"]
+            .as_object()
+            .and_then(|m| m.values().filter_map(|v| v["contextWindow"].as_u64()).max())
+        {
+            // 用量沿用最近一則 assistant 訊息的值，這裡只補上視窗大小。
+            let _ = self.tx.send(AgentEvent::Context {
+                used: 0,
+                window: Some(window),
+            });
+        }
         if let Some(cost) = result_cost(msg) {
             let _ = self.tx.send(AgentEvent::Cost(cost));
         }

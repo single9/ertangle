@@ -66,7 +66,7 @@ pub(crate) fn cmd_sessions(json: bool) -> Result<()> {
             .map(|n| format!("  ({n})"))
             .unwrap_or_default();
         println!(
-            "{}  {:<22} {:<11} {:<9} {:<6} {:<7} {} @{}{}",
+            "{}  {:<22} {:<11} {:<9} {:<6} {:<14} {:<7} {} @{}{}",
             s.id,
             s.label,
             match &s.model {
@@ -75,6 +75,7 @@ pub(crate) fn cmd_sessions(json: bool) -> Result<()> {
             },
             status,
             s.permission.id(),
+            s.context.map_or_else(|| "-".to_string(), |c| c.short()),
             transport,
             s.cwd,
             branch,
