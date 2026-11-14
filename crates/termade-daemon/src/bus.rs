@@ -1,6 +1,7 @@
 //! 訊息匯流排：防呆斷路器、waiter、訊息投遞與 mailbox 後備。
 
 use super::*;
+use tr::tr;
 
 // ---------------------------------------------------------------------------
 // 防呆：速率限制與迴圈偵測
@@ -41,7 +42,13 @@ impl BusGuard {
         }
         if entry.timestamps_ms.len() >= PAIR_RATE_CAP_PER_MIN {
             bail!(
-                "速率限制：{from} → {to_key} 在 1 分鐘內已傳送超過 {PAIR_RATE_CAP_PER_MIN} 則訊息"
+                "{}",
+                tr!(
+                    "速率限制：{from} → {to_key} 在 1 分鐘內已傳送超過 {cap} 則訊息",
+                    from = from,
+                    to_key = to_key,
+                    cap = PAIR_RATE_CAP_PER_MIN
+                )
             );
         }
 
@@ -49,7 +56,13 @@ impl BusGuard {
         if !body.is_empty() && entry.last_body == body {
             if entry.repeat_count >= LOOP_REPEAT_CAP {
                 bail!(
-                    "迴圈偵測：{from} → {to_key} 連續傳送相同內容超過 {LOOP_REPEAT_CAP} 次，已斷路"
+                    "{}",
+                    tr!(
+                        "迴圈偵測：{from} → {to_key} 連續傳送相同內容超過 {cap} 次，已斷路",
+                        from = from,
+                        to_key = to_key,
+                        cap = LOOP_REPEAT_CAP
+                    )
                 );
             }
             entry.repeat_count += 1;
@@ -145,12 +158,15 @@ impl Shared {
         match self.deliver_message_noted(from, to, kind, body, reply_to) {
             Ok((msg_id, route_notes)) => {
                 let mut note = if over_budget_target && kind_wakes_recipient(kind) {
-                    format!("已送出訊息 {msg_id}（收件者已超過成本上限 over_budget，拒絕自動喚醒）")
+                    tr!(
+                        "已送出訊息 {msg_id}（收件者已超過成本上限 over_budget，拒絕自動喚醒）",
+                        msg_id = msg_id
+                    )
                 } else {
-                    format!("已送出訊息 {msg_id}")
+                    tr!("已送出訊息 {msg_id}", msg_id = msg_id)
                 };
                 for n in route_notes {
-                    note.push_str(&format!("（{n}）"));
+                    note.push_str(&tr!("（{n}）", n = n));
                 }
                 let _ = reply.send(Frame::ok_note(note));
             }
@@ -222,13 +238,16 @@ impl Shared {
                                 .map(|s| s.label.clone())
                                 .unwrap_or_else(|| succ.clone());
                             body = format!("（原收件者 {t}，已交接）\n{body}");
-                            route_notes.push(format!(
-                                "收件者 {t} 已交接，訊息改投給接手的 {succ_label}（{succ}）"
+                            route_notes.push(tr!(
+                                "收件者 {t} 已交接，訊息改投給接手的 {succ_label}（{succ}）",
+                                t = t,
+                                succ_label = succ_label,
+                                succ = succ
                             ));
                             sid = succ;
                         }
                         if dead(&inner.state, &sid) {
-                            route_notes.push(format!("對方 {sid} 已結束，訊息不會被讀取"));
+                            route_notes.push(tr!("對方 {sid} 已結束，訊息不會被讀取", sid = sid));
                         }
                     }
                     Target::Direct(sid)

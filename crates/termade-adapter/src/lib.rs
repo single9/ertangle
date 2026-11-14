@@ -26,6 +26,7 @@ use termade_core::{
     AgentKind, Cost, Decision, PermissionPolicy, PermissionRequest, SessionId, SessionStatus,
 };
 use termade_protocol::Transport;
+use tr::tr;
 
 /// adapter 正規化後、往上送的事件。
 #[derive(Debug, Clone)]
@@ -131,14 +132,27 @@ pub trait AgentControl: Send + Sync {
     /// 成功回傳實際生效的 model（agent 有回報才有）；不支援的 adapter 回傳明確錯誤。
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         let _ = (model, effort);
-        bail!("{} 不支援執行期切換 model／effort", self.transport())
+        bail!(
+            "{}",
+            tr!(
+                "{transport} 不支援執行期切換 model／effort",
+                transport = self.transport()
+            )
+        )
     }
 }
 
 /// 檢查 effort 值合法。
 pub fn check_effort(e: &str) -> Result<()> {
     if !EFFORT_LEVELS.contains(&e) {
-        bail!("未知的 effort `{e}`；可用：{}", EFFORT_LEVELS.join(", "));
+        bail!(
+            "{}",
+            tr!(
+                "未知的 effort `{e}`；可用：{list}",
+                e = e,
+                list = EFFORT_LEVELS.join(", ")
+            )
+        );
     }
     Ok(())
 }
@@ -148,9 +162,9 @@ pub fn signal_pid(pid: u32, sig: &str) -> Result<()> {
     let status = std::process::Command::new("kill")
         .args([sig, &pid.to_string()])
         .status()
-        .context("執行 kill 失敗")?;
+        .with_context(|| tr!("執行 kill 失敗"))?;
     if !status.success() {
-        bail!("kill {sig} {pid} 失敗");
+        bail!("{}", tr!("kill {sig} {pid} 失敗", sig = sig, pid = pid));
     }
     Ok(())
 }
@@ -191,29 +205,48 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let is_claude = matches!(spec.kind, AgentKind::ClaudeCode);
     if let Some(e) = &spec.effort {
         if !EFFORT_LEVELS.contains(&e.as_str()) {
-            bail!("未知的 effort `{e}`；可用：{}", EFFORT_LEVELS.join(", "));
+            bail!(
+                "{}",
+                tr!(
+                    "未知的 effort `{e}`；可用：{list}",
+                    e = e,
+                    list = EFFORT_LEVELS.join(", ")
+                )
+            );
         }
     }
     let is_codex = matches!(spec.kind, AgentKind::Codex);
     if !is_claude && (!spec.allowed_tools.is_empty() || !spec.disallowed_tools.is_empty()) {
         bail!(
-            "{} 尚不支援 allowed_tools／disallowed_tools；請改用 claude",
-            spec.kind
+            "{}",
+            tr!(
+                "{kind} 尚不支援 allowed_tools／disallowed_tools；請改用 claude",
+                kind = spec.kind
+            )
         );
     }
     if spec.read_only && !is_claude && !is_codex {
-        bail!("{} 尚不支援 read_only；請改用 claude 或 codex", spec.kind);
+        bail!(
+            "{}",
+            tr!(
+                "{kind} 尚不支援 read_only；請改用 claude 或 codex",
+                kind = spec.kind
+            )
+        );
     }
     if spec.sandbox.is_some() && !is_codex {
-        bail!("sandbox 只適用於 codex");
+        bail!("{}", tr!("sandbox 只適用於 codex"));
     }
     // 接續只走原生協定；不能靜默開新對話。
     if spec.resume.is_some() {
         if spec.transport == Transport::Pty {
-            bail!("PTY 模式無法接續對話");
+            bail!("{}", tr!("PTY 模式無法接續對話"));
         }
         if matches!(spec.kind, AgentKind::Custom(_)) {
-            bail!("{} 沒有原生結構化協定，無法接續對話", spec.kind);
+            bail!(
+                "{}",
+                tr!("{kind} 沒有原生結構化協定，無法接續對話", kind = spec.kind)
+            );
         }
     }
     let want_structured = match spec.transport {
@@ -240,14 +273,18 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if let Some(m) = &spec.model {
         if spec.transport != Transport::Pty {
             bail!(
-                "{} 尚不支援以結構化模式指定 model（{m}）；請改用 --transport pty 並以參數傳入",
-                spec.kind
+                "{}",
+                tr!(
+                    "{kind} 尚不支援以結構化模式指定 model（{m}）；請改用 --transport pty 並以參數傳入",
+                    kind = spec.kind,
+                    m = m
+                )
             );
         }
     }
     let (prog, _) = spec.kind.pty_command();
     if which(prog).is_none() {
-        bail!("找不到 `{prog}`，請先安裝");
+        bail!("{}", tr!("找不到 `{prog}`，請先安裝", prog = prog));
     }
     pty::start(spec, tx)
 }
@@ -266,10 +303,19 @@ pub fn supports_structured(kind: &AgentKind) -> bool {
 fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     match spec.kind {
         AgentKind::OpenCode | AgentKind::Antigravity => {
-            let (prog, _) = spec.kind.acp_command().context("此 agent 不支援 ACP")?;
+            let (prog, _) = spec
+                .kind
+                .acp_command()
+                .with_context(|| tr!("此 agent 不支援 ACP"))?;
             let target = spec.bin.as_deref().unwrap_or(prog);
             if which(target).is_none() {
-                bail!("找不到 `{target}`，請先安裝或改用 --transport pty");
+                bail!(
+                    "{}",
+                    tr!(
+                        "找不到 `{target}`，請先安裝或改用 --transport pty",
+                        target = target
+                    )
+                );
             }
             acp::start(spec, tx)
         }
@@ -278,18 +324,33 @@ fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn
             if spec.bin.is_none() && std::env::var_os("TERMADE_CLAUDE_BIN").is_some() {
                 // 由 claude::start 透過 TERMADE_CLAUDE_BIN 處理
             } else if which(target).is_none() {
-                bail!("找不到 `{target}`，請先安裝或改用 --transport pty");
+                bail!(
+                    "{}",
+                    tr!(
+                        "找不到 `{target}`，請先安裝或改用 --transport pty",
+                        target = target
+                    )
+                );
             }
             claude::start(spec, tx)
         }
         AgentKind::Codex => {
             let target = spec.bin.as_deref().unwrap_or("codex");
             if which(target).is_none() {
-                bail!("找不到 `{target}`，請先安裝或改用 --transport pty");
+                bail!(
+                    "{}",
+                    tr!(
+                        "找不到 `{target}`，請先安裝或改用 --transport pty",
+                        target = target
+                    )
+                );
             }
             codex::start(spec, tx)
         }
-        AgentKind::Custom(_) => bail!("自訂 agent 沒有原生結構化協定，請用 --transport pty"),
+        AgentKind::Custom(_) => bail!(
+            "{}",
+            tr!("自訂 agent 沒有原生結構化協定，請用 --transport pty")
+        ),
     }
 }
 

@@ -1,6 +1,7 @@
 //! 連線傳輸（Unix socket／TCP）與 client 端。
 
 use super::*;
+use tr::tr;
 
 // ---------------------------------------------------------------------------
 // 雙模連線傳輸（Unix Socket + M5 TCP Remote）
@@ -59,11 +60,15 @@ impl Client {
     pub fn connect() -> Result<Client> {
         let stream = if let Ok(remote) = std::env::var("TERMADE_REMOTE") {
             let tcp = TcpStream::connect(remote.trim())
-                .with_context(|| format!("無法連線遠端 daemon（{remote}）"))?;
+                .with_context(|| tr!("無法連線遠端 daemon（{remote}）", remote = remote))?;
             ConnStream::Tcp(tcp)
         } else {
-            let unix = UnixStream::connect(socket_path())
-                .with_context(|| format!("無法連線 daemon（{:?}）", socket_path()))?;
+            let unix = UnixStream::connect(socket_path()).with_context(|| {
+                tr!(
+                    "無法連線 daemon（{path}）",
+                    path = format!("{:?}", socket_path())
+                )
+            })?;
             ConnStream::Unix(unix)
         };
         let reader = BufReader::new(stream.try_clone()?);
@@ -97,7 +102,7 @@ impl Client {
     pub fn recv(&mut self) -> Result<Frame> {
         let mut line = String::new();
         if self.reader.read_line(&mut line)? == 0 {
-            bail!("daemon 已關閉連線");
+            bail!("{}", tr!("daemon 已關閉連線"));
         }
         Ok(decode_line(line.trim())?)
     }
@@ -122,7 +127,7 @@ pub fn ensure_daemon() -> Result<()> {
         return Ok(());
     }
     if std::env::var_os("TERMADE_REMOTE").is_some() {
-        bail!("無法連線至 TERMADE_REMOTE 指定的遠端 daemon");
+        bail!("{}", tr!("無法連線至 TERMADE_REMOTE 指定的遠端 daemon"));
     }
     let sock = socket_path();
     if let Some(dir) = sock.parent() {
@@ -130,7 +135,7 @@ pub fn ensure_daemon() -> Result<()> {
             crate::server::ensure_private_dir(dir)?;
         }
     }
-    let exe = std::env::current_exe().context("取得自身執行檔路徑失敗")?;
+    let exe = std::env::current_exe().with_context(|| tr!("取得自身執行檔路徑失敗"))?;
     let log_dir = state_dir();
     let _ = fs::create_dir_all(&log_dir);
     let log_path = log_dir.join("daemon.log");
@@ -146,7 +151,7 @@ pub fn ensure_daemon() -> Result<()> {
     } else {
         cmd.stderr(Stdio::null());
     }
-    let mut child = cmd.spawn().context("無法啟動 daemon")?;
+    let mut child = cmd.spawn().with_context(|| tr!("無法啟動 daemon"))?;
     for _ in 0..120 {
         std::thread::sleep(Duration::from_millis(50));
         if is_running() {
@@ -163,11 +168,17 @@ pub fn ensure_daemon() -> Result<()> {
                 })
                 .unwrap_or_default();
             if detail.is_empty() {
-                bail!("daemon 異常退出（{status}）");
+                bail!("{}", tr!("daemon 異常退出（{status}）", status = status));
             } else {
-                bail!("daemon 啟動失敗：{detail}");
+                bail!("{}", tr!("daemon 啟動失敗：{detail}", detail = detail));
             }
         }
     }
-    bail!("daemon 啟動逾時（{:?}）", socket_path())
+    bail!(
+        "{}",
+        tr!(
+            "daemon 啟動逾時（{path}）",
+            path = format!("{:?}", socket_path())
+        )
+    )
 }

@@ -12,6 +12,7 @@ pub mod i18n;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tr::tr;
 
 /// 目前時間（Unix epoch 毫秒）。
 pub fn now_millis() -> u64 {
@@ -892,7 +893,7 @@ impl State {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = SessionStatus::Failed;
                     let d: String = detail.chars().take(80).collect();
-                    s.status_note = Some(format!("額度用完：{d}（可用 handoff 交接）"));
+                    s.status_note = Some(tr!("額度用完：{d}（可用 handoff 交接）", d = d));
                 }
             }
             Event::SessionRemoved { session } => {
@@ -997,7 +998,7 @@ impl State {
                     let mut text: String = first.trim().chars().take(100).collect();
                     if first.trim().chars().count() > 100 || extra > 0 {
                         text.push_str(&if extra > 0 {
-                            format!(" …(+{extra} 行)")
+                            tr!(" …(+{extra} 行)", extra = extra)
                         } else {
                             "…".into()
                         });
@@ -1005,7 +1006,7 @@ impl State {
                     let line = match (ok, text.is_empty()) {
                         (true, true) => "  ✓".to_string(),
                         (true, false) => format!("  ✓ {text}"),
-                        (false, true) => "  ✗ 失敗".to_string(),
+                        (false, true) => format!("  ✗ {}", tr!("失敗")),
                         (false, false) => format!("  ✗ {text}"),
                     };
                     self.push_transcript_line(session, line);
@@ -1464,22 +1465,22 @@ impl Quota {
             .windows
             .iter()
             .map(|w| match w.resets_at_ms {
-                Some(r) if r <= now_ms => format!("{} 已重置", w.name),
-                Some(r) => format!(
-                    "{} {:.0}% (重置 {})",
-                    w.name,
-                    w.used_percent,
-                    format_remaining(r - now_ms)
+                Some(r) if r <= now_ms => tr!("{name} 已重置", name = w.name),
+                Some(r) => tr!(
+                    "{name} {pct}% (重置 {remaining})",
+                    name = w.name,
+                    pct = format!("{:.0}", w.used_percent),
+                    remaining = format_remaining(r - now_ms)
                 ),
                 None => format!("{} {:.0}%", w.name, w.used_percent),
             })
             .collect();
-        format!(
-            "{}{} {}",
-            self.agent,
-            if self.reached { " ✗額度已滿" } else { "" },
-            parts.join(" · ")
-        )
+        let reached = if self.reached {
+            format!(" {}", tr!("✗額度已滿"))
+        } else {
+            String::new()
+        };
+        format!("{}{} {}", self.agent, reached, parts.join(" · "))
     }
 
     /// 最吃緊的視窗用量（百分比）。
@@ -1585,10 +1586,10 @@ impl Attachment {
     /// 讀取檔案成附件：圖片內嵌 base64（上限 5 MB）；UTF-8 文字檔內嵌內容（上限 256 KB，
     /// 超過就只帶路徑）；其他二進位檔只帶路徑。
     pub fn load(path: &std::path::Path) -> Result<Attachment, String> {
-        let meta =
-            std::fs::metadata(path).map_err(|e| format!("無法讀取 {}：{e}", path.display()))?;
+        let meta = std::fs::metadata(path)
+            .map_err(|e| tr!("無法讀取 {path}：{e}", path = path.display(), e = e))?;
         if !meta.is_file() {
-            return Err(format!("{} 不是檔案", path.display()));
+            return Err(tr!("{path} 不是檔案", path = path.display()));
         }
         let name = path
             .file_name()
@@ -1604,20 +1605,22 @@ impl Attachment {
         };
         if let Some(mime) = image_mime(path) {
             if meta.len() > MAX_IMAGE_BYTES {
-                return Err(format!(
-                    "圖片 {} 太大（{} KB，上限 {} KB）",
-                    att.name,
-                    meta.len() / 1024,
-                    MAX_IMAGE_BYTES / 1024
+                return Err(tr!(
+                    "圖片 {name} 太大（{size} KB，上限 {max} KB）",
+                    name = att.name,
+                    size = meta.len() / 1024,
+                    max = MAX_IMAGE_BYTES / 1024
                 ));
             }
-            let bytes = std::fs::read(path).map_err(|e| format!("讀取 {} 失敗：{e}", att.name))?;
+            let bytes = std::fs::read(path)
+                .map_err(|e| tr!("讀取 {name} 失敗：{e}", name = att.name, e = e))?;
             att.mime = mime.into();
             att.data = Some(base64_encode(&bytes));
             return Ok(att);
         }
         if meta.len() <= MAX_TEXT_BYTES {
-            let bytes = std::fs::read(path).map_err(|e| format!("讀取 {} 失敗：{e}", att.name))?;
+            let bytes = std::fs::read(path)
+                .map_err(|e| tr!("讀取 {name} 失敗：{e}", name = att.name, e = e))?;
             if !bytes.contains(&0) {
                 if let Ok(text) = String::from_utf8(bytes) {
                     att.mime = "text/plain".into();

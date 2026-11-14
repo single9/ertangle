@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use termade_protocol::{Frame, Request};
+use tr::tr;
 
 use crate::{lock, token_matches, ClientTx, Shared, VERSION};
 
@@ -21,7 +22,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         } => {
             if let Some(expected) = &shared.auth_token {
                 if !token_matches(token.as_deref(), expected) {
-                    let _ = reply.send(Frame::error("遠端認證失敗：token 不符"));
+                    let _ = reply.send(Frame::error(tr!("遠端認證失敗：token 不符")));
                     return;
                 }
             }
@@ -68,7 +69,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         }
 
         Request::Shutdown => {
-            let _ = reply.send(Frame::ok_note("daemon 關閉中"));
+            let _ = reply.send(Frame::ok_note(tr!("daemon 關閉中")));
             let shared = shared.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(150));

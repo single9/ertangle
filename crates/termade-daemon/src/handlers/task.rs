@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use termade_core::{now_millis, MsgKind, State, Target, Task, TaskStatus};
 use termade_protocol::Frame;
+use tr::tr;
 
 use crate::{lock, new_id, ClientTx, Shared};
 
@@ -117,9 +118,9 @@ pub(crate) fn handle_create(
             .map(|d| d.as_str())
             .collect();
         if !missing.is_empty() {
-            let _ = reply.send(Frame::error(format!(
-                "找不到前置任務：{}",
-                missing.join("、")
+            let _ = reply.send(Frame::error(tr!(
+                "找不到前置任務：{list}",
+                list = missing.join("、")
             )));
             return;
         }
@@ -138,12 +139,13 @@ pub(crate) fn handle_create(
     if waiting.is_empty() {
         // 指派任務時直接投遞一則 handoff 訊息，讓閒置中的負責人被喚醒。
         notify_assignee(shared, &task);
-        let _ = reply.send(Frame::ok_note(format!("已建立任務 {id}")));
+        let _ = reply.send(Frame::ok_note(tr!("已建立任務 {id}", id = id)));
     } else {
         // 還在等前置任務：先不通知負責人，等相依性完成再由 `unblock_dependents` 送。
-        let _ = reply.send(Frame::ok_note(format!(
-            "已建立任務 {id} （blocked：等待 {} 完成後自動解鎖並通知負責人）",
-            waiting.join("、")
+        let _ = reply.send(Frame::ok_note(tr!(
+            "已建立任務 {id} （blocked：等待 {waiting} 完成後自動解鎖並通知負責人）",
+            id = id,
+            waiting = waiting.join("、")
         )));
     }
 }
@@ -189,10 +191,13 @@ pub(crate) fn handle_update(
                 unblock_dependents(shared, &task_id);
             }
 
-            let _ = reply.send(Frame::ok_note(format!("已更新任務 {task_id}")));
+            let _ = reply.send(Frame::ok_note(tr!(
+                "已更新任務 {task_id}",
+                task_id = task_id
+            )));
         }
         None => {
-            let _ = reply.send(Frame::error(format!("找不到任務 {id}")));
+            let _ = reply.send(Frame::error(tr!("找不到任務 {id}", id = id)));
         }
     }
 }

@@ -1,6 +1,7 @@
 //! 伺服器：連線處理、遠端模式驗證與 daemon 主迴圈。
 
 use super::*;
+use tr::tr;
 
 // ---------------------------------------------------------------------------
 // 伺服器
@@ -51,13 +52,15 @@ pub(crate) fn handle_conn(
                         } else {
                             // 失敗後延遲回覆再關閉連線，拖慢暴力嘗試。
                             std::thread::sleep(AUTH_FAIL_DELAY);
-                            let _ =
-                                tx.send(Frame::error("遠端認證失敗：請設定正確的 TERMADE_TOKEN"));
+                            let _ = tx.send(Frame::error(tr!(
+                                "遠端認證失敗：請設定正確的 TERMADE_TOKEN"
+                            )));
                             break;
                         }
                     } else {
                         std::thread::sleep(AUTH_FAIL_DELAY);
-                        let _ = tx.send(Frame::error("未認證的遠端連線：請先送 Hello 帶 token"));
+                        let _ =
+                            tx.send(Frame::error(tr!("未認證的遠端連線：請先送 Hello 帶 token")));
                         break;
                     }
                 }
@@ -67,12 +70,12 @@ pub(crate) fn handle_conn(
                 }));
                 if handled.is_err() {
                     tracing::error!("處理請求時 panic，中斷此連線");
-                    let _ = tx.send(Frame::error("daemon 處理請求時發生內部錯誤"));
+                    let _ = tx.send(Frame::error(tr!("daemon 處理請求時發生內部錯誤")));
                     break;
                 }
             }
             Err(e) => {
-                let _ = tx.send(Frame::error(format!("無法解析請求：{e}")));
+                let _ = tx.send(Frame::error(tr!("無法解析請求：{e}", e = e)));
             }
         }
     }
@@ -109,13 +112,23 @@ pub struct RemoteOptions {
 /// 讀取 token 檔；要求不對 group/other 開放權限。
 pub(crate) fn read_token_file(path: &Path) -> Result<String> {
     use std::os::unix::fs::PermissionsExt;
-    let meta = fs::metadata(path).with_context(|| format!("讀取 token 檔 {path:?} 失敗"))?;
+    let meta = fs::metadata(path)
+        .with_context(|| tr!("讀取 token 檔 {path} 失敗", path = format!("{path:?}")))?;
     if meta.permissions().mode() & 0o077 != 0 {
-        bail!("token 檔 {path:?} 權限過寬，請執行 chmod 600");
+        bail!(
+            "{}",
+            tr!(
+                "token 檔 {path} 權限過寬，請執行 chmod 600",
+                path = format!("{path:?}")
+            )
+        );
     }
     let t = fs::read_to_string(path)?.trim().to_string();
     if t.is_empty() {
-        bail!("token 檔 {path:?} 是空的");
+        bail!(
+            "{}",
+            tr!("token 檔 {path} 是空的", path = format!("{path:?}"))
+        );
     }
     Ok(t)
 }
@@ -127,7 +140,10 @@ pub(crate) fn resolve_token(opts: &RemoteOptions) -> Result<Option<String>> {
     }
     if let Some(t) = opts.token.clone().filter(|t| !t.is_empty()) {
         tracing::warn!("--token 已棄用（會出現在 ps 輸出）；請改用 TERMADE_TOKEN 或 --token-file");
-        eprintln!("警告：--token 已棄用（會出現在 ps 輸出）；請改用 TERMADE_TOKEN 或 --token-file");
+        eprintln!(
+            "{}",
+            tr!("警告：--token 已棄用（會出現在 ps 輸出）；請改用 TERMADE_TOKEN 或 --token-file")
+        );
         return Ok(Some(t));
     }
     Ok(std::env::var("TERMADE_TOKEN")
@@ -139,21 +155,34 @@ pub(crate) fn resolve_token(opts: &RemoteOptions) -> Result<Option<String>> {
 pub(crate) fn validate_listen(addr: &str, has_token: bool, insecure_public: bool) -> Result<()> {
     use std::net::ToSocketAddrs;
     if !has_token {
-        bail!("--listen 需要認證 token：請設定 TERMADE_TOKEN 或 --token-file <path>");
+        bail!(
+            "{}",
+            tr!("--listen 需要認證 token：請設定 TERMADE_TOKEN 或 --token-file <path>")
+        );
     }
     let addrs: Vec<_> = addr
         .to_socket_addrs()
-        .with_context(|| format!("無法解析監聽位址 {addr}"))?
+        .with_context(|| tr!("無法解析監聽位址 {addr}", addr = addr))?
         .collect();
     let all_loopback = !addrs.is_empty() && addrs.iter().all(|a| a.ip().is_loopback());
     if !all_loopback {
         if !insecure_public {
             bail!(
-                "--listen {addr} 不是 loopback 位址；TCP 為明文傳輸。\
-                 建議綁 127.0.0.1 並用 SSH 轉發；若確定要公開，加上 --insecure-listen-public"
+                "{}",
+                tr!(
+                    "--listen {addr} 不是 loopback 位址；TCP 為明文傳輸。\
+                     建議綁 127.0.0.1 並用 SSH 轉發；若確定要公開，加上 --insecure-listen-public",
+                    addr = addr
+                )
             );
         }
-        eprintln!("警告：daemon 以明文 TCP 對非 loopback 位址 {addr} 開放，token 與內容可被側錄");
+        eprintln!(
+            "{}",
+            tr!(
+                "警告：daemon 以明文 TCP 對非 loopback 位址 {addr} 開放，token 與內容可被側錄",
+                addr = addr
+            )
+        );
         tracing::warn!("明文 TCP 監聽於非 loopback 位址：{addr}");
     }
     Ok(())
@@ -165,18 +194,29 @@ pub(crate) fn ensure_private_dir(dir: &Path) -> Result<()> {
     match fs::symlink_metadata(dir) {
         Ok(meta) => {
             if !meta.is_dir() {
-                bail!("{dir:?} 不是目錄");
+                bail!("{}", tr!("{dir} 不是目錄", dir = format!("{dir:?}")));
             }
             // SAFETY: geteuid 無前置條件、無副作用。
             let me = unsafe { libc_geteuid() };
             if meta.uid() != me {
-                bail!("{dir:?} 不屬於目前使用者（uid {}），拒絕啟動", meta.uid());
+                bail!(
+                    "{}",
+                    tr!(
+                        "{dir} 不屬於目前使用者（uid {uid}），拒絕啟動",
+                        dir = format!("{dir:?}"),
+                        uid = meta.uid()
+                    )
+                );
             }
             if meta.permissions().mode() & 0o077 != 0 {
                 // 目錄是自己的（例如舊版以 755 建立）：直接收緊，不要求使用者手動處理。
                 tracing::warn!("{dir:?} 權限過寬，已改為 0700");
-                fs::set_permissions(dir, fs::Permissions::from_mode(0o700))
-                    .with_context(|| format!("無法將 {dir:?} 改為 0700，請手動 chmod 700"))?;
+                fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).with_context(|| {
+                    tr!(
+                        "無法將 {dir} 改為 0700，請手動 chmod 700",
+                        dir = format!("{dir:?}")
+                    )
+                })?;
             }
             Ok(())
         }
@@ -187,7 +227,7 @@ pub(crate) fn ensure_private_dir(dir: &Path) -> Result<()> {
             fs::DirBuilder::new()
                 .mode(0o700)
                 .create(dir)
-                .with_context(|| format!("建立 {dir:?} 失敗"))
+                .with_context(|| tr!("建立 {dir} 失敗", dir = format!("{dir:?}")))
         }
         Err(e) => Err(e.into()),
     }
@@ -224,16 +264,24 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
         if dir == runtime_dir() {
             ensure_private_dir(dir)?;
         } else {
-            fs::create_dir_all(dir).with_context(|| format!("建立 {dir:?} 失敗"))?;
+            fs::create_dir_all(dir)
+                .with_context(|| tr!("建立 {dir} 失敗", dir = format!("{dir:?}")))?;
         }
     }
     if sock.exists() {
         if is_running() {
-            bail!("已有 daemon 在執行（{sock:?}）；請直接連線，或先 `termade shutdown`");
+            bail!(
+                "{}",
+                tr!(
+                    "已有 daemon 在執行（{sock}）；請直接連線，或先 `termade shutdown`",
+                    sock = format!("{sock:?}")
+                )
+            );
         }
         let _ = fs::remove_file(&sock);
     }
-    let listener = UnixListener::bind(&sock).with_context(|| format!("綁定 {sock:?} 失敗"))?;
+    let listener = UnixListener::bind(&sock)
+        .with_context(|| tr!("綁定 {sock} 失敗", sock = format!("{sock:?}")))?;
 
     fs::create_dir_all(state_dir())?;
 
@@ -244,7 +292,7 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
     // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽（M5 遠端模式）。
     if let Some(addr) = listen_tcp {
         let tcp_listener =
-            TcpListener::bind(&addr).with_context(|| format!("綁定 TCP {addr} 失敗"))?;
+            TcpListener::bind(&addr).with_context(|| tr!("綁定 TCP {addr} 失敗", addr = addr))?;
         tracing::info!("termade daemon 遠端監聽已啟動：tcp={addr}");
         let shared_tcp = shared.clone();
         std::thread::spawn(move || {

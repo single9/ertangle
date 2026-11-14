@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use termade_core::{Decision, SessionStatus};
+use tr::tr;
 
 struct PtyControl {
     writer: Mutex<Box<dyn Write + Send>>,
@@ -70,12 +71,13 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             pixel_width: 0,
             pixel_height: 0,
         })
-        .context("openpty 失敗")?;
+        .with_context(|| tr!("openpty 失敗"))?;
 
     let (default_prog, base) = spec.kind.pty_command();
     let prog = match spec.bin.as_deref() {
-        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
-        None => crate::which(default_prog).context(format!("找不到 `{default_prog}`"))?,
+        Some(b) => crate::which(b).with_context(|| tr!("找不到指定的執行檔 `{b}`", b = b))?,
+        None => crate::which(default_prog)
+            .with_context(|| tr!("找不到 `{prog}`", prog = default_prog))?,
     };
     let mut cmd = CommandBuilder::new(prog);
     for a in base {
@@ -90,14 +92,20 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         cmd.env(k, v);
     }
 
-    let child = pair.slave.spawn_command(cmd).context("spawn agent 失敗")?;
+    let child = pair
+        .slave
+        .spawn_command(cmd)
+        .with_context(|| tr!("spawn agent 失敗"))?;
     drop(pair.slave);
 
     let mut reader = pair
         .master
         .try_clone_reader()
-        .context("clone reader 失敗")?;
-    let writer = pair.master.take_writer().context("take writer 失敗")?;
+        .with_context(|| tr!("clone reader 失敗"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .with_context(|| tr!("take writer 失敗"))?;
     drop(pair.master);
 
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));

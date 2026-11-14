@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use termade_core::{AgentKind, PermissionPolicy, Role};
 pub use toml::Value as TomlValue;
+use tr::tr;
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
@@ -92,10 +93,10 @@ impl AgentSpawnCfg {
         let mut reasons = Vec::new();
         let effort_too_high = match (effort.and_then(rank), rank(self.max_effort())) {
             (Some(e), Some(max)) if e > max => {
-                reasons.push(format!(
-                    "effort {} 高於免確認上限 {}",
-                    effort.unwrap_or(""),
-                    self.max_effort()
+                reasons.push(tr!(
+                    "effort {effort} 高於免確認上限 {max}",
+                    effort = effort.unwrap_or(""),
+                    max = self.max_effort()
                 ));
                 true
             }
@@ -105,9 +106,10 @@ impl AgentSpawnCfg {
             Some(m) if !self.allowed_models.is_empty() => {
                 let ok = self.allowed_models.iter().any(|a| m.contains(a.as_str()));
                 if !ok {
-                    reasons.push(format!(
-                        "model {m} 不在免確認清單（{}）",
-                        self.allowed_models.join(", ")
+                    reasons.push(tr!(
+                        "model {m} 不在免確認清單（{list}）",
+                        m = m,
+                        list = self.allowed_models.join(", ")
                     ));
                 }
                 !ok
@@ -383,7 +385,7 @@ impl Config {
                 .entry(t.to_string())
                 .or_insert_with(|| toml::Value::Table(toml::Table::new()))
                 .as_table_mut()
-                .ok_or_else(|| anyhow::anyhow!("`{t}` 不是表格"))?;
+                .ok_or_else(|| anyhow::anyhow!(tr!("`{t}` 不是表格", t = t)))?;
         }
         match value {
             Some(v) => {

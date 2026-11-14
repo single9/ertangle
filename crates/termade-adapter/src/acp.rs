@@ -19,6 +19,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use termade_core::{new_id, Decision, PermissionRequest, SessionStatus};
+use tr::tr;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
@@ -77,9 +78,12 @@ impl Conn {
         self.write(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))?;
         let msg = r
             .recv_timeout(timeout)
-            .map_err(|_| anyhow!("`{method}` 逾時"))?;
+            .map_err(|_| anyhow!(tr!("`{method}` 逾時", method = method)))?;
         if let Some(err) = msg.get("error") {
-            bail!("`{method}` 失敗：{err}");
+            bail!(
+                "{}",
+                tr!("`{method}` 失敗：{err}", method = method, err = err)
+            );
         }
         Ok(msg.get("result").cloned().unwrap_or(Value::Null))
     }
@@ -88,7 +92,7 @@ impl Conn {
     fn prompt(&self, text: &str, atts: &[termade_core::Attachment]) -> Result<()> {
         let sid = self.acp_session.lock().unwrap().clone();
         if sid.is_empty() {
-            bail!("session 尚未就緒");
+            bail!("{}", tr!("session 尚未就緒"));
         }
         let effective = take_effective_prompt(&self.prepend_once, text);
         let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
@@ -206,7 +210,7 @@ impl Conn {
     fn resolve(&self, req: &str, decision: Decision) -> Result<()> {
         let entry = self.perms.lock().unwrap().remove(req);
         let Some((jid, options)) = entry else {
-            bail!("未知的核准請求：{req}");
+            bail!("{}", tr!("未知的核准請求：{req}", req = req));
         };
         self.respond(&jid, decision_result(decision, &options));
         Ok(())
@@ -322,7 +326,7 @@ impl AgentControl for AcpControl {
                     json!({ "sessionId": sid, "configId": config_id, "value": value }),
                     CALL_TIMEOUT,
                 )
-                .with_context(|| format!("設定 {what} `{value}` 失敗"))?;
+                .with_context(|| tr!("設定 {what} `{value}` 失敗", what = what, value = value))?;
             if r["configOptions"].is_array() {
                 *self.options.lock().unwrap() = json!({ "configOptions": r["configOptions"] });
             }
@@ -398,7 +402,11 @@ fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
     let opt = opts
         .iter()
         .find(|o| o["category"] == "model" || o["id"] == "model")
-        .ok_or_else(|| anyhow!("此 agent 沒有回報可選的 model（configOptions 無 model 項）"))?;
+        .ok_or_else(|| {
+            anyhow!(tr!(
+                "此 agent 沒有回報可選的 model（configOptions 無 model 項）"
+            ))
+        })?;
     let id = opt["id"].as_str().unwrap_or("model").to_string();
     // options 可能是平的 [{value,name}]，也可能分組 [{options:[...]}]。
     let mut values: Vec<String> = Vec::new();
@@ -413,7 +421,14 @@ fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
         }
     }
     if !values.is_empty() && !values.iter().any(|v| v == wanted) {
-        bail!("未知的 model `{wanted}`；可用：{}", values.join(", "));
+        bail!(
+            "{}",
+            tr!(
+                "未知的 model `{wanted}`；可用：{list}",
+                wanted = wanted,
+                list = values.join(", ")
+            )
+        );
     }
     Ok((id, wanted.to_string()))
 }
@@ -431,7 +446,11 @@ fn pick_effort_option(new: &Value, wanted: &str) -> Result<(String, String)> {
             is_effort(o["id"].as_str().unwrap_or(""))
                 || is_effort(o["category"].as_str().unwrap_or(""))
         })
-        .ok_or_else(|| anyhow!("此 agent 沒有回報可設定的 effort（configOptions 無相關項）"))?;
+        .ok_or_else(|| {
+            anyhow!(tr!(
+                "此 agent 沒有回報可設定的 effort（configOptions 無相關項）"
+            ))
+        })?;
     let id = opt["id"].as_str().unwrap_or("effort").to_string();
     let values: Vec<String> = opt["options"]
         .as_array()
@@ -440,7 +459,14 @@ fn pick_effort_option(new: &Value, wanted: &str) -> Result<(String, String)> {
         .filter_map(|o| o["value"].as_str().map(str::to_string))
         .collect();
     if !values.is_empty() && !values.iter().any(|v| v == wanted) {
-        bail!("effort `{wanted}` 不在可用清單：{}", values.join(", "));
+        bail!(
+            "{}",
+            tr!(
+                "effort `{wanted}` 不在可用清單：{list}",
+                wanted = wanted,
+                list = values.join(", ")
+            )
+        );
     }
     Ok((id, wanted.to_string()))
 }
@@ -449,10 +475,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let (default_prog, args) = spec
         .kind
         .acp_command()
-        .context("此 agent 不支援原生結構化協定")?;
+        .with_context(|| tr!("此 agent 不支援原生結構化協定"))?;
     let prog = match spec.bin.as_deref() {
-        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
-        None => crate::which(default_prog).context(format!("找不到 `{default_prog}`"))?,
+        Some(b) => crate::which(b).with_context(|| tr!("找不到指定的執行檔 `{b}`", b = b))?,
+        None => crate::which(default_prog)
+            .with_context(|| tr!("找不到 `{prog}`", prog = default_prog))?,
     };
 
     let mut cmd = Command::new(&prog);
@@ -467,11 +494,14 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     }
     let mut child = cmd
         .spawn()
-        .with_context(|| format!("無法啟動 `{} acp`", prog.display()))?;
+        .with_context(|| tr!("無法啟動 `{prog} acp`", prog = prog.display()))?;
 
-    let stdin = child.stdin.take().context("取得 stdin 失敗")?;
+    let stdin = child.stdin.take().with_context(|| tr!("取得 stdin 失敗"))?;
     let stderr_tail = child.stderr.take().map(crate::stderr::StderrTail::spawn);
-    let stdout = child.stdout.take().context("取得 stdout 失敗")?;
+    let stdout = child
+        .stdout
+        .take()
+        .with_context(|| tr!("取得 stdout 失敗"))?;
 
     let conn = Arc::new(Conn {
         session_id: spec.id.clone(),
@@ -549,7 +579,13 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let (sid, new) = match &spec.resume {
         Some(id) => {
             if !can_load {
-                bail!("{} 沒有宣告 loadSession，無法接續對話", spec.kind);
+                bail!(
+                    "{}",
+                    tr!(
+                        "{kind} 沒有宣告 loadSession，無法接續對話",
+                        kind = spec.kind
+                    )
+                );
             }
             conn.loading.store(true, Ordering::SeqCst);
             let loaded = conn.call(
@@ -570,7 +606,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             )?;
             let sid = new["sessionId"]
                 .as_str()
-                .context("`session/new` 未回傳 sessionId")?
+                .with_context(|| tr!("`session/new` 未回傳 sessionId"))?
                 .to_string();
             (sid, new)
         }
@@ -588,7 +624,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             json!({ "sessionId": sid, "configId": config_id, "value": value }),
             CALL_TIMEOUT,
         )
-        .with_context(|| format!("設定 model `{value}` 失敗"))?;
+        .with_context(|| tr!("設定 model `{value}` 失敗", value = value))?;
         let _ = tx.send(AgentEvent::Model(value));
     }
     if let Some(e) = spec.effort.as_ref().filter(|_| has_options) {
@@ -598,7 +634,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             json!({ "sessionId": sid, "configId": config_id, "value": value }),
             CALL_TIMEOUT,
         )
-        .with_context(|| format!("設定 effort `{value}` 失敗"))?;
+        .with_context(|| tr!("設定 effort `{value}` 失敗", value = value))?;
     }
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 

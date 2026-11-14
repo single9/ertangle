@@ -25,6 +25,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use termade_core::{new_id, Cost, Decision, PermissionRequest, SessionStatus};
+use tr::tr;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -62,9 +63,12 @@ impl Conn {
         self.write(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))?;
         let msg = r
             .recv_timeout(timeout)
-            .map_err(|_| anyhow!("`{method}` 逾時"))?;
+            .map_err(|_| anyhow!(tr!("`{method}` 逾時", method = method)))?;
         if let Some(err) = msg.get("error") {
-            bail!("`{method}` 失敗：{err}");
+            bail!(
+                "{}",
+                tr!("`{method}` 失敗：{err}", method = method, err = err)
+            );
         }
         Ok(msg.get("result").cloned().unwrap_or(Value::Null))
     }
@@ -235,9 +239,9 @@ impl Conn {
             let _ = self.tx.send(AgentEvent::Limited(text));
             return;
         }
-        let mut note = format!("codex 錯誤：{text}");
+        let mut note = tr!("codex 錯誤：{text}", text = text);
         if is_auth_error(err) {
-            note.push_str("（請執行 `codex login`）");
+            note.push_str(&tr!("（請執行 `codex login`）"));
         }
         let _ = self.tx.send(AgentEvent::Output(format!("⚠ {note}\n")));
         let _ = self.tx.send(AgentEvent::Note(note));
@@ -316,7 +320,7 @@ impl CodexControl {
     fn thread_id(&self) -> Result<String> {
         let t = self.conn.thread.lock().unwrap().clone();
         if t.is_empty() {
-            bail!("codex thread 尚未就緒");
+            bail!("{}", tr!("codex thread 尚未就緒"));
         }
         Ok(t)
     }
@@ -392,7 +396,7 @@ impl AgentControl for CodexControl {
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()> {
         let entry = self.conn.perms.lock().unwrap().remove(req);
         let Some(entry) = entry else {
-            bail!("未知的核准請求：{req}");
+            bail!("{}", tr!("未知的核准請求：{req}", req = req));
         };
         let id = entry["id"].clone();
         let kind = match entry["kind"].as_str() {
@@ -422,8 +426,8 @@ impl AgentControl for CodexControl {
 
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     let prog = match spec.bin.as_deref() {
-        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
-        None => crate::which("codex").context("找不到 `codex`")?,
+        Some(b) => crate::which(b).with_context(|| tr!("找不到指定的執行檔 `{b}`", b = b))?,
+        None => crate::which("codex").with_context(|| tr!("找不到 `{prog}`", prog = "codex"))?,
     };
     let mut cmd = Command::new(prog);
     cmd.arg("app-server");
@@ -448,10 +452,18 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         cmd.env(k, v);
     }
 
-    let mut child = cmd.spawn().context("無法啟動 `codex app-server`")?;
-    let stdin = child.stdin.take().context("取得 codex stdin 失敗")?;
+    let mut child = cmd
+        .spawn()
+        .with_context(|| tr!("無法啟動 `codex app-server`"))?;
+    let stdin = child
+        .stdin
+        .take()
+        .with_context(|| tr!("取得 codex stdin 失敗"))?;
     let stderr_tail = child.stderr.take().map(crate::stderr::StderrTail::spawn);
-    let stdout = child.stdout.take().context("取得 codex stdout 失敗")?;
+    let stdout = child
+        .stdout
+        .take()
+        .with_context(|| tr!("取得 codex stdout 失敗"))?;
 
     let conn = Arc::new(Conn {
         session_id: spec.id.clone(),
@@ -510,7 +522,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         json!({ "clientInfo": { "name": "termade", "title": "termade", "version": env!("CARGO_PKG_VERSION") } }),
         CALL_TIMEOUT,
     )
-    .context("codex `initialize` 失敗")?;
+    .with_context(|| tr!("codex `initialize` 失敗"))?;
 
     // 接續時改用 `thread/resume`（歷史回合放在回應裡，不會以通知重播）。
     let method = if spec.resume.is_some() {
@@ -520,10 +532,10 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     };
     let started = conn
         .call(method, thread_open_params(&spec), CALL_TIMEOUT)
-        .with_context(|| format!("codex `{method}` 失敗"))?;
+        .with_context(|| tr!("codex `{method}` 失敗", method = method))?;
     let tid = started["thread"]["id"]
         .as_str()
-        .with_context(|| format!("`{method}` 未回傳 thread id"))?
+        .with_context(|| tr!("`{method}` 未回傳 thread id", method = method))?
         .to_string();
     *conn.thread.lock().unwrap() = tid.clone();
     let _ = tx.send(AgentEvent::NativeId(tid));

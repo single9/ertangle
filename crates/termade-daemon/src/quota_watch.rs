@@ -2,6 +2,7 @@
 //! `[handoff] auto = true` 時，自動交接給 `fallback` 裡第一個可用的 agent。
 
 use std::sync::Arc;
+use tr::tr;
 
 use termade_core::{now_millis, AgentKind, Event, Quota, SessionId};
 
@@ -88,10 +89,11 @@ impl Shared {
                 } else if lock_set(&self.budget_warned).insert(sid.clone()) {
                     self.emit(Event::SessionNote {
                         session: sid.clone(),
-                        note: format!(
-                            "token 用量已達 {}/{}（{pct:.0}%），接近上限",
-                            termade_core::human_tokens(total_tokens),
-                            termade_core::human_tokens(tok_limit)
+                        note: tr!(
+                            "token 用量已達 {used}/{limit}（{pct}%），接近上限",
+                            used = termade_core::human_tokens(total_tokens),
+                            limit = termade_core::human_tokens(tok_limit),
+                            pct = format!("{pct:.0}")
                         ),
                     });
                 }
@@ -114,9 +116,11 @@ impl Shared {
             } else if lock_set(&self.budget_warned).insert(sid.clone()) {
                 self.emit(Event::SessionNote {
                     session: sid.clone(),
-                    note: format!(
-                        "成本已達 ${spent:.2}/{}（{pct:.0}%），接近上限",
-                        termade_core::format_usd_limit(limit)
+                    note: tr!(
+                        "成本已達 ${spent}/{limit}（{pct}%），接近上限",
+                        spent = format!("{spent:.2}"),
+                        limit = termade_core::format_usd_limit(limit),
+                        pct = format!("{pct:.0}")
                     ),
                 });
             }
@@ -204,9 +208,10 @@ impl Shared {
         for sid in live {
             self.emit(Event::SessionNote {
                 session: sid,
-                note: format!(
-                    "{} 額度已用 {used:.0}%，快用完了；需要時用 :handoff 交接給其他 agent",
-                    quota.agent
+                note: tr!(
+                    "{agent} 額度已用 {used}%，快用完了；需要時用 :handoff 交接給其他 agent",
+                    agent = quota.agent,
+                    used = format!("{used:.0}")
                 ),
             });
         }
@@ -233,7 +238,7 @@ impl Shared {
         else {
             self.emit(Event::SessionNote {
                 session: sid.clone(),
-                note: "額度用完，但 [handoff] fallback 沒有可用的 agent；請手動 :handoff".into(),
+                note: tr!("額度用完，但 [handoff] fallback 沒有可用的 agent；請手動 :handoff"),
             });
             return;
         };

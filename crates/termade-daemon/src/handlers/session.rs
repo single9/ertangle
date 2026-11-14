@@ -10,6 +10,7 @@ use termade_core::{
     Target,
 };
 use termade_protocol::{Frame, SpawnRequest};
+use tr::tr;
 
 use crate::config;
 use crate::git::{git_toplevel, make_worktree};
@@ -84,14 +85,16 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         if must_ask {
             let reasons = match &check {
                 config::SpawnCheck::Exceeds { reasons, .. } => reasons.join("；"),
-                config::SpawnCheck::Fine => "設定要求每次都先確認".to_string(),
+                config::SpawnCheck::Fine => tr!("設定要求每次都先確認"),
             };
-            let detail = format!(
-                "agent {pid} 要建立 {} session：model={} effort={}\n原因：{reasons}\n任務：{}",
-                spawn.kind,
-                resolved.model.as_deref().unwrap_or("預設"),
-                resolved.effort.as_deref().unwrap_or("預設"),
-                spawn
+            let detail = tr!(
+                "agent {pid} 要建立 {kind} session：model={model} effort={effort}\n原因：{reasons}\n任務：{task}",
+                pid = pid,
+                kind = spawn.kind,
+                model = resolved.model.clone().unwrap_or_else(|| tr!("預設")),
+                effort = resolved.effort.clone().unwrap_or_else(|| tr!("預設")),
+                reasons = reasons,
+                task = spawn
                     .prompt
                     .as_deref()
                     .unwrap_or("")
@@ -99,11 +102,11 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                     .take(200)
                     .collect::<String>(),
             );
-            let d = ask_user(shared, pid, "建立子 agent".into(), detail, false);
+            let d = ask_user(shared, pid, tr!("建立子 agent"), detail, false);
             if d == Decision::Deny {
-                let _ = reply.send(Frame::error(
-                    "使用者拒絕（或逾時未回應）建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立",
-                ));
+                let _ = reply.send(Frame::error(tr!(
+                    "使用者拒絕（或逾時未回應）建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
+                )));
                 return;
             }
         } else if let config::SpawnCheck::Exceeds {
@@ -114,15 +117,15 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         {
             // confirm = never：effort 調降，model 直接拒絕。
             if model_not_allowed {
-                let _ = reply.send(Frame::error(format!(
-                    "{}（agent_spawn.confirm = never）",
-                    reasons.join("；")
+                let _ = reply.send(Frame::error(tr!(
+                    "{reasons}（agent_spawn.confirm = never）",
+                    reasons = reasons.join("；")
                 )));
                 return;
             }
             if effort_too_high {
                 let max = pol.max_effort().to_string();
-                spawn_note = Some(format!("effort 已調降為 {max}"));
+                spawn_note = Some(tr!("effort 已調降為 {max}", max = max));
                 resolved.effort = Some(max);
             }
         }
@@ -139,8 +142,10 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         };
         if let Some(max_depth) = cfg.limits.max_depth {
             if depth > max_depth {
-                let _ = reply.send(Frame::error(format!(
-                    "超過子 agent 層數上限 max_depth：目前第 {depth} 層（上限 {max_depth}）"
+                let _ = reply.send(Frame::error(tr!(
+                    "超過子 agent 層數上限 max_depth：目前第 {depth} 層（上限 {max_depth}）",
+                    depth = depth,
+                    max_depth = max_depth
                 )));
                 return;
             }
@@ -148,8 +153,10 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         if let Some(max_children) = cfg.limits.max_children {
             let live_children = inner.state.live_children_count(pid);
             if live_children >= max_children {
-                let _ = reply.send(Frame::error(format!(
-                    "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中（上限 {max_children}）"
+                let _ = reply.send(Frame::error(tr!(
+                    "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中（上限 {max_children}）",
+                    live_children = live_children,
+                    max_children = max_children
                 )));
                 return;
             }
@@ -157,26 +164,30 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         if let Some(tree_usd) = cfg.limits.tree_usd {
             let tree_spent = inner.state.tree_cost_usd(pid);
             if tree_spent >= tree_usd {
-                let _ = reply.send(Frame::error(format!(
-                    "已達整棵樹成本上限 tree_usd：目前已花費 ${tree_spent:.2}（上限 ${tree_usd:.2}）"
+                let _ = reply.send(Frame::error(tr!(
+                    "已達整棵樹成本上限 tree_usd：目前已花費 ${spent}（上限 ${limit}）",
+                    spent = format!("{tree_spent:.2}"),
+                    limit = format!("{tree_usd:.2}")
                 )));
                 return;
             }
         }
         if let Some(p_sess) = inner.state.sessions.get(pid) {
             if p_sess.over_budget {
-                let _ = reply.send(Frame::error(format!(
-                    "父 session {} 已達成本上限 session_usd（over_budget），無法產生子 agent",
-                    p_sess.label
+                let _ = reply.send(Frame::error(tr!(
+                    "父 session {label} 已達成本上限 session_usd（over_budget），無法產生子 agent",
+                    label = p_sess.label
                 )));
                 return;
             }
             if let Some(p_limit) = p_sess.budget_usd {
                 let rem = (p_limit - p_sess.cost.usd).max(0.0);
                 if rem <= 0.0 {
-                    let _ = reply.send(Frame::error(format!(
-                        "父 session {} 剩餘預算 session_usd 為 $0.00（已花費 ${:.2} / 上限 ${:.2}），無法產生子 agent",
-                        p_sess.label, p_sess.cost.usd, p_limit
+                    let _ = reply.send(Frame::error(tr!(
+                        "父 session {label} 剩餘預算 session_usd 為 $0.00（已花費 ${spent} / 上限 ${limit}），無法產生子 agent",
+                        label = p_sess.label,
+                        spent = format!("{:.2}", p_sess.cost.usd),
+                        limit = format!("{p_limit:.2}")
                     )));
                     return;
                 }
@@ -199,7 +210,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                 branch = Some(br);
             }
             Err(e) => {
-                let _ = reply.send(Frame::error(format!("建立 worktree 失敗：{e}")));
+                let _ = reply.send(Frame::error(tr!("建立 worktree 失敗：{e}", e = e)));
                 return;
             }
         }
@@ -289,19 +300,19 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                 // 舊 session 還沒提醒的未讀訊息已列在交接簡報裡，不再另外提醒接手者（T25）。
                 lock(&shared.inner).pending_nudge.remove(&from);
             }
-            let mut note = format!("已建立 session {id}");
+            let mut note = tr!("已建立 session {id}", id = id);
             if let Some((from, to)) = downgraded {
-                note.push_str(&format!(
-                    "（權限由 {} 調降為 {}：不得高於父 session／設定上限）",
-                    from.id(),
-                    to.id()
+                note.push_str(&tr!(
+                    "（權限由 {from} 調降為 {to}：不得高於父 session／設定上限）",
+                    from = from.id(),
+                    to = to.id()
                 ));
             }
             if let Some(n) = &spawn_note {
-                note.push_str(&format!("（{n}）"));
+                note.push_str(&tr!("（{n}）", n = n));
             }
             if forced_worktree && !spawn.worktree {
-                note.push_str("（依 agent_spawn.worktree 使用獨立 worktree）");
+                note.push_str(&tr!("（依 agent_spawn.worktree 使用獨立 worktree）"));
             }
             let _ = reply.send(Frame::ok_note(note));
         }
@@ -319,7 +330,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             shared.emit(Event::SessionRemoved {
                 session: id.clone(),
             });
-            let _ = reply.send(Frame::error(format!("啟動 agent 失敗：{e}")));
+            let _ = reply.send(Frame::error(tr!("啟動 agent 失敗：{e}", e = e)));
         }
     }
 }
@@ -467,25 +478,32 @@ pub(crate) fn handle_resume(
 ) {
     let sid = shared.resolve_session(&session);
     let Some(s) = lock(&shared.inner).state.sessions.get(&sid).cloned() else {
-        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
         return;
     };
     if s.status.is_live() {
-        let _ = reply.send(Frame::error(format!("{} 仍在執行，不需要接續", s.label)));
+        let _ = reply.send(Frame::error(tr!(
+            "{label} 仍在執行，不需要接續",
+            label = s.label
+        )));
         return;
     }
     let Some(native_id) = s.native_id.clone() else {
-        let _ = reply.send(Frame::error(format!(
-            "{} 沒有可接續的對話 id（PTY、舊版 log，或 agent 還沒回報就結束了）；請改用交接（handoff）",
-            s.label
+        let _ = reply.send(Frame::error(tr!(
+            "{label} 沒有可接續的對話 id（PTY、舊版 log，或 agent 還沒回報就結束了）；請改用交接（handoff）",
+            label = s.label
         )));
         return;
     };
     let cwd = PathBuf::from(&s.cwd);
     if !cwd.is_dir() {
-        let _ = reply.send(Frame::error(format!(
-            "{} 的工作目錄 {} 已不存在，無法接續",
-            s.label, s.cwd
+        let _ = reply.send(Frame::error(tr!(
+            "{label} 的工作目錄 {cwd} 已不存在，無法接續",
+            label = s.label,
+            cwd = s.cwd
         )));
         return;
     }
@@ -495,9 +513,10 @@ pub(crate) fn handle_resume(
         .as_ref()
         .and_then(|_| shared.cwd_in_use_by_other(&s))
     {
-        let _ = reply.send(Frame::error(format!(
-            "worktree 正由 {user} 使用，不能接續 {}",
-            s.label
+        let _ = reply.send(Frame::error(tr!(
+            "worktree 正由 {user} 使用，不能接續 {label}",
+            user = user,
+            label = s.label
         )));
         return;
     }
@@ -538,10 +557,14 @@ pub(crate) fn handle_resume(
                     note: String::new(),
                 });
             }
-            let _ = reply.send(Frame::ok_note(format!("已接續 {}", s.label)));
+            let _ = reply.send(Frame::ok_note(tr!("已接續 {label}", label = s.label)));
         }
         Err(e) => {
-            let _ = reply.send(Frame::error(format!("接續 {} 失敗：{e}", s.label)));
+            let _ = reply.send(Frame::error(tr!(
+                "接續 {label} 失敗：{e}",
+                label = s.label,
+                e = e
+            )));
         }
     }
 }
@@ -554,7 +577,7 @@ pub(crate) fn send_prompt(
     attachments: &[termade_core::Attachment],
 ) -> anyhow::Result<()> {
     let Some((sid, ctl)) = shared.control(sid) else {
-        anyhow::bail!("找不到 session {sid}");
+        anyhow::bail!("{}", tr!("找不到 session {session}", session = sid));
     };
     shared.wake_if_sleeping(&sid, &ctl);
     let (is_pty, was_idle) = {
@@ -606,10 +629,13 @@ pub(crate) fn handle_prompt(
             .map(|s| s.native_id.is_some());
         let msg = match resumable {
             Some(true) => {
-                format!("{session} 已結束；可用 :resume（或 `termade resume`）接續原對話")
+                tr!(
+                    "{session} 已結束；可用 :resume（或 `termade resume`）接續原對話",
+                    session = session
+                )
             }
-            Some(false) => format!("{session} 已結束，且沒有可接續的對話 id"),
-            None => format!("找不到 session {session}"),
+            Some(false) => tr!("{session} 已結束，且沒有可接續的對話 id", session = session),
+            None => tr!("找不到 session {session}", session = session),
         };
         let _ = reply.send(Frame::error(msg));
         return;
@@ -621,9 +647,9 @@ pub(crate) fn handle_prompt(
         .get(&sid)
         .filter(|s| s.over_budget)
     {
-        let _ = reply.send(Frame::error(format!(
-            "session {} 已超過成本上限（over_budget）；請先用 `termade budget {} <金額>` 或 TUI `:budget <金額>` 調高上限",
-            s.label, s.label
+        let _ = reply.send(Frame::error(tr!(
+            "session {label} 已超過成本上限（over_budget）；請先用 `termade budget {label} <金額>` 或 TUI `:budget <金額>` 調高上限",
+            label = s.label
         )));
         return;
     }
@@ -650,7 +676,10 @@ pub(crate) fn handle_prompt(
             } else {
                 let q = inner.queues.entry(sid.clone()).or_default();
                 if q.len() >= MAX_QUEUE_LEN {
-                    (false, Err(format!("排隊已滿（上限 {MAX_QUEUE_LEN} 則）")))
+                    (
+                        false,
+                        Err(tr!("排隊已滿（上限 {max} 則）", max = MAX_QUEUE_LEN)),
+                    )
                 } else {
                     q.push_back(QueuedPrompt {
                         text: text.clone(),
@@ -670,8 +699,9 @@ pub(crate) fn handle_prompt(
                         session: sid,
                         items,
                     });
-                    let _ = reply.send(Frame::ok_note(format!(
-                        "已排隊（共 {n} 則，閒下來自動送出）"
+                    let _ = reply.send(Frame::ok_note(tr!(
+                        "已排隊（共 {n} 則，閒下來自動送出）",
+                        n = n
                     )));
                 }
                 Err(msg) => {
@@ -687,7 +717,7 @@ pub(crate) fn handle_prompt(
             let _ = reply.send(Frame::ok());
         }
         Err(e) => {
-            let _ = reply.send(Frame::error(format!("送 prompt 失敗：{e}")));
+            let _ = reply.send(Frame::error(tr!("送 prompt 失敗：{e}", e = e)));
         }
     }
 }
@@ -702,7 +732,10 @@ pub(crate) fn handle_queue_clear(shared: &Arc<Shared>, reply: &ClientTx, session
         (exists, count, had_state)
     };
     if !exists {
-        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
         return;
     }
     if count > 0 || had_state {
@@ -711,7 +744,10 @@ pub(crate) fn handle_queue_clear(shared: &Arc<Shared>, reply: &ClientTx, session
             items: Vec::new(),
         });
     }
-    let _ = reply.send(Frame::ok_note(format!("已清空 {count} 則排隊 prompt")));
+    let _ = reply.send(Frame::ok_note(tr!(
+        "已清空 {count} 則排隊 prompt",
+        count = count
+    )));
 }
 
 pub(crate) fn handle_queue_pop(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
@@ -734,7 +770,10 @@ pub(crate) fn handle_queue_pop(shared: &Arc<Shared>, reply: &ClientTx, session: 
         }
     };
     if !exists {
-        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
         return;
     }
     match popped {
@@ -773,7 +812,10 @@ pub(crate) fn handle_handoff(
 ) {
     let sid = shared.resolve_session(&session);
     let Some(src) = lock(&shared.inner).state.sessions.get(&sid).cloned() else {
-        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
         return;
     };
     // 舊 agent 還在跑就先停掉，避免兩個 agent 同時改同一個目錄。
@@ -833,7 +875,7 @@ pub(crate) fn handle_handoff(
     }
     shared.emit(Event::SessionNote {
         session: sid.clone(),
-        note: format!("已交接給 {}", kind.id()),
+        note: tr!("已交接給 {kind}", kind = kind.id()),
     });
     handle_spawn(
         shared,
@@ -865,19 +907,23 @@ pub(crate) fn handle_budget(
     budget_usd: f64,
 ) {
     if !budget_usd.is_finite() || budget_usd <= 0.0 {
-        let _ = reply.send(Frame::error("預算上限必須為大於 0 的數字"));
+        let _ = reply.send(Frame::error(tr!("預算上限必須為大於 0 的數字")));
         return;
     }
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     let Some(s) = sess else {
-        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
         return;
     };
     if budget_usd <= s.cost.usd {
-        let _ = reply.send(Frame::error(format!(
-            "新的上限（${budget_usd:.2}）必須高於目前已花費金額（${:.2}）",
-            s.cost.usd
+        let _ = reply.send(Frame::error(tr!(
+            "新的上限（${budget}）必須高於目前已花費金額（${spent}）",
+            budget = format!("{budget_usd:.2}"),
+            spent = format!("{:.2}", s.cost.usd)
         )));
         return;
     }
@@ -893,9 +939,10 @@ pub(crate) fn handle_budget(
     if !shared.flush_queue_if_idle(&sid) {
         shared.nudge_unread_if_idle(&sid);
     }
-    let _ = reply.send(Frame::ok_note(format!(
-        "已將 {} 的預算上限設為 ${budget_usd:.2}",
-        s.label
+    let _ = reply.send(Frame::ok_note(tr!(
+        "已將 {label} 的預算上限設為 ${budget}",
+        label = s.label,
+        budget = format!("{budget_usd:.2}")
     )));
 }
 
@@ -906,7 +953,10 @@ pub(crate) fn handle_cancel(shared: &Arc<Shared>, reply: &ClientTx, session: Str
             let _ = reply.send(Frame::ok());
         }
         None => {
-            let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+            let _ = reply.send(Frame::error(tr!(
+                "找不到 session {session}",
+                session = session
+            )));
         }
     }
 }
@@ -915,17 +965,21 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     let Some(s) = sess else {
-        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
         return;
     };
     if s.status.is_live() {
-        let _ = reply.send(Frame::error(
-            "session 仍在執行，請先結束（kill）".to_string(),
-        ));
+        let _ = reply.send(Frame::error(tr!("session 仍在執行，請先結束（kill）")));
         return;
     }
     if let Some(user) = shared.cwd_in_use_by_other(&s) {
-        let _ = reply.send(Frame::error(format!("worktree 仍被 {user} 使用，不能移除")));
+        let _ = reply.send(Frame::error(tr!(
+            "worktree 仍被 {user} 使用，不能移除",
+            user = user
+        )));
         return;
     }
     // 共用 worktree（handoff）：還有其他 session 參照時只移除紀錄，worktree 與分支留給最後一個。
@@ -939,10 +993,10 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
             session: sid.clone(),
         });
         shared.clear_queue_for_ended(&sid, true);
-        let _ = reply.send(Frame::ok_note(format!(
-            "已移除 {}（worktree 仍由 {} 參照，保留）",
-            s.label,
-            sharers.join("、")
+        let _ = reply.send(Frame::ok_note(tr!(
+            "已移除 {label}（worktree 仍由 {sharers} 參照，保留）",
+            label = s.label,
+            sharers = sharers.join("、")
         )));
         return;
     }
@@ -950,15 +1004,16 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         let repo = crate::git::session_repo(&shared.default_cwd(), &s);
         if !force {
             if let Some(reason) = crate::git::gc_block_reason(&repo, &s) {
-                let _ = reply.send(Frame::error(format!(
-                    "{}（{reason}）：請先 merge，或用 force 強制移除",
-                    s.label
+                let _ = reply.send(Frame::error(tr!(
+                    "{label}（{reason}）：請先 merge，或用 force 強制移除",
+                    label = s.label,
+                    reason = reason
                 )));
                 return;
             }
         }
         if let Err(e) = crate::git::remove_worktree(&repo, &s, force) {
-            let _ = reply.send(Frame::error(format!("移除 worktree 失敗：{e}")));
+            let _ = reply.send(Frame::error(tr!("移除 worktree 失敗：{e}", e = e)));
             return;
         }
     }
@@ -967,7 +1022,7 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
     });
     lock(&shared.inner).pending_nudge.remove(&sid);
     shared.clear_queue_for_ended(&sid, true);
-    let _ = reply.send(Frame::ok_note(format!("已移除 {}", s.label)));
+    let _ = reply.send(Frame::ok_note(tr!("已移除 {label}", label = s.label)));
 }
 
 pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
@@ -985,7 +1040,10 @@ pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
             let _ = reply.send(Frame::ok());
         }
         None => {
-            let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+            let _ = reply.send(Frame::error(tr!(
+                "找不到 session {session}",
+                session = session
+            )));
         }
     }
 }
@@ -1000,11 +1058,14 @@ pub(crate) fn handle_config(
     let model = model.filter(|m| !m.trim().is_empty());
     let effort = effort.filter(|e| !e.trim().is_empty());
     if model.is_none() && effort.is_none() {
-        let _ = reply.send(Frame::error("請指定 model 或 effort"));
+        let _ = reply.send(Frame::error(tr!("請指定 model 或 effort")));
         return;
     }
     let Some((sid, ctl)) = shared.control(&session) else {
-        let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
         return;
     };
     match ctl.set_config(model.as_deref(), effort.as_deref()) {
@@ -1028,13 +1089,14 @@ pub(crate) fn handle_config(
             if let Some(e) = &effort {
                 parts.push(format!("effort={e}"));
             }
-            let _ = reply.send(Frame::ok_note(format!(
-                "{sid} 已切換 {}（下一個回合起生效）",
-                parts.join(" ")
+            let _ = reply.send(Frame::ok_note(tr!(
+                "{sid} 已切換 {parts}（下一個回合起生效）",
+                sid = sid,
+                parts = parts.join(" ")
             )));
         }
         Err(e) => {
-            let _ = reply.send(Frame::error(format!("切換失敗：{e}")));
+            let _ = reply.send(Frame::error(tr!("切換失敗：{e}", e = e)));
         }
     }
 }
@@ -1047,14 +1109,17 @@ pub(crate) fn handle_sleep(shared: &Arc<Shared>, reply: &ClientTx, session: Stri
                     session: sid.clone(),
                     status: SessionStatus::Sleeping,
                 });
-                let _ = reply.send(Frame::ok_note(format!("已休眠 {sid}")));
+                let _ = reply.send(Frame::ok_note(tr!("已休眠 {sid}", sid = sid)));
             }
             Err(e) => {
-                let _ = reply.send(Frame::error(format!("休眠失敗：{e}")));
+                let _ = reply.send(Frame::error(tr!("休眠失敗：{e}", e = e)));
             }
         },
         None => {
-            let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+            let _ = reply.send(Frame::error(tr!(
+                "找不到 session {session}",
+                session = session
+            )));
         }
     }
 }
@@ -1068,14 +1133,17 @@ pub(crate) fn handle_wake(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
                     status: SessionStatus::Idle,
                 });
                 shared.flush_queue_if_idle(&sid);
-                let _ = reply.send(Frame::ok_note(format!("已喚醒 {sid}")));
+                let _ = reply.send(Frame::ok_note(tr!("已喚醒 {sid}", sid = sid)));
             }
             Err(e) => {
-                let _ = reply.send(Frame::error(format!("喚醒失敗：{e}")));
+                let _ = reply.send(Frame::error(tr!("喚醒失敗：{e}", e = e)));
             }
         },
         None => {
-            let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+            let _ = reply.send(Frame::error(tr!(
+                "找不到 session {session}",
+                session = session
+            )));
         }
     }
 }
@@ -1110,11 +1178,14 @@ pub(crate) fn handle_permission(
                 let _ = reply.send(Frame::ok());
             }
             Err(e) => {
-                let _ = reply.send(Frame::error(format!("核准回覆失敗：{e}")));
+                let _ = reply.send(Frame::error(tr!("核准回覆失敗：{e}", e = e)));
             }
         },
         None => {
-            let _ = reply.send(Frame::error(format!("找不到 session {session}")));
+            let _ = reply.send(Frame::error(tr!(
+                "找不到 session {session}",
+                session = session
+            )));
         }
     }
 }
@@ -1225,5 +1296,5 @@ pub(crate) fn handle_artifact(
         ts,
     };
     shared.emit(Event::BusMessage { message });
-    let _ = reply.send(Frame::ok_note(format!("已分享產出 {id}")));
+    let _ = reply.send(Frame::ok_note(tr!("已分享產出 {id}", id = id)));
 }

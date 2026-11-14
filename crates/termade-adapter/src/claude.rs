@@ -25,6 +25,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use termade_core::{Cost, Decision, SessionStatus};
+use tr::tr;
 
 /// 讀取執行中的 Claude 事件流。
 struct Conn {
@@ -230,7 +231,7 @@ impl Conn {
             if termade_core::looks_like_limit(&detail) {
                 let _ = self.tx.send(AgentEvent::Limited(detail));
             } else if !detail.trim().is_empty() {
-                let note = format!("claude 錯誤：{}", detail.trim());
+                let note = tr!("claude 錯誤：{detail}", detail = detail.trim());
                 let _ = self.tx.send(AgentEvent::Output(format!("⚠ {note}\n")));
                 let _ = self.tx.send(AgentEvent::Note(note));
             }
@@ -355,7 +356,10 @@ impl AgentControl for ClaudeControl {
 
     /// M1 尚未支援逐項核准：Claude 的權限在啟動時以 `--permission-mode` 決定。
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
-        bail!("claude adapter 尚未支援逐項核准（請用 --permission auto/bypass）")
+        bail!(
+            "{}",
+            tr!("claude adapter 尚未支援逐項核准（請用 --permission auto/bypass）")
+        )
     }
 
     fn transport(&self) -> &'static str {
@@ -459,8 +463,9 @@ fn base_args(spec: &SessionSpec) -> Vec<String> {
 
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     let prog = match spec.bin.as_deref() {
-        Some(b) => crate::which(b).context(format!("找不到指定的執行檔 `{b}`"))?,
-        None => crate::agent_bin("claude", "TERMADE_CLAUDE_BIN").context("找不到 `claude`")?,
+        Some(b) => crate::which(b).with_context(|| tr!("找不到指定的執行檔 `{b}`", b = b))?,
+        None => crate::agent_bin("claude", "TERMADE_CLAUDE_BIN")
+            .with_context(|| tr!("找不到 `{prog}`", prog = "claude"))?,
     };
     let mut cmd = Command::new(prog);
     cmd.args(base_args(&spec));
@@ -486,10 +491,16 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         cmd.env(k, v);
     }
 
-    let mut child = cmd.spawn().context("無法啟動 `claude`")?;
-    let stdin = child.stdin.take().context("取得 claude stdin 失敗")?;
+    let mut child = cmd.spawn().with_context(|| tr!("無法啟動 `claude`"))?;
+    let stdin = child
+        .stdin
+        .take()
+        .with_context(|| tr!("取得 claude stdin 失敗"))?;
     let stderr_tail = child.stderr.take().map(crate::stderr::StderrTail::spawn);
-    let stdout = child.stdout.take().context("取得 claude stdout 失敗")?;
+    let stdout = child
+        .stdout
+        .take()
+        .with_context(|| tr!("取得 claude stdout 失敗"))?;
 
     let conn = Arc::new(Conn {
         stdin: Mutex::new(stdin),

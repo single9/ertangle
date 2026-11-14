@@ -11,6 +11,7 @@ use std::process::ChildStderr;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tr::tr;
 
 /// 最多保留的行數。
 const MAX_LINES: usize = 20;
@@ -100,11 +101,11 @@ impl StderrTail {
         if lines.is_empty() {
             return;
         }
-        let _ = tx.send(AgentEvent::Output(format!(
-            "⚠ 處理程序以結束碼 {} 結束，stderr 最後 {} 行：\n{}\n",
-            code.unwrap_or(-1),
-            lines.len(),
-            lines.join("\n")
+        let _ = tx.send(AgentEvent::Output(tr!(
+            "⚠ 處理程序以結束碼 {code} 結束，stderr 最後 {count} 行：\n{lines}\n",
+            code = code.unwrap_or(-1),
+            count = lines.len(),
+            lines = lines.join("\n")
         )));
     }
 }

@@ -50,6 +50,7 @@ use termade_core::{
     Record, Seq, Session, SessionId, SessionStatus, State, Target,
 };
 use termade_protocol::{decode_line, encode_line, Frame, Request};
+use tr::tr;
 
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// 記憶體內保留的事件上限（供新 client 補齊；超過則靠快照）。
@@ -152,7 +153,8 @@ fn replay_files(paths: &[PathBuf]) -> Result<(State, Vec<Record>)> {
         if !path.is_file() {
             continue;
         }
-        let file = File::open(path).with_context(|| format!("開啟 {path:?} 失敗"))?;
+        let file = File::open(path)
+            .with_context(|| tr!("開啟 {path} 失敗", path = format!("{path:?}")))?;
         let mut bad = 0usize;
         for line in BufReader::new(file).lines() {
             let Ok(line) = line else {
@@ -392,7 +394,7 @@ impl Shared {
             if resumable {
                 shared.emit(Event::SessionNote {
                     session: sid,
-                    note: "daemon 重啟，可用 :resume 接續".into(),
+                    note: tr!("daemon 重啟，可用 :resume 接續"),
                 });
             }
         }
@@ -699,7 +701,7 @@ impl Shared {
                 }
                 self.emit(Event::SessionNote {
                     session: sid.clone(),
-                    note: format!("排隊 prompt 送出失敗：{e}"),
+                    note: tr!("排隊 prompt 送出失敗：{e}", e = e),
                 });
                 false
             }
@@ -724,7 +726,10 @@ impl Shared {
         if !is_removed && dropped > 0 {
             self.emit(Event::SessionNote {
                 session: sid.clone(),
-                note: format!("session 已結束，丟棄 {dropped} 則排隊 prompt"),
+                note: tr!(
+                    "session 已結束，丟棄 {dropped} 則排隊 prompt",
+                    dropped = dropped
+                ),
             });
         }
     }

@@ -1,6 +1,7 @@
 //! Git／worktree 輔助函式：建立、狀態、diff、auto-commit、merge、PR、gc。
 
 use super::*;
+use tr::tr;
 
 /// 在 `repo` 建立一個 worktree，回傳 (路徑, 分支)。
 pub(crate) fn make_worktree(repo: &Path, id: &str) -> Result<(PathBuf, String)> {
@@ -15,7 +16,7 @@ pub(crate) fn make_worktree(repo: &Path, id: &str) -> Result<(PathBuf, String)> 
         .args(["worktree", "add", "-b", &branch])
         .arg(&dir)
         .output()
-        .context("執行 git worktree 失敗")?;
+        .with_context(|| tr!("執行 git worktree 失敗"))?;
     if !out.status.success() {
         bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
@@ -54,7 +55,7 @@ pub(crate) fn git_status_summary(cwd: &Path) -> (usize, String) {
 /// 取得工作目錄的統一格式 diff（含已追蹤變更與新增未追蹤檔案的內容預覽）。
 pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
     if !cwd.is_dir() {
-        bail!("工作目錄不存在：{cwd:?}");
+        bail!("{}", tr!("工作目錄不存在：{cwd}", cwd = format!("{cwd:?}")));
     }
     let mut out = String::new();
 
@@ -64,7 +65,7 @@ pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
         .arg(cwd)
         .args(["diff", "HEAD"])
         .output()
-        .context("執行 git diff 失敗")?;
+        .with_context(|| tr!("執行 git diff 失敗"))?;
     let diff_str = String::from_utf8_lossy(&diff.stdout);
     if !diff_str.trim().is_empty() {
         out.push_str(&diff_str);
@@ -79,7 +80,7 @@ pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
         .arg(cwd)
         .args(["ls-files", "--others", "--exclude-standard"])
         .output()
-        .context("執行 git ls-files 失敗")?;
+        .with_context(|| tr!("執行 git ls-files 失敗"))?;
     for rel in String::from_utf8_lossy(&untracked.stdout).lines() {
         let rel = rel.trim();
         if rel.is_empty() || rel.starts_with(".termade/") {
@@ -103,7 +104,7 @@ pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
     }
 
     if out.trim().is_empty() {
-        Ok("(目前工作區沒有尚未合併的變更)\n".to_string())
+        Ok(format!("{}\n", tr!("(目前工作區沒有尚未合併的變更)")))
     } else {
         Ok(out)
     }
@@ -121,7 +122,7 @@ pub(crate) fn git_output(dir: &Path, args: &[&str]) -> Result<std::process::Outp
         .arg(dir)
         .args(args)
         .output()
-        .with_context(|| format!("執行 git {} 失敗", args.join(" ")))
+        .with_context(|| tr!("執行 git {args} 失敗", args = args.join(" ")))
 }
 
 /// 取得 `dir` 所在 repo 的根目錄。
@@ -147,8 +148,11 @@ pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
     let out = git_output(dir, &["status", "--porcelain"])?;
     if !out.status.success() {
         bail!(
-            "git status 失敗：{}",
-            String::from_utf8_lossy(&out.stderr).trim()
+            "{}",
+            tr!(
+                "git status 失敗：{detail}",
+                detail = String::from_utf8_lossy(&out.stderr).trim()
+            )
         );
     }
     Ok(String::from_utf8_lossy(&out.stdout)
@@ -164,8 +168,11 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
     let add = git_output(wt_dir, &["add", "-A", "--", ".", ":(exclude).termade"])?;
     if !add.status.success() {
         bail!(
-            "git add 失敗：{}",
-            String::from_utf8_lossy(&add.stderr).trim()
+            "{}",
+            tr!(
+                "git add 失敗：{detail}",
+                detail = String::from_utf8_lossy(&add.stderr).trim()
+            )
         );
     }
     let commit = git_output(
@@ -179,7 +186,10 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
             String::from_utf8_lossy(&commit.stderr)
         );
         if !text.contains("nothing to commit") && !text.contains("nothing added to commit") {
-            bail!("commit worktree 失敗：{}", text.trim());
+            bail!(
+                "{}",
+                tr!("commit worktree 失敗：{detail}", detail = text.trim())
+            );
         }
     }
     Ok(())
@@ -190,11 +200,14 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
     let branch = session
         .branch
         .as_deref()
-        .context("此 session 沒有獨立的 worktree 分支")?;
+        .with_context(|| tr!("此 session 沒有獨立的 worktree 分支"))?;
     // 前置檢查：任一不成立就不動 repo。
     let git_dir_out = git_output(main_repo, &["rev-parse", "--git-dir"])?;
     if !git_dir_out.status.success() {
-        bail!("{main_repo:?} 不是 git repo");
+        bail!(
+            "{}",
+            tr!("{repo} 不是 git repo", repo = format!("{main_repo:?}"))
+        );
     }
     let git_dir = {
         let p = String::from_utf8_lossy(&git_dir_out.stdout)
@@ -209,11 +222,20 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
     };
     for marker in ["MERGE_HEAD", "rebase-merge", "rebase-apply"] {
         if git_dir.join(marker).exists() {
-            bail!("主工作區正在合併、rebase 中（{marker}），請先處理完畢");
+            bail!(
+                "{}",
+                tr!(
+                    "主工作區正在合併、rebase 中（{marker}），請先處理完畢",
+                    marker = marker
+                )
+            );
         }
     }
     if has_uncommitted(main_repo)? {
-        bail!("主工作區有未 commit 的變更，請先 commit 或 stash 後再合併");
+        bail!(
+            "{}",
+            tr!("主工作區有未 commit 的變更，請先 commit 或 stash 後再合併")
+        );
     }
     let target = git_output(main_repo, &["rev-parse", "--abbrev-ref", "HEAD"])?;
     let target = String::from_utf8_lossy(&target.stdout).trim().to_string();
@@ -235,22 +257,26 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
             .map(|o| o.status.success())
             .unwrap_or(false);
         let ff_desc = if can_ff {
-            "可快轉 (fast-forward)"
+            tr!("可快轉 (fast-forward)")
         } else {
-            "需三方合併 (three-way merge)"
+            tr!("需三方合併 (three-way merge)")
         };
         let pending_desc = if pending_files.is_empty() {
-            "無未提交變更".to_string()
+            tr!("無未提交變更")
         } else {
-            format!(
-                "待提交檔案（{}）：{}",
-                pending_files.len(),
-                pending_files.join(", ")
+            tr!(
+                "待提交檔案（{count}）：{files}",
+                count = pending_files.len(),
+                files = pending_files.join(", ")
             )
         };
-        return Ok(format!(
-            "[dry-run] 合併 {branch}（{}）至 {target}：{ff_desc}，{pending_desc}",
-            session.label
+        return Ok(tr!(
+            "[dry-run] 合併 {branch}（{label}）至 {target}：{ff_desc}，{pending_desc}",
+            branch = branch,
+            label = session.label,
+            target = target,
+            ff_desc = ff_desc,
+            pending_desc = pending_desc
         ));
     }
 
@@ -270,14 +296,32 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
         let _ = git_output(main_repo, &["merge", "--abort"]);
         let detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
         if conflicts.is_empty() {
-            bail!("合併 {branch} 到 {target} 失敗，已還原：{detail}");
+            bail!(
+                "{}",
+                tr!(
+                    "合併 {branch} 到 {target} 失敗，已還原：{detail}",
+                    branch = branch,
+                    target = target,
+                    detail = detail
+                )
+            );
         }
         bail!(
-            "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{}",
-            conflicts.join(", ")
+            "{}",
+            tr!(
+                "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{files}",
+                branch = branch,
+                target = target,
+                files = conflicts.join(", ")
+            )
         );
     }
-    Ok(format!("已將 {branch}（{}）合併進 {target}", session.label))
+    Ok(tr!(
+        "已將 {branch}（{label}）合併進 {target}",
+        branch = branch,
+        label = session.label,
+        target = target
+    ))
 }
 
 /// 透過 `gh pr create` 建立 Pull Request。
@@ -285,7 +329,7 @@ pub(crate) fn create_worktree_pr(session: &Session, title: &str, body: &str) -> 
     let branch = session
         .branch
         .as_deref()
-        .context("此 session 沒有獨立分支，無法建立 PR")?;
+        .with_context(|| tr!("此 session 沒有獨立分支，無法建立 PR"))?;
     let wt_dir = Path::new(&session.cwd);
     if wt_dir.is_dir() {
         auto_commit_worktree(wt_dir, &session.label)?;
@@ -296,7 +340,7 @@ pub(crate) fn create_worktree_pr(session: &Session, title: &str, body: &str) -> 
             "pr", "create", "--title", title, "--body", body, "--head", branch,
         ])
         .output()
-        .context("找不到或無法執行 `gh` CLI")?;
+        .with_context(|| tr!("找不到或無法執行 `gh` CLI"))?;
     if !out.status.success() {
         bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
@@ -331,23 +375,21 @@ pub(crate) fn gc_block_reason(main_repo: &Path, session: &Session) -> Option<Str
     let wt_dir = Path::new(&session.cwd);
     if wt_dir.is_dir() {
         match has_uncommitted(wt_dir) {
-            Ok(true) => return Some("有未 commit 變更".into()),
+            Ok(true) => return Some(tr!("有未 commit 變更")),
             Ok(false) => {}
-            Err(e) => return Some(format!("無法檢查狀態：{e}")),
+            Err(e) => return Some(tr!("無法檢查狀態：{e}", e = e)),
         }
     }
     if let Some(branch) = &session.branch {
         // 分支已不存在（例如共用 worktree 的另一個 session 已把它刪掉）：
         // 目錄也不在就沒有東西要保護；目錄還在則保守地擋下。
         if !branch_exists(main_repo, branch) {
-            return wt_dir
-                .exists()
-                .then(|| "分支不存在，worktree 仍在".to_string());
+            return wt_dir.exists().then(|| tr!("分支不存在，worktree 仍在"));
         }
         match git_output(main_repo, &["merge-base", "--is-ancestor", branch, "HEAD"]) {
             Ok(o) if o.status.success() => {}
-            Ok(_) => return Some("尚未合併".into()),
-            Err(e) => return Some(format!("無法檢查合併狀態：{e}")),
+            Ok(_) => return Some(tr!("尚未合併")),
+            Err(e) => return Some(tr!("無法檢查合併狀態：{e}", e = e)),
         }
     }
     None
