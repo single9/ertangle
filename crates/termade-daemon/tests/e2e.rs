@@ -1,4 +1,4 @@
-//! daemon 端到端：啟動 daemon → spawn（假 claude）→ prompt → 收到輸出 → shutdown。
+//! daemon 端到端：啟動 daemon → spawn (假 claude)→ prompt → 收到輸出 → shutdown。
 //! 不需要真實 agent 或網路。環境變數是行程全域的，所以整個流程放在單一測試裡。
 
 use std::time::{Duration, Instant};

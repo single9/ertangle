@@ -3,7 +3,7 @@
 use super::*;
 
 // ---------------------------------------------------------------------------
-// event log 寫入執行緒（T07 / T08）
+// event log 寫入執行緒 (T07 / T08)
 // ---------------------------------------------------------------------------
 
 pub(crate) const DEFAULT_LOG_MAX_BYTES: u64 = 64 * 1024 * 1024;
@@ -19,7 +19,7 @@ pub struct LogConfig {
 }
 
 impl LogConfig {
-    /// 讀取 `TERMADE_LOG_MAX_BYTES`（預設 64 MB）與 `TERMADE_LOG_KEEP`（預設 3 份）。
+    /// 讀取 `TERMADE_LOG_MAX_BYTES` (預設 64 MB)與 `TERMADE_LOG_KEEP` (預設 3 份)。
     pub fn from_env() -> Self {
         let get = |k: &str| {
             std::env::var(k)
@@ -89,7 +89,7 @@ impl LogWriter {
 
     pub(crate) fn fail(&mut self, e: &std::io::Error) {
         if self.ok.swap(false, Ordering::SeqCst) {
-            tracing::error!("event log 寫入失敗（{:?}）：{e}；之後定期重試", self.path);
+            tracing::error!("event log 寫入失敗 ({:?})：{e}；之後定期重試", self.path);
             if let Some(tx) = &self.health_tx {
                 let _ = tx.send(false);
             }
@@ -168,7 +168,7 @@ impl LogWriter {
     }
 }
 
-/// 啟動 log 寫入執行緒。`state` 是目前已重播的狀態（供輪替時寫 snapshot）。
+/// 啟動 log 寫入執行緒。`state` 是目前已重播的狀態 (供輪替時寫 snapshot)。
 pub(crate) fn spawn_log_writer(
     path: PathBuf,
     state: State,

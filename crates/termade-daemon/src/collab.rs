@@ -1,8 +1,8 @@
 //! 協作說明：告訴每個 agent 它是誰、向誰回報、怎麼使用 `termade_*` 工具。
 //!
-//! 注入管道有兩層（見 `docs/DESIGN.md` 的「協作說明」）：
-//! 1. `termade mcp` 在 MCP `initialize` 回應的 `instructions` 帶出（`mcp.rs`）。
-//! 2. 啟動 agent 時經 `SessionSpec::system_append` 交給 adapter（`handlers/session.rs`）。
+//! 注入管道有兩層 (見 `docs/DESIGN.md` 的「協作說明」)：
+//! 1. `termade mcp` 在 MCP `initialize` 回應的 `instructions` 帶出 (`mcp.rs`)。
+//! 2. 啟動 agent 時經 `SessionSpec::system_append` 交給 adapter (`handlers/session.rs`)。
 //!
 //! 不寫成 worktree 裡的 `AGENTS.md`：合併前的自動 commit 會把它提交進使用者的分支，
 //! 也會干擾 repo 自己的 `AGENTS.md`。
@@ -18,7 +18,7 @@ const MAX_REPO_INSTRUCTIONS: usize = 8 * 1024;
 
 const HEADER: &str = "[termade 協作說明]";
 
-/// 對所有 session 都一樣的通則（查不到 session 時只給這一段）。
+/// 對所有 session 都一樣的通則 (查不到 session 時只給這一段)。
 fn general_rules(out: &mut String) {
     out.push_str(
         "- 進度：工作進行中，用 termade_status 更新一句話的進度。\n\
@@ -36,24 +36,24 @@ fn push_extra(out: &mut String, extra: &str) {
     }
 }
 
-/// 組出某個 session 的協作說明。`parent` 是產生它的 session（人產生的為 `None`）；
+/// 組出某個 session 的協作說明。`parent` 是產生它的 session (人產生的為 `None`)；
 /// `extra` 原樣附加在最後。
 pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) -> String {
     let mut out = format!("{HEADER}\n");
     let spawned_by = match (parent, me.parent.as_deref()) {
-        (Some(p), _) => format!("session「{}」（{}）", p.label, p.id),
+        (Some(p), _) => format!("session「{}」({})", p.label, p.id),
         (None, Some(pid)) => format!("session {pid}"),
         (None, None) => "使用者".to_string(),
     };
     out.push_str(&format!(
-        "你是 termade 管理的 agent session「{}」（id {}，角色 {}），由{spawned_by}產生。\n",
+        "你是 termade 管理的 agent session「{}」(id {}，角色 {})，由{spawned_by}產生。\n",
         me.label,
         me.id,
         me.role.id()
     ));
     match parent.map(|p| p.id.as_str()).or(me.parent.as_deref()) {
         Some(pid) => out.push_str(&format!(
-            "- 回報：完成或卡住時，用 termade_send（to=\"{pid}\"）把結果告訴父 session；不要做完就停住不回報。\n"
+            "- 回報：完成或卡住時，用 termade_send (to=\"{pid}\")把結果告訴父 session；不要做完就停住不回報。\n"
         )),
         None => out.push_str(
             "- 回報：你是使用者直接產生的；完成或卡住時直接在回覆裡說明，不需要另外傳訊息。\n",
@@ -62,20 +62,20 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
     general_rules(&mut out);
     if let Some(branch) = &me.branch {
         out.push_str(&format!(
-            "- worktree：你在獨立的 git worktree（分支 {branch}）工作。成果留在這個分支；不要自己合併回主分支，除非被明確要求。\n"
+            "- worktree：你在獨立的 git worktree (分支 {branch})工作。成果留在這個分支；不要自己合併回主分支，除非被明確要求。\n"
         ));
     }
     if me.role == Role::Coordinator {
         out.push_str(
             "- 協調：用 termade_spawn 產生 worker，用 termade_task_create 與 depends_on 安排順序；等回覆用 termade_wait，不要輪詢。\n\
-             - 成本：termade_spawn 出的 session 預設各自獨立工作區。不要自己挑高消耗的 model 或 effort；沒有特別需要就不指定（用設定的預設），需要較強的 model 時先問使用者。超出使用者設定的範圍時，系統會彈出確認。\n",
+             - 成本：termade_spawn 出的 session 預設各自獨立工作區。不要自己挑高消耗的 model 或 effort；沒有特別需要就不指定 (用設定的預設)，需要較強的 model 時先問使用者。超出使用者設定的範圍時，系統會彈出確認。\n",
         );
     }
     push_extra(&mut out, extra);
     out
 }
 
-/// 查不到 session（例如使用者手動執行 `termade mcp`）時的通則。
+/// 查不到 session (例如使用者手動執行 `termade mcp`)時的通則。
 pub fn general_instructions(extra: &str) -> String {
     let mut out = format!("{HEADER}\n");
     general_rules(&mut out);
@@ -90,7 +90,7 @@ fn truncate_text(mut t: String, name: &str) -> String {
             cut -= 1;
         }
         t.truncate(cut);
-        t.push_str(&format!("\n…（{name} 過長，已截斷）"));
+        t.push_str(&format!("\n… ({name} 過長，已截斷)"));
     }
     t.trim().to_string()
 }
@@ -99,7 +99,7 @@ fn truncate_text(mut t: String, name: &str) -> String {
 /// 最後是 `<project>/.termade/instructions.md`。
 fn extra_text(cfg: &Config, role: Option<&Role>, project: &Path, global_dir: &Path) -> String {
     let mut parts: Vec<String> = Vec::new();
-    // ADE 整體系統提示：全域設定檔指定的檔案（只認全域，repo 內的設定不能指向任意檔案）。
+    // ADE 整體系統提示：全域設定檔指定的檔案 (只認全域，repo 內的設定不能指向任意檔案)。
     if let Some(f) = cfg.collab.prompt_file.as_deref() {
         let path = std::path::PathBuf::from(f);
         let path = if path.is_absolute() {
@@ -128,10 +128,10 @@ fn extra_text(cfg: &Config, role: Option<&Role>, project: &Path, global_dir: &Pa
     parts.join("\n\n")
 }
 
-/// 依設定組出 `session`（id 或 label）的協作說明；`[collab] instructions = false` 時回 `None`。
+/// 依設定組出 `session`(id 或 label)的協作說明；`[collab] instructions = false` 時回 `None`。
 ///
-/// 設定與 `.termade/instructions.md` 取自 session 所屬的專案（worktree 看主 repo，
-/// 因為 `.termade/` 不進版控，worktree 裡不會有）。查不到 session 時以 `fallback_cwd` 為專案，
+/// 設定與 `.termade/instructions.md` 取自 session 所屬的專案 (worktree 看主 repo，
+/// 因為 `.termade/` 不進版控，worktree 裡不會有)。查不到 session 時以 `fallback_cwd` 為專案，
 /// 只給通則。
 pub fn for_session(
     state: &State,
@@ -221,8 +221,8 @@ mod tests {
         me.parent = Some("ses_p".into());
         me.branch = Some("termade/ses_w".into());
         let t = collab_instructions(&me, Some(&parent), "");
-        assert!(t.contains("由session「coord」（ses_p）產生"), "{t}");
-        assert!(t.contains("termade_send（to=\"ses_p\"）"), "{t}");
+        assert!(t.contains("由session「coord」(ses_p)產生"), "{t}");
+        assert!(t.contains("termade_send (to=\"ses_p\")"), "{t}");
         assert!(t.contains("分支 termade/ses_w") && t.contains("不要自己合併"));
         assert!(!t.contains("直接在回覆裡說明"), "{t}");
         assert!(!t.contains("termade_task_create"), "{t}");
@@ -233,7 +233,7 @@ mod tests {
         let mut me = sess("ses_w", "worker/a", Role::Worker);
         me.parent = Some("ses_gone".into());
         let t = collab_instructions(&me, None, "");
-        assert!(t.contains("termade_send（to=\"ses_gone\"）"), "{t}");
+        assert!(t.contains("termade_send (to=\"ses_gone\")"), "{t}");
         assert!(!t.contains("直接在回覆裡說明"));
     }
 

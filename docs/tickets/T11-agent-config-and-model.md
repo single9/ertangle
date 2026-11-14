@@ -11,7 +11,7 @@
 - agent 回報的實際 model 被 daemon 丟掉，`Session.model` 永遠是 `None`。
 - 整個專案唯一的設定檔是 `policy.toml`；沒有地方設定預設 agent、預設 model、執行檔路徑、額外參數或環境變數。
 
-多 agent 協作的常見用法（協調者用大模型、worker 用便宜的模型）因此做不到。
+多 agent 協作的常見用法 (協調者用大模型、worker 用便宜的模型)因此做不到。
 
 ## 證據
 
@@ -25,7 +25,7 @@
 
 ## 分析邏輯
 
-1. 從三個 spawn 入口（`src/main.rs` 的 `Spawn`、TUI 的 `submit_spawn`、MCP 的 `termade_spawn`）往下追到 `SpawnRequest`，確認沒有 model 欄位。
+1. 從三個 spawn 入口 (`src/main.rs` 的 `Spawn`、TUI 的 `submit_spawn`、MCP 的 `termade_spawn`)往下追到 `SpawnRequest`，確認沒有 model 欄位。
 2. 再追到 `SessionSpec` 找有沒有其他通道；`args` 欄位存在且各 adapter 都有 `cmd.args(&spec.args)`，但 daemon 端寫死空陣列。
 3. 反方向追 `Session.model`：adapter 送出 → daemon `ingest` 直接 `return`。所以連顯示都沒有。
 4. 各 agent 指定 model 的方式，本機查到的：
@@ -36,7 +36,7 @@
 
 ## 實作方式
 
-1. **設定檔 `config.toml`**（`~/.config/termade/config.toml`，repo 的 `.termade/config.toml` 可覆寫）：
+1. **設定檔 `config.toml`** (`~/.config/termade/config.toml`，repo 的 `.termade/config.toml` 可覆寫)：
    ```toml
    [defaults]
    agent = "claude"
@@ -60,25 +60,25 @@
    ```
    解析順序：spawn 請求的明確值 → `roles.<role>` → `agents.<kind>` → `defaults`。
 
-   目前的 `policy.toml` 是手寫的行解析器（`PolicyEngine::parse_toml`），撐不住巢狀表格。這裡建議引入 `toml` crate；T04 的結構化規則也會需要它。
+   目前的 `policy.toml` 是手寫的行解析器 (`PolicyEngine::parse_toml`)，撐不住巢狀表格。這裡建議引入 `toml` crate；T04 的結構化規則也會需要它。
 2. **協定**：`SpawnRequest` 與 `SessionSpec` 增加 `model: Option<String>`。`SpawnRequest` 另加 `args: Vec<String>` 供一次性覆寫。兩者都 `#[serde(default)]`，舊 client 不受影響。
 3. **各 adapter 套用 model**：
    - Claude：加 `--model <model>`。
    - Codex：`thread/start` 帶 `model`。先以實機或文件確認欄位名稱。
-   - OpenCode／Antigravity（ACP）：先確認 `session/new` 回應是否列出可用 model 與對應的設定方法；若協定內沒有，退而以環境變數或設定檔注入。確認之前，對這兩家指定 model 時回傳明確錯誤，不要靜默忽略。
+   - OpenCode／Antigravity (ACP)：先確認 `session/new` 回應是否列出可用 model 與對應的設定方法；若協定內沒有，退而以環境變數或設定檔注入。確認之前，對這兩家指定 model 時回傳明確錯誤，不要靜默忽略。
    - PTY：只透過 `args` 傳遞，不做轉換。
-4. **回報實際 model**：新增 `Event::SessionModel { session, model }`（或沿用既有的狀態事件），`ingest` 不再丟棄 `AgentEvent::Model`，`State::apply` 寫入 `Session.model`。
+4. **回報實際 model**：新增 `Event::SessionModel { session, model }` (或沿用既有的狀態事件)，`ingest` 不再丟棄 `AgentEvent::Model`，`State::apply` 寫入 `Session.model`。
 5. **入口**：
    - CLI：`termade spawn --model <m>`，以及 `-- <額外參數>`。
    - MCP：`termade_spawn` 增加 `model`；`termade_peers`／`termade_whoami` 回傳 model。
-   - TUI：`n` 的輸入支援 `claude:opus 幫我…` 或 `claude --model opus 幫我…`（擇一，建議前者，較短）；sessions 欄與標題列顯示 model。
+   - TUI：`n` 的輸入支援 `claude:opus 幫我…` 或 `claude --model opus 幫我…` (擇一，建議前者，較短)；sessions 欄與標題列顯示 model。
 6. **執行期切換 model** 不在這張票：各家支援程度不同，先做啟動時指定。
 
 ## 驗收條件
 
 - 測試：設定檔解析與四層覆寫順序。
-- 測試：Claude adapter 在有 model 時產生的命令列含 `--model <m>`（以 T06 的假 agent 或直接檢查組出的參數）。
+- 測試：Claude adapter 在有 model 時產生的命令列含 `--model <m>` (以 T06 的假 agent 或直接檢查組出的參數)。
 - 測試：收到 `AgentEvent::Model` 後 `State` 中該 session 的 `model` 有值。
-- 測試：舊格式的 `SpawnRequest` JSON（沒有 `model`、`args`）仍可解析。
+- 測試：舊格式的 `SpawnRequest` JSON (沒有 `model`、`args`)仍可解析。
 - 對尚未支援的 agent 指定 model 時得到明確錯誤。
 - `termade sessions` 與 TUI 顯示每個 session 的 model。

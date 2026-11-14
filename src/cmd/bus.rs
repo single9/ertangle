@@ -1,4 +1,4 @@
-//! 匯流排訊息子命令（send、inbox、wait、ask、artifact）。
+//! 匯流排訊息子命令 (send、inbox、wait、ask、artifact)。
 
 use anyhow::{bail, Context, Result};
 use termade_core::{ArtifactKind, MsgKind, Target};
@@ -27,7 +27,7 @@ pub(crate) fn cmd_send(
     };
     let kind = MsgKind::parse(&kind).with_context(|| {
         tr!(
-            "未知的訊息種類：{kind}（chat/handoff/question/answer/status/artifact）",
+            "未知的訊息種類：{kind} (chat/handoff/question/answer/status/artifact)",
             kind = kind
         )
     })?;
@@ -176,12 +176,8 @@ pub(crate) fn cmd_artifact(
     session: Option<String>,
 ) -> Result<()> {
     let session = resolve_self_session(session)?;
-    let kind = ArtifactKind::parse(&kind).with_context(|| {
-        tr!(
-            "未知的產出種類：{kind}（code/pr/doc/test/run）",
-            kind = kind
-        )
-    })?;
+    let kind = ArtifactKind::parse(&kind)
+        .with_context(|| tr!("未知的產出種類：{kind} (code/pr/doc/test/run)", kind = kind))?;
     let frame = roundtrip(&Request::ArtifactShare {
         session,
         kind,
@@ -220,7 +216,7 @@ mod msg_id_tests {
             Some("msg_3f2a1b2c3d4e")
         );
         assert_eq!(
-            msg_id_in("已送出訊息 msg_ab12（對方已結束）").as_deref(),
+            msg_id_in("已送出訊息 msg_ab12 (對方已結束)").as_deref(),
             Some("msg_ab12")
         );
         assert_eq!(msg_id_in("no id"), None);

@@ -12,13 +12,13 @@ use termade_protocol::{Frame, Request};
 use tr::tr;
 
 // ---------------------------------------------------------------------------
-// 旗標的可用值（補全腳本會列出這些；別名仍可解析但不列出）
+// 旗標的可用值 (補全腳本會列出這些；別名仍可解析但不列出)
 // ---------------------------------------------------------------------------
 
-/// `--effort` 的可用值；與 `termade_adapter::EFFORT_LEVELS` 相同（有測試比對）。
+/// `--effort` 的可用值；與 `termade_adapter::EFFORT_LEVELS` 相同 (有測試比對)。
 pub(crate) const EFFORT_VALUES: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
-/// `--kind`／`handoff --to`：接受 `kind` 或 `kind:model`，kind 的部分交給 [`AgentKind::parse`]（含別名）。
+/// `--kind`／`handoff --to`：接受 `kind` 或 `kind:model`，kind 的部分交給 [`AgentKind::parse`] (含別名)。
 #[derive(Clone)]
 pub(crate) struct KindParser;
 
@@ -37,7 +37,7 @@ impl TypedValueParser for KindParser {
             return Err(clap::Error::raw(
                 clap::error::ErrorKind::InvalidValue,
                 tr!(
-                    "未知的 agent：{kind}（opencode/claude/codex/antigravity，可加 `:model`）\n",
+                    "未知的 agent：{kind} (opencode/claude/codex/antigravity，可加 `:model`)\n",
                     kind = kind
                 ),
             )
@@ -93,7 +93,7 @@ pub(crate) fn cmd_completions(shell: Shell) -> Result<()> {
     Ok(())
 }
 
-/// clap 產生的靜態補全，加上（zsh／bash）查 session 名稱的片段。
+/// clap 產生的靜態補全，加上 (zsh／bash)查 session 名稱的片段。
 pub(crate) fn completion_script(shell: Shell) -> String {
     let mut cmd = command_for_completion();
     let mut buf = Vec::new();
@@ -106,7 +106,7 @@ pub(crate) fn completion_script(shell: Shell) -> String {
     }
 }
 
-/// 排除隱藏子命令（`__complete`）：`clap_complete` 預設仍會把 `hide = true` 的子命令列進腳本。
+/// 排除隱藏子命令 (`__complete`)：`clap_complete` 預設仍會把 `hide = true` 的子命令列進腳本。
 fn command_for_completion() -> Command {
     let base = crate::Cli::command();
     let args: Vec<Arg> = base.get_arguments().cloned().collect();
@@ -123,7 +123,7 @@ fn command_for_completion() -> Command {
 }
 
 const ZSH_SESSIONS_FN: &str = r#"
-# session 名稱（label，沒有 label 時是 id）；daemon 沒在跑時不列出任何東西，也不會啟動它。
+# session 名稱 (label，沒有 label 時是 id)；daemon 沒在跑時不列出任何東西，也不會啟動它。
 _termade_sessions() {
     local -a sessions
     sessions=(${(f)"$(command termade __complete sessions 2>/dev/null)"})
@@ -132,7 +132,7 @@ _termade_sessions() {
 "#;
 
 /// 把要填 session 的參數從 `_default` 換成 `_termade_sessions`。
-/// 函式定義放在第一行（`#compdef`）之後：檔案被 autoload 時，結尾會直接呼叫 `_termade`，定義要先出現。
+/// 函式定義放在第一行 (`#compdef`)之後：檔案被 autoload 時，結尾會直接呼叫 `_termade`，定義要先出現。
 fn zsh_with_sessions(script: &str) -> String {
     let mut out = String::with_capacity(script.len() + ZSH_SESSIONS_FN.len());
     for (i, line) in script.lines().enumerate() {
@@ -172,7 +172,7 @@ fn bash_with_sessions(script: &str, cmd: &Command) -> String {
     }
     format!(
         r#"{script}
-# session 名稱（label，沒有 label 時是 id）；daemon 沒在跑時不列出任何東西，也不會啟動它。
+# session 名稱 (label，沒有 label 時是 id)；daemon 沒在跑時不列出任何東西，也不會啟動它。
 _termade_with_sessions() {{
     _termade "$@"
     local cur="${{COMP_WORDS[COMP_CWORD]}}" prev="${{COMP_WORDS[COMP_CWORD-1]}}" sub="${{COMP_WORDS[1]}}" want=""
@@ -202,10 +202,10 @@ complete -F _termade_with_sessions -o bashdefault -o default termade
 // `termade __complete sessions`
 // ---------------------------------------------------------------------------
 
-/// 等 daemon 回覆的上限（毫秒）；可用 `TERMADE_COMPLETE_TIMEOUT_MS` 調整。
+/// 等 daemon 回覆的上限 (毫秒)；可用 `TERMADE_COMPLETE_TIMEOUT_MS` 調整。
 const DEFAULT_TIMEOUT_MS: u64 = 200;
 
-/// 每行印出一個 session 名稱。任何失敗（daemon 沒跑、逾時、協定錯誤）都是「不輸出、結束碼 0」，
+/// 每行印出一個 session 名稱。任何失敗 (daemon 沒跑、逾時、協定錯誤)都是「不輸出、結束碼 0」，
 /// 而且絕不啟動 daemon：按 Tab 不該有副作用。
 pub(crate) fn cmd_complete_sessions() -> Result<()> {
     let timeout = std::env::var("TERMADE_COMPLETE_TIMEOUT_MS")
@@ -261,7 +261,7 @@ fn session_names(state: &State, project: &str) -> Vec<String> {
 }
 
 /// 專案根目錄：cwd 所在 git repo 的頂層，不在 repo 內就用 cwd 本身。
-/// 與 TUI 預設範圍用的規則相同（`termade-tui` 的 `home_project`）。
+/// 與 TUI 預設範圍用的規則相同 (`termade-tui` 的 `home_project`)。
 fn home_project(cwd: &std::path::Path) -> String {
     std::process::Command::new("git")
         .arg("-C")

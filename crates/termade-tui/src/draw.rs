@@ -1,4 +1,4 @@
-//! 所有繪製函式（版面、標題、sessions、transcript、diff、bus、輸入框）。
+//! 所有繪製函式 (版面、標題、sessions、transcript、diff、bus、輸入框)。
 
 use super::*;
 use tr::tr;
@@ -201,7 +201,7 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(tr!(" 命令（Tab 補全） ")),
+                .title(tr!(" 命令 (Tab 補全) ")),
         ),
         area,
     );
@@ -249,7 +249,7 @@ pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &Ap
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(tr!(" 專案檔案（Tab 採用） ")),
+                .title(tr!(" 專案檔案 (Tab 採用) ")),
         ),
         area,
     );
@@ -304,7 +304,7 @@ pub(crate) fn draw_help(f: &mut TuiFrame, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(tr!(" 說明（Esc 關閉） ")),
+                .title(tr!(" 說明 (Esc 關閉) ")),
         ),
         area,
     );
@@ -355,7 +355,7 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
         .collect();
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
-        tr!(" ↑↓ 選項目 · Enter 開清單選擇（開關直接切換）· ←→ 輪替 · Esc 關閉　變更立即儲存"),
+        tr!(" ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"),
         Style::default().fg(Color::Gray),
     )));
     f.render_widget(ratatui::widgets::Clear, area);
@@ -364,7 +364,7 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(tr!(" 設定（寫入全域 config.toml） ")),
+                .title(tr!(" 設定 (寫入全域 config.toml) ")),
         ),
         area,
     );
@@ -402,7 +402,7 @@ fn draw_settings_sub(
     ])];
     if all.is_empty() {
         lines.push(Line::from(Span::styled(
-            tr!(" （沒有符合的項目）"),
+            tr!(" (沒有符合的項目)"),
             Style::default().fg(Color::Gray),
         )));
     }
@@ -420,7 +420,7 @@ fn draw_settings_sub(
         " {item}{loading} · Enter 選定 · Esc 返回 ",
         item = item.label(s),
         loading = if loading {
-            tr!("（載入中…）")
+            tr!("(載入中…)")
         } else {
             String::new()
         }
@@ -437,7 +437,7 @@ fn draw_settings_sub(
     );
 }
 
-/// 置中的清單選擇器（agent／model），第一列是過濾輸入。
+/// 置中的清單選擇器 (agent／model)，第一列是過濾輸入。
 pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let Some(p) = app.picker.as_mut() else { return };
     p.poll_pending();
@@ -479,7 +479,7 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     if vis.is_empty() && !loading {
         lines.push(Line::from(Span::styled(
             if p.filter.is_empty() {
-                tr!("（沒有選項）")
+                tr!("(沒有選項)")
             } else {
                 tr!("Enter 使用自訂值：{value}", value = p.filter)
             },
@@ -498,7 +498,7 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     );
 }
 
-/// 一行待核准提示（Bus 隱藏時使用）：優先顯示目前選取 session 的請求。
+/// 一行待核准提示 (Bus 隱藏時使用)：優先顯示目前選取 session 的請求。
 pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
     let selected = app.selected_id();
     let pending = &app.state.pending_permissions;
@@ -549,7 +549,7 @@ pub(crate) fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
     if ids.is_empty() || area.width == 0 {
         f.render_widget(
             Paragraph::new(Span::styled(
-                tr!(" （尚無 session，按 n 建立）"),
+                tr!(" (尚無 session，按 n 建立)"),
                 Style::default().fg(Color::DarkGray),
             )),
             area,
@@ -798,7 +798,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             let branch = s.branch.as_deref().unwrap_or("");
             let note = s.status_note.as_deref().unwrap_or("");
             let mut spans: Vec<Span> = Vec::new();
-            // 顯示全部專案（或有多個專案）時，列首放專案色塊，同專案同色。
+            // 顯示全部專案 (或有多個專案)時，列首放專案色塊，同專案同色。
             if show_project {
                 spans.push(Span::styled(
                     format!(
@@ -891,7 +891,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 .title(if app.scope_here {
                     match hidden {
                         0 => tr!(" Sessions · 本專案 "),
-                        n => tr!(" Sessions · 本專案（另 {n} 個在別處，P 顯示） ", n = n),
+                        n => tr!(" Sessions · 本專案 (另 {n} 個在別處，P 顯示) ", n = n),
                     }
                 } else if show_project {
                     tr!(" Sessions · 全部專案 ")
@@ -916,8 +916,8 @@ pub(crate) fn transcript_stamp(app: &App, id: &SessionId) -> (usize, usize, usiz
     })
 }
 
-/// 依目前模式（Markdown / 原始）與寬度，把逐字稿建成樣式化且已換行的行。
-/// 工具呼叫（`▸ …`）與結果（`  ✓ …`／`  ✗ …`）行：原樣顯示並上色。
+/// 依目前模式 (Markdown / 原始)與寬度，把逐字稿建成樣式化且已換行的行。
+/// 工具呼叫 (`▸ …`)與結果 (`  ✓ …`／`  ✗ …`)行：原樣顯示並上色。
 fn tool_line(l: &str) -> Option<Line<'static>> {
     let style = if l.starts_with("▸ ") {
         Style::default().fg(Color::Cyan)
@@ -945,7 +945,7 @@ pub(crate) fn build_transcript_lines(
         src.iter().map(|l| Line::raw(l.clone())).collect()
     } else {
         // 工具呼叫／結果行是程式產生的摘要，不能當 Markdown：
-        // `_`、`*`、反斜線會被吃掉（例如 mcp__termade__termade_peers 變成 mcpadeadepeers）。
+        // `_`、`*`、反斜線會被吃掉 (例如 mcp__termade__termade_peers 變成 mcpadeadepeers)。
         let mut out: Vec<Line<'static>> = Vec::new();
         let mut batch: Vec<String> = Vec::new();
         for l in src {
@@ -1328,7 +1328,7 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
-        Mode::Normal => tr!(" 輸入（i 輸入 · ? 說明） "),
+        Mode::Normal => tr!(" 輸入 (i 輸入 · ? 說明) "),
         Mode::Help => tr!(" 說明 "),
         Mode::Settings => tr!(" 設定 "),
         Mode::Prompt => match app
@@ -1336,8 +1336,8 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
             .and_then(|id| app.state.queues.get(&id).map(Vec::len))
             .unwrap_or(0)
         {
-            0 => tr!(" prompt（@ 附檔 · Enter 送出 · Alt-Enter 排隊） "),
-            n => tr!(" prompt（排隊 {n} 則 · Alt-Enter 再排） ", n = n),
+            0 => tr!(" prompt (@ 附檔 · Enter 送出 · Alt-Enter 排隊) "),
+            n => tr!(" prompt (排隊 {n} 則 · Alt-Enter 再排) ", n = n),
         },
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => tr!(
@@ -1362,12 +1362,12 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
             None => tr!(" spawn：<agent[:model]> <prompt> "),
         },
         Mode::Menu => tr!(" 選單 "),
-        Mode::Pick => tr!(" 選擇（Enter 確認 · Esc 取消） "),
+        Mode::Pick => tr!(" 選擇 (Enter 確認 · Esc 取消) "),
         Mode::Message => tr!(" message → 選取的 session "),
         Mode::Review => tr!(" review 註解 → 選取的 session "),
-        Mode::Command => tr!(" 命令（Tab 補全） "),
+        Mode::Command => tr!(" 命令 (Tab 補全) "),
         Mode::Jump => tr!(" 跳轉 session "),
-        Mode::Search => tr!(" 搜尋（Enter／↓ 下一個 · ↑ 上一個 · Esc 離開） "),
+        Mode::Search => tr!(" 搜尋 (Enter／↓ 下一個 · ↑ 上一個 · Esc 離開) "),
     };
     let style = if app.mode == Mode::Normal {
         Style::default()

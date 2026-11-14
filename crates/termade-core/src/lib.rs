@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tr::tr;
 
-/// 目前時間（Unix epoch 毫秒）。
+/// 目前時間 (Unix epoch 毫秒)。
 pub fn now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -32,7 +32,7 @@ pub type SessionId = String;
 pub type MsgId = String;
 pub type TaskId = String;
 
-/// 每個事件的單調序號，用來做增量同步（`since`）。
+/// 每個事件的單調序號，用來做增量同步 (`since`)。
 pub type Seq = u64;
 
 // ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ pub enum AgentKind {
 }
 
 impl AgentKind {
-    /// 穩定識別字（給 CLI / 設定檔用）。
+    /// 穩定識別字 (給 CLI / 設定檔用)。
     pub fn id(&self) -> &str {
         match self {
             AgentKind::OpenCode => "opencode",
@@ -73,7 +73,7 @@ impl AgentKind {
         })
     }
 
-    /// 可選的四種內建 agent（不含 Custom）。
+    /// 可選的四種內建 agent (不含 Custom)。
     pub fn builtins() -> [AgentKind; 4] {
         [
             AgentKind::OpenCode,
@@ -83,7 +83,7 @@ impl AgentKind {
         ]
     }
 
-    /// 互動模式（PTY 直通）的啟動指令。
+    /// 互動模式 (PTY 直通)的啟動指令。
     pub fn pty_command(&self) -> (&str, Vec<&'static str>) {
         match self {
             AgentKind::OpenCode => ("opencode", vec![]),
@@ -94,10 +94,10 @@ impl AgentKind {
         }
     }
 
-    /// 原生結構化協定的啟動指令（若有）。
+    /// 原生結構化協定的啟動指令 (若有)。
     ///
-    /// OpenCode 與 Antigravity 都直接提供原生 ACP（`opencode acp` / `agy acp`），
-    /// 無需額外 npm 套件；Claude 與 Codex 走各自的結構化介面（見 adapter crate）。
+    /// OpenCode 與 Antigravity 都直接提供原生 ACP (`opencode acp` / `agy acp`)，
+    /// 無需額外 npm 套件；Claude 與 Codex 走各自的結構化介面 (見 adapter crate)。
     pub fn acp_command(&self) -> Option<(&str, Vec<&'static str>)> {
         match self {
             AgentKind::OpenCode => Some(("opencode", vec!["acp"])),
@@ -157,7 +157,7 @@ pub enum SessionStatus {
     Idle,
     Busy,
     WaitingApproval,
-    /// 閒置休眠（處理程序已 SIGSTOP 暫停，收到新訊息或喚醒時自動 SIGCONT）。
+    /// 閒置休眠 (處理程序已 SIGSTOP 暫停，收到新訊息或喚醒時自動 SIGCONT)。
     Sleeping,
     Exited,
     Failed,
@@ -188,7 +188,7 @@ pub struct Cost {
     pub output_tokens: u64,
 }
 
-/// session 目前的 context 用量（對話已佔用的 token 數與模型的 context 視窗）。
+/// session 目前的 context 用量 (對話已佔用的 token 數與模型的 context 視窗)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextUsage {
     pub used: u64,
@@ -230,7 +230,7 @@ pub fn human_tokens(n: u64) -> String {
     }
 }
 
-/// 把美金上限格式化成簡短字串：整數省略小數（`$5`），否則保留兩位（`$2.50`）。
+/// 把美金上限格式化成簡短字串：整數省略小數 (`$5`)，否則保留兩位 (`$2.50`)。
 pub fn format_usd_limit(limit: f64) -> String {
     if (limit - limit.round()).abs() < 1e-6 {
         format!("${:.0}", limit)
@@ -246,7 +246,7 @@ pub struct Session {
     pub kind: AgentKind,
     /// 人類可讀標籤，例如 `worker/eu-zip`。
     pub label: String,
-    /// 工作目錄（可能是 worktree 路徑）。
+    /// 工作目錄 (可能是 worktree 路徑)。
     pub cwd: String,
     /// 若在 worktree 中，記錄分支名。
     pub branch: Option<String>,
@@ -254,40 +254,40 @@ pub struct Session {
     pub status: SessionStatus,
     pub model: Option<String>,
     pub cost: Cost,
-    /// 誰產生的（人或某個 session）。
+    /// 誰產生的 (人或某個 session)。
     pub parent: Option<SessionId>,
     pub created_ms: u64,
-    /// adapter 用的傳輸方式（顯示用）。
+    /// adapter 用的傳輸方式 (顯示用)。
     pub transport: String,
     /// agent 透過 `termade_status` 回報的簡短進度說明。
     #[serde(default)]
     pub status_note: Option<String>,
-    /// 建立 worktree 時所屬的主 repo 根目錄（merge／gc／pr 用）。
+    /// 建立 worktree 時所屬的主 repo 根目錄 (merge／gc／pr 用)。
     #[serde(default)]
     pub repo_root: Option<String>,
-    /// 此 session 的權限政策（舊 log 沒有此欄位時為 `auto`）。
+    /// 此 session 的權限政策 (舊 log 沒有此欄位時為 `auto`)。
     #[serde(default)]
     pub permission: PermissionPolicy,
-    /// context 用量（agent 回報；舊 log 沒有此欄位）。
+    /// context 用量 (agent 回報；舊 log 沒有此欄位)。
     #[serde(default)]
     pub context: Option<ContextUsage>,
-    /// agent 原生的對話 id（Claude session id、Codex thread id、ACP sessionId），接續用。
-    /// `None` 表示這個 session 不能接續（舊 log、PTY，或 agent 沒有宣告載入能力）。
+    /// agent 原生的對話 id (Claude session id、Codex thread id、ACP sessionId)，接續用。
+    /// `None` 表示這個 session 不能接續 (舊 log、PTY，或 agent 沒有宣告載入能力)。
     #[serde(default)]
     pub native_id: Option<String>,
-    /// 此 session 的成本上限（美元；解析後的實際上限）。
+    /// 此 session 的成本上限 (美元；解析後的實際上限)。
     #[serde(default)]
     pub budget_usd: Option<f64>,
-    /// 是否已達成本上限（達上限後中斷回合並拒絕新 prompt，直到人工調高）。
+    /// 是否已達成本上限 (達上限後中斷回合並拒絕新 prompt，直到人工調高)。
     #[serde(default)]
     pub over_budget: bool,
-    /// 被誰接手（交接後由 `Event::SessionHandedOff` 設定；舊 log 沒有此欄位）。
+    /// 被誰接手 (交接後由 `Event::SessionHandedOff` 設定；舊 log 沒有此欄位)。
     #[serde(default)]
     pub handed_off_to: Option<SessionId>,
-    /// 目前的推理強度（啟動時解析出的值，或執行期切換後的值；舊 log 沒有此欄位）。
+    /// 目前的推理強度 (啟動時解析出的值，或執行期切換後的值；舊 log 沒有此欄位)。
     #[serde(default)]
     pub effort: Option<String>,
-    /// agent 回報的原生斜線指令名稱（不含 `/`；Claude `slash_commands`、ACP `available_commands_update`）。
+    /// agent 回報的原生斜線指令名稱 (不含 `/`；Claude `slash_commands`、ACP `available_commands_update`)。
     #[serde(default)]
     pub slash_commands: Vec<String>,
 }
@@ -347,7 +347,7 @@ pub enum MsgKind {
     Question,
     Answer,
     Status,
-    /// 分享產出（檔案 / 分支 / diff）。
+    /// 分享產出 (檔案 / 分支 / diff)。
     Artifact,
 }
 
@@ -477,7 +477,7 @@ impl ArtifactKind {
     }
 }
 
-/// agent 分享的產出物（檔案、分支或 diff）。
+/// agent 分享的產出物 (檔案、分支或 diff)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: String,
@@ -489,7 +489,7 @@ pub struct Artifact {
     pub ts: u64,
 }
 
-/// 審查者在 diff 行內留下的註解（M3 review 迴圈）。
+/// 審查者在 diff 行內留下的註解 (M3 review 迴圈)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewComment {
     pub id: String,
@@ -500,7 +500,7 @@ pub struct ReviewComment {
     pub ts: u64,
 }
 
-/// Worktree 摘要資訊（M3 工作區管理）。
+/// Worktree 摘要資訊 (M3 工作區管理)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorktreeInfo {
     pub session: SessionId,
@@ -519,19 +519,19 @@ pub struct WorktreeInfo {
 /// 統一權限政策：決定 agent 執行工具時要不要問人。
 ///
 /// 每個 adapter 會把這個政策翻譯成自己協定支援的形式：
-/// * ACP（OpenCode / Antigravity）：`Ask` = 轉發 `session/request_permission`；
+/// * ACP (OpenCode / Antigravity)：`Ask` = 轉發 `session/request_permission`；
 ///   `Auto` / `Bypass` = adapter 直接代為核准。
 /// * Claude：以 `--permission-mode` 旗標對應。
 /// * Codex：以 `thread/start` 的 `approvalPolicy` 對應。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionPolicy {
-    /// 逐項詢問（ACP 會把請求轉給 client；不支援的協定則盡量保守）。
+    /// 逐項詢問 (ACP 會把請求轉給 client；不支援的協定則盡量保守)。
     Ask,
-    /// 自動核准安全操作（預設）：不中斷流程，但仍保留協定層級的界線。
+    /// 自動核准安全操作 (預設)：不中斷流程，但仍保留協定層級的界線。
     #[default]
     Auto,
-    /// 完全跳過權限檢查，agent 想做什麼都行（危險）。
+    /// 完全跳過權限檢查，agent 想做什麼都行 (危險)。
     Bypass,
 }
 
@@ -571,7 +571,7 @@ impl PermissionPolicy {
         })
     }
 
-    /// 是否要由 adapter 自行代為核准（不轉發給人）。
+    /// 是否要由 adapter 自行代為核准 (不轉發給人)。
     pub fn auto_approves(&self) -> bool {
         matches!(self, PermissionPolicy::Auto | PermissionPolicy::Bypass)
     }
@@ -588,7 +588,7 @@ impl PermissionPolicy {
     /// Codex app-server 的 CLI 旗標。
     ///
     /// `codex app-server` 不透過命令列吃權限設定，而是用 `thread/start` 的
-    /// `approvalPolicy`（見 [`PermissionPolicy::codex_approval_policy`]），因此這裡一律為空。
+    /// `approvalPolicy` (見 [`PermissionPolicy::codex_approval_policy`])，因此這裡一律為空。
     pub fn codex_flags(&self) -> Vec<&'static str> {
         vec![]
     }
@@ -618,7 +618,7 @@ pub enum Decision {
     Deny,
 }
 
-/// agent 送出的核准請求（已正規化，不分來源協定）。
+/// agent 送出的核准請求 (已正規化，不分來源協定)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionRequest {
     /// adapter 內部的請求 id，回覆時要帶回。
@@ -626,7 +626,7 @@ pub struct PermissionRequest {
     pub session: SessionId,
     /// 簡短標題，例如 `Bash`、`Edit`。
     pub title: String,
-    /// 細節（指令、路徑、diff 摘要）。
+    /// 細節 (指令、路徑、diff 摘要)。
     pub detail: String,
 }
 
@@ -656,20 +656,20 @@ pub enum Event {
         used: u64,
         window: Option<u64>,
     },
-    /// agent 回報帳號額度（用量百分比與重置時間）。
+    /// agent 回報帳號額度 (用量百分比與重置時間)。
     QuotaUpdated {
         quota: Quota,
     },
-    /// agent 回報額度用完／被限流（可交接給其他 agent）。
+    /// agent 回報額度用完／被限流 (可交接給其他 agent)。
     SessionLimited {
         session: SessionId,
         detail: String,
     },
-    /// session 從清單移除（啟動失敗或使用者清除已結束的 session）。
+    /// session 從清單移除 (啟動失敗或使用者清除已結束的 session)。
     SessionRemoved {
         session: SessionId,
     },
-    /// agent 回報（或設定指定）的實際 model。
+    /// agent 回報 (或設定指定)的實際 model。
     SessionModel {
         session: SessionId,
         model: String,
@@ -679,12 +679,12 @@ pub enum Event {
         session: SessionId,
         commands: Vec<String>,
     },
-    /// 執行期切換（或啟動時設定）的推理強度。
+    /// 執行期切換 (或啟動時設定)的推理強度。
     SessionEffort {
         session: SessionId,
         effort: String,
     },
-    /// agent 回報的原生對話 id（接續用）。
+    /// agent 回報的原生對話 id (接續用)。
     SessionNativeId {
         session: SessionId,
         native_id: String,
@@ -698,17 +698,17 @@ pub enum Event {
         session: SessionId,
         note: String,
     },
-    /// 交接完成：`to` 接手 `from` 的工作（匯流排訊息會轉給接手者）。
+    /// 交接完成：`to` 接手 `from` 的工作 (匯流排訊息會轉給接手者)。
     SessionHandedOff {
         from: SessionId,
         to: SessionId,
     },
-    /// 使用者送出的 prompt（顯示在逐字稿，讓對話有上下文）。
+    /// 使用者送出的 prompt (顯示在逐字稿，讓對話有上下文)。
     UserPrompt {
         session: SessionId,
         text: String,
     },
-    /// agent 的文字輸出（串流 chunk 或整行）。
+    /// agent 的文字輸出 (串流 chunk 或整行)。
     Output {
         session: SessionId,
         text: String,
@@ -751,29 +751,29 @@ pub enum Event {
         session: SessionId,
         cost: Cost,
     },
-    /// session 達到成本上限（已中斷當前回合，並將 `over_budget` 設為 `true`）。
+    /// session 達到成本上限 (已中斷當前回合，並將 `over_budget` 設為 `true`)。
     SessionOverBudget {
         session: SessionId,
         spent: f64,
         limit: f64,
     },
-    /// 人工調整 session 的成本上限（同時解除 `over_budget`）。
+    /// 人工調整 session 的成本上限 (同時解除 `over_budget`)。
     SessionBudget {
         session: SessionId,
         budget_usd: Option<f64>,
     },
-    /// event log 寫入健康狀態（`ok == false` 表示寫入失敗，TUI 顯示 `log ✗`）。
+    /// event log 寫入健康狀態 (`ok == false` 表示寫入失敗，TUI 顯示 `log ✗`)。
     LogHealth {
         ok: bool,
     },
-    /// session 的待送 prompt 佇列變動（`items` 為原始輸入文字清單，不含附件內容）。
+    /// session 的待送 prompt 佇列變動 (`items` 為原始輸入文字清單，不含附件內容)。
     QueueChanged {
         session: SessionId,
         items: Vec<String>,
     },
 }
 
-/// 事件 + 序號 + 時間，是對外（socket / log）傳遞的單位。
+/// 事件 + 序號 + 時間，是對外 (socket / log)傳遞的單位。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Record {
     pub seq: Seq,
@@ -786,7 +786,7 @@ pub struct Record {
 // State：事件的 fold 結果
 // ---------------------------------------------------------------------------
 
-/// transcript 每個 session 最多保留的行數（避免長對話吃記憶體）。
+/// transcript 每個 session 最多保留的行數 (避免長對話吃記憶體)。
 pub const TRANSCRIPT_CAP: usize = 4000;
 /// bus 訊息保留上限。
 pub const MESSAGE_CAP: usize = 1000;
@@ -811,13 +811,13 @@ pub struct State {
     pub pending_permissions: BTreeMap<String, PermissionRequest>,
     /// session id → 輸出文字行。
     pub transcripts: HashMap<SessionId, VecDeque<String>>,
-    /// event log 寫入健康狀態（預設正常）。
+    /// event log 寫入健康狀態 (預設正常)。
     #[serde(default = "default_true")]
     pub log_ok: bool,
-    /// 各 agent 最近一次回報的額度（agent id → 額度）。
+    /// 各 agent 最近一次回報的額度 (agent id → 額度)。
     #[serde(default)]
     pub quotas: BTreeMap<String, Quota>,
-    /// 各 session 排隊中的 prompt 原始輸入文字清單（session id → items）。
+    /// 各 session 排隊中的 prompt 原始輸入文字清單 (session id → items)。
     #[serde(default)]
     pub queues: BTreeMap<SessionId, Vec<String>>,
 }
@@ -893,7 +893,7 @@ impl State {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = SessionStatus::Failed;
                     let d: String = detail.chars().take(80).collect();
-                    s.status_note = Some(tr!("額度用完：{d}（可用 handoff 交接）", d = d));
+                    s.status_note = Some(tr!("額度用完：{d} (可用 handoff 交接)", d = d));
                 }
             }
             Event::SessionRemoved { session } => {
@@ -1084,7 +1084,7 @@ impl State {
         }
     }
 
-    /// 計算 `sid` 的深度（人直接產生的 session 為第 0 層，子 agent 依序遞增）。
+    /// 計算 `sid` 的深度 (人直接產生的 session 為第 0 層，子 agent 依序遞增)。
     pub fn session_depth(&self, sid: &str) -> usize {
         let mut depth = 0;
         let mut cur = sid;
@@ -1122,7 +1122,7 @@ impl State {
         cur.to_string()
     }
 
-    /// 取得與 `sid` 同一棵樹的所有 session id（根與所有後代）。
+    /// 取得與 `sid` 同一棵樹的所有 session id (根與所有後代)。
     pub fn tree_sessions(&self, sid: &str) -> Vec<SessionId> {
         let root = self.tree_root(sid);
         self.sessions
@@ -1132,7 +1132,7 @@ impl State {
             .collect()
     }
 
-    /// 計算與 `sid` 同一棵樹（根與所有後代）的美金總花費。
+    /// 計算與 `sid` 同一棵樹 (根與所有後代)的美金總花費。
     pub fn tree_cost_usd(&self, sid: &str) -> f64 {
         let root = self.tree_root(sid);
         self.sessions
@@ -1142,7 +1142,7 @@ impl State {
             .sum()
     }
 
-    /// 計算 `parent_id` 目前仍在執行（live）的直接子 session 數量。
+    /// 計算 `parent_id` 目前仍在執行 (live)的直接子 session 數量。
     pub fn live_children_count(&self, parent_id: &str) -> usize {
         self.sessions
             .values()
@@ -1172,7 +1172,7 @@ impl State {
         total
     }
 
-    /// 任務還沒完成的前置任務（`depends_on` 裡存在且狀態不是 `done` 的）。
+    /// 任務還沒完成的前置任務 (`depends_on` 裡存在且狀態不是 `done` 的)。
     /// 找不到的 id 不算：它永遠不會完成，算進去會讓任務卡死。
     pub fn unfinished_deps(&self, task: &Task) -> Vec<&Task> {
         task.depends_on
@@ -1182,7 +1182,7 @@ impl State {
             .collect()
     }
 
-    /// 以 `id` 或 `label` 解析 session id（優先回傳完全匹配的 id，其次為存活中的同 label session）。
+    /// 以 `id` 或 `label` 解析 session id (優先回傳完全匹配的 id，其次為存活中的同 label session)。
     pub fn resolve_session_id(&self, id_or_label: &str) -> Option<SessionId> {
         let needle = id_or_label.trim().trim_start_matches('@');
         if self.sessions.contains_key(needle) {
@@ -1241,12 +1241,12 @@ impl State {
 }
 
 // ---------------------------------------------------------------------------
-// Policy Engine & 秘密保護（M4）
+// Policy Engine & 秘密保護 (M4)
 // ---------------------------------------------------------------------------
 
 /// 權限規則引擎：在 `PermissionPolicy` 之前先過濾明確安全與高風險操作。
 ///
-/// 可由 `~/.config/termade/policy.toml`（或專案 `.termade/policy.toml`）覆寫：
+/// 可由 `~/.config/termade/policy.toml` (或專案 `.termade/policy.toml`)覆寫：
 /// ```toml
 /// allow = ["Read", "Grep", "Glob", "git status"]
 /// deny = ["rm -rf /", "git push --force", "/.ssh/"]
@@ -1282,7 +1282,7 @@ impl Default for PolicyEngine {
 }
 
 impl PolicyEngine {
-    /// 從簡易 TOML 文字解析規則（未指定的區塊保留預設值）。
+    /// 從簡易 TOML 文字解析規則 (未指定的區塊保留預設值)。
     pub fn parse_toml(src: &str) -> Self {
         let mut engine = Self::default();
         for raw_line in src.lines() {
@@ -1306,7 +1306,7 @@ impl PolicyEngine {
     /// 評估一個核准請求：
     /// * 命中 `deny` → `Some(Decision::Deny)`
     /// * 命中 `allow` → `Some(Decision::Allow)`
-    /// * 其餘 → `None`（交由 session 的 `PermissionPolicy` 或人類決定）
+    /// * 其餘 → `None` (交由 session 的 `PermissionPolicy` 或人類決定)
     pub fn evaluate(&self, title: &str, detail: &str) -> Option<Decision> {
         let combined = format!("{title} {detail}");
         // deny 維持保守的子字串比對：寧可多擋。
@@ -1333,7 +1333,7 @@ impl PolicyEngine {
         None
     }
 
-    /// 疊上 repo 層級規則：`deny` 取聯集（不能移除全域 deny），`allow` 也合併。
+    /// 疊上 repo 層級規則：`deny` 取聯集 (不能移除全域 deny)，`allow` 也合併。
     pub fn merged_with(&self, local: &PolicyEngine) -> PolicyEngine {
         let mut out = self.clone();
         for d in &local.deny {
@@ -1350,7 +1350,7 @@ impl PolicyEngine {
     }
 }
 
-/// `text` 是否以 `pat` 開頭，且 `pat` 結束處是詞邊界（空白或結尾）。
+/// `text` 是否以 `pat` 開頭，且 `pat` 結束處是詞邊界 (空白或結尾)。
 fn word_prefix(text: &str, pat: &str) -> bool {
     let t = text.trim_start();
     t.starts_with(pat)
@@ -1360,7 +1360,7 @@ fn word_prefix(text: &str, pat: &str) -> bool {
             .is_none_or(char::is_whitespace)
 }
 
-/// 從核准請求的 `detail`（通常是 JSON rawInput）取出指令字串。
+/// 從核准請求的 `detail` (通常是 JSON rawInput)取出指令字串。
 fn command_text(detail: &str) -> Option<String> {
     // 不是 JSON 時，整段當作指令文字。
     let Ok(v) = serde_json::from_str::<serde_json::Value>(detail) else {
@@ -1384,7 +1384,7 @@ fn parse_string_array(s: &str) -> Vec<String> {
         .collect()
 }
 
-/// 把工具輸入（JSON 字串）濃縮成一行人看得懂的摘要：優先 command／file_path／pattern 等欄位。
+/// 把工具輸入 (JSON 字串)濃縮成一行人看得懂的摘要：優先 command／file_path／pattern 等欄位。
 pub fn tool_summary(input: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(input).ok()?;
     let one_line = |s: &str| -> String {
@@ -1426,17 +1426,17 @@ pub fn tool_summary(input: &str) -> Option<String> {
     }
 }
 
-/// 某個額度視窗（例如 Claude 的 5 小時／7 天）。
+/// 某個額度視窗 (例如 Claude 的 5 小時／7 天)。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QuotaWindow {
     /// 顯示名稱：`5h`、`7d`、`30d`…
     pub name: String,
     pub used_percent: f32,
-    /// 重置時間（epoch 毫秒）。
+    /// 重置時間 (epoch 毫秒)。
     pub resets_at_ms: Option<u64>,
 }
 
-/// 某個 agent 帳號目前的額度狀態（由 agent 自己回報，非 termade 估算）。
+/// 某個 agent 帳號目前的額度狀態 (由 agent 自己回報，非 termade 估算)。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Quota {
     /// agent 種類 id，例如 `claude`、`codex`。
@@ -1483,7 +1483,7 @@ impl Quota {
         format!("{}{} {}", self.agent, reached, parts.join(" · "))
     }
 
-    /// 最吃緊的視窗用量（百分比）。
+    /// 最吃緊的視窗用量 (百分比)。
     pub fn max_used(&self) -> f32 {
         self.windows
             .iter()
@@ -1492,7 +1492,7 @@ impl Quota {
     }
 }
 
-/// 視窗長度（分鐘）轉成顯示名稱。
+/// 視窗長度 (分鐘)轉成顯示名稱。
 pub fn window_name(mins: u64) -> String {
     match mins {
         300 => "5h".into(),
@@ -1504,7 +1504,7 @@ pub fn window_name(mins: u64) -> String {
     }
 }
 
-/// 錯誤文字是否像額度用完／被限流（各 agent 的訊息不一，採保守的關鍵字比對）。
+/// 錯誤文字是否像額度用完／被限流 (各 agent 的訊息不一，採保守的關鍵字比對)。
 pub fn looks_like_limit(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
     (t.contains("limit")
@@ -1520,7 +1520,7 @@ pub fn looks_like_limit(text: &str) -> bool {
         || t.contains("429")
 }
 
-/// 隨 prompt 一起送出的附件（檔案或圖片）。內容由送出端（TUI／CLI）讀好並內嵌，
+/// 隨 prompt 一起送出的附件 (檔案或圖片)。內容由送出端 (TUI／CLI)讀好並內嵌，
 /// 所以遠端 daemon 也不需要存取同一個檔案系統。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Attachment {
@@ -1528,7 +1528,7 @@ pub struct Attachment {
     pub name: String,
     /// MIME 類型，例如 `image/png`、`text/plain`。
     pub mime: String,
-    /// 原始路徑（僅供參考／PTY 使用）。
+    /// 原始路徑 (僅供參考／PTY 使用)。
     #[serde(default)]
     pub path: Option<String>,
     /// 圖片的 base64 內容。
@@ -1538,12 +1538,12 @@ pub struct Attachment {
     #[serde(default)]
     pub text: Option<String>,
     pub size: u64,
-    /// 使用者原始輸入文字（含 `@檔名`，供排隊預覽與 `:unqueue` 還原使用）。
+    /// 使用者原始輸入文字 (含 `@檔名`，供排隊預覽與 `:unqueue` 還原使用)。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_prompt: Option<String>,
 }
 
-/// 圖片附件大小上限（5 MB）與文字檔內嵌上限（256 KB）。
+/// 圖片附件大小上限 (5 MB)與文字檔內嵌上限 (256 KB)。
 pub const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: u64 = 256 * 1024;
 
@@ -1558,7 +1558,7 @@ pub fn image_mime(path: &std::path::Path) -> Option<&'static str> {
     }
 }
 
-/// 標準 base64 編碼（含 padding）。
+/// 標準 base64 編碼 (含 padding)。
 pub fn base64_encode(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
@@ -1583,8 +1583,8 @@ pub fn base64_encode(bytes: &[u8]) -> String {
 }
 
 impl Attachment {
-    /// 讀取檔案成附件：圖片內嵌 base64（上限 5 MB）；UTF-8 文字檔內嵌內容（上限 256 KB，
-    /// 超過就只帶路徑）；其他二進位檔只帶路徑。
+    /// 讀取檔案成附件：圖片內嵌 base64 (上限 5 MB)；UTF-8 文字檔內嵌內容 (上限 256 KB，
+    /// 超過就只帶路徑)；其他二進位檔只帶路徑。
     pub fn load(path: &std::path::Path) -> Result<Attachment, String> {
         let meta = std::fs::metadata(path)
             .map_err(|e| tr!("無法讀取 {path}：{e}", path = path.display(), e = e))?;
@@ -1606,7 +1606,7 @@ impl Attachment {
         if let Some(mime) = image_mime(path) {
             if meta.len() > MAX_IMAGE_BYTES {
                 return Err(tr!(
-                    "圖片 {name} 太大（{size} KB，上限 {max} KB）",
+                    "圖片 {name} 太大 ({size} KB，上限 {max} KB)",
                     name = att.name,
                     size = meta.len() / 1024,
                     max = MAX_IMAGE_BYTES / 1024
@@ -1647,7 +1647,7 @@ impl Attachment {
 }
 
 /// 把附件併入 prompt 文字：文字檔以 fenced block 內嵌；圖片在 `images_as_text` 為真時改成一行說明
-/// （給不支援圖片區塊的 agent）。
+/// (給不支援圖片區塊的 agent)。
 pub fn compose_text(text: &str, atts: &[Attachment], images_as_text: bool) -> String {
     let mut out = text.to_string();
     for a in atts {
@@ -1670,7 +1670,7 @@ pub fn compose_text(text: &str, atts: &[Attachment], images_as_text: bool) -> St
             ));
         } else {
             out.push_str(&format!(
-                "\n\n[檔案附件：{}{}（內容未內嵌）]",
+                "\n\n[檔案附件：{}{} (內容未內嵌)]",
                 a.name,
                 a.path
                     .as_deref()
@@ -1682,7 +1682,7 @@ pub fn compose_text(text: &str, atts: &[Attachment], images_as_text: bool) -> St
     out
 }
 
-/// 遮罩文字中的常見金鑰與憑證樣式（寫入 event log 前保護秘密）。
+/// 遮罩文字中的常見金鑰與憑證樣式 (寫入 event log 前保護秘密)。
 pub fn redact_secrets(input: &str) -> String {
     const PREFIXES: &[&str] = &["sk-", "ghp_", "gho_", "AIza", "AKIA", "xoxb-"];
     let mut out = String::with_capacity(input.len());

@@ -1,11 +1,11 @@
 //! `termade-tui` — 全終端機非同步多 agent 儀表板。
 //!
-//! 提供三欄式（或依視窗寬度降級為雙欄／分頁）互動介面：
+//! 提供三欄式 (或依視窗寬度降級為雙欄／分頁)互動介面：
 //! * 左側：所有 session 的清單、狀態符號與未讀標示；
-//! * 中央：逐字稿（支援 Markdown 渲染）、worktree diff、worktrees 清單或任務視圖；
+//! * 中央：逐字稿 (支援 Markdown 渲染)、worktree diff、worktrees 清單或任務視圖；
 //! * 右側：匯流排訊息、任務看板與待核准清單。
 //!
-//! 逐字稿區支援 Markdown 渲染（見 [`markdown`]）、翻頁捲動與「跟隨最新」，
+//! 逐字稿區支援 Markdown 渲染 (見 [`markdown`])、翻頁捲動與「跟隨最新」，
 //! 並可用 `t` 在渲染後與原始文字之間切換。
 
 mod app;
@@ -83,7 +83,7 @@ use termade_daemon::{Client, ConnStream};
 use termade_protocol::{Frame, Request};
 use tr::tr;
 
-/// 啟動 TUI（會先確保 daemon 在跑）。
+/// 啟動 TUI (會先確保 daemon 在跑)。
 pub fn run() -> Result<()> {
     termade_daemon::ensure_daemon()?;
 
@@ -115,7 +115,7 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     // 預設擷取滑鼠：應用內可拖曳選取中央區塊並用 OSC 52 複製，滾輪也能捲動。
-    // 需要終端機原生選取時按 `F2` 關閉擷取（Shift+拖曳在多數終端機也可直接繞過）。
+    // 需要終端機原生選取時按 `F2` 關閉擷取 (Shift+拖曳在多數終端機也可直接繞過)。
     // 另外保留 DECSET 1007：關閉擷取後滾輪仍會變成 Up/Down 來捲動逐字稿。
     execute!(
         stdout,
@@ -146,7 +146,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     Ok(())
 }
 
-/// 切換完整滑鼠擷取（滾輪事件與點選 session）；關閉時回到原生選取。
+/// 切換完整滑鼠擷取 (滾輪事件與點選 session)；關閉時回到原生選取。
 pub(crate) fn set_mouse_capture(on: bool) -> Result<()> {
     let mut out = io::stdout();
     if on {
@@ -184,7 +184,7 @@ fn event_loop(
                     if !app.disconnected {
                         app.disconnected = true;
                         app.status =
-                            tr!("daemon 連線已中斷（可能被關閉了）。畫面是最後的狀態，按 q 離開後重新啟動");
+                            tr!("daemon 連線已中斷 (可能被關閉了)。畫面是最後的狀態，按 q 離開後重新啟動");
                         dirty = true;
                     }
                     break;
@@ -192,7 +192,7 @@ fn event_loop(
             }
         }
 
-        // 通知在兩次繪製之間直接寫 stdout（與 OSC 52 複製相同的做法）。
+        // 通知在兩次繪製之間直接寫 stdout (與 OSC 52 複製相同的做法)。
         if !app.notify.pending.is_empty() {
             if let Some(err) = app.notify.flush(&mut io::stdout().lock()) {
                 app.status = err;

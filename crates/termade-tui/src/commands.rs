@@ -65,7 +65,7 @@ pub(crate) fn submit_prompt_or_route(
             },
         )?;
         app.status = if n > 0 {
-            tr!("已送出 prompt（含 {n} 個附件）", n = n)
+            tr!("已送出 prompt (含 {n} 個附件)", n = n)
         } else {
             tr!("已送出 prompt")
         };
@@ -75,8 +75,8 @@ pub(crate) fn submit_prompt_or_route(
     Ok(())
 }
 
-/// 把一則 prompt 排進選取 session 的佇列（交由 daemon 管理）；session 已閒置就直接送。
-/// 只處理一般 prompt（含 `@檔案` 附件）；`/命令`、`@peer`、`#channel` 不排隊。
+/// 把一則 prompt 排進選取 session 的佇列 (交由 daemon 管理)；session 已閒置就直接送。
+/// 只處理一般 prompt (含 `@檔案` 附件)；`/命令`、`@peer`、`#channel` 不排隊。
 pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
@@ -123,7 +123,7 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
         && app.state.queues.get(&id).is_none_or(|q| q.is_empty());
     if idle_and_empty {
         app.status = if n_att > 0 {
-            tr!("已送出 prompt（含 {n_att} 個附件）", n_att = n_att)
+            tr!("已送出 prompt (含 {n_att} 個附件)", n_att = n_att)
         } else {
             tr!("已送出 prompt")
         };
@@ -132,7 +132,7 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
         if q.len() < 20 {
             q.push(trimmed.to_string());
         }
-        app.status = tr!("已排隊（共 {n} 則，閒下來自動送出）", n = q.len());
+        app.status = tr!("已排隊 (共 {n} 則，閒下來自動送出)", n = q.len());
     }
     Ok(())
 }
@@ -147,7 +147,7 @@ fn queue_command(app: &mut App, writer: &mut ConnStream, rest: &str) -> Result<(
         "" => {
             let items = app.state.queues.get(&id).cloned().unwrap_or_default();
             app.status = if items.is_empty() {
-                tr!("排隊為空（:queue <文字> 排入，或在輸入框按 Alt-Enter）")
+                tr!("排隊為空 (:queue <文字> 排入，或在輸入框按 Alt-Enter)")
             } else {
                 let list: Vec<String> = items
                     .iter()
@@ -211,7 +211,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("quota", termade_core::tr_noop!("顯示各 agent 帳號的額度與重置時間")),
     (
         "budget",
-        termade_core::tr_noop!("<金額>  設定或調高選取 session 的成本上限（美元）"),
+        termade_core::tr_noop!("<金額>  設定或調高選取 session 的成本上限 (美元)"),
     ),
     (
         "handoff",
@@ -219,11 +219,11 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ),
     (
         "resume",
-        termade_core::tr_noop!("[prompt]  接續選取的已結束 session（接回原對話，session 不變）"),
+        termade_core::tr_noop!("[prompt]  接續選取的已結束 session (接回原對話，session 不變)"),
     ),
     (
         "model",
-        termade_core::tr_noop!("[名稱]  切換選取 session 的 model（下一回合起生效）；不帶參數列出目前與可選項"),
+        termade_core::tr_noop!("[名稱]  切換選取 session 的 model (下一回合起生效)；不帶參數列出目前與可選項"),
     ),
     (
         "effort",
@@ -232,14 +232,14 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("settings", termade_core::tr_noop!("開啟設定面板：用清單切換預設 model、effort、權限、agent 建立 session 的防呆")),
     (
         "set",
-        termade_core::tr_noop!("不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml（空值＝刪除）"),
+        termade_core::tr_noop!("不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml (空值＝刪除)"),
     ),
     ("kill", termade_core::tr_noop!("結束選取的 session")),
     ("cancel", termade_core::tr_noop!("中斷選取 session 的目前回合")),
     ("sleep", termade_core::tr_noop!("休眠選取的 session")),
     ("wake", termade_core::tr_noop!("喚醒選取的 session")),
     ("rm", termade_core::tr_noop!("[session] [--force]  移除已結束的 session")),
-    ("clean", termade_core::tr_noop!("清除所有已結束（且沒有分支）的 session")),
+    ("clean", termade_core::tr_noop!("清除所有已結束 (且沒有分支)的 session")),
     ("merge", termade_core::tr_noop!("[session] [--dry-run]  合併 worktree 回主工作區")),
     ("diff", termade_core::tr_noop!("顯示選取 session 的 diff")),
     ("gc", termade_core::tr_noop!("[session]  清理已合併的 worktree")),
@@ -247,7 +247,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("overview", termade_core::tr_noop!("回到 transcript 視圖")),
     (
         "find",
-        termade_core::tr_noop!("[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容（同 f）"),
+        termade_core::tr_noop!("[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容 (同 f)"),
     ),
     ("layout", termade_core::tr_noop!("[three|two|tabs]  切換版面")),
     ("raw", termade_core::tr_noop!("原始文字／Markdown 切換")),
@@ -256,7 +256,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("scope", termade_core::tr_noop!("[here|all]  只看本專案／顯示全部專案的 session")),
     (
         "notify",
-        termade_core::tr_noop!("[on|off|test]  開關通知（回合結束／等待核准／失敗／額度用完）；不帶參數顯示狀態"),
+        termade_core::tr_noop!("[on|off|test]  開關通知 (回合結束／等待核准／失敗／額度用完)；不帶參數顯示狀態"),
     ),
     (
         "queue",
@@ -272,14 +272,14 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ),
     ("broadcast", termade_core::tr_noop!("<訊息>  廣播給所有 session")),
     ("copy", termade_core::tr_noop!("複製目前畫面內容")),
-    ("quit", termade_core::tr_noop!("離開（保留 daemon）")),
+    ("quit", termade_core::tr_noop!("離開 (保留 daemon)")),
     (
         "stop",
-        termade_core::tr_noop!("結束本專案所有執行中的 session（不動 daemon 與其他專案）"),
+        termade_core::tr_noop!("結束本專案所有執行中的 session (不動 daemon 與其他專案)"),
     ),
     (
         "shutdown",
-        termade_core::tr_noop!("關閉共用 daemon（結束所有專案的 session）並離開；有 session 在跑時需 :shutdown! 確認"),
+        termade_core::tr_noop!("關閉共用 daemon (結束所有專案的 session)並離開；有 session 在跑時需 :shutdown! 確認"),
     ),
 ];
 
@@ -302,7 +302,7 @@ pub(crate) fn command_hints(input: &str) -> Vec<(&'static str, &'static str)> {
 }
 
 pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<()> {
-    // `//名稱 …`：強制轉發給 agent（即使跟 TUI 命令同名）。
+    // `//名稱 …`：強制轉發給 agent (即使跟 TUI 命令同名)。
     if let Some(native) = raw.trim().strip_prefix('/').filter(|r| r.starts_with('/')) {
         let native = native.trim_start_matches('/');
         let mut p = native.splitn(2, char::is_whitespace);
@@ -321,7 +321,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
         "quota" => {
             let now = termade_core::now_millis();
             app.status = if app.state.quotas.is_empty() {
-                tr!("尚無額度資料（agent 執行過一個回合後才會有）")
+                tr!("尚無額度資料 (agent 執行過一個回合後才會有)")
             } else {
                 app.state
                     .quotas
@@ -341,7 +341,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                 [amt] => (app.selected_id(), *amt),
                 [ses, amt] => (Some((*ses).to_string()), *amt),
                 _ => {
-                    app.status = tr!("用法：:budget <金額>（或 :budget <session> <金額>）");
+                    app.status = tr!("用法：:budget <金額> (或 :budget <session> <金額>)");
                     return Ok(());
                 }
             };
@@ -616,7 +616,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                 .count();
             if verb == "shutdown" && !live.is_empty() {
                 app.status = tr!(
-                    "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session（其他專案 {others} 個）。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit",
+                    "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session (其他專案 {others} 個)。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit",
                     n = live.len(),
                     others = others
                 );
@@ -652,11 +652,11 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
 }
 
 /// TUI 不認得的 `/指令` 是 agent 的原生斜線指令：原樣轉發給選取的 session。
-/// `/` 開頭的名稱若跟 TUI 命令同名（如 `/model`），TUI 的優先；要送給 agent 就打 `//名稱`。
+/// `/` 開頭的名稱若跟 TUI 命令同名 (如 `/model`)，TUI 的優先；要送給 agent 就打 `//名稱`。
 fn forward_native(app: &mut App, writer: &mut ConnStream, verb: &str, rest: &str) -> Result<()> {
     let Some(id) = app.selected_id() else {
         app.status = tr!(
-            "未知的命令：/{verb}（沒有選取的 session 可轉發）",
+            "未知的命令：/{verb} (沒有選取的 session 可轉發)",
             verb = verb
         );
         return Ok(());
@@ -682,7 +682,7 @@ fn forward_native(app: &mut App, writer: &mut ConnStream, verb: &str, rest: &str
     )?;
     app.status = match known {
         Some(false) => tr!(
-            "已轉發 /{verb} 給 agent（它沒有回報這個指令，可能被當成一般文字）",
+            "已轉發 /{verb} 給 agent (它沒有回報這個指令，可能被當成一般文字)",
             verb = verb
         ),
         _ => tr!("已轉發原生指令 /{verb} 給 agent", verb = verb),
@@ -696,7 +696,7 @@ pub(crate) fn hints_with_native(app: &App) -> Vec<(String, String)> {
         .into_iter()
         .map(|(n, d)| (n.to_string(), termade_core::tr_dyn!(d)))
         .collect();
-    // 已打完命令名稱：用參數候選取代用法行（用法留在 `:help`）。
+    // 已打完命令名稱：用參數候選取代用法行 (用法留在 `:help`)。
     if let Some((_, cands)) = arg_candidates(app, &app.input) {
         if !cands.is_empty() {
             return cands;
@@ -713,7 +713,7 @@ pub(crate) fn hints_with_native(app: &App) -> Vec<(String, String)> {
         .unwrap_or(&[]);
     for c in native {
         if c.starts_with(input) && !out.iter().any(|(n, _)| n == c) {
-            out.push((c.clone(), tr!("（agent 原生指令，原樣轉發）")));
+            out.push((c.clone(), tr!("(agent 原生指令，原樣轉發)")));
         }
     }
     out
@@ -748,7 +748,7 @@ pub(crate) fn execute_jump(app: &mut App, writer: &mut ConnStream, query: &str) 
 
 pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
     // 由選擇器選好 agent／model 時，輸入框的內容就是 prompt；
-    // 否則維持舊格式 `<agent[:model]> <prompt>`（`:spawn claude:opus …`）。
+    // 否則維持舊格式 `<agent[:model]> <prompt>`(`:spawn claude:opus …`)。
     let (kind, model, prompt) = if let Some((kind, model)) = app.spawn_target.clone() {
         (kind, model, Some(text.trim().to_string()))
     } else {
@@ -761,7 +761,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         let prompt = parts.next().map(|s| s.trim().to_string());
         let Some(kind) = AgentKind::parse(kind_str) else {
             app.status = tr!(
-                "未知的 agent：{kind_str}（opencode/claude/codex/antigravity）",
+                "未知的 agent：{kind_str} (opencode/claude/codex/antigravity)",
                 kind_str = kind_str
             );
             return Ok(());
@@ -873,9 +873,9 @@ fn session_config_command(
                 .collect();
             tr!(
                 "model：{current}　可選：{choices}",
-                current = sess.model.clone().unwrap_or_else(|| tr!("（未回報）")),
+                current = sess.model.clone().unwrap_or_else(|| tr!("(未回報)")),
                 choices = if choices.is_empty() {
-                    tr!("（用 :model <名稱> 直接指定）")
+                    tr!("(用 :model <名稱> 直接指定)")
                 } else {
                     choices.join(", ")
                 }
@@ -883,7 +883,7 @@ fn session_config_command(
         } else {
             tr!(
                 "effort：{current}　可選：{choices}",
-                current = sess.effort.clone().unwrap_or_else(|| tr!("（預設）")),
+                current = sess.effort.clone().unwrap_or_else(|| tr!("(預設)")),
                 choices = termade_adapter::EFFORT_LEVELS.join(", ")
             )
         };
@@ -904,7 +904,7 @@ fn session_config_command(
         },
     )?;
     app.status = tr!(
-        "切換 {verb} → {value}（下一回合起生效）",
+        "切換 {verb} → {value} (下一回合起生效)",
         verb = verb,
         value = value
     );
@@ -936,7 +936,7 @@ fn set_default_command(app: &mut App, rest: &str) {
         let agent = app.selected_kind_id();
         let a = agent.as_deref().and_then(|k| cfg.agents.get(k));
         app.status = tr!(
-            "預設：agent={agent} permission={permission} model={model} effort={effort}（{target}）",
+            "預設：agent={agent} permission={permission} model={model} effort={effort} ({target})",
             agent = cfg.defaults.agent.as_deref().unwrap_or("-"),
             permission = cfg.defaults.permission.as_deref().unwrap_or("-"),
             model = a.and_then(|a| a.model.as_deref()).unwrap_or("-"),
@@ -979,12 +979,12 @@ fn set_default_command(app: &mut App, rest: &str) {
     };
     app.status = match result {
         Ok(()) if value.is_empty() => tr!(
-            "已移除 {key} 預設（{path}）",
+            "已移除 {key} 預設 ({path})",
             key = key,
             path = path.display()
         ),
         Ok(()) => tr!(
-            "已將預設 {key} 設為 {value}（{path}），新建立的 session 起生效",
+            "已將預設 {key} 設為 {value} ({path})，新建立的 session 起生效",
             key = key,
             value = value,
             path = path.display()
@@ -993,8 +993,8 @@ fn set_default_command(app: &mut App, rest: &str) {
     };
 }
 
-/// 命令第二個字以後的候選：`(目前正在打的字, [(值, 說明)])`。只列出以該字開頭的。
-/// 支援 `:set`（key 與各 key 的值）、`:model`、`:effort`。
+/// 命令第二個字以後的候選：` (目前正在打的字, [(值, 說明)])`。只列出以該字開頭的。
+/// 支援 `:set`(key 與各 key 的值)、`:model`、`:effort`。
 pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(String, String)>)> {
     let input = input.trim_start().trim_start_matches(['/', ':']);
     if !input.contains(char::is_whitespace) {
@@ -1036,7 +1036,7 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                 None => {
                     let mut v: Vec<(String, String)> = vec![
                         ("agent".into(), tr!("預設的 agent")),
-                        ("permission".into(), tr!("預設權限（ask／auto／bypass）")),
+                        ("permission".into(), tr!("預設權限 (ask／auto／bypass)")),
                         ("model".into(), tr!("選取 session 的 agent 的預設 model")),
                         ("effort".into(), tr!("選取 session 的 agent 的預設 effort")),
                     ];

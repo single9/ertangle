@@ -1,7 +1,7 @@
 //! 通知：回合結束、等待核准、失敗、額度用完時提醒不在畫面前的使用者。
 //!
-//! 偵測（[`notices_for`]）是純函式；送出方式有終端機 bell、OSC 9 與使用者自訂命令。
-//! 通知由 TUI 發出（daemon 可能在遠端或沒有桌面環境），TUI 沒開就沒有通知。
+//! 偵測 ([`notices_for`])是純函式；送出方式有終端機 bell、OSC 9 與使用者自訂命令。
+//! 通知由 TUI 發出 (daemon 可能在遠端或沒有桌面環境)，TUI 沒開就沒有通知。
 
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -12,18 +12,18 @@ use tr::tr;
 use termade_core::{Event, Record, SessionId, SessionStatus, State};
 use termade_daemon::config::TuiCfg;
 
-/// `ts` 比現在早超過這麼久的事件視為歷史（重連補送），不通知。
+/// `ts` 比現在早超過這麼久的事件視為歷史 (重連補送)，不通知。
 pub(crate) const STALE_MS: u64 = 5_000;
 /// 同一個 session 同一類通知在這段時間內只發一次。
 pub(crate) const DEBOUNCE: Duration = Duration::from_secs(3);
-/// 「做完了」的回合長度門檻預設值（秒）。
+/// 「做完了」的回合長度門檻預設值 (秒)。
 pub(crate) const DEFAULT_MIN_TURN_SECS: u64 = 10;
-/// 通知文字上限（字元），避免工具名或標籤過長。
+/// 通知文字上限 (字元)，避免工具名或標籤過長。
 const TEXT_CAP: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum NoticeKind {
-    /// 回合結束（忙碌 → 閒置）。
+    /// 回合結束 (忙碌 → 閒置)。
     Done,
     Failed,
     /// 等待核准。
@@ -80,13 +80,13 @@ impl Method {
 
 /// [`notices_for`] 的過濾條件；全部由呼叫端填入，測試可以直接構造。
 pub(crate) struct NotifyCtx<'a> {
-    /// 現在的時間（毫秒，與 `Record::ts` 同一個基準）。
+    /// 現在的時間 (毫秒，與 `Record::ts` 同一個基準)。
     pub(crate) now_ms: u64,
     pub(crate) now: Instant,
     pub(crate) min_turn: Duration,
     /// 各 session 目前這個回合的開始時間；沒有紀錄的視為夠長。
     pub(crate) turn_started: &'a HashMap<SessionId, Instant>,
-    /// 終端機是否有焦點（終端機不回報時為 `false`）。
+    /// 終端機是否有焦點 (終端機不回報時為 `false`)。
     pub(crate) focused: bool,
     /// 目前選取的 session。
     pub(crate) selected: Option<&'a str>,
@@ -96,13 +96,13 @@ pub(crate) struct NotifyCtx<'a> {
     pub(crate) last_sent: &'a HashMap<(SessionId, NoticeKind), Instant>,
 }
 
-/// 「忙碌」：回合進行中。休眠、啟動中都不算，所以喚醒（`Sleeping` → `Idle`）
-/// 與啟動完成（`Starting` → `Idle`）不會被當成回合結束。
+/// 「忙碌」：回合進行中。休眠、啟動中都不算，所以喚醒 (`Sleeping` → `Idle`)
+/// 與啟動完成 (`Starting` → `Idle`)不會被當成回合結束。
 pub(crate) fn is_busy(status: SessionStatus) -> bool {
     matches!(status, SessionStatus::Busy | SessionStatus::WaitingApproval)
 }
 
-/// 這個事件（套用到 `before` 之前）該產生哪些通知。
+/// 這個事件 (套用到 `before` 之前)該產生哪些通知。
 pub(crate) fn notices_for(before: &State, record: &Record, ctx: &NotifyCtx) -> Vec<Notice> {
     if record.ts.saturating_add(STALE_MS) < ctx.now_ms {
         return Vec::new();
@@ -172,7 +172,7 @@ pub(crate) fn notices_for(before: &State, record: &Record, ctx: &NotifyCtx) -> V
     }]
 }
 
-/// 去掉控制字元（含 ESC、BEL 與 C1），並限制長度；寫進 OSC 序列前必須經過這裡。
+/// 去掉控制字元 (含 ESC、BEL 與 C1)，並限制長度；寫進 OSC 序列前必須經過這裡。
 pub(crate) fn sanitize(s: &str) -> String {
     s.chars()
         .filter(|c| !c.is_control())
@@ -205,12 +205,12 @@ pub(crate) fn notify_command(command: &str, notice: &Notice) -> Command {
     cmd
 }
 
-/// 通知的設定與執行期狀態（`App` 持有一份）。
+/// 通知的設定與執行期狀態 (`App` 持有一份)。
 pub(crate) struct Notifier {
     /// `:notify on|off` 的執行期開關。
     pub(crate) enabled: bool,
     pub(crate) methods: Vec<Method>,
-    /// 設定裡無法辨識的方式名稱（`:notify` 會列出）。
+    /// 設定裡無法辨識的方式名稱 (`:notify` 會列出)。
     pub(crate) unknown: Vec<String>,
     pub(crate) command: Option<String>,
     pub(crate) min_turn: Duration,
@@ -253,17 +253,17 @@ impl Notifier {
         }
     }
 
-    /// 目前狀態的一行說明（`:notify` 與切換後顯示在狀態列）。
+    /// 目前狀態的一行說明 (`:notify` 與切換後顯示在狀態列)。
     pub(crate) fn describe(&self) -> String {
         let mut out = if self.methods.is_empty() {
-            tr!("通知：關閉（config.toml 的 [tui] notify 是空的）")
+            tr!("通知：關閉 (config.toml 的 [tui] notify 是空的)")
         } else {
             let names: Vec<&str> = self.methods.iter().map(|m| m.id()).collect();
             let methods = names.join(&tr!("列表分隔" => "、"));
             if self.enabled {
-                tr!("通知：開（{methods}）", methods = methods)
+                tr!("通知：開 ({methods})", methods = methods)
             } else {
-                tr!("通知：關（{methods}）", methods = methods)
+                tr!("通知：關 ({methods})", methods = methods)
             }
         };
         if self.methods.contains(&Method::Command) && self.command.is_none() {
@@ -337,7 +337,7 @@ impl Notifier {
         }
     }
 
-    /// 送出累積的通知。回傳值是要顯示在狀態列的錯誤（沒有就是 `None`）。
+    /// 送出累積的通知。回傳值是要顯示在狀態列的錯誤 (沒有就是 `None`)。
     pub(crate) fn flush(&mut self, out: &mut impl Write) -> Option<String> {
         let mut error = None;
         for notice in std::mem::take(&mut self.pending) {

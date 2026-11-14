@@ -1,19 +1,19 @@
 //! 串流文字的行緩衝。
 //!
-//! 結構化協定（ACP、Claude stream-json、Codex app-server）都是**一小段一小段**吐字的。
+//! 結構化協定 (ACP、Claude stream-json、Codex app-server)都是**一小段一小段**吐字的。
 //! 若每個 chunk 都當成一則輸出，transcript 就會變成「一行一字」。
 //! [`StreamBuf`] 把 chunk 併回完整行再送出，並在換種類或回合結束時收尾。
 
 /// 把 token 級 chunk 併成完整行的緩衝。
 #[derive(Default)]
 pub struct StreamBuf {
-    /// 目前累積的種類（例如 `"msg"` / `"think"`）；換種類時會先收尾。
+    /// 目前累積的種類 (例如 `"msg"` / `"think"`)；換種類時會先收尾。
     kind: &'static str,
     text: String,
 }
 
 impl StreamBuf {
-    /// 依種類替每行加上前綴（思考用 `💭 `）。
+    /// 依種類替每行加上前綴 (思考用 `💭 `)。
     fn decorate(kind: &str, line: &str) -> String {
         if kind == "think" {
             format!("💭 {line}")
@@ -22,7 +22,7 @@ impl StreamBuf {
         }
     }
 
-    /// 併入一段 chunk，回傳可送出的完整行（可能多行、含換行）。
+    /// 併入一段 chunk，回傳可送出的完整行 (可能多行、含換行)。
     pub fn push(&mut self, kind: &'static str, text: &str) -> String {
         let mut out = String::new();
         if self.kind != kind {

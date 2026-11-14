@@ -1,4 +1,4 @@
-//! 子命令實作（CLI 定義留在 main.rs）。
+//! 子命令實作 (CLI 定義留在 main.rs)。
 
 pub(crate) mod bus;
 pub(crate) mod completions;
@@ -26,7 +26,7 @@ pub(crate) fn resolve_self_session(explicit: Option<String>) -> Result<String> {
 
 pub(crate) fn connect() -> Result<Client> {
     Client::connect()
-        .with_context(|| tr!("無法連線 daemon（先執行 `termade daemon` 或用 `termade` 啟動）"))
+        .with_context(|| tr!("無法連線 daemon (先執行 `termade daemon` 或用 `termade` 啟動)"))
 }
 
 /// 送一個請求並等待第一個非 Ready 的回覆。

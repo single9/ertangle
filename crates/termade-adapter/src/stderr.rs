@@ -15,7 +15,7 @@ use tr::tr;
 
 /// 最多保留的行數。
 const MAX_LINES: usize = 20;
-/// 單行最多保留的位元組數（超過的部分丟掉）。
+/// 單行最多保留的位元組數 (超過的部分丟掉)。
 const MAX_LINE_BYTES: usize = 500;
 
 #[derive(Default)]
@@ -82,7 +82,7 @@ impl StderrTail {
         })
     }
 
-    /// 目前保留的行（最舊在前）。
+    /// 目前保留的行 (最舊在前)。
     pub fn lines(&self) -> Vec<String> {
         self.inner.lock().unwrap().lines.iter().cloned().collect()
     }

@@ -10,9 +10,9 @@ use crate::config::Config;
 use crate::paths::config_dir;
 use crate::{client_channel, lock, Shared};
 
-/// 預設的提醒門檻（百分比）。
+/// 預設的提醒門檻 (百分比)。
 pub(crate) const DEFAULT_WARN_PERCENT: f32 = 90.0;
-/// 自動交接最多串接幾次（避免 A→B→A 無限循環）。
+/// 自動交接最多串接幾次 (避免 A→B→A 無限循環)。
 const MAX_HANDOFF_DEPTH: usize = 3;
 
 /// 最吃緊的「尚未重置」視窗用量；全都已重置回傳 0。
@@ -24,7 +24,7 @@ pub(crate) fn live_pressure(q: &Quota, now_ms: u64) -> f32 {
         .fold(0.0, f32::max)
 }
 
-/// 從 `fallback`（`kind[:model]`）挑第一個可接手的：agent 不同於來源，且它的額度沒滿。
+/// 從 `fallback`(`kind[:model]`)挑第一個可接手的：agent 不同於來源，且它的額度沒滿。
 pub(crate) fn pick_fallback(
     fallback: &[String],
     source: &AgentKind,
@@ -76,7 +76,7 @@ impl Shared {
             .warn_percent
             .unwrap_or(crate::config::DEFAULT_BUDGET_WARN_PERCENT);
 
-        // 1) 單一 session 上限：沒有美金數字（usd == 0 且有 token）時改看 session_tokens，否則看 USD。
+        // 1) 單一 session 上限：沒有美金數字 (usd == 0 且有 token)時改看 session_tokens，否則看 USD。
         let total_tokens = s.cost.input_tokens + s.cost.output_tokens;
         let usd_limit = s
             .budget_usd
@@ -90,7 +90,7 @@ impl Shared {
                     self.emit(Event::SessionNote {
                         session: sid.clone(),
                         note: tr!(
-                            "token 用量已達 {used}/{limit}（{pct}%），接近上限",
+                            "token 用量已達 {used}/{limit} ({pct}%)，接近上限",
                             used = termade_core::human_tokens(total_tokens),
                             limit = termade_core::human_tokens(tok_limit),
                             pct = format!("{pct:.0}")
@@ -117,7 +117,7 @@ impl Shared {
                 self.emit(Event::SessionNote {
                     session: sid.clone(),
                     note: tr!(
-                        "成本已達 ${spent}/{limit}（{pct}%），接近上限",
+                        "成本已達 ${spent}/{limit} ({pct}%)，接近上限",
                         spent = format!("{spent:.2}"),
                         limit = termade_core::format_usd_limit(limit),
                         pct = format!("{pct:.0}")
@@ -136,7 +136,7 @@ impl Shared {
             }
         }
 
-        // 2) 整棵樹的上限（tree_usd）：從這個 session 往上找到根，加總整棵樹，超過時中斷樹裡所有 live 的 session。
+        // 2) 整棵樹的上限 (tree_usd)：從這個 session 往上找到根，加總整棵樹，超過時中斷樹裡所有 live 的 session。
         if let Some(tree_limit) = cfg.limits.tree_usd.filter(|&l| l > 0.0) {
             let (tree_spent, to_stop) = {
                 let inner = lock(&self.inner);
@@ -182,7 +182,7 @@ impl Shared {
         Config::load(&config_dir(), cwd).handoff
     }
 
-    /// 用量越過門檻時，對該 agent 還在跑的 session 留下交接建議（每次越線只提醒一次）。
+    /// 用量越過門檻時，對該 agent 還在跑的 session 留下交接建議 (每次越線只提醒一次)。
     fn warn_if_quota_high(self: &Arc<Self>, quota: &Quota) {
         let now = now_millis();
         let cwd = self.default_cwd();

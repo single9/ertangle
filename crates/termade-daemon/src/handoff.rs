@@ -1,4 +1,4 @@
-//! 交接：把一個 session 的工作（通常是額度用完）交給另一個 agent。
+//! 交接：把一個 session 的工作 (通常是額度用完)交給另一個 agent。
 //!
 //! 做法參考 Orca 的「full handoff」：新 agent 以簡報當初始 prompt 啟動，舊的停止，不等結果。
 //! 差別是額度用完時舊 agent 已無法自己寫簡報，所以由 daemon 從事件狀態與 git 組出簡報。
@@ -22,7 +22,7 @@ pub(crate) fn build_handoff_brief(
         .map(|t| t.iter().collect())
         .unwrap_or_default();
 
-    // 使用者 prompt 在 transcript 裡以 `❯ ` 開頭（多行的後續行縮排兩格）。
+    // 使用者 prompt 在 transcript 裡以 `❯ ` 開頭 (多行的後續行縮排兩格)。
     let mut prompts: Vec<String> = Vec::new();
     for l in &lines {
         if let Some(first) = l.strip_prefix("❯ ") {
@@ -54,7 +54,7 @@ pub(crate) fn build_handoff_brief(
 
     let mut b = String::new();
     b.push_str(&format!(
-        "你正在接手另一個 agent（{}，{}）未完成的工作。它因為額度用完或中斷而停止，無法再回答問題，\n\
+        "你正在接手另一個 agent ({}，{})未完成的工作。它因為額度用完或中斷而停止，無法再回答問題，\n\
          請依下列資訊與工作目錄中的實際內容繼續；不要重做已完成的部分，先檢查目前的 git 狀態與附上的 diff 再動手。\n\n",
         s.label,
         s.kind.id()
@@ -97,7 +97,7 @@ pub(crate) fn build_handoff_brief(
                 Target::Channel(_) => "頻道",
             };
             b.push_str(&format!(
-                "- 來自 {}（{}，{}）：{}\n",
+                "- 來自 {} ({}，{})：{}\n",
                 m.from,
                 to,
                 m.kind.id(),
@@ -112,10 +112,10 @@ pub(crate) fn build_handoff_brief(
     b.push_str(&format!(
         "## 工作目錄現況\n路徑：{}{}\n{git_summary}\n注意：未 commit 的變更已由 termade 自動 commit 到這個分支，可能是做到一半的狀態。\n\n",
         s.cwd,
-        s.branch.as_deref().map(|b| format!("（分支 {b}）")).unwrap_or_default()
+        s.branch.as_deref().map(|b| format!("(分支 {b})")).unwrap_or_default()
     ));
     if !tail.is_empty() {
-        b.push_str("## 它最後的輸出（最近幾十行）\n```\n");
+        b.push_str("## 它最後的輸出 (最近幾十行)\n```\n");
         b.push_str(&tail.join("\n"));
         b.push_str("\n```\n");
     }

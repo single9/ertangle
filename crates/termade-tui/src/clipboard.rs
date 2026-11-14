@@ -1,18 +1,18 @@
-//! 終端機剪貼簿輔助（OSC 52）與區塊複製。
+//! 終端機剪貼簿輔助 (OSC 52)與區塊複製。
 
 use std::io::{self, Write};
 use tr::tr;
 
 use crate::app::{main_pane_text, App};
 
-/// 用 OSC 52 把文字寫進終端機剪貼簿（SSH / tmux 下也可用，不需終端機原生選取）。
+/// 用 OSC 52 把文字寫進終端機剪貼簿 (SSH / tmux 下也可用，不需終端機原生選取)。
 pub(crate) fn write_clipboard(text: &str) -> io::Result<()> {
     let mut out = io::stdout().lock();
     write!(out, "\x1b]52;c;{}\x07", base64_encode(text.as_bytes()))?;
     out.flush()
 }
 
-/// 最小 base64 編碼器（OSC 52 需要；避免多拉一個相依性）。
+/// 最小 base64 編碼器 (OSC 52 需要；避免多拉一個相依性)。
 pub(crate) fn base64_encode(data: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
@@ -36,7 +36,7 @@ pub(crate) fn base64_encode(data: &[u8]) -> String {
     out
 }
 
-/// 複製中央主要區塊（`Y` 或 `/copy`），成功後在狀態列回報行數。
+/// 複製中央主要區塊 (`Y` 或 `/copy`)，成功後在狀態列回報行數。
 pub(crate) fn copy_main_pane(app: &mut App) {
     let text = main_pane_text(app);
     if text.is_empty() {
@@ -47,7 +47,7 @@ pub(crate) fn copy_main_pane(app: &mut App) {
         Ok(()) => {
             let lines = text.lines().count().max(1);
             app.status = tr!(
-                "已複製主要區塊 {lines} 行（OSC 52；失敗時可用 Shift+拖曳選取）",
+                "已複製主要區塊 {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)",
                 lines = lines
             );
         }

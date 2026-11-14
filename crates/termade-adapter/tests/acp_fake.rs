@@ -36,7 +36,7 @@ fn fake_spec(resume: Option<&str>, prompt: Option<&str>, no_load: bool) -> Sessi
     }
 }
 
-/// 收事件直到 `done` 成立或逾時，回傳（輸出, 原生 id）。
+/// 收事件直到 `done` 成立或逾時，回傳 (輸出, 原生 id)。
 fn collect(
     rx: &Receiver<AgentEvent>,
     done: impl Fn(&str, &Option<String>) -> bool,
@@ -84,7 +84,7 @@ fn agent_without_load_session_cannot_resume_and_reports_no_id() {
         .expect("沒有 loadSession 不能接續");
     assert!(e.to_string().contains("loadSession"), "{e}");
 
-    // 開新對話可以，但不回報 id（之後接不回來，就不要讓上層以為可以）。
+    // 開新對話可以，但不回報 id (之後接不回來，就不要讓上層以為可以)。
     let (tx, rx) = mpsc::channel();
     let ctl = spawn(fake_spec(None, Some("hi"), true), tx).expect("啟動假 ACP agent");
     let (out, native) = collect(&rx, |o, _| o.contains("fresh reply"));

@@ -15,7 +15,7 @@ msgid "請指定 --to、--channel 或 --broadcast"
 msgstr "Specify --to, --channel or --broadcast"
 
 #: src/cmd/bus.rs
-msgid "未知的訊息種類：{kind}（chat/handoff/question/answer/status/artifact）"
+msgid "未知的訊息種類：{kind} (chat/handoff/question/answer/status/artifact)"
 msgstr "Unknown message kind: {kind} (chat/handoff/question/answer/status/artifact)"
 
 #: src/cmd/bus.rs crates/termade-tui/src/input.rs
@@ -47,11 +47,11 @@ msgid "(等待回覆逾時)"
 msgstr "(timed out waiting for a reply)"
 
 #: src/cmd/bus.rs
-msgid "未知的產出種類：{kind}（code/pr/doc/test/run）"
+msgid "未知的產出種類：{kind} (code/pr/doc/test/run)"
 msgstr "Unknown artifact kind: {kind} (code/pr/doc/test/run)"
 
 #: src/cmd/completions.rs
-msgid "未知的 agent：{kind}（opencode/claude/codex/antigravity，可加 `:model`）\n"
+msgid "未知的 agent：{kind} (opencode/claude/codex/antigravity，可加 `:model`)\n"
 msgstr "Unknown agent: {kind} (opencode/claude/codex/antigravity, optionally with `:model`)\n"
 
 #: src/cmd/cost.rs src/cmd/session.rs src/cmd/task.rs
@@ -63,7 +63,7 @@ msgid "(尚無額度資料：agent 執行過一個回合後才會回報)"
 msgstr "(no quota data yet: reported after an agent completes a turn)"
 
 #: src/cmd/cost.rs
-msgid "{summary}   （{age} 前更新）"
+msgid "{summary}   ({age} 前更新)"
 msgstr "{summary}   (updated {age} ago)"
 
 #: src/cmd/cost.rs
@@ -75,7 +75,7 @@ msgid "提示：另有 {count} 份較舊的輪替檔，加 --all 可一併讀取
 msgstr "Note: {count} older rotated file(s) exist; add --all to read them too"
 
 #: src/cmd/cost.rs
-msgid "重播 {path}：共 {count} 筆事件（最新 seq={seq}，sessions={sessions}，tasks={tasks}，messages={messages}）"
+msgid "重播 {path}：共 {count} 筆事件 (最新 seq={seq}，sessions={sessions}，tasks={tasks}，messages={messages})"
 msgstr "Replay {path}: {count} event(s) (latest seq={seq}, sessions={sessions}, tasks={tasks}, messages={messages})"
 
 #: src/cmd/daemon.rs
@@ -83,11 +83,11 @@ msgid "已要求 daemon 關閉"
 msgstr "Asked daemon to shut down"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model`（例如 claude:opus）"
+msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)"
 msgstr "Agent kind: opencode / claude / codex / antigravity; may include `:model` (e.g. claude:opus)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "stdio MCP server 模式（供 agent 子處理程序設定為 MCP 工具）"
+msgid "stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)"
 msgstr "Run as a stdio MCP server (for agent child processes to use as an MCP tool)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -103,7 +103,7 @@ msgid "以前景方式執行 daemon"
 msgstr "Run the daemon in the foreground"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "傳輸通道：auto（預設）/ structured / pty"
+msgid "傳輸通道：auto (預設)/ structured / pty"
 msgstr "Transport: auto (default) / structured / pty"
 
 #: src/cmd/helptext/help_strings.rs
@@ -111,11 +111,11 @@ msgid "僅乾跑：不改動 repo，回報會 commit 的檔案與是否可快轉
 msgstr "Dry run only: leave the repo untouched and report the files that would be committed and whether it can fast-forward"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "允許在未走 SSH 轉發下綁定非 loopback 位址（危險：傳輸為明文，僅供專用私有網路）"
+msgid "允許在未走 SSH 轉發下綁定非 loopback 位址 (危險：傳輸為明文，僅供專用私有網路)"
 msgstr "Allow binding a non-loopback address without SSH forwarding (dangerous: traffic is plaintext; only for dedicated private networks)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "分享重要產出物（檔案、PR 連結、測試報告等）"
+msgid "分享重要產出物 (檔案、PR 連結、測試報告等)"
 msgstr "Share an important artifact (a file, PR link, test report, etc.)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -127,19 +127,19 @@ msgid "列出所有協作任務"
 msgstr "List all collaboration tasks"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "列出所有由 termade 管理的 git worktree（M3）"
+msgid "列出所有由 termade 管理的 git worktree (M3)"
 msgstr "List all git worktrees managed by termade (M3)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "包含已讀訊息（預設只顯示新進未讀）"
+msgid "包含已讀訊息 (預設只顯示新進未讀)"
 msgstr "Include messages already read (by default only new unread ones are shown)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "包含已輪替的舊紀錄檔（events.jsonl.1 等；預設只讀目前活躍檔）"
+msgid "包含已輪替的舊紀錄檔 (events.jsonl.1 等；預設只讀目前活躍檔)"
 msgstr "Include rotated old log files (events.jsonl.1 etc.; by default only the active file is read)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "印出所有說明文字（供翻譯抽取用，不會啟動 daemon）"
+msgid "印出所有說明文字 (供翻譯抽取用，不會啟動 daemon)"
 msgstr "Print all help text (for translation extraction; does not start the daemon)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -155,7 +155,7 @@ msgid "只重播序號大於此值的事件"
 msgstr "Replay only events with a sequence number greater than this value"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "同時綁定 TCP 位址供遠端連線（例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token）"
+msgid "同時綁定 TCP 位址供遠端連線 (例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token)"
 msgstr "Also bind a TCP address for remote connections (e.g. 127.0.0.1:7420; SSH forwarding is recommended; requires a token)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -163,7 +163,7 @@ msgid "同步問答：送出 question 訊息並阻塞等待對方回覆 answer"
 msgstr "Synchronous Q&A: send a question message and block until the other side replies with an answer"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "啟動 TUI（預設行為）"
+msgid "啟動 TUI (預設行為)"
 msgstr "Start the TUI (default behavior)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -175,27 +175,27 @@ msgid "喚醒已休眠的 session"
 msgstr "Wake a sleeping session"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "回覆的訊息 id（形成對話串）"
+msgid "回覆的訊息 id (形成對話串)"
 msgstr "ID of the message being replied to (forms a conversation thread)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "在獨立的 git worktree 中執行（M3）"
+msgid "在獨立的 git worktree 中執行 (M3)"
 msgstr "Run in a separate git worktree (M3)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "執行期切換 session 的 model 與／或 effort（下一個回合起生效）"
+msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生效)"
 msgstr "Switch a session's model and/or effort at runtime (takes effect from the next turn)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "寄件者 session id（預設讀 TERMADE_SESSION 環境變數）"
+msgid "寄件者 session id (預設讀 TERMADE_SESSION 環境變數)"
 msgstr "Sender session id (defaults to the TERMADE_SESSION environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "將指定 session 的 worktree 合併回主分支（M3）"
+msgid "將指定 session 的 worktree 合併回主分支 (M3)"
 msgstr "Merge the given session's worktree back into the main branch (M3)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "對指定 session 的程式碼留下審查註解並送回該 agent（M3）"
+msgid "對指定 session 的程式碼留下審查註解並送回該 agent (M3)"
 msgstr "Leave a review comment on the given session's code and send it back to that agent (M3)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -203,7 +203,7 @@ msgid "對象 session id 或標籤"
 msgstr "Target session id or label"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "工作目錄（預設為目前目錄）"
+msgid "工作目錄 (預設為目前目錄)"
 msgstr "Working directory (defaults to the current directory)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -215,7 +215,7 @@ msgid "廣播自己的最新狀態摘要"
 msgstr "Broadcast your latest status summary"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "建立新任務（M2 看板）"
+msgid "建立新任務 (M2 看板)"
 msgstr "Create a new task (M2 board)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -223,7 +223,7 @@ msgid "建立新的 agent session"
 msgstr "Create a new agent session"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "強制刪除（即使有未 commit 變更或未合併分支）"
+msgid "強制刪除 (即使有未 commit 變更或未合併分支)"
 msgstr "Force removal (even with uncommitted changes or an unmerged branch)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -231,19 +231,19 @@ msgid "強制結束 agent 子處理程序"
 msgstr "Forcibly end the agent child process"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "從檔案讀取 token（權限需為 0600 或 0400；避免 token 出現在 process list）"
+msgid "從檔案讀取 token (權限需為 0600 或 0400；避免 token 出現在 process list)"
 msgstr "Read the token from a file (permissions must be 0600 or 0400; keeps the token out of the process list)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "從清單移除已結束的 session（有 worktree 分支時需已合併，或加 --force）"
+msgid "從清單移除已結束的 session (有 worktree 分支時需已合併，或加 --force)"
 msgstr "Remove a finished session from the list (a worktree branch must be merged first, or add --force)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "把 session 的工作交接給另一個 agent（額度用完時）：沿用同一個工作目錄，附上交接簡報與 diff"
+msgid "把 session 的工作交接給另一個 agent (額度用完時)：沿用同一個工作目錄，附上交接簡報與 diff"
 msgstr "Hand a session's work off to another agent (when quota runs out): reuses the same working directory and attaches a handoff brief and diff"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "指定 events.jsonl 路徑（預設為 termade 自己的 log）"
+msgid "指定 events.jsonl 路徑 (預設為 termade 自己的 log)"
 msgstr "Path to events.jsonl (defaults to termade's own log)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -251,19 +251,19 @@ msgid "接手的 agent，可加 `:model`，例如 codex、claude:sonnet"
 msgstr "The agent taking over; may include `:model`, e.g. codex, claude:sonnet"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續（session id 不變）"
+msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)"
 msgstr "Resume a finished session: after the agent process died or the daemon restarted, continue the original conversation (the session id stays the same)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "接續後立刻送出的 prompt（可省略）"
+msgid "接續後立刻送出的 prompt (可省略)"
 msgstr "Prompt to send right after resuming (optional)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "推理強度：low / medium / high / xhigh / max（省略則依 config.toml）"
+msgid "推理強度：low / medium / high / xhigh / max (省略則依 config.toml)"
 msgstr "Reasoning effort: low / medium / high / xhigh / max (defaults to config.toml if omitted)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "收件者：session id、標籤（例如 worker/b）、或 @id / @label"
+msgid "收件者：session id、標籤 (例如 worker/b)、或 @id / @label"
 msgstr "Recipient: a session id, a label (e.g. worker/b), or @id / @label"
 
 #: src/cmd/helptext/help_strings.rs
@@ -275,19 +275,19 @@ msgid "新的 model；省略則不變"
 msgstr "New model; unchanged if omitted"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "新的成本上限（美元，例如 10）"
+msgid "新的成本上限 (美元，例如 10)"
 msgstr "New cost limit (USD, e.g. 10)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "新的推理強度（low|medium|high|xhigh|max）"
+msgid "新的推理強度 (low|medium|high|xhigh|max)"
 msgstr "New reasoning effort (low|medium|high|xhigh|max)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "明確指定 model（優先於 kind 的 `:model` 與設定檔）"
+msgid "明確指定 model (優先於 kind 的 `:model` 與設定檔)"
 msgstr "Explicitly set the model (takes precedence over the kind's `:model` and the config file)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "易讀標籤（例如 worker/backend；未指定時自動產生）"
+msgid "易讀標籤 (例如 worker/backend；未指定時自動產生)"
 msgstr "Human-readable label (e.g. worker/backend; generated automatically if omitted)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -307,27 +307,27 @@ msgid "查看目前 session 的收件匣"
 msgstr "Show the current session's inbox"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "檔案與行號位置（例如 `src/lib.rs:42`）"
+msgid "檔案與行號位置 (例如 `src/lib.rs:42`)"
 msgstr "File and line location (e.g. `src/lib.rs:42`)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "檢視指定 session 的 worktree git diff（M3）"
+msgid "檢視指定 session 的 worktree git diff (M3)"
 msgstr "Show the git diff of the given session's worktree (M3)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "權限政策：ask / auto / bypass（省略則依 config.toml，預設 auto）"
+msgid "權限政策：ask / auto / bypass (省略則依 config.toml，預設 auto)"
 msgstr "Permission policy: ask / auto / bypass (defaults to config.toml, otherwise auto)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "此 MCP server 代表的 session id（預設讀 TERMADE_SESSION 環境變數）"
+msgid "此 MCP server 代表的 session id (預設讀 TERMADE_SESSION 環境變數)"
 msgstr "Session id this MCP server acts for (defaults to the TERMADE_SESSION environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "此 session 的成本上限（美元，例如 2.50）"
+msgid "此 session 的成本上限 (美元，例如 2.50)"
 msgstr "Cost limit for this session (USD, e.g. 2.50)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "清理已結束或指定的 worktree（M3）"
+msgid "清理已結束或指定的 worktree (M3)"
 msgstr "Clean up finished or specified worktrees (M3)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -335,19 +335,19 @@ msgid "清空待送佇列"
 msgstr "Clear the pending queue"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "為指定 session 的 worktree 建立 GitHub PR（M3）"
+msgid "為指定 session 的 worktree 建立 GitHub PR (M3)"
 msgstr "Create a GitHub PR for the given session's worktree (M3)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "父 session id 或標籤（未指定時若有 TERMADE_SESSION 則自動繼承）"
+msgid "父 session id 或標籤 (未指定時若有 TERMADE_SESSION 則自動繼承)"
 msgstr "Parent session id or label (inherits TERMADE_SESSION automatically if not given)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "產生 shell 補全腳本並印到 stdout（bash / zsh / fish）"
+msgid "產生 shell 補全腳本並印到 stdout (bash / zsh / fish)"
 msgstr "Generate a shell completion script and print it to stdout (bash / zsh / fish)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "種類：code / pr / doc / test / run（預設 code）"
+msgid "種類：code / pr / doc / test / run (預設 code)"
 msgstr "Kind: code / pr / doc / test / run (default code)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -359,19 +359,19 @@ msgid "補充給接手者的說明"
 msgstr "Extra notes for the agent taking over"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "補全腳本用的查詢（不會啟動 daemon）"
+msgid "補全腳本用的查詢 (不會啟動 daemon)"
 msgstr "Query used by completion scripts (does not start the daemon)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "角色：coordinator / worker / reviewer / tester（預設 worker）"
+msgid "角色：coordinator / worker / reviewer / tester (預設 worker)"
 msgstr "Role: coordinator / worker / reviewer / tester (default worker)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "訊息種類：chat（預設）/ handoff / question / answer / status / artifact"
+msgid "訊息種類：chat (預設)/ handoff / question / answer / status / artifact"
 msgstr "Message kind: chat (default) / handoff / question / answer / status / artifact"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "設定或調高指定 session 的成本上限（美元）"
+msgid "設定或調高指定 session 的成本上限 (美元)"
 msgstr "Set or raise the given session's cost limit (USD)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -379,7 +379,7 @@ msgid "說明備註"
 msgstr "Description or notes"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "讓 session 休眠（停止處理程序但保留對話紀錄，可隨時喚醒）"
+msgid "讓 session 休眠 (停止處理程序但保留對話紀錄，可隨時喚醒)"
 msgstr "Put a session to sleep (stops the process but keeps the transcript; can be woken at any time)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -391,23 +391,23 @@ msgid "透過匯流排傳送訊息給其他 session"
 msgstr "Send a message to other sessions over the bus"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "連線遠端 daemon 位址（例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定）"
+msgid "連線遠端 daemon 位址 (例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定)"
 msgstr "Address of a remote daemon to connect to (e.g. 127.0.0.1:7420; can also be set with the TERMADE_REMOTE environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "逾時毫秒數（預設 120000 = 2 分鐘）"
+msgid "逾時毫秒數 (預設 120000 = 2 分鐘)"
 msgstr "Timeout in milliseconds (default 120000 = 2 minutes)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "逾時毫秒數（預設 60000 = 60 秒）"
+msgid "逾時毫秒數 (預設 60000 = 60 秒)"
 msgstr "Timeout in milliseconds (default 60000 = 60 seconds)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "遠端認證 token（亦可透過環境變數 TERMADE_TOKEN 設定）"
+msgid "遠端認證 token (亦可透過環境變數 TERMADE_TOKEN 設定)"
 msgstr "Remote authentication token (can also be set with the TERMADE_TOKEN environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "遠端連線認證用的 token（未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發）"
+msgid "遠端連線認證用的 token (未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發)"
 msgstr "Token for remote authentication (falls back to the TERMADE_TOKEN environment variable; use together with SSH forwarding for safety)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -423,23 +423,23 @@ msgid "阻塞等待下一則發給自己的訊息"
 msgstr "Block until the next message addressed to you arrives"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "附加檔案或圖片到初始 prompt（可重複）"
-msgstr "Attach files or images to the initial prompt (repeatable)"
+msgid "附加檔案或圖片 (可重複)"
+msgstr "Attach files or images (repeatable)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "附加檔案或圖片（可重複）"
-msgstr "Attach files or images (repeatable)"
+msgid "附加檔案或圖片到初始 prompt (可重複)"
+msgstr "Attach files or images to the initial prompt (repeatable)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "附加給底層 agent 的命令列參數"
 msgstr "Extra command-line arguments for the underlying agent"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "頻道名稱（例如 backend；會廣播給所有同角色或訂閱者）"
+msgid "頻道名稱 (例如 backend；會廣播給所有同角色或訂閱者)"
 msgstr "Channel name (e.g. backend; broadcast to everyone with the same role or subscribed)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "顯示各 agent 帳號的額度（5 小時／7 天視窗與重置時間）"
+msgid "顯示各 agent 帳號的額度 (5 小時／7 天視窗與重置時間)"
 msgstr "Show each agent account's quota (5-hour / 7-day windows and reset times)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -455,15 +455,15 @@ msgid "(沒有 session)"
 msgstr "(no sessions)"
 
 #: src/cmd/session.rs crates/termade-tui/src/commands.rs
-msgid "未知的 agent：{kind_str}（opencode/claude/codex/antigravity）"
+msgid "未知的 agent：{kind_str} (opencode/claude/codex/antigravity)"
 msgstr "Unknown agent: {kind_str} (opencode/claude/codex/antigravity)"
 
 #: src/cmd/session.rs
-msgid "未知的 transport：{other}（auto/structured/acp/pty）"
+msgid "未知的 transport：{other} (auto/structured/acp/pty)"
 msgstr "Unknown transport: {other} (auto/structured/acp/pty)"
 
 #: src/cmd/session.rs
-msgid "未知的權限政策：{p}（ask/auto/bypass）"
+msgid "未知的權限政策：{p} (ask/auto/bypass)"
 msgstr "Unknown permission policy: {p} (ask/auto/bypass)"
 
 #: src/cmd/session.rs
@@ -520,11 +520,11 @@ msgid "(沒有任務)"
 msgstr "(no tasks)"
 
 #: src/cmd/task.rs
-msgid "  （等待 {list}）"
+msgid "  (等待 {list})"
 msgstr "  (waiting for {list})"
 
 #: src/cmd/task.rs
-msgid "未知的狀態：{s}（todo/doing/done/blocked）"
+msgid "未知的狀態：{s} (todo/doing/done/blocked)"
 msgstr "Unknown status: {s} (todo/doing/done/blocked)"
 
 #: src/cmd/worktree.rs
@@ -552,7 +552,7 @@ msgid "請指定 --session <id> 或設定環境變數 TERMADE_SESSION"
 msgstr "Specify --session <id> or set the TERMADE_SESSION environment variable"
 
 #: src/cmd/mod.rs
-msgid "無法連線 daemon（先執行 `termade daemon` 或用 `termade` 啟動）"
+msgid "無法連線 daemon (先執行 `termade daemon` 或用 `termade` 啟動)"
 msgstr "Cannot connect to daemon (run `termade daemon` first, or start with `termade`)"
 
 #: crates/termade-adapter/src/acp.rs crates/termade-adapter/src/codex.rs
@@ -576,7 +576,7 @@ msgid "設定 {what} `{value}` 失敗"
 msgstr "Failed to set {what} `{value}`"
 
 #: crates/termade-adapter/src/acp.rs
-msgid "此 agent 沒有回報可選的 model（configOptions 無 model 項）"
+msgid "此 agent 沒有回報可選的 model (configOptions 無 model 項)"
 msgstr "This agent did not report any selectable model (no model entry in configOptions)"
 
 #: crates/termade-adapter/src/acp.rs
@@ -584,7 +584,7 @@ msgid "未知的 model `{wanted}`；可用：{list}"
 msgstr "Unknown model `{wanted}`; available: {list}"
 
 #: crates/termade-adapter/src/acp.rs
-msgid "此 agent 沒有回報可設定的 effort（configOptions 無相關項）"
+msgid "此 agent 沒有回報可設定的 effort (configOptions 無相關項)"
 msgstr "This agent did not report a configurable effort (no related entry in configOptions)"
 
 #: crates/termade-adapter/src/acp.rs
@@ -638,7 +638,7 @@ msgid "claude 錯誤：{detail}"
 msgstr "claude error: {detail}"
 
 #: crates/termade-adapter/src/claude.rs
-msgid "claude adapter 尚未支援逐項核准（請用 --permission auto/bypass）"
+msgid "claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)"
 msgstr "The claude adapter does not support per-action approval yet (use --permission auto/bypass)"
 
 #: crates/termade-adapter/src/claude.rs
@@ -658,7 +658,7 @@ msgid "codex 錯誤：{text}"
 msgstr "codex error: {text}"
 
 #: crates/termade-adapter/src/codex.rs
-msgid "（請執行 `codex login`）"
+msgid "(請執行 `codex login`)"
 msgstr " (run `codex login`)"
 
 #: crates/termade-adapter/src/codex.rs
@@ -750,7 +750,7 @@ msgid "{kind} 沒有原生結構化協定，無法接續對話"
 msgstr "{kind} has no native structured protocol; cannot resume the conversation"
 
 #: crates/termade-adapter/src/lib.rs
-msgid "{kind} 尚不支援以結構化模式指定 model（{m}）；請改用 --transport pty 並以參數傳入"
+msgid "{kind} 尚不支援以結構化模式指定 model ({m})；請改用 --transport pty 並以參數傳入"
 msgstr "{kind} does not support choosing a model in structured mode yet ({m}); use --transport pty and pass it as an argument"
 
 #: crates/termade-adapter/src/lib.rs
@@ -770,7 +770,7 @@ msgid "自訂 agent 沒有原生結構化協定，請用 --transport pty"
 msgstr "Custom agents have no native structured protocol; use --transport pty"
 
 #: crates/termade-core/src/lib.rs
-msgid "額度用完：{d}（可用 handoff 交接）"
+msgid "額度用完：{d} (可用 handoff 交接)"
 msgstr "Quota exhausted: {d} (use handoff to hand off)"
 
 #: crates/termade-core/src/lib.rs
@@ -802,7 +802,7 @@ msgid "{path} 不是檔案"
 msgstr "{path} is not a file"
 
 #: crates/termade-core/src/lib.rs
-msgid "圖片 {name} 太大（{size} KB，上限 {max} KB）"
+msgid "圖片 {name} 太大 ({size} KB，上限 {max} KB)"
 msgstr "Image {name} is too large ({size} KB, limit {max} KB)"
 
 #: crates/termade-core/src/lib.rs
@@ -818,7 +818,7 @@ msgid "迴圈偵測：{from} → {to_key} 連續傳送相同內容超過 {cap} �
 msgstr "Loop detected: {from} → {to_key} sent identical content more than {cap} times in a row; circuit broken"
 
 #: crates/termade-daemon/src/bus.rs
-msgid "已送出訊息 {msg_id}（收件者已超過成本上限 over_budget，拒絕自動喚醒）"
+msgid "已送出訊息 {msg_id} (收件者已超過成本上限 over_budget，拒絕自動喚醒)"
 msgstr "Message {msg_id} sent (recipient is over_budget, so it will not be woken automatically)"
 
 #: crates/termade-daemon/src/bus.rs
@@ -827,11 +827,11 @@ msgstr "Message {msg_id} sent"
 
 #: crates/termade-daemon/src/bus.rs
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "（{n}）"
+msgid "({n})"
 msgstr " ({n})"
 
 #: crates/termade-daemon/src/bus.rs
-msgid "收件者 {t} 已交接，訊息改投給接手的 {succ_label}（{succ}）"
+msgid "收件者 {t} 已交接，訊息改投給接手的 {succ_label} ({succ})"
 msgstr "Recipient {t} was handed off; message redirected to its successor {succ_label} ({succ})"
 
 #: crates/termade-daemon/src/bus.rs
@@ -839,11 +839,11 @@ msgid "對方 {sid} 已結束，訊息不會被讀取"
 msgstr "{sid} has ended; the message will not be read"
 
 #: crates/termade-daemon/src/client.rs
-msgid "無法連線遠端 daemon（{remote}）"
+msgid "無法連線遠端 daemon ({remote})"
 msgstr "Cannot connect to remote daemon ({remote})"
 
 #: crates/termade-daemon/src/client.rs
-msgid "無法連線 daemon（{path}）"
+msgid "無法連線 daemon ({path})"
 msgstr "Cannot connect to daemon ({path})"
 
 #: crates/termade-daemon/src/client.rs
@@ -863,7 +863,7 @@ msgid "無法啟動 daemon"
 msgstr "Cannot start daemon"
 
 #: crates/termade-daemon/src/client.rs
-msgid "daemon 異常退出（{status}）"
+msgid "daemon 異常退出 ({status})"
 msgstr "The daemon exited unexpectedly ({status})"
 
 #: crates/termade-daemon/src/client.rs
@@ -871,7 +871,7 @@ msgid "daemon 啟動失敗：{detail}"
 msgstr "Failed to start daemon: {detail}"
 
 #: crates/termade-daemon/src/client.rs
-msgid "daemon 啟動逾時（{path}）"
+msgid "daemon 啟動逾時 ({path})"
 msgstr "Timed out starting daemon ({path})"
 
 #: crates/termade-daemon/src/config.rs
@@ -879,7 +879,7 @@ msgid "effort {effort} 高於免確認上限 {max}"
 msgstr "effort {effort} is above the no-confirmation limit {max}"
 
 #: crates/termade-daemon/src/config.rs
-msgid "model {m} 不在免確認清單（{list}）"
+msgid "model {m} 不在免確認清單 ({list})"
 msgstr "model {m} is not in the no-confirmation list ({list})"
 
 #: crates/termade-daemon/src/config.rs
@@ -931,7 +931,7 @@ msgid "{repo} 不是 git repo"
 msgstr "{repo} is not a git repo"
 
 #: crates/termade-daemon/src/git.rs
-msgid "主工作區正在合併、rebase 中（{marker}），請先處理完畢"
+msgid "主工作區正在合併、rebase 中 ({marker})，請先處理完畢"
 msgstr "The main worktree is in the middle of a merge or rebase ({marker}); finish it first"
 
 #: crates/termade-daemon/src/git.rs
@@ -951,11 +951,11 @@ msgid "無未提交變更"
 msgstr "no uncommitted changes"
 
 #: crates/termade-daemon/src/git.rs
-msgid "待提交檔案（{count}）：{files}"
+msgid "待提交檔案 ({count})：{files}"
 msgstr "pending files ({count}): {files}"
 
 #: crates/termade-daemon/src/git.rs
-msgid "[dry-run] 合併 {branch}（{label}）至 {target}：{ff_desc}，{pending_desc}"
+msgid "[dry-run] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
 msgstr "[dry-run] Merge {branch} ({label}) into {target}: {ff_desc}, {pending_desc}"
 
 #: crates/termade-daemon/src/git.rs
@@ -967,7 +967,7 @@ msgid "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{f
 msgstr "Merging {branch} into {target} hit conflicts and was rolled back. Conflicting files: {files}"
 
 #: crates/termade-daemon/src/git.rs
-msgid "已將 {branch}（{label}）合併進 {target}"
+msgid "已將 {branch} ({label})合併進 {target}"
 msgstr "Merged {branch} ({label}) into {target}"
 
 #: crates/termade-daemon/src/git.rs
@@ -1022,11 +1022,11 @@ msgid "建立子 agent"
 msgstr "Create sub-agent"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "使用者拒絕（或逾時未回應）建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
+msgid "使用者拒絕 (或逾時未回應)建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
 msgstr "The user denied (or did not respond in time to) creating this session; use a cheaper model / lower effort, or ask the user to create it themselves"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "{reasons}（agent_spawn.confirm = never）"
+msgid "{reasons} (agent_spawn.confirm = never)"
 msgstr "{reasons} (agent_spawn.confirm = never)"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1034,23 +1034,23 @@ msgid "effort 已調降為 {max}"
 msgstr "effort lowered to {max}"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "超過子 agent 層數上限 max_depth：目前第 {depth} 層（上限 {max_depth}）"
+msgid "超過子 agent 層數上限 max_depth：目前第 {depth} 層 (上限 {max_depth})"
 msgstr "Sub-agent depth limit max_depth exceeded: now at level {depth} (limit {max_depth})"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中（上限 {max_children}）"
+msgid "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中 (上限 {max_children})"
 msgstr "Direct sub-agent limit max_children reached: {live_children} running (limit {max_children})"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "已達整棵樹成本上限 tree_usd：目前已花費 ${spent}（上限 ${limit}）"
+msgid "已達整棵樹成本上限 tree_usd：目前已花費 ${spent} (上限 ${limit})"
 msgstr "Tree cost limit tree_usd reached: spent ${spent} (limit ${limit})"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "父 session {label} 已達成本上限 session_usd（over_budget），無法產生子 agent"
+msgid "父 session {label} 已達成本上限 session_usd (over_budget)，無法產生子 agent"
 msgstr "Parent session {label} reached its cost limit session_usd (over_budget); cannot spawn a sub-agent"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "父 session {label} 剩餘預算 session_usd 為 $0.00（已花費 ${spent} / 上限 ${limit}），無法產生子 agent"
+msgid "父 session {label} 剩餘預算 session_usd 為 $0.00 (已花費 ${spent} / 上限 ${limit})，無法產生子 agent"
 msgstr "Parent session {label} has $0.00 of session_usd budget left (spent ${spent} / limit ${limit}); cannot spawn a sub-agent"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1062,11 +1062,11 @@ msgid "已建立 session {id}"
 msgstr "Created session {id}"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "（權限由 {from} 調降為 {to}：不得高於父 session／設定上限）"
+msgid "(權限由 {from} 調降為 {to}：不得高於父 session／設定上限)"
 msgstr " (permission lowered from {from} to {to}: cannot exceed the parent session / configured limit)"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "（依 agent_spawn.worktree 使用獨立 worktree）"
+msgid "(依 agent_spawn.worktree 使用獨立 worktree)"
 msgstr " (using a dedicated worktree per agent_spawn.worktree)"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1078,7 +1078,7 @@ msgid "{label} 仍在執行，不需要接續"
 msgstr "{label} is still running; no need to resume"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "{label} 沒有可接續的對話 id（PTY、舊版 log，或 agent 還沒回報就結束了）；請改用交接（handoff）"
+msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 還沒回報就結束了)；請改用交接 (handoff)"
 msgstr "{label} has no conversation id to resume (PTY, old log, or the agent exited before reporting one); use handoff instead"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1098,7 +1098,7 @@ msgid "接續 {label} 失敗：{e}"
 msgstr "Failed to resume {label}: {e}"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "{session} 已結束；可用 :resume（或 `termade resume`）接續原對話"
+msgid "{session} 已結束；可用 :resume (或 `termade resume`)接續原對話"
 msgstr "{session} has ended; use :resume (or `termade resume`) to continue the conversation"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1106,16 +1106,16 @@ msgid "{session} 已結束，且沒有可接續的對話 id"
 msgstr "{session} has ended and has no conversation id to resume"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "session {label} 已超過成本上限（over_budget）；請先用 `termade budget {label} <金額>` 或 TUI `:budget <金額>` 調高上限"
+msgid "session {label} 已超過成本上限 (over_budget)；請先用 `termade budget {label} <金額>` 或 TUI `:budget <金額>` 調高上限"
 msgstr "session {label} is over its cost limit (over_budget); raise the limit first with `termade budget {label} <amount>` or TUI `:budget <amount>`"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "排隊已滿（上限 {max} 則）"
+msgid "排隊已滿 (上限 {max} 則)"
 msgstr "Queue is full (limit {max})"
 
 #: crates/termade-daemon/src/handlers/session.rs
 #: crates/termade-tui/src/commands.rs
-msgid "已排隊（共 {n} 則，閒下來自動送出）"
+msgid "已排隊 (共 {n} 則，閒下來自動送出)"
 msgstr "Queued ({n} total, sent automatically when idle)"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1135,7 +1135,7 @@ msgid "預算上限必須為大於 0 的數字"
 msgstr "The budget limit must be a number greater than 0"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "新的上限（${budget}）必須高於目前已花費金額（${spent}）"
+msgid "新的上限 (${budget})必須高於目前已花費金額 (${spent})"
 msgstr "The new limit (${budget}) must be higher than the amount spent so far (${spent})"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1143,7 +1143,7 @@ msgid "已將 {label} 的預算上限設為 ${budget}"
 msgstr "Set the budget limit of {label} to ${budget}"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "session 仍在執行，請先結束（kill）"
+msgid "session 仍在執行，請先結束 (kill)"
 msgstr "The session is still running; kill it first"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1151,11 +1151,11 @@ msgid "worktree 仍被 {user} 使用，不能移除"
 msgstr "The worktree is still in use by {user}; cannot remove"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "已移除 {label}（worktree 仍由 {sharers} 參照，保留）"
+msgid "已移除 {label} (worktree 仍由 {sharers} 參照，保留)"
 msgstr "Removed {label} (worktree kept: still referenced by {sharers})"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "{label}（{reason}）：請先 merge，或用 force 強制移除"
+msgid "{label} ({reason})：請先 merge，或用 force 強制移除"
 msgstr "{label} ({reason}): merge first, or use force to remove anyway"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1171,7 +1171,7 @@ msgid "請指定 model 或 effort"
 msgstr "Specify a model or effort"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "{sid} 已切換 {parts}（下一個回合起生效）"
+msgid "{sid} 已切換 {parts} (下一個回合起生效)"
 msgstr "{sid} switched {parts} (takes effect from the next turn)"
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1212,7 +1212,7 @@ msgstr "Created task {id}"
 
 #. 還在等前置任務：先不通知負責人，等相依性完成再由 `unblock_dependents` 送。
 #: crates/termade-daemon/src/handlers/task.rs
-msgid "已建立任務 {id} （blocked：等待 {waiting} 完成後自動解鎖並通知負責人）"
+msgid "已建立任務 {id} (blocked：等待 {waiting} 完成後自動解鎖並通知負責人)"
 msgstr "Created task {id} (blocked: waiting for {waiting}; it will unblock automatically and notify the assignee)"
 
 #: crates/termade-daemon/src/handlers/task.rs
@@ -1240,15 +1240,15 @@ msgid "建立 PR 失敗：{e}"
 msgstr "Failed to create PR: {e}"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
-msgid "{label}（worktree 仍被 {user} 使用）"
+msgid "{label} (worktree 仍被 {user} 使用)"
 msgstr "{label} (worktree still in use by {user})"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
-msgid "{label}（{reason}）"
+msgid "{label} ({reason})"
 msgstr "{label} ({reason})"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
-msgid "{label}（移除失敗：{e}）"
+msgid "{label} (移除失敗：{e})"
 msgstr "{label} (removal failed: {e})"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
@@ -1256,7 +1256,7 @@ msgid "已清理 {removed} 個 worktree"
 msgstr "Cleaned up {removed} worktree(s)"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
-msgid "；略過 {count} 個：{list}（可用 --force 強制移除）"
+msgid "；略過 {count} 個：{list} (可用 --force 強制移除)"
 msgstr "; skipped {count}: {list} (use --force to remove anyway)"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
@@ -1272,11 +1272,11 @@ msgid "daemon 關閉中"
 msgstr "daemon shutting down"
 
 #: crates/termade-daemon/src/quota_watch.rs
-msgid "token 用量已達 {used}/{limit}（{pct}%），接近上限"
+msgid "token 用量已達 {used}/{limit} ({pct}%)，接近上限"
 msgstr "token usage reached {used}/{limit} ({pct}%), nearing the limit"
 
 #: crates/termade-daemon/src/quota_watch.rs
-msgid "成本已達 ${spent}/{limit}（{pct}%），接近上限"
+msgid "成本已達 ${spent}/{limit} ({pct}%)，接近上限"
 msgstr "Cost reached ${spent}/{limit} ({pct}%), nearing the limit"
 
 #: crates/termade-daemon/src/quota_watch.rs
@@ -1316,7 +1316,7 @@ msgid "token 檔 {path} 是空的"
 msgstr "Token file {path} is empty"
 
 #: crates/termade-daemon/src/server.rs
-msgid "警告：--token 已棄用（會出現在 ps 輸出）；請改用 TERMADE_TOKEN 或 --token-file"
+msgid "警告：--token 已棄用 (會出現在 ps 輸出)；請改用 TERMADE_TOKEN 或 --token-file"
 msgstr "Warning: --token is deprecated (it shows up in ps output); use TERMADE_TOKEN or --token-file instead"
 
 #: crates/termade-daemon/src/server.rs
@@ -1340,7 +1340,7 @@ msgid "{dir} 不是目錄"
 msgstr "{dir} is not a directory"
 
 #: crates/termade-daemon/src/server.rs
-msgid "{dir} 不屬於目前使用者（uid {uid}），拒絕啟動"
+msgid "{dir} 不屬於目前使用者 (uid {uid})，拒絕啟動"
 msgstr "{dir} is not owned by the current user (uid {uid}); refusing to start"
 
 #: crates/termade-daemon/src/server.rs
@@ -1352,7 +1352,7 @@ msgid "建立 {dir} 失敗"
 msgstr "Failed to create {dir}"
 
 #: crates/termade-daemon/src/server.rs
-msgid "已有 daemon 在執行（{sock}）；請直接連線，或先 `termade shutdown`"
+msgid "已有 daemon 在執行 ({sock})；請直接連線，或先 `termade shutdown`"
 msgstr "A daemon is already running ({sock}); connect to it directly, or run `termade shutdown` first"
 
 #: crates/termade-daemon/src/server.rs
@@ -1388,23 +1388,23 @@ msgid "版面：{layout}"
 msgstr "Layout: {layout}"
 
 #: crates/termade-tui/src/app.rs
-msgid "▸ 工具 ×{calls}（✓{ok}）· 最後：{last}"
+msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr "▸ Tools ×{calls} (✓{ok}) · last: {last}"
 
 #: crates/termade-tui/src/app.rs
-msgid "工具：展開（每筆呼叫都顯示，按 O 摺疊）"
+msgid "工具：展開 (每筆呼叫都顯示，按 O 摺疊)"
 msgstr "Tools: expanded (every call shown, O to collapse)"
 
 #: crates/termade-tui/src/app.rs
-msgid "工具：摺疊（連續呼叫合成一行，按 O 展開）"
+msgid "工具：摺疊 (連續呼叫合成一行，按 O 展開)"
 msgstr "Tools: collapsed (consecutive calls on one line, O to expand)"
 
 #: crates/termade-tui/src/app.rs
-msgid "思考顯示：開（顯示 💭 行）"
+msgid "思考顯示：開 (顯示 💭 行)"
 msgstr "Thinking: shown (💭 lines visible)"
 
 #: crates/termade-tui/src/app.rs
-msgid "思考顯示：關（已隱藏 💭 行，按 T 顯示）"
+msgid "思考顯示：關 (已隱藏 💭 行，按 T 顯示)"
 msgstr "Thinking: hidden (💭 lines hidden, T to show)"
 
 #: crates/termade-tui/src/app.rs crates/termade-tui/src/input.rs
@@ -1412,11 +1412,11 @@ msgid "逐字稿：跟隨最新"
 msgstr "Transcript: following latest"
 
 #: crates/termade-tui/src/app.rs
-msgid "逐字稿：第 {next} 行（End 回到最新）"
+msgid "逐字稿：第 {next} 行 (End 回到最新)"
 msgstr "Transcript: line {next} (End to jump to latest)"
 
 #: crates/termade-tui/src/app.rs
-msgid "只顯示本專案的 session（{project}），P 顯示全部"
+msgid "只顯示本專案的 session ({project})，P 顯示全部"
 msgstr "Showing sessions of this project only ({project}), P to show all"
 
 #: crates/termade-tui/src/app.rs
@@ -1428,7 +1428,7 @@ msgid "寫入暫存圖片失敗：{e}"
 msgstr "Failed to write temporary image: {e}"
 
 #: crates/termade-tui/src/attach.rs
-msgid "剪貼簿裡沒有圖片（需要 wl-paste 或 xclip）"
+msgid "剪貼簿裡沒有圖片 (需要 wl-paste 或 xclip)"
 msgstr "No image in clipboard (requires wl-paste or xclip)"
 
 #: crates/termade-tui/src/clipboard.rs
@@ -1436,7 +1436,7 @@ msgid "沒有可複製的內容"
 msgstr "Nothing to copy"
 
 #: crates/termade-tui/src/clipboard.rs
-msgid "已複製主要區塊 {lines} 行（OSC 52；失敗時可用 Shift+拖曳選取）"
+msgid "已複製主要區塊 {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
 msgstr "Copied {lines} lines of the main pane (OSC 52; if it fails, Shift+drag to select)"
 
 #: crates/termade-tui/src/clipboard.rs crates/termade-tui/src/mouse.rs
@@ -1452,7 +1452,7 @@ msgid "附件錯誤：{e}"
 msgstr "Attachment error: {e}"
 
 #: crates/termade-tui/src/commands.rs
-msgid "已送出 prompt（含 {n} 個附件）"
+msgid "已送出 prompt (含 {n} 個附件)"
 msgstr "Prompt sent (with {n} attachments)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1468,11 +1468,11 @@ msgid "已超過成本上限，先用 :budget <金額> 調高"
 msgstr "Cost limit exceeded; raise it with :budget <amount> first"
 
 #: crates/termade-tui/src/commands.rs
-msgid "已送出 prompt（含 {n_att} 個附件）"
+msgid "已送出 prompt (含 {n_att} 個附件)"
 msgstr "Prompt sent (with {n_att} attachments)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "排隊為空（:queue <文字> 排入，或在輸入框按 Alt-Enter）"
+msgid "排隊為空 (:queue <文字> 排入，或在輸入框按 Alt-Enter)"
 msgstr "Queue is empty (:queue <text> to add, or Alt-Enter in the input box)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1508,7 +1508,7 @@ msgid "顯示各 agent 帳號的額度與重置時間"
 msgstr "Show quota and reset time for each agent account"
 
 #: crates/termade-tui/src/commands.rs
-msgid "<金額>  設定或調高選取 session 的成本上限（美元）"
+msgid "<金額>  設定或調高選取 session 的成本上限 (美元)"
 msgstr "<amount>  Set or raise the cost limit of the selected session (USD)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1516,11 +1516,11 @@ msgid "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 a
 msgstr "[agent[:model]] [note]  Hand off the selected session's work to another agent"
 
 #: crates/termade-tui/src/commands.rs
-msgid "[prompt]  接續選取的已結束 session（接回原對話，session 不變）"
+msgid "[prompt]  接續選取的已結束 session (接回原對話，session 不變)"
 msgstr "[prompt]  Resume the selected ended session (same conversation, same session)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "[名稱]  切換選取 session 的 model（下一回合起生效）；不帶參數列出目前與可選項"
+msgid "[名稱]  切換選取 session 的 model (下一回合起生效)；不帶參數列出目前與可選項"
 msgstr "[name]  Switch the selected session's model (from the next turn); without arguments lists current and available"
 
 #: crates/termade-tui/src/commands.rs
@@ -1532,7 +1532,7 @@ msgid "開啟設定面板：用清單切換預設 model、effort、權限、agen
 msgstr "Open the settings panel: default model, effort, permission, and agent spawn guardrails"
 
 #: crates/termade-tui/src/commands.rs
-msgid "不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml（空值＝刪除）"
+msgid "不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml (空值＝刪除)"
 msgstr "Without arguments opens settings; [--repo] <agent|permission|model|effort> <value>  writes config.toml directly (empty = delete)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1556,7 +1556,7 @@ msgid "[session] [--force]  移除已結束的 session"
 msgstr "[session] [--force]  Remove an ended session"
 
 #: crates/termade-tui/src/commands.rs
-msgid "清除所有已結束（且沒有分支）的 session"
+msgid "清除所有已結束 (且沒有分支)的 session"
 msgstr "Remove all ended sessions (without branches)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1580,7 +1580,7 @@ msgid "回到 transcript 視圖"
 msgstr "Back to the transcript view"
 
 #: crates/termade-tui/src/commands.rs
-msgid "[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容（同 f）"
+msgid "[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容 (同 f)"
 msgstr "[text]  Search the visible transcript or diff (same as f)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1604,7 +1604,7 @@ msgid "[here|all]  只看本專案／顯示全部專案的 session"
 msgstr "[here|all]  Show sessions of this project only / all projects"
 
 #: crates/termade-tui/src/commands.rs
-msgid "[on|off|test]  開關通知（回合結束／等待核准／失敗／額度用完）；不帶參數顯示狀態"
+msgid "[on|off|test]  開關通知 (回合結束／等待核准／失敗／額度用完)；不帶參數顯示狀態"
 msgstr "[on|off|test]  Toggle notifications (turn done / awaiting approval / failed / quota exhausted); without arguments shows status"
 
 #: crates/termade-tui/src/commands.rs
@@ -1640,23 +1640,23 @@ msgid "複製目前畫面內容"
 msgstr "Copy the current screen"
 
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
-msgid "離開（保留 daemon）"
+msgid "離開 (保留 daemon)"
 msgstr "Quit (keep the daemon running)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "結束本專案所有執行中的 session（不動 daemon 與其他專案）"
+msgid "結束本專案所有執行中的 session (不動 daemon 與其他專案)"
 msgstr "Stop all running sessions of this project (daemon and other projects untouched)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "關閉共用 daemon（結束所有專案的 session）並離開；有 session 在跑時需 :shutdown! 確認"
+msgid "關閉共用 daemon (結束所有專案的 session)並離開；有 session 在跑時需 :shutdown! 確認"
 msgstr "Shut down the shared daemon (ending sessions of all projects) and quit; requires :shutdown! while sessions are running"
 
 #: crates/termade-tui/src/commands.rs
-msgid "尚無額度資料（agent 執行過一個回合後才會有）"
+msgid "尚無額度資料 (agent 執行過一個回合後才會有)"
 msgstr "No quota data yet (available after an agent completes a turn)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "用法：:budget <金額>（或 :budget <session> <金額>）"
+msgid "用法：:budget <金額> (或 :budget <session> <金額>)"
 msgstr "Usage: :budget <amount> (or :budget <session> <amount>)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1728,7 +1728,7 @@ msgid "用法：/layout three|two|tabs"
 msgstr "Usage: /layout three|two|tabs"
 
 #: crates/termade-tui/src/commands.rs
-msgid "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session（其他專案 {others} 個）。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit"
+msgid "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session (其他專案 {others} 個)。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit"
 msgstr "shutdown stops the shared daemon and ends {n} running sessions ({others} in other projects). Type :shutdown! to confirm; use :stop to end only this project, or :quit to just leave the TUI"
 
 #: crates/termade-tui/src/commands.rs
@@ -1736,11 +1736,11 @@ msgid "已要求結束本專案 {n} 個執行中的 session"
 msgstr "Requested stop of {n} running sessions in this project"
 
 #: crates/termade-tui/src/commands.rs
-msgid "未知的命令：/{verb}（沒有選取的 session 可轉發）"
+msgid "未知的命令：/{verb} (沒有選取的 session 可轉發)"
 msgstr "Unknown command: /{verb} (no selected session to forward it to)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "已轉發 /{verb} 給 agent（它沒有回報這個指令，可能被當成一般文字）"
+msgid "已轉發 /{verb} 給 agent (它沒有回報這個指令，可能被當成一般文字)"
 msgstr "Forwarded /{verb} to the agent (it did not report this command; it may be treated as plain text)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1748,7 +1748,7 @@ msgid "已轉發原生指令 /{verb} 給 agent"
 msgstr "Forwarded native command /{verb} to the agent"
 
 #: crates/termade-tui/src/commands.rs
-msgid "（agent 原生指令，原樣轉發）"
+msgid "(agent 原生指令，原樣轉發)"
 msgstr "(agent native command, forwarded as is)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1788,11 +1788,11 @@ msgid "model：{current}　可選：{choices}"
 msgstr "model: {current}  available: {choices}"
 
 #: crates/termade-tui/src/commands.rs
-msgid "（未回報）"
+msgid "(未回報)"
 msgstr "(not reported)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "（用 :model <名稱> 直接指定）"
+msgid "(用 :model <名稱> 直接指定)"
 msgstr "(use :model <name> to set it directly)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1800,15 +1800,15 @@ msgid "effort：{current}　可選：{choices}"
 msgstr "effort: {current}  available: {choices}"
 
 #: crates/termade-tui/src/commands.rs
-msgid "（預設）"
+msgid "(預設)"
 msgstr "(default)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "切換 {verb} → {value}（下一回合起生效）"
+msgid "切換 {verb} → {value} (下一回合起生效)"
 msgstr "Switching {verb} → {value} (from the next turn)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "預設：agent={agent} permission={permission} model={model} effort={effort}（{target}）"
+msgid "預設：agent={agent} permission={permission} model={model} effort={effort} ({target})"
 msgstr "Defaults: agent={agent} permission={permission} model={model} effort={effort} ({target})"
 
 #: crates/termade-tui/src/commands.rs
@@ -1828,11 +1828,11 @@ msgid "可設定：agent、permission、model、effort"
 msgstr "Settable keys: agent, permission, model, effort"
 
 #: crates/termade-tui/src/commands.rs
-msgid "已移除 {key} 預設（{path}）"
+msgid "已移除 {key} 預設 ({path})"
 msgstr "Removed default {key} ({path})"
 
 #: crates/termade-tui/src/commands.rs
-msgid "已將預設 {key} 設為 {value}（{path}），新建立的 session 起生效"
+msgid "已將預設 {key} 設為 {value} ({path})，新建立的 session 起生效"
 msgstr "Set default {key} to {value} ({path}); applies to new sessions"
 
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/settings.rs
@@ -1848,7 +1848,7 @@ msgid "預設的 agent"
 msgstr "Default agent"
 
 #: crates/termade-tui/src/commands.rs
-msgid "預設權限（ask／auto／bypass）"
+msgid "預設權限 (ask／auto／bypass)"
 msgstr "Default permission (ask/auto/bypass)"
 
 #: crates/termade-tui/src/commands.rs
@@ -1880,23 +1880,23 @@ msgid "沒有更多 hunk"
 msgstr "No more hunks"
 
 #: crates/termade-tui/src/draw.rs
-msgid " 命令（Tab 補全） "
+msgid " 命令 (Tab 補全) "
 msgstr " Commands (Tab to complete) "
 
 #: crates/termade-tui/src/draw.rs
-msgid " 專案檔案（Tab 採用） "
+msgid " 專案檔案 (Tab 採用) "
 msgstr " Project files (Tab to accept) "
 
 #: crates/termade-tui/src/draw.rs
-msgid " 說明（Esc 關閉） "
+msgid " 說明 (Esc 關閉) "
 msgstr " Help (Esc to close) "
 
 #: crates/termade-tui/src/draw.rs
-msgid " ↑↓ 選項目 · Enter 開清單選擇（開關直接切換）· ←→ 輪替 · Esc 關閉　變更立即儲存"
+msgid " ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"
 msgstr " ↑↓ select · Enter choose (toggles flip) · ←→ cycle · Esc close  Saved instantly"
 
 #: crates/termade-tui/src/draw.rs
-msgid " 設定（寫入全域 config.toml） "
+msgid " 設定 (寫入全域 config.toml) "
 msgstr " Settings (written to global config.toml) "
 
 #: crates/termade-tui/src/draw.rs
@@ -1904,7 +1904,7 @@ msgid " 過濾："
 msgstr " Filter: "
 
 #: crates/termade-tui/src/draw.rs
-msgid " （沒有符合的項目）"
+msgid " (沒有符合的項目)"
 msgstr " (no matches)"
 
 #: crates/termade-tui/src/draw.rs
@@ -1912,7 +1912,7 @@ msgid " {item}{loading} · Enter 選定 · Esc 返回 "
 msgstr " {item}{loading} · Enter select · Esc back "
 
 #: crates/termade-tui/src/draw.rs
-msgid "（載入中…）"
+msgid "(載入中…)"
 msgstr " (loading…)"
 
 #: crates/termade-tui/src/draw.rs
@@ -1920,7 +1920,7 @@ msgid "  載入可用 model 中…"
 msgstr "  Loading available models…"
 
 #: crates/termade-tui/src/draw.rs
-msgid "（沒有選項）"
+msgid "(沒有選項)"
 msgstr "(no options)"
 
 #: crates/termade-tui/src/draw.rs
@@ -1940,7 +1940,7 @@ msgid "⏸ {label} 要求 {title}：{detail}{more} {keys}"
 msgstr "⏸ {label} requests {title}: {detail}{more} {keys}"
 
 #: crates/termade-tui/src/draw.rs
-msgid " （尚無 session，按 n 建立）"
+msgid " (尚無 session，按 n 建立)"
 msgstr " (no sessions yet, press n to create one)"
 
 #: crates/termade-tui/src/draw.rs
@@ -1968,7 +1968,7 @@ msgid " Sessions · 本專案 "
 msgstr " Sessions · this project "
 
 #: crates/termade-tui/src/draw.rs
-msgid " Sessions · 本專案（另 {n} 個在別處，P 顯示） "
+msgid " Sessions · 本專案 (另 {n} 個在別處，P 顯示) "
 msgstr " Sessions · this project ({n} more elsewhere, P to show) "
 
 #: crates/termade-tui/src/draw.rs
@@ -2012,7 +2012,7 @@ msgid "agent 之間的訊息與任務看板會出現在這裡。"
 msgstr "Messages between agents and the task board appear here."
 
 #: crates/termade-tui/src/draw.rs
-msgid " 輸入（i 輸入 · ? 說明） "
+msgid " 輸入 (i 輸入 · ? 說明) "
 msgstr " Input (i to type · ? help) "
 
 #: crates/termade-tui/src/draw.rs
@@ -2024,11 +2024,11 @@ msgid " 設定 "
 msgstr " Settings "
 
 #: crates/termade-tui/src/draw.rs
-msgid " prompt（@ 附檔 · Enter 送出 · Alt-Enter 排隊） "
+msgid " prompt (@ 附檔 · Enter 送出 · Alt-Enter 排隊) "
 msgstr " prompt (@ attach · Enter send · Alt-Enter queue) "
 
 #: crates/termade-tui/src/draw.rs
-msgid " prompt（排隊 {n} 則 · Alt-Enter 再排） "
+msgid " prompt (排隊 {n} 則 · Alt-Enter 再排) "
 msgstr " prompt ({n} queued · Alt-Enter to queue more) "
 
 #: crates/termade-tui/src/draw.rs
@@ -2044,7 +2044,7 @@ msgid " 選單 "
 msgstr " Menu "
 
 #: crates/termade-tui/src/draw.rs
-msgid " 選擇（Enter 確認 · Esc 取消） "
+msgid " 選擇 (Enter 確認 · Esc 取消) "
 msgstr " Select (Enter confirm · Esc cancel) "
 
 #: crates/termade-tui/src/draw.rs
@@ -2060,7 +2060,7 @@ msgid " 跳轉 session "
 msgstr " Jump to session "
 
 #: crates/termade-tui/src/draw.rs
-msgid " 搜尋（Enter／↓ 下一個 · ↑ 上一個 · Esc 離開） "
+msgid " 搜尋 (Enter／↓ 下一個 · ↑ 上一個 · Esc 離開) "
 msgstr " Search (Enter/↓ next · ↑ previous · Esc exit) "
 
 #: crates/termade-tui/src/draw.rs
@@ -2084,11 +2084,11 @@ msgid "常用"
 msgstr "Common"
 
 #: crates/termade-tui/src/help.rs
-msgid "選單（s session、g git、v 檢視、m 訊息）"
+msgid "選單 (s session、g git、v 檢視、m 訊息)"
 msgstr "Menu (s session, g git, v view, m message)"
 
 #: crates/termade-tui/src/help.rs
-msgid "命令列（輸入時會提示，Tab 補全）；也可用 /"
+msgid "命令列 (輸入時會提示，Tab 補全)；也可用 /"
 msgstr "Command line (hints while typing, Tab to complete); / also works"
 
 #: crates/termade-tui/src/help.rs
@@ -2096,7 +2096,7 @@ msgid "新增 agent：選 agent → model → 輸入 prompt"
 msgstr "New agent: pick agent → model → type prompt"
 
 #: crates/termade-tui/src/help.rs
-msgid "對選取的 session 輸入 prompt（也可 @peer、#channel 傳訊息）"
+msgid "對選取的 session 輸入 prompt (也可 @peer、#channel 傳訊息)"
 msgstr "Type a prompt for the selected session (or message with @peer, #channel)"
 
 #: crates/termade-tui/src/help.rs
@@ -2112,7 +2112,7 @@ msgid "這個說明面板"
 msgstr "This help panel"
 
 #: crates/termade-tui/src/help.rs
-msgid "離開（保留 daemon）／關閉 daemon 並離開"
+msgid "離開 (保留 daemon)／關閉 daemon 並離開"
 msgstr "Quit (keep daemon) / shut down daemon and quit"
 
 #: crates/termade-tui/src/help.rs
@@ -2128,7 +2128,7 @@ msgid "附加檔案或圖片；會在專案內模糊搜尋，↑↓ 選、Tab �
 msgstr "Attach a file or image; fuzzy-searches the project, ↑↓ select, Tab accept"
 
 #: crates/termade-tui/src/help.rs
-msgid "貼上剪貼簿圖片（需 wl-paste 或 xclip）"
+msgid "貼上剪貼簿圖片 (需 wl-paste 或 xclip)"
 msgstr "Paste an image from the clipboard (requires wl-paste or xclip)"
 
 #: crates/termade-tui/src/help.rs
@@ -2140,15 +2140,15 @@ msgid "把檔案拖進終端機會自動轉成 @路徑"
 msgstr "Dropping a file into the terminal turns it into @path"
 
 #: crates/termade-tui/src/help.rs
-msgid "（spawn 時）切換是否使用獨立 git worktree"
+msgid "(spawn 時)切換是否使用獨立 git worktree"
 msgstr "(when spawning) toggle using a separate git worktree"
 
 #: crates/termade-tui/src/help.rs
-msgid "（spawn 時）切換權限 ask／auto／bypass"
+msgid "(spawn 時)切換權限 ask／auto／bypass"
 msgstr "(when spawning) cycle permission ask/auto/bypass"
 
 #: crates/termade-tui/src/help.rs
-msgid "（spawn 時）切換 effort；預設不指定"
+msgid "(spawn 時)切換 effort；預設不指定"
 msgstr "(when spawning) cycle effort; unset by default"
 
 #: crates/termade-tui/src/help.rs crates/termade-tui/src/menu.rs
@@ -2168,7 +2168,7 @@ msgid "核准：允許／一律允許／拒絕"
 msgstr "Approval: allow / always allow / deny"
 
 #: crates/termade-tui/src/help.rs crates/termade-tui/src/menu.rs
-msgid "交接給其他 agent（額度用完時）"
+msgid "交接給其他 agent (額度用完時)"
 msgstr "Hand off to another agent (when quota runs out)"
 
 #: crates/termade-tui/src/help.rs
@@ -2188,7 +2188,7 @@ msgid "切換 Overview／Diff／Worktrees／Tasks"
 msgstr "Switch Overview / Diff / Worktrees / Tasks"
 
 #: crates/termade-tui/src/help.rs
-msgid "（Tasks 視圖）選任務／跳到負責人的 session"
+msgid "(Tasks 視圖)選任務／跳到負責人的 session"
 msgstr "(Tasks view) select task / jump to the assignee's session"
 
 #: crates/termade-tui/src/help.rs
@@ -2204,11 +2204,11 @@ msgid "原始文字／Markdown；顯示／隱藏思考"
 msgstr "Raw text / Markdown; show / hide thinking"
 
 #: crates/termade-tui/src/help.rs
-msgid "展開／摺疊工具呼叫（預設摺疊）"
+msgid "展開／摺疊工具呼叫 (預設摺疊)"
 msgstr "Expand / collapse tool calls (collapsed by default)"
 
 #: crates/termade-tui/src/help.rs
-msgid "（輸入 prompt 或命令時）回顧歷史輸入"
+msgid "(輸入 prompt 或命令時)回顧歷史輸入"
 msgstr "(while typing a prompt or command) browse input history"
 
 #: crates/termade-tui/src/help.rs
@@ -2216,11 +2216,11 @@ msgid "只看本專案／顯示全部專案的 session"
 msgstr "Show sessions of this project only / all projects"
 
 #: crates/termade-tui/src/help.rs
-msgid "（輸入 prompt 時）換行；輸入框隨行數長高，貼上保留換行"
+msgid "(輸入 prompt 時)換行；輸入框隨行數長高，貼上保留換行"
 msgstr "(while typing a prompt) new line; the input box grows, pasted newlines are kept"
 
 #: crates/termade-tui/src/help.rs
-msgid "（輸入 prompt 時）排隊，session 閒下來自動送出"
+msgid "(輸入 prompt 時)排隊，session 閒下來自動送出"
 msgstr "(while typing a prompt) queue it, sent when the session is idle"
 
 #: crates/termade-tui/src/help.rs
@@ -2228,7 +2228,7 @@ msgid "捲動 transcript；End 回到最新"
 msgstr "Scroll the transcript; End jumps to latest"
 
 #: crates/termade-tui/src/help.rs
-msgid "搜尋逐字稿或 diff（邊打邊找）；Enter／↓ 下一個、↑ 上一個、Esc 離開"
+msgid "搜尋逐字稿或 diff (邊打邊找)；Enter／↓ 下一個、↑ 上一個、Esc 離開"
 msgstr "Search the transcript or diff (incremental); Enter/↓ next, ↑ previous, Esc exit"
 
 #: crates/termade-tui/src/help.rs
@@ -2268,7 +2268,7 @@ msgid "清理已合併的 worktree"
 msgstr "Clean up merged worktrees"
 
 #: crates/termade-tui/src/help.rs
-msgid "命令（: 開頭）"
+msgid "命令 (: 開頭)"
 msgstr "Commands (start with :)"
 
 #: crates/termade-tui/src/help.rs
@@ -2280,7 +2280,7 @@ msgid "交接給另一個 agent，如 :handoff codex 補充說明"
 msgstr "Hand off to another agent, e.g. :handoff codex extra notes"
 
 #: crates/termade-tui/src/help.rs
-msgid "接續已結束的 session（處理程序死掉或 daemon 重啟後）；可接 prompt"
+msgid "接續已結束的 session (處理程序死掉或 daemon 重啟後)；可接 prompt"
 msgstr "Resume an ended session (after the process died or the daemon restarted); optional prompt"
 
 #: crates/termade-tui/src/help.rs
@@ -2292,7 +2292,7 @@ msgid "結束／中斷選取的 session"
 msgstr "Kill / interrupt the selected session"
 
 #: crates/termade-tui/src/help.rs
-msgid "排隊 prompt（查看／clear）／取消最後一則放回輸入框"
+msgid "排隊 prompt (查看／clear)／取消最後一則放回輸入框"
 msgstr "Queue a prompt (list / clear) / take back the last one into the input box"
 
 #: crates/termade-tui/src/help.rs
@@ -2308,11 +2308,11 @@ msgid "切換版面；:raw、:thoughts、:bus 切換顯示"
 msgstr "Switch layout; :raw, :thoughts, :bus toggle display"
 
 #: crates/termade-tui/src/help.rs
-msgid "on|off 開關通知（回合結束、等待核准、失敗、額度用完）；test 試發；方式在 config.toml [tui] notify"
+msgid "on|off 開關通知 (回合結束、等待核准、失敗、額度用完)；test 試發；方式在 config.toml [tui] notify"
 msgstr "on|off toggles notifications (turn done, awaiting approval, failed, quota exhausted); test sends one; methods in config.toml [tui] notify"
 
 #: crates/termade-tui/src/help.rs
-msgid "搜尋逐字稿或 diff，如 :find error（同 f）"
+msgid "搜尋逐字稿或 diff，如 :find error (同 f)"
 msgstr "Search the transcript or diff, e.g. :find error (same as f)"
 
 #: crates/termade-tui/src/help.rs
@@ -2320,7 +2320,7 @@ msgid "新增任務／廣播訊息"
 msgstr "Add a task / broadcast a message"
 
 #: crates/termade-tui/src/help.rs
-msgid "任務視圖／改選取任務的狀態（todo doing blocked review done）"
+msgid "任務視圖／改選取任務的狀態 (todo doing blocked review done)"
 msgstr "Task view / change the selected task's status (todo doing blocked review done)"
 
 #: crates/termade-tui/src/help.rs
@@ -2348,7 +2348,7 @@ msgid "忙碌／閒置／失敗／結束"
 msgstr "busy / idle / failed / ended"
 
 #: crates/termade-tui/src/help.rs
-msgid "（Tasks 視圖）任務的前置任務；黃色是還沒完成的"
+msgid "(Tasks 視圖)任務的前置任務；黃色是還沒完成的"
 msgstr "(Tasks view) prerequisite tasks; yellow ones are not done yet"
 
 #: crates/termade-tui/src/input.rs
@@ -2356,15 +2356,15 @@ msgid "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / co
 msgstr "Commands: spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown"
 
 #: crates/termade-tui/src/input.rs
-msgid "輸入關鍵字跳轉至匹配的 session（label / id / branch）"
+msgid "輸入關鍵字跳轉至匹配的 session (label / id / branch)"
 msgstr "Type a keyword to jump to a matching session (label / id / branch)"
 
 #: crates/termade-tui/src/input.rs
-msgid "對 `{loc}` 留下審查註解（Enter 送回 agent）"
+msgid "對 `{loc}` 留下審查註解 (Enter 送回 agent)"
 msgstr "Leave a review comment on `{loc}` (Enter sends it to the agent)"
 
 #: crates/termade-tui/src/input.rs
-msgid "命令（Tab 補全）：spawn rm clean kill merge diff gc task …"
+msgid "命令 (Tab 補全)：spawn rm clean kill merge diff gc task …"
 msgstr "Command (Tab to complete): spawn rm clean kill merge diff gc task …"
 
 #: crates/termade-tui/src/input.rs
@@ -2376,15 +2376,15 @@ msgid "已要求重整"
 msgstr "Refresh requested"
 
 #: crates/termade-tui/src/input.rs
-msgid "滑鼠擷取：開（可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取）"
+msgid "滑鼠擷取：開 (可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取)"
 msgstr "Mouse capture: on (drag to select and copy the center pane; Shift+drag for native selection)"
 
 #: crates/termade-tui/src/input.rs
-msgid "滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端機 alternate scroll）"
+msgid "滑鼠擷取：關 (可直接拖曳選取複製；滾輪用終端機 alternate scroll)"
 msgstr "Mouse capture: off (drag to select natively; the wheel uses the terminal's alternate scroll)"
 
 #: crates/termade-tui/src/input.rs
-msgid "Bus：顯示（b 或 Esc 關閉；僅在兩欄／分頁模式有浮層）"
+msgid "Bus：顯示 (b 或 Esc 關閉；僅在兩欄／分頁模式有浮層)"
 msgstr "Bus: shown (b or Esc to close; overlay only in two-column / tabs layouts)"
 
 #: crates/termade-tui/src/input.rs
@@ -2424,7 +2424,7 @@ msgid "候選：{list}"
 msgstr "Candidates: {list}"
 
 #: crates/termade-tui/src/menu.rs
-msgid "設定（預設 model／effort／權限…）"
+msgid "設定 (預設 model／effort／權限…)"
 msgstr "Settings (default model / effort / permission…)"
 
 #: crates/termade-tui/src/menu.rs
@@ -2432,7 +2432,7 @@ msgid "複製目前畫面"
 msgstr "Copy current screen"
 
 #: crates/termade-tui/src/menu.rs
-msgid "說明（所有按鍵與命令）"
+msgid "說明 (所有按鍵與命令)"
 msgstr "Help (all keys and commands)"
 
 #: crates/termade-tui/src/menu.rs
@@ -2444,19 +2444,19 @@ msgid "關閉共用 daemon 並離開"
 msgstr "Shut down the shared daemon and quit"
 
 #: crates/termade-tui/src/menu.rs
-msgid "新增 agent…（選 agent 與 model）"
+msgid "新增 agent… (選 agent 與 model)"
 msgstr "New agent… (pick agent and model)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "接續已結束的 session（接回原對話）"
+msgid "接續已結束的 session (接回原對話)"
 msgstr "Resume an ended session (same conversation)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "切換 model（執行中）"
+msgid "切換 model (執行中)"
 msgstr "Switch model (running)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "切換 effort（執行中）"
+msgid "切換 effort (執行中)"
 msgstr "Switch effort (running)"
 
 #: crates/termade-tui/src/menu.rs
@@ -2480,7 +2480,7 @@ msgid "merge 回主工作區"
 msgstr "Merge into the main checkout"
 
 #: crates/termade-tui/src/menu.rs
-msgid "merge 乾跑（dry-run）"
+msgid "merge 乾跑 (dry-run)"
 msgstr "Merge dry run"
 
 #: crates/termade-tui/src/menu.rs
@@ -2520,11 +2520,11 @@ msgid "新增任務"
 msgstr "Add task"
 
 #: crates/termade-tui/src/menu.rs
-msgid "附加檔案／圖片…（@路徑，Tab 補全）"
+msgid "附加檔案／圖片… (@路徑，Tab 補全)"
 msgstr "Attach file / image… (@path, Tab to complete)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "選單沒有 `{c}`（Backspace 返回、Esc 關閉）"
+msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr "No `{c}` in this menu (Backspace back, Esc close)"
 
 #: crates/termade-tui/src/menu.rs
@@ -2544,7 +2544,7 @@ msgid "最新 Haiku"
 msgstr "latest Haiku"
 
 #: crates/termade-tui/src/menu.rs
-msgid "預設（依 config.toml）"
+msgid "預設 (依 config.toml)"
 msgstr "Default (from config.toml)"
 
 #: crates/termade-tui/src/menu.rs
@@ -2556,11 +2556,11 @@ msgid "選擇 agent"
 msgstr "Choose agent"
 
 #: crates/termade-tui/src/menu.rs
-msgid "已要求交接給 {target}（舊 session 會停止，新 agent 沿用同一個工作目錄）"
+msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同一個工作目錄)"
 msgstr "Handoff to {target} requested (the old session stops; the new agent uses the same working directory)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "spawn → {target}：輸入 prompt 後 Enter（可留空）"
+msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)"
 msgstr "spawn → {target}: type a prompt and press Enter (may be empty)"
 
 #: crates/termade-tui/src/menu.rs
@@ -2568,11 +2568,11 @@ msgid "沒有符合的 agent"
 msgstr "No matching agent"
 
 #: crates/termade-tui/src/menu.rs
-msgid "{agent} 的 model（輸入可過濾；無符合時 Enter 使用輸入值）"
+msgid "{agent} 的 model (輸入可過濾；無符合時 Enter 使用輸入值)"
 msgstr "Model for {agent} (type to filter; Enter uses the typed value if nothing matches)"
 
 #: crates/termade-tui/src/mouse.rs
-msgid "選取第 {from}–{to} 行（放開滑鼠複製）"
+msgid "選取第 {from}–{to} 行 (放開滑鼠複製)"
 msgstr "Selected lines {from}–{to} (release the mouse to copy)"
 
 #: crates/termade-tui/src/mouse.rs
@@ -2580,7 +2580,7 @@ msgid "選取範圍沒有文字"
 msgstr "Selection contains no text"
 
 #: crates/termade-tui/src/mouse.rs
-msgid "已複製選取 {n} 行（OSC 52；Shift+拖曳可原生選取）"
+msgid "已複製選取 {n} 行 (OSC 52；Shift+拖曳可原生選取)"
 msgstr "Copied {n} selected lines (OSC 52; Shift+drag for native selection)"
 
 #: crates/termade-tui/src/notify.rs
@@ -2604,7 +2604,7 @@ msgid "{label}：{what}"
 msgstr "{label}: {what}"
 
 #: crates/termade-tui/src/notify.rs
-msgid "通知：關閉（config.toml 的 [tui] notify 是空的）"
+msgid "通知：關閉 (config.toml 的 [tui] notify 是空的)"
 msgstr "Notifications: disabled ([tui] notify in config.toml is empty)"
 
 #: crates/termade-tui/src/notify.rs
@@ -2613,11 +2613,11 @@ msgid "、"
 msgstr ", "
 
 #: crates/termade-tui/src/notify.rs
-msgid "通知：開（{methods}）"
+msgid "通知：開 ({methods})"
 msgstr "Notifications: on ({methods})"
 
 #: crates/termade-tui/src/notify.rs
-msgid "通知：關（{methods}）"
+msgid "通知：關 ({methods})"
 msgstr "Notifications: off ({methods})"
 
 #: crates/termade-tui/src/notify.rs
@@ -2641,7 +2641,7 @@ msgid "通知命令執行失敗：{e}"
 msgstr "Notification command failed: {e}"
 
 #: crates/termade-tui/src/search.rs
-msgid "這個視圖不支援搜尋（逐字稿與 Diff 才有）"
+msgid "這個視圖不支援搜尋 (逐字稿與 Diff 才有)"
 msgstr "This view does not support search (only the transcript and Diff do)"
 
 #: crates/termade-tui/src/search.rs
@@ -2653,11 +2653,11 @@ msgid "找不到「{query}」"
 msgstr "\"{query}\" not found"
 
 #: crates/termade-tui/src/search.rs
-msgid "搜尋「{query}」停在 {current}/{total}（f 再搜尋）"
+msgid "搜尋「{query}」停在 {current}/{total} (f 再搜尋)"
 msgstr "Search \"{query}\" stopped at {current}/{total} (f to search again)"
 
 #: crates/termade-tui/src/search.rs
-msgid "搜尋：輸入文字（只找畫面上顯示的內容）"
+msgid "搜尋：輸入文字 (只找畫面上顯示的內容)"
 msgstr "Search: type text (only searches what is displayed)"
 
 #: crates/termade-tui/src/search.rs
@@ -2681,7 +2681,7 @@ msgid "下面兩項設定的對象 agent"
 msgstr "Agent for the two settings below"
 
 #: crates/termade-tui/src/settings.rs
-msgid "{agent} 的預設 model（清單載入中…）"
+msgid "{agent} 的預設 model (清單載入中…)"
 msgstr "Default model for {agent} (loading list…)"
 
 #: crates/termade-tui/src/settings.rs
@@ -2717,7 +2717,7 @@ msgid "未設定"
 msgstr "Not set"
 
 #: crates/termade-tui/src/settings.rs
-msgid "未設定（auto）"
+msgid "未設定 (auto)"
 msgstr "Not set (auto)"
 
 #: crates/termade-tui/src/settings.rs
@@ -2733,7 +2733,7 @@ msgid "bypass：完全不問"
 msgstr "bypass: never ask"
 
 #: crates/termade-tui/src/settings.rs
-msgid "未設定（agent 自己的預設）"
+msgid "未設定 (agent 自己的預設)"
 msgstr "Not set (agent's own default)"
 
 #: crates/termade-tui/src/settings.rs
@@ -2753,7 +2753,7 @@ msgid "每次都問使用者"
 msgstr "Always ask the user"
 
 #: crates/termade-tui/src/settings.rs
-msgid "不問（effort 調降、model 拒絕）"
+msgid "不問 (effort 調降、model 拒絕)"
 msgstr "Never ask (lower effort, reject model)"
 
 #: crates/termade-tui/src/settings.rs
@@ -2769,7 +2769,7 @@ msgid "載入翻譯失敗：{e}"
 msgstr "Failed to load translation: {e}"
 
 #: crates/termade-tui/src/settings.rs
-msgid "已儲存到 {path}（新建立的 session 起生效）"
+msgid "已儲存到 {path} (新建立的 session 起生效)"
 msgstr "Saved to {path} (applies to new sessions)"
 
 #: crates/termade-tui/src/tasks.rs
@@ -2781,7 +2781,7 @@ msgid "這個任務還沒有負責人"
 msgstr "This task has no assignee yet"
 
 #: crates/termade-tui/src/tasks.rs
-msgid "負責人的 session（{id}）已不存在"
+msgid "負責人的 session ({id})已不存在"
 msgstr "The assignee's session ({id}) no longer exists"
 
 #: crates/termade-tui/src/tasks.rs
@@ -2813,19 +2813,19 @@ msgid "{id} · 負責人 {assignee} · 建立者 {creator}"
 msgstr "{id} · assignee {assignee} · created by {creator}"
 
 #: crates/termade-tui/src/tasks.rs
-msgid "  ? {id}（已不存在）"
+msgid "  ? {id} (已不存在)"
 msgstr "  ? {id} (no longer exists)"
 
 #: crates/termade-tui/src/tasks.rs
-msgid "（沒有說明）"
+msgid "(沒有說明)"
 msgstr "(no description)"
 
 #: crates/termade-tui/src/tasks.rs
-msgid " 任務說明（Enter 跳到負責人 · :task-status <狀態>） "
+msgid " 任務說明 (Enter 跳到負責人 · :task-status <狀態>) "
 msgstr " Task details (Enter go to assignee · :task-status <status>) "
 
 #: crates/termade-tui/src/lib.rs
-msgid "daemon 連線已中斷（可能被關閉了）。畫面是最後的狀態，按 q 離開後重新啟動"
+msgid "daemon 連線已中斷 (可能被關閉了)。畫面是最後的狀態，按 q 離開後重新啟動"
 msgstr "Lost connection to the daemon (it may have been shut down). The screen shows the last state; press q to quit and restart"
 
 #: crates/termade-tui/src/lib.rs

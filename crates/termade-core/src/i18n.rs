@@ -43,7 +43,7 @@ pub enum Language {
     En,
 }
 
-/// 可選的語言：`(設定值, 顯示名稱)`。顯示名稱用該語言自己的寫法，不翻譯。
+/// 可選的語言：` (設定值, 顯示名稱)`。顯示名稱用該語言自己的寫法，不翻譯。
 pub const LANGUAGES: [(Language, &str, &str); 2] = [
     (Language::ZhTw, "zh-TW", "繁體中文"),
     (Language::En, "en", "English"),

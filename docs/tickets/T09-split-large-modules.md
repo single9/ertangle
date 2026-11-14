@@ -14,15 +14,15 @@
 | `crates/termade-daemon/src/lib.rs` | 2064 | 路徑、client 連線、`BusGuard`、請求分派、匯流排投遞、spawn、git 操作、伺服器迴圈 |
 | `src/main.rs` | 927 | CLI 定義與所有子命令的實作 |
 
-- `Shared::handle`（`crates/termade-daemon/src/lib.rs:549-1041`）是單一函式約 490 行，一個 `match` 處理 23 種請求。
-- `handle_key`（`crates/termade-tui/src/lib.rs:373-618`）約 245 行。
+- `Shared::handle`(`crates/termade-daemon/src/lib.rs:549-1041`)是單一函式約 490 行，一個 `match` 處理 23 種請求。
+- `handle_key`(`crates/termade-tui/src/lib.rs:373-618`)約 245 行。
 
 ## 分析邏輯
 
 1. 以 `wc -l` 排序，前兩名佔全專案 43%。
 2. 列出每個檔案的頂層項目，看能否用一句話描述它的職責；兩者都不行。
-3. git 輔助函式（`lib.rs:1414-1621`）不需要 `Shared`，是最容易先抽出來的一塊，而且抽出後 T02、T03 的測試可以直接對它寫。
-4. 這是可維護性問題，不影響行為，所以排在測試（T06）之後，重構時才有東西確認沒改壞。
+3. git 輔助函式 (`lib.rs:1414-1621`)不需要 `Shared`，是最容易先抽出來的一塊，而且抽出後 T02、T03 的測試可以直接對它寫。
+4. 這是可維護性問題，不影響行為，所以排在測試 (T06)之後，重構時才有東西確認沒改壞。
 
 ## 實作方式
 
@@ -37,7 +37,7 @@
 | `bus.rs` | `BusGuard`、`Waiter`、`handle_bus_send`、`deliver_message`、`handle_bus_wait`、`append_mailbox` |
 | `git.rs` | worktree 建立、狀態、diff、auto-commit、merge、PR、移除 |
 | `server.rs` | `handle_conn`、`run_with_options` |
-| `handlers/` | `Shared::handle` 只留分派，各請求類別（session、task、worktree、review）各一個檔案 |
+| `handlers/` | `Shared::handle` 只留分派，各請求類別 (session、task、worktree、review)各一個檔案 |
 
 `lib.rs` 以 `pub use` 維持現有的公開路徑，`src/main.rs` 與 `termade-tui` 不需要改 import。
 
@@ -60,6 +60,6 @@
 ## 驗收條件
 
 - 沒有單一 `.rs` 檔超過約 800 行，沒有單一函式超過約 150 行。
-- 公開 API 不變（`termade-tui`、`src/main.rs` 的 import 不需修改，或只因模組重新匯出而調整）。
+- 公開 API 不變 (`termade-tui`、`src/main.rs` 的 import 不需修改，或只因模組重新匯出而調整)。
 - 測試數量與結果在重構前後相同。
 - diff 中只有搬移與必要的 `use`／可見度調整，沒有邏輯變更。

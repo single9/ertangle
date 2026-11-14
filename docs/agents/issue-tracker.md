@@ -8,7 +8,7 @@ Issues for this repo live as markdown files in `docs/tickets/`, following the co
 - Every ticket has a row in the table in `docs/tickets/README.md` (`| [TNN](TNN-slug.md) | title | priority | dependencies |`). Add the row when the ticket is created.
 - Ticket body sections, in order: `優先度／範圍` line, `## 問題`, `## 證據` (file:line references), `## 分析邏輯` (list what was *not* confirmed), `## 實作方式`, `## 驗收條件`.
 - Priority: P0 data loss or corrupted state; P1 security or regression guard; P2 stability and maintainability; P3 cleanup.
-- Triage state is a `Status:` line under the title (see `triage-labels.md` for the role strings). When a ticket is done, append `(已完成)` to its title cell in the README table; the `Status:` line can then be dropped.
+- Triage state is a `Status:` line under the title (see `triage-labels.md` for the role strings). When a ticket is done, append ` (已完成)` to its title cell in the README table; the `Status:` line can then be dropped.
 - Larger features that need a spec first: put the spec at `docs/tickets/TNN-<slug>.md` as well and split implementation tickets into separate `TNN` files that reference it.
 - Comments and conversation history append to the bottom of the ticket under a `## Comments` heading.
 - Manual / real-machine verification results go in `docs/VERIFICATION.md`, not in the ticket.

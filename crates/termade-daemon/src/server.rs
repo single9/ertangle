@@ -31,7 +31,7 @@ pub(crate) fn handle_conn(
         }
     });
 
-    // 遠端連線一律需要認證；沒有設定 token 時 fail closed（不再靜默放行）。
+    // 遠端連線一律需要認證；沒有設定 token 時 fail closed (不再靜默放行)。
     let mut authenticated = !require_auth;
 
     for line in reader.lines() {
@@ -85,7 +85,7 @@ pub(crate) fn handle_conn(
 /// 認證失敗後、回覆並關閉連線前的延遲。
 pub(crate) const AUTH_FAIL_DELAY: Duration = Duration::from_millis(500);
 
-/// 常數時間比對 token（逐位元組 XOR 累加；長度不同仍走完整比較再判定）。
+/// 常數時間比對 token (逐位元組 XOR 累加；長度不同仍走完整比較再判定)。
 pub(crate) fn token_matches(given: Option<&str>, expected: &str) -> bool {
     let Some(given) = given else { return false };
     let (a, b) = (given.as_bytes(), expected.as_bytes());
@@ -103,7 +103,7 @@ pub struct RemoteOptions {
     pub listen: Option<String>,
     /// 已棄用的 `--token`
     pub token: Option<String>,
-    /// `--token-file <path>`（權限須為 0600）
+    /// `--token-file <path>` (權限須為 0600)
     pub token_file: Option<PathBuf>,
     /// 允許綁定非 loopback 位址
     pub insecure_listen_public: bool,
@@ -133,16 +133,16 @@ pub(crate) fn read_token_file(path: &Path) -> Result<String> {
     Ok(t)
 }
 
-/// 決定 token 來源：`--token-file` > `--token`（棄用）> `TERMADE_TOKEN`。
+/// 決定 token 來源：`--token-file` > `--token` (棄用)> `TERMADE_TOKEN`。
 pub(crate) fn resolve_token(opts: &RemoteOptions) -> Result<Option<String>> {
     if let Some(p) = &opts.token_file {
         return read_token_file(p).map(Some);
     }
     if let Some(t) = opts.token.clone().filter(|t| !t.is_empty()) {
-        tracing::warn!("--token 已棄用（會出現在 ps 輸出）；請改用 TERMADE_TOKEN 或 --token-file");
+        tracing::warn!("--token 已棄用 (會出現在 ps 輸出)；請改用 TERMADE_TOKEN 或 --token-file");
         eprintln!(
             "{}",
-            tr!("警告：--token 已棄用（會出現在 ps 輸出）；請改用 TERMADE_TOKEN 或 --token-file")
+            tr!("警告：--token 已棄用 (會出現在 ps 輸出)；請改用 TERMADE_TOKEN 或 --token-file")
         );
         return Ok(Some(t));
     }
@@ -188,7 +188,7 @@ pub(crate) fn validate_listen(addr: &str, has_token: bool, insecure_public: bool
     Ok(())
 }
 
-/// 確保 socket 目錄存在、為自己所有且不對其他人開放（新建為 0700）。
+/// 確保 socket 目錄存在、為自己所有且不對其他人開放 (新建為 0700)。
 pub(crate) fn ensure_private_dir(dir: &Path) -> Result<()> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
     match fs::symlink_metadata(dir) {
@@ -202,14 +202,14 @@ pub(crate) fn ensure_private_dir(dir: &Path) -> Result<()> {
                 bail!(
                     "{}",
                     tr!(
-                        "{dir} 不屬於目前使用者（uid {uid}），拒絕啟動",
+                        "{dir} 不屬於目前使用者 (uid {uid})，拒絕啟動",
                         dir = format!("{dir:?}"),
                         uid = meta.uid()
                     )
                 );
             }
             if meta.permissions().mode() & 0o077 != 0 {
-                // 目錄是自己的（例如舊版以 755 建立）：直接收緊，不要求使用者手動處理。
+                // 目錄是自己的 (例如舊版以 755 建立)：直接收緊，不要求使用者手動處理。
                 tracing::warn!("{dir:?} 權限過寬，已改為 0700");
                 fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).with_context(|| {
                     tr!(
@@ -238,7 +238,7 @@ extern "C" {
     pub(crate) fn libc_geteuid() -> u32;
 }
 
-/// 以前景方式跑 daemon（預設只綁本地 Unix socket）。
+/// 以前景方式跑 daemon (預設只綁本地 Unix socket)。
 pub fn run() -> Result<()> {
     run_with_options(None, None)
 }
@@ -252,7 +252,7 @@ pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Re
     })
 }
 
-/// 以前景方式跑 daemon，可選同時開放 TCP 遠端監聽（M5，含安全檢查）。
+/// 以前景方式跑 daemon，可選同時開放 TCP 遠端監聽 (M5，含安全檢查)。
 pub fn run_remote(opts: RemoteOptions) -> Result<()> {
     let auth_token = resolve_token(&opts)?;
     if let Some(addr) = &opts.listen {
@@ -273,7 +273,7 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
             bail!(
                 "{}",
                 tr!(
-                    "已有 daemon 在執行（{sock}）；請直接連線，或先 `termade shutdown`",
+                    "已有 daemon 在執行 ({sock})；請直接連線，或先 `termade shutdown`",
                     sock = format!("{sock:?}")
                 )
             );
@@ -289,7 +289,7 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
     let policy = load_policy(&default_cwd);
     let shared = Shared::restore(&log_path(), policy, default_cwd, auth_token)?;
 
-    // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽（M5 遠端模式）。
+    // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽 (M5 遠端模式)。
     if let Some(addr) = listen_tcp {
         let tcp_listener =
             TcpListener::bind(&addr).with_context(|| tr!("綁定 TCP {addr} 失敗", addr = addr))?;

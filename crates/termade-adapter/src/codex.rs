@@ -1,16 +1,16 @@
-//! Codex 的原生 adapter（`codex app-server`）。
+//! Codex 的原生 adapter (`codex app-server`)。
 //!
-//! Codex 的 app server 是 stdio 上的 JSON-RPC（實驗性，但介面穩定且可自我描述：
-//! `codex app-server generate-json-schema` 會吐出完整 schema）。
+//! Codex 的 app server 是 stdio 上的 JSON-RPC (實驗性，但介面穩定且可自我描述：
+//! `codex app-server generate-json-schema` 會吐出完整 schema)。
 //!
 //! 用到的子集：
 //! * `initialize`
 //! * `thread/start` → `thread.id`
-//! * `turn/start`（帶 `input`）
+//! * `turn/start` (帶 `input`)
 //! * `turn/interrupt`
 //! * 通知：`item/agentMessage/delta`、`item/completed`、`turn/completed`、
 //!   `thread/tokenUsage/updated`
-//! * 核准（server→client 請求）：`item/commandExecution/requestApproval`、
+//! * 核准 (server→client 請求)：`item/commandExecution/requestApproval`、
 //!   `item/fileChange/requestApproval`
 
 use crate::stream::StreamBuf;
@@ -40,7 +40,7 @@ struct Conn {
     thread: Mutex<String>,
     turn: Mutex<String>,
     stream: Mutex<StreamBuf>,
-    /// 本回合已回報過的錯誤文字（`error` 通知與 `turn/completed` 不重複送）。
+    /// 本回合已回報過的錯誤文字 (`error` 通知與 `turn/completed` 不重複送)。
     last_error: Mutex<Option<String>>,
     tx: Sender<AgentEvent>,
 }
@@ -96,7 +96,7 @@ impl Conn {
             }
         }
         let method = msg["method"].as_str().unwrap_or("");
-        // 2) server → client 的請求（需要我們回覆）。
+        // 2) server → client 的請求 (需要我們回覆)。
         if msg.get("id").is_some() && !method.is_empty() {
             self.on_server_request(method, &msg);
             return;
@@ -224,7 +224,7 @@ impl Conn {
         }
     }
 
-    /// 把 codex 的錯誤（`error` 通知的 `error`，或 `turn.error`）送到逐字稿與 status note。
+    /// 把 codex 的錯誤 (`error` 通知的 `error`，或 `turn.error`)送到逐字稿與 status note。
     /// 同一個回合內相同文字只回報一次。
     fn report_error(&self, err: &Value) {
         let text = error_text(err);
@@ -241,7 +241,7 @@ impl Conn {
         }
         let mut note = tr!("codex 錯誤：{text}", text = text);
         if is_auth_error(err) {
-            note.push_str(&tr!("（請執行 `codex login`）"));
+            note.push_str(&tr!("(請執行 `codex login`)"));
         }
         let _ = self.tx.send(AgentEvent::Output(format!("⚠ {note}\n")));
         let _ = self.tx.send(AgentEvent::Note(note));
@@ -284,7 +284,7 @@ fn error_text(err: &Value) -> String {
     }
 }
 
-/// 是否為認證錯誤（401、token 失效、未授權）。
+/// 是否為認證錯誤 (401、token 失效、未授權)。
 fn is_auth_error(err: &Value) -> bool {
     let t = err.to_string().to_ascii_lowercase();
     t.contains("401") || t.contains("token_revoked") || t.contains("unauthorized")
@@ -349,7 +349,7 @@ impl AgentControl for CodexControl {
         Ok(())
     }
 
-    /// 存起來，下一個 `turn/start` 帶 `model`／`effort`（schema 已確認兩者都是 `TurnStartParams` 欄位）。
+    /// 存起來，下一個 `turn/start` 帶 `model`／`effort`(schema 已確認兩者都是 `TurnStartParams` 欄位)。
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         if let Some(e) = effort {
             crate::check_effort(e)?;
@@ -524,7 +524,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     )
     .with_context(|| tr!("codex `initialize` 失敗"))?;
 
-    // 接續時改用 `thread/resume`（歷史回合放在回應裡，不會以通知重播）。
+    // 接續時改用 `thread/resume` (歷史回合放在回應裡，不會以通知重播)。
     let method = if spec.resume.is_some() {
         "thread/resume"
     } else {
@@ -542,7 +542,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if let Some(model) = started["model"].as_str() {
         let _ = tx.send(AgentEvent::Model(model.to_string()));
     }
-    // 啟動時查一次帳號額度（沒登入或舊版 codex 不支援就略過）。
+    // 啟動時查一次帳號額度 (沒登入或舊版 codex 不支援就略過)。
     if let Ok(r) = conn.call("account/rateLimits/read", json!({}), CALL_TIMEOUT) {
         if let Some(q) = parse_rate_limits(&r["rateLimits"]) {
             let _ = tx.send(AgentEvent::Quota(q));
@@ -561,7 +561,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     Ok(Box::new(control))
 }
 
-/// 解析 Codex 的 `RateLimitSnapshot`（`account/rateLimits/read` 與更新通知共用）。
+/// 解析 Codex 的 `RateLimitSnapshot`(`account/rateLimits/read` 與更新通知共用)。
 pub(crate) fn parse_rate_limits(snap: &Value) -> Option<termade_core::Quota> {
     let mut windows = Vec::new();
     for key in ["primary", "secondary"] {
@@ -591,9 +591,9 @@ pub(crate) fn parse_rate_limits(snap: &Value) -> Option<termade_core::Quota> {
     })
 }
 
-/// `thread/start` 參數：cwd、approvalPolicy，加上可選的 model 與 sandbox（官方文件範例：
-/// `"model"`、`"sandbox": "workspace-write"`；`read_only` 對應 `read-only`）。
-/// Codex `turn/start` 的 input：文字（含內嵌文字檔）加上 data URL 圖片。
+/// `thread/start` 參數：cwd、approvalPolicy，加上可選的 model 與 sandbox (官方文件範例：
+/// `"model"`、`"sandbox": "workspace-write"`；`read_only` 對應 `read-only`)。
+/// Codex `turn/start` 的 input：文字 (含內嵌文字檔)加上 data URL 圖片。
 fn turn_input(text: &str, atts: &[termade_core::Attachment]) -> Value {
     let mut items =
         vec![json!({ "type": "text", "text": termade_core::compose_text(text, atts, false) })];
@@ -605,7 +605,7 @@ fn turn_input(text: &str, atts: &[termade_core::Attachment]) -> Value {
     Value::Array(items)
 }
 
-/// `thread/start` 或（`spec.resume` 有值時）`thread/resume` 的參數。
+/// `thread/start` 或 (`spec.resume` 有值時)`thread/resume` 的參數。
 /// 兩者接受同一組覆寫欄位；接續時多帶 `threadId`，並用 `excludeTurns` 省掉回應裡的歷史回合。
 fn thread_open_params(spec: &SessionSpec) -> Value {
     let mut p = thread_start_params(spec);
@@ -648,7 +648,7 @@ mod tests {
 
     #[test]
     fn approval_verdict_mapping() {
-        // 只驗證對應表本身（不需真的跑 codex）。
+        // 只驗證對應表本身 (不需真的跑 codex)。
         let cases = [
             (ApprovalKind::Command, Decision::Allow, "accept"),
             (

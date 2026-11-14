@@ -83,7 +83,7 @@ pub(crate) fn handle_mouse(
                 app.selection = Some((sel.0, p));
                 let ((l0, _), (l1, _)) = normalize_selection((sel.0, p));
                 app.status = tr!(
-                    "選取第 {from}–{to} 行（放開滑鼠複製）",
+                    "選取第 {from}–{to} 行 (放開滑鼠複製)",
                     from = l0 + 1,
                     to = l1 + 1
                 );
@@ -103,7 +103,7 @@ pub(crate) fn handle_mouse(
                             Ok(()) => {
                                 let n = text.lines().count().max(1);
                                 app.status =
-                                    tr!("已複製選取 {n} 行（OSC 52；Shift+拖曳可原生選取）", n = n);
+                                    tr!("已複製選取 {n} 行 (OSC 52；Shift+拖曳可原生選取)", n = n);
                             }
                             Err(e) => app.status = tr!("複製失敗：{e}", e = e),
                         }
@@ -116,7 +116,7 @@ pub(crate) fn handle_mouse(
     Ok(())
 }
 
-/// 把滑鼠座標映射成逐字稿的（絕對渲染行, 顯示欄）；`clamp` 時允許拖到區域外。
+/// 把滑鼠座標映射成逐字稿的 (絕對渲染行, 顯示欄)；`clamp` 時允許拖到區域外。
 pub(crate) fn transcript_pos(
     app: &App,
     column: u16,
@@ -143,7 +143,7 @@ pub(crate) fn transcript_pos(
     Some((line.min(app.transcript_total - 1), col))
 }
 
-/// 讓選取範圍的起點在終點之前（行優先）。
+/// 讓選取範圍的起點在終點之前 (行優先)。
 pub(crate) fn normalize_selection(
     sel: ((usize, usize), (usize, usize)),
 ) -> ((usize, usize), (usize, usize)) {
@@ -174,7 +174,7 @@ pub(crate) fn selection_columns(
     (to > from).then_some((from, to))
 }
 
-/// 依顯示欄位標亮一行中的選取區間（保留原本樣式）。
+/// 依顯示欄位標亮一行中的選取區間 (保留原本樣式)。
 pub(crate) fn highlight_columns(line: &Line<'static>, from: usize, to: usize) -> Line<'static> {
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut col = 0usize;
@@ -215,7 +215,7 @@ fn select_style(base: Style, selected: bool) -> Style {
     }
 }
 
-/// 依顯示欄位切出字串片段（中文等寬字元以 2 欄計）。
+/// 依顯示欄位切出字串片段 (中文等寬字元以 2 欄計)。
 pub(crate) fn slice_display(s: &str, from: usize, to: usize) -> String {
     let mut out = String::new();
     let mut col = 0usize;
@@ -232,7 +232,7 @@ pub(crate) fn slice_display(s: &str, from: usize, to: usize) -> String {
     out
 }
 
-/// 目前滑鼠選取範圍的純文字（只含中央逐字稿，不含側欄與邊框）。
+/// 目前滑鼠選取範圍的純文字 (只含中央逐字稿，不含側欄與邊框)。
 pub(crate) fn selection_text(app: &App) -> String {
     let Some(sel) = app.selection else {
         return String::new();

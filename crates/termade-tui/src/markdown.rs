@@ -1,11 +1,11 @@
-//! 極簡 Markdown 渲染器（零外部相依性）。
+//! 極簡 Markdown 渲染器 (零外部相依性)。
 //!
 //! 把 agent 的逐字稿純文字轉成 Ratatui 的 [`Line`] / [`Span`]，支援：
 //! 標題、粗體／斜體／刪除線、行內程式碼、連結、無序／有序／工作清單、
-//! 引言、分隔線、圍籬程式碼區塊（含語言標籤與底色）、GFM 表格。
+//! 引言、分隔線、圍籬程式碼區塊 (含語言標籤與底色)、GFM 表格。
 //!
-//! 也認得 termade 自己在逐字稿裡加的語意前綴：`❯ `（使用者 prompt）、
-//! `💭 `（思考）、`▸ `（工具呼叫）、`💬 `（審查註解），各自用不同顏色呈現。
+//! 也認得 termade 自己在逐字稿裡加的語意前綴：`❯ ` (使用者 prompt)、
+//! `💭 ` (思考)、`▸ ` (工具呼叫)、`💬 ` (審查註解)，各自用不同顏色呈現。
 //!
 //! 設計上刻意保持「行導向」：一次 `render` 會把整段來源重新渲染，
 //! 因此圍籬／表格狀態不需要跨次呼叫儲存。
@@ -38,7 +38,7 @@ impl Renderer {
         Self { in_fence: false }
     }
 
-    /// 把來源行渲染成樣式化行。`width` 是可用顯示寬度（不含邊框）。
+    /// 把來源行渲染成樣式化行。`width` 是可用顯示寬度 (不含邊框)。
     pub fn render(&mut self, src: &[String], width: usize) -> Vec<Line<'static>> {
         self.in_fence = false;
         let mut out: Vec<Line<'static>> = Vec::with_capacity(src.len());
@@ -263,7 +263,7 @@ fn task_marker(rest: &str) -> (&'static str, &str) {
 // 圍籬程式碼
 // ---------------------------------------------------------------------------
 
-/// 若此行是圍籬（``` 或 ~~~）則回傳語言標籤（可為空）。
+/// 若此行是圍籬 (``` 或 ~~~)則回傳語言標籤 (可為空)。
 fn fence(line: &str) -> Option<String> {
     let t = line.trim_start();
     let rest = t.strip_prefix("```").or_else(|| t.strip_prefix("~~~"))?;
@@ -288,7 +288,7 @@ fn code_line(line: &str, width: usize) -> Vec<Line<'static>> {
         .collect()
 }
 
-/// 依顯示寬度把字串切成多段（用於程式碼區塊）。
+/// 依顯示寬度把字串切成多段 (用於程式碼區塊)。
 fn split_display_width(s: &str, budget: usize) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
@@ -400,7 +400,7 @@ fn spans_width(spans: &[Span<'_>]) -> usize {
         .sum()
 }
 
-/// 依顯示寬度裁切 spans（保留樣式），超出時以 `…` 收尾。
+/// 依顯示寬度裁切 spans (保留樣式)，超出時以 `…` 收尾。
 fn truncate_spans(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
     if spans_width(&spans) <= max {
         return spans;
@@ -480,7 +480,7 @@ fn render_table(rows: &[String], sep: &str, width: usize) -> Vec<Line<'static>> 
     out
 }
 
-/// 硬裁切一行到 `width` 個顯示欄位（超出時以 `…` 收尾），保留各 span 樣式。
+/// 硬裁切一行到 `width` 個顯示欄位 (超出時以 `…` 收尾)，保留各 span 樣式。
 fn clip(line: Line<'static>, width: usize) -> Line<'static> {
     if spans_width(&line.spans) <= width {
         line
@@ -534,7 +534,7 @@ fn table_sep(widths: &[usize]) -> Line<'static> {
 // 行內樣式
 // ---------------------------------------------------------------------------
 
-/// 解析行內 Markdown（粗體、斜體、刪除線、程式碼、連結）。
+/// 解析行內 Markdown (粗體、斜體、刪除線、程式碼、連結)。
 pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut buf = String::new();
@@ -637,7 +637,7 @@ fn flush(spans: &mut Vec<Span<'static>>, buf: &mut String, base: Style) {
 }
 
 // ---------------------------------------------------------------------------
-// 換行（把已渲染的行依顯示寬度硬切）
+// 換行 (把已渲染的行依顯示寬度硬切)
 // ---------------------------------------------------------------------------
 
 /// 把單一樣式化行依顯示寬度切成多行，保留樣式。

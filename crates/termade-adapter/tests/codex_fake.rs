@@ -1,4 +1,4 @@
-//! 用假的 codex app-server 驗證錯誤會被送到逐字稿與 status note（T23）。
+//! 用假的 codex app-server 驗證錯誤會被送到逐字稿與 status note (T23)。
 
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};

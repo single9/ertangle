@@ -1,10 +1,10 @@
-//! `termade mcp` — 內建的 MCP（Model Context Protocol）stdio server。
+//! `termade mcp` — 內建的 MCP (Model Context Protocol)stdio server。
 //!
-//! 每個由 daemon 啟動的 agent 都會自動注入這個 MCP server（`termade mcp --session <id>`），
+//! 每個由 daemon 啟動的 agent 都會自動注入這個 MCP server (`termade mcp --session <id>`)，
 //! 讓 agent 直接用原生工具呼叫與其他 agent 溝通、查任務看板、回報狀態，甚至自行
 //! `termade_spawn` 出子 agent。
 //!
-//! 協定：JSON-RPC 2.0 over stdio（newline-delimited JSON）。
+//! 協定：JSON-RPC 2.0 over stdio (newline-delimited JSON)。
 
 use crate::Client;
 use anyhow::{bail, Context, Result};
@@ -49,13 +49,13 @@ pub fn run(session_override: Option<String>) -> Result<()> {
     Ok(())
 }
 
-/// 處理單一 JSON-RPC 訊息；若是 notification（無 `id`）則回傳 `None`。
+/// 處理單一 JSON-RPC 訊息；若是 notification (無 `id`)則回傳 `None`。
 pub fn handle_rpc(session: &str, msg: &Value) -> Option<Value> {
     let id = msg.get("id").cloned();
     let method = msg["method"].as_str().unwrap_or("");
     let params = &msg["params"];
 
-    // Notification（例如 `notifications/initialized`）不需回覆。
+    // Notification (例如 `notifications/initialized`)不需回覆。
     let id = id?;
 
     let result = match method {
@@ -107,7 +107,7 @@ pub fn handle_rpc(session: &str, msg: &Value) -> Option<Value> {
     })
 }
 
-/// `initialize` 的回應；`instructions` 是給模型看的協作說明（MCP 規格的選用欄位）。
+/// `initialize` 的回應；`instructions` 是給模型看的協作說明 (MCP 規格的選用欄位)。
 fn initialize_result(client_ver: &str, instructions: Option<String>) -> Value {
     let mut res = json!({
         "protocolVersion": client_ver,
@@ -453,7 +453,7 @@ fn roundtrip(req: &Request) -> Result<Frame> {
     }
 }
 
-/// Claude `--permission-prompt-tool` 要求的回應格式（以 JSON 字串回傳）。
+/// Claude `--permission-prompt-tool` 要求的回應格式 (以 JSON 字串回傳)。
 fn approval_response(allowed: bool, input: &Value) -> Value {
     let v = if allowed {
         json!({ "behavior": "allow", "updatedInput": input })
@@ -949,7 +949,7 @@ mod tests {
     }
 }
 
-/// `termade_task_list` 的回傳：每個任務加上 `waiting_on`（還沒完成的前置任務），
+/// `termade_task_list` 的回傳：每個任務加上 `waiting_on` (還沒完成的前置任務)，
 /// 讓 agent 看得出任務為什麼被擋住、該去問誰。
 fn task_list_json(state: &termade_core::State) -> Value {
     let tasks: Vec<Value> = state

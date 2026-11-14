@@ -278,7 +278,7 @@ fn selection_text_uses_display_columns() {
     app.selection = Some(((0, 11), (1, 1)));
     assert_eq!(selection_text(&app), "world\nse");
 
-    // 反向拖曳（由下往上）也要正常。
+    // 反向拖曳 (由下往上)也要正常。
     app.selection = Some(((1, 1), (0, 11)));
     assert_eq!(selection_text(&app), "world\nse");
 }
@@ -396,7 +396,7 @@ fn add_pending(app: &mut App) {
 #[test]
 fn layout_modes_render_expected_panes() {
     let mut app = sample_app(&["hi"]);
-    assert_eq!(app.layout, LayoutMode::Two, "預設是兩欄（不顯示 Bus）");
+    assert_eq!(app.layout, LayoutMode::Two, "預設是兩欄 (不顯示 Bus)");
     app.layout = LayoutMode::Three;
     let (_, three) = render_size(&mut app, 120, 40);
     assert!(three.contains("Sessions") && three.contains("Bus / Tasks"));
@@ -692,7 +692,7 @@ fn antigravity_models_are_grouped_by_base_name() {
     assert_eq!(p.items[0].0, "gemini-4-argon  (Gemini 4 Argon)");
 }
 
-// ---- 附件（@檔案／圖片）----
+// ---- 附件 (@檔案／圖片)----
 
 fn temp_dir_with(files: &[(&str, &[u8])]) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("termade-att-{}", termade_core::new_id("t")));
@@ -800,7 +800,7 @@ fn project_search_finds_files_and_resolves_bare_names() {
     std::fs::write(d.join("src/other.rs"), "").unwrap();
     let hits = crate::attach::suggestions(&d, "needle", 5);
     assert_eq!(hits.first().map(String::as_str), Some("src/deep/needle.rs"));
-    // 只打檔名也能附上（唯一符合）
+    // 只打檔名也能附上 (唯一符合)
     let (body, atts) = crate::attach::extract_attachments("看 @needle.rs 吧", &d).unwrap();
     assert_eq!(atts.len(), 1);
     assert_eq!(body, "看 needle.rs 吧");
@@ -1377,7 +1377,7 @@ fn type_keys(app: &mut App, w: &mut ConnStream, text: &str) {
     }
 }
 
-/// 60 行逐字稿（畫面一次放不下），第 5、20、41 行含 `needle`，第 30 行含 `Needle`。
+/// 60 行逐字稿 (畫面一次放不下)，第 5、20、41 行含 `needle`，第 30 行含 `Needle`。
 fn search_app() -> App {
     let lines: Vec<String> = (0..60)
         .map(|i| match i {
@@ -1835,7 +1835,7 @@ fn settings_panel_cycles_values_and_writes_config() {
     }
     crate::settings::handle_key(&mut app, key(KeyCode::Enter));
     assert!(app.settings.as_ref().unwrap().sub.is_none());
-    // 第 6 列「worktree」：預設 on → off（寫成布林）
+    // 第 6 列「worktree」：預設 on → off (寫成布林)
     for _ in 0..4 {
         crate::settings::handle_key(&mut app, key(KeyCode::Down));
     }

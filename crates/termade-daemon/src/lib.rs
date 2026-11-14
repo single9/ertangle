@@ -1,13 +1,13 @@
 //! `termade-daemon` — 常駐的狀態中心。
 //!
 //! 負責：
-//! * 持有 agent 子處理程序（透過 adapter）與其控制把手；
-//! * 把 adapter 事件正規化後寫入 append-only event log（含秘密遮罩）並廣播給所有 client；
-//! * 提供 Unix socket 與選配 TCP（M5 遠端）控制介面（[`termade_protocol`]）；
+//! * 持有 agent 子處理程序 (透過 adapter)與其控制把手；
+//! * 把 adapter 事件正規化後寫入 append-only event log (含秘密遮罩)並廣播給所有 client；
+//! * 提供 Unix socket 與選配 TCP (M5 遠端)控制介面 ([`termade_protocol`])；
 //! * 提供 agent 之間的訊息匯流排、收件匣/阻塞等待、防呆斷路器與任務看板；
-//! * 提供 git worktree 管理、diff、行內審查註解（review 迴圈）、merge 與 PR（M3）；
-//! * 提供權限規則引擎（`policy.toml`）與閒置休眠/喚醒（M4）；
-//! * 提供內建的 stdio MCP server（[`mcp`]）。
+//! * 提供 git worktree 管理、diff、行內審查註解 (review 迴圈)、merge 與 PR (M3)；
+//! * 提供權限規則引擎 (`policy.toml`)與閒置休眠/喚醒 (M4)；
+//! * 提供內建的 stdio MCP server ([`mcp`])。
 
 mod bus;
 pub use bus::BusGuard;
@@ -53,11 +53,11 @@ use termade_protocol::{decode_line, encode_line, Frame, Request};
 use tr::tr;
 
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// 記憶體內保留的事件上限（供新 client 補齊；超過則靠快照）。
+/// 記憶體內保留的事件上限 (供新 client 補齊；超過則靠快照)。
 const BACKLOG_CAP: usize = 20_000;
-/// `BusWait` 最長等待上限（5 分鐘，避免永久阻塞）。
+/// `BusWait` 最長等待上限 (5 分鐘，避免永久阻塞)。
 const MAX_WAIT_MS: u64 = 300_000;
-/// 同一對 session 連續傳送完全相同內容的上限（超過即觸發迴圈斷路）。
+/// 同一對 session 連續傳送完全相同內容的上限 (超過即觸發迴圈斷路)。
 const LOOP_REPEAT_CAP: usize = 3;
 /// 同一對 session 每分鐘最多可傳送的訊息數。
 const PAIR_RATE_CAP_PER_MIN: usize = 30;
@@ -77,7 +77,7 @@ pub(crate) struct QueuedPrompt {
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock()
         .unwrap_or_else(|e: PoisonError<MutexGuard<'_, T>>| {
-            tracing::error!("鎖已中毒（某執行緒 panic），取回內部資料繼續");
+            tracing::error!("鎖已中毒 (某執行緒 panic)，取回內部資料繼續");
             e.into_inner()
         })
 }
@@ -106,7 +106,7 @@ fn load_local_policy(dir: &Path) -> PolicyEngine {
     }
 }
 
-/// 核准決策順序：deny → allow → session 政策（auto／bypass 自動允許）→ 交給人（`None`）。
+/// 核准決策順序：deny → allow → session 政策 (auto／bypass 自動允許)→ 交給人 (`None`)。
 fn decide_permission(
     policy: &PolicyEngine,
     session_policy: PermissionPolicy,
@@ -129,7 +129,7 @@ pub fn replay_log(path: &Path) -> Result<(State, Vec<Record>)> {
     replay_files(&[path.to_path_buf()])
 }
 
-/// 輪替過的舊檔（由舊到新），不含目前這一份。
+/// 輪替過的舊檔 (由舊到新)，不含目前這一份。
 pub fn rotated_logs(path: &Path) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = (1..)
         .map(|n| rotated_log_path(path, n))
@@ -139,7 +139,7 @@ pub fn rotated_logs(path: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// 依序重播所有輪替檔與目前這一份（`termade replay --all`）。
+/// 依序重播所有輪替檔與目前這一份 (`termade replay --all`)。
 pub fn replay_log_all(path: &Path) -> Result<(State, Vec<Record>)> {
     let mut files = rotated_logs(path);
     files.push(path.to_path_buf());
@@ -173,7 +173,7 @@ fn replay_files(paths: &[PathBuf]) -> Result<(State, Vec<Record>)> {
             }
         }
         if bad > 0 {
-            tracing::warn!("replay_log：略過 {bad} 行無法解析的紀錄（{path:?}）");
+            tracing::warn!("replay_log：略過 {bad} 行無法解析的紀錄 ({path:?})");
         }
     }
     Ok((state, records))
@@ -190,7 +190,7 @@ pub(crate) struct SessionEntry {
 }
 
 impl ConnStream {
-    /// 關閉連線兩個方向（用於踢掉卡住的 client）。
+    /// 關閉連線兩個方向 (用於踢掉卡住的 client)。
     pub(crate) fn shutdown(&self) {
         let _ = match self {
             ConnStream::Unix(u) => u.shutdown(std::net::Shutdown::Both),
@@ -237,7 +237,7 @@ impl ClientTx {
     /// 廣播用：佇列已滿則回傳 false，並關閉連線讓 client 重連補齊。
     fn send_bounded(&self, frame: Frame) -> bool {
         if self.pending.load(Ordering::SeqCst) >= CLIENT_QUEUE_CAP {
-            tracing::warn!("client 佇列已滿（{CLIENT_QUEUE_CAP}），中斷連線");
+            tracing::warn!("client 佇列已滿 ({CLIENT_QUEUE_CAP})，中斷連線");
             if let Some(c) = &self.closer {
                 c.shutdown();
             }
@@ -273,7 +273,7 @@ pub(crate) struct Inner {
     pub(crate) backlog: VecDeque<Record>,
     pub(crate) sessions: HashMap<SessionId, SessionEntry>,
     pub(crate) inbox_cursors: HashMap<SessionId, MsgId>,
-    /// 送達時收件者正忙、因此沒有喚醒的訊息（T25）；回到 `Idle` 時合併提醒一次。
+    /// 送達時收件者正忙、因此沒有喚醒的訊息 (T25)；回到 `Idle` 時合併提醒一次。
     pub(crate) pending_nudge: HashMap<SessionId, Vec<MsgId>>,
     pub(crate) waiters: Vec<Waiter>,
     /// 等待人類回覆的 MCP 核准請求：req id → 決定通道。
@@ -282,21 +282,21 @@ pub(crate) struct Inner {
     pub(crate) policy: PolicyEngine,
     pub(crate) default_cwd: PathBuf,
     pub(crate) clients: Vec<ClientTx>,
-    /// 各 session 的待送 prompt 佇列（含附件內容，只留記憶體）。
+    /// 各 session 的待送 prompt 佇列 (含附件內容，只留記憶體)。
     pub(crate) queues: HashMap<SessionId, VecDeque<QueuedPrompt>>,
 }
 
 pub(crate) struct Shared {
     pub(crate) inner: Mutex<Inner>,
     pub(crate) log_tx: Mutex<Sender<LogMsg>>,
-    /// log 目前是否能正常寫入（false 表示寫入失敗中）。
+    /// log 目前是否能正常寫入 (false 表示寫入失敗中)。
     pub(crate) log_ok: Arc<AtomicBool>,
     pub(crate) auth_token: Option<String>,
     /// 本次 daemon 啟動的世代 id。
     pub(crate) epoch: String,
-    /// 已經提醒過額度快滿的 agent（用量降回門檻以下才會重新提醒）。
+    /// 已經提醒過額度快滿的 agent (用量降回門檻以下才會重新提醒)。
     pub(crate) quota_warned: Mutex<std::collections::HashSet<String>>,
-    /// 已經提醒過成本接近上限的 session（降回門檻以下或調高上限後才會重新提醒）。
+    /// 已經提醒過成本接近上限的 session (降回門檻以下或調高上限後才會重新提醒)。
     pub(crate) budget_warned: Mutex<std::collections::HashSet<SessionId>>,
 }
 
@@ -375,7 +375,7 @@ impl Shared {
         });
 
         // 重啟後子處理程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
-        // 有原生對話 id 的可以接續，但不自動做（會在使用者沒注意時動用額度），只留一則說明。
+        // 有原生對話 id 的可以接續，但不自動做 (會在使用者沒注意時動用額度)，只留一則說明。
         let orphans: Vec<(SessionId, bool)> = {
             let inner = lock(&shared.inner);
             inner
@@ -413,7 +413,7 @@ impl Shared {
         Ok(shared)
     }
 
-    /// 重啟還原後，清掉超過 1 小時且已結束、又沒有 worktree 分支的 session（log 仍完整保留）。
+    /// 重啟還原後，清掉超過 1 小時且已結束、又沒有 worktree 分支的 session (log 仍完整保留)。
     /// 否則歷史上所有 session 都會一直堆在清單裡。
     pub(crate) fn prune_ended_sessions(&self, now_ms: u64) {
         const KEEP_ENDED_MS: u64 = 3600 * 1000;
@@ -436,8 +436,8 @@ impl Shared {
         }
     }
 
-    /// 另一個仍在執行的 session 是否正在使用這個工作目錄（交接後新舊 session 共用同一個 worktree）。
-    /// 其他尚未移除、與 `s` 共用同一個 worktree 的 session（不論狀態）的 label。
+    /// 另一個仍在執行的 session 是否正在使用這個工作目錄 (交接後新舊 session 共用同一個 worktree)。
+    /// 其他尚未移除、與 `s` 共用同一個 worktree 的 session (不論狀態)的 label。
     pub(crate) fn cwd_shared_with(&self, s: &Session) -> Vec<String> {
         lock(&self.inner)
             .state
@@ -470,7 +470,7 @@ impl Shared {
         inner.clients.retain(|c| c.send_bounded(frame.clone()));
     }
 
-    /// 廣播一個事件：更新狀態、寫 log（先遮罩憑證）、推給所有 client。
+    /// 廣播一個事件：更新狀態、寫 log (先遮罩憑證)、推給所有 client。
     pub(crate) fn emit(&self, event: Event) {
         let mut inner = lock(&self.inner);
         inner.seq += 1;
@@ -495,7 +495,7 @@ impl Shared {
         inner.clients.retain(|c| c.send_bounded(frame.clone()));
     }
 
-    /// 把 adapter 事件翻譯成核心事件（並在核准事件時先經過 PolicyEngine 規則過濾）。
+    /// 把 adapter 事件翻譯成核心事件 (並在核准事件時先經過 PolicyEngine 規則過濾)。
     /// 依規則引擎與 session 政策自動決定核准；`None` 表示要問人。
     pub(crate) fn auto_decision(
         &self,
@@ -644,14 +644,14 @@ impl Shared {
             lock(&self.inner).pending_nudge.remove(sid);
             self.clear_queue_for_ended(sid, false);
         } else if became_idle {
-            // 使用者排的 prompt 是明確指示，先送；佇列沒送出東西才補未讀訊息提醒（T25）。
+            // 使用者排的 prompt 是明確指示，先送；佇列沒送出東西才補未讀訊息提醒 (T25)。
             if !self.flush_queue_if_idle(sid) {
                 self.nudge_unread_if_idle(sid);
             }
         }
     }
 
-    /// 當 session 回到 `Idle` 時，若佇列有待送 prompt，取第一則送出（一次一則）。
+    /// 當 session 回到 `Idle` 時，若佇列有待送 prompt，取第一則送出 (一次一則)。
     /// 回傳是否真的送出了 prompt。
     pub(crate) fn flush_queue_if_idle(self: &Arc<Self>, sid: &SessionId) -> bool {
         let popped = {
@@ -661,7 +661,7 @@ impl Shared {
                 .sessions
                 .get(sid)
                 .is_some_and(|s| s.status == SessionStatus::Idle && !s.over_budget);
-            // 超過成本上限（T17）時佇列保留不送；調高上限後由 handle_budget 再觸發。
+            // 超過成本上限 (T17)時佇列保留不送；調高上限後由 handle_budget 再觸發。
             if !is_idle {
                 return false;
             }
@@ -708,7 +708,7 @@ impl Shared {
         }
     }
 
-    /// session 結束或移除時清空待送佇列，並廣播 `QueueChanged`（與結束提示）。
+    /// session 結束或移除時清空待送佇列，並廣播 `QueueChanged` (與結束提示)。
     pub(crate) fn clear_queue_for_ended(&self, sid: &SessionId, is_removed: bool) {
         let (dropped, had_state) = {
             let mut inner = lock(&self.inner);

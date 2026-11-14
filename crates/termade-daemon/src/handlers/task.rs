@@ -43,7 +43,7 @@ fn assignment_body(state: &State, task: &Task) -> String {
                 })
                 .unwrap_or_else(|| "無負責人".into());
             body.push_str(&format!(
-                "- {}「{}」（{}，負責人：{owner}）\n",
+                "- {}「{}」({}，負責人：{owner})\n",
                 d.id,
                 d.title,
                 d.status.id()
@@ -53,7 +53,7 @@ fn assignment_body(state: &State, task: &Task) -> String {
     body.trim_end().to_string()
 }
 
-/// 把指派訊息投遞給負責人（閒置中的負責人會被喚醒）。自己指派給自己不通知。
+/// 把指派訊息投遞給負責人 (閒置中的負責人會被喚醒)。自己指派給自己不通知。
 fn notify_assignee(shared: &Arc<Shared>, task: &Task) {
     let Some(target) = task.assignee.clone().filter(|a| !a.is_empty()) else {
         return;
@@ -71,7 +71,7 @@ fn notify_assignee(shared: &Arc<Shared>, task: &Task) {
     );
 }
 
-/// 任務是否還在等前置任務（`blocked` 且有相依性沒完成）。
+/// 任務是否還在等前置任務 (`blocked` 且有相依性沒完成)。
 fn waiting_on_deps(state: &State, task: &Task) -> bool {
     task.status == TaskStatus::Blocked && !state.unfinished_deps(task).is_empty()
 }
@@ -143,7 +143,7 @@ pub(crate) fn handle_create(
     } else {
         // 還在等前置任務：先不通知負責人，等相依性完成再由 `unblock_dependents` 送。
         let _ = reply.send(Frame::ok_note(tr!(
-            "已建立任務 {id} （blocked：等待 {waiting} 完成後自動解鎖並通知負責人）",
+            "已建立任務 {id} (blocked：等待 {waiting} 完成後自動解鎖並通知負責人)",
             id = id,
             waiting = waiting.join("、")
         )));

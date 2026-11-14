@@ -1,4 +1,4 @@
-//! 任務視圖（T18）：依狀態分組的任務清單、選取任務的說明，以及游標／跳轉／改狀態。
+//! 任務視圖 (T18)：依狀態分組的任務清單、選取任務的說明，以及游標／跳轉／改狀態。
 
 use anyhow::Result;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -33,7 +33,7 @@ pub(crate) fn status_color(s: TaskStatus) -> Color {
 }
 
 /// 任務是否屬於目前的專案範圍。`Task` 沒有專案欄位，用負責人或建立者的 session 判斷；
-/// 兩者都對不到 session（人建立、還沒指派，或 session 已移除）的任務一律顯示。
+/// 兩者都對不到 session (人建立、還沒指派，或 session 已移除)的任務一律顯示。
 fn in_scope(app: &App, t: &Task) -> bool {
     if !app.scope_here {
         return true;
@@ -77,7 +77,7 @@ pub(crate) fn selected_task(app: &App) -> Option<TaskId> {
         .cloned()
 }
 
-/// 移動任務游標（鍵盤與滑鼠滾輪共用）。
+/// 移動任務游標 (鍵盤與滑鼠滾輪共用)。
 pub(crate) fn move_task_cursor(app: &mut App, delta: i32) {
     let n = visible_task_ids(app).len();
     if n == 0 {
@@ -103,7 +103,7 @@ pub(crate) fn jump_to_assignee(app: &mut App) {
         return;
     };
     if !app.state.sessions.contains_key(&assignee) {
-        app.status = tr!("負責人的 session（{id}）已不存在", id = short(&assignee));
+        app.status = tr!("負責人的 session ({id})已不存在", id = short(&assignee));
         return;
     }
     // 負責人在別的專案時，先改成顯示全部專案才選得到。
@@ -172,7 +172,7 @@ pub(crate) fn fmt_age(now_ms: u64, then_ms: u64) -> String {
     }
 }
 
-/// 依顯示寬度截斷並補空白到剛好 `w` 欄（中文等寬字元算 2 欄）。
+/// 依顯示寬度截斷並補空白到剛好 `w` 欄 (中文等寬字元算 2 欄)。
 fn fit(s: &str, w: usize) -> String {
     let s = s.replace('\n', " ");
     let mut out = String::new();
@@ -261,7 +261,7 @@ pub(crate) fn draw_tasks(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let inner_w = list_area.width.saturating_sub(2) as usize;
     let title_w = inner_w.saturating_sub(46).clamp(12, 60);
     let now = termade_core::now_millis();
-    // 每一列對應的任務索引（分組標題是 None），供捲動與滑鼠點選。
+    // 每一列對應的任務索引 (分組標題是 None)，供捲動與滑鼠點選。
     let mut rows: Vec<Option<usize>> = Vec::new();
     let mut lines: Vec<Line> = Vec::new();
     let mut last_group = None;
@@ -386,7 +386,7 @@ fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
                 Style::default().fg(Color::Yellow),
             ),
             None => (
-                tr!("  ? {id}（已不存在）", id = short(dep)),
+                tr!("  ? {id} (已不存在)", id = short(dep)),
                 Style::default().fg(Color::DarkGray),
             ),
         };
@@ -394,7 +394,7 @@ fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
     }
     if t.detail.trim().is_empty() {
         lines.push(Line::styled(
-            tr!("（沒有說明）"),
+            tr!("(沒有說明)"),
             Style::default().fg(Color::DarkGray),
         ));
     } else {
@@ -404,7 +404,7 @@ fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(tr!(" 任務說明（Enter 跳到負責人 · :task-status <狀態>） ")),
+                .title(tr!(" 任務說明 (Enter 跳到負責人 · :task-status <狀態>) ")),
         )
         .wrap(Wrap { trim: false });
     f.render_widget(para, area);

@@ -1,4 +1,4 @@
-//! Helix 風格的 Space 選單（which-key）與 spawn 選擇器（agent → model → prompt）。
+//! Helix 風格的 Space 選單 (which-key)與 spawn 選擇器 (agent → model → prompt)。
 
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -14,11 +14,11 @@ use crate::commands::execute_command;
 pub(crate) enum Act {
     /// 進入子選單。
     Menu,
-    /// 執行命令（等同在 `:` 輸入）。
+    /// 執行命令 (等同在 `:` 輸入)。
     Cmd(&'static str),
     /// 開啟 spawn 選擇器。
     Spawn,
-    /// 開啟交接選擇器（選接手的 agent 與 model）。
+    /// 開啟交接選擇器 (選接手的 agent 與 model)。
     Handoff,
     /// 切到輸入模式並預填文字。
     Prefill(Mode, &'static str),
@@ -47,7 +47,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 it('m', "message ▸", Act::Menu),
                 it(
                     ',',
-                    termade_core::tr_noop!("設定（預設 model／effort／權限…）"),
+                    termade_core::tr_noop!("設定 (預設 model／effort／權限…)"),
                     Act::Cmd("settings"),
                 ),
                 it(
@@ -57,12 +57,12 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 ),
                 it(
                     '?',
-                    termade_core::tr_noop!("說明（所有按鍵與命令）"),
+                    termade_core::tr_noop!("說明 (所有按鍵與命令)"),
                     Act::Cmd("help"),
                 ),
                 it(
                     'q',
-                    termade_core::tr_noop!("離開（保留 daemon）"),
+                    termade_core::tr_noop!("離開 (保留 daemon)"),
                     Act::Cmd("quit"),
                 ),
                 it(
@@ -82,27 +82,27 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
             vec![
                 it(
                     'n',
-                    termade_core::tr_noop!("新增 agent…（選 agent 與 model）"),
+                    termade_core::tr_noop!("新增 agent… (選 agent 與 model)"),
                     Act::Spawn,
                 ),
                 it(
                     'h',
-                    termade_core::tr_noop!("交接給其他 agent（額度用完時）"),
+                    termade_core::tr_noop!("交接給其他 agent (額度用完時)"),
                     Act::Handoff,
                 ),
                 it(
                     'r',
-                    termade_core::tr_noop!("接續已結束的 session（接回原對話）"),
+                    termade_core::tr_noop!("接續已結束的 session (接回原對話)"),
                     Act::Cmd("resume"),
                 ),
                 it(
                     'm',
-                    termade_core::tr_noop!("切換 model（執行中）"),
+                    termade_core::tr_noop!("切換 model (執行中)"),
                     Act::Prefill(Mode::Command, "model "),
                 ),
                 it(
                     'e',
-                    termade_core::tr_noop!("切換 effort（執行中）"),
+                    termade_core::tr_noop!("切換 effort (執行中)"),
                     Act::Prefill(Mode::Command, "effort "),
                 ),
                 it(
@@ -141,7 +141,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 ),
                 it(
                     'n',
-                    termade_core::tr_noop!("merge 乾跑（dry-run）"),
+                    termade_core::tr_noop!("merge 乾跑 (dry-run)"),
                     Act::Cmd("merge --dry-run"),
                 ),
                 it(
@@ -204,7 +204,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 ),
                 it(
                     'f',
-                    termade_core::tr_noop!("附加檔案／圖片…（@路徑，Tab 補全）"),
+                    termade_core::tr_noop!("附加檔案／圖片… (@路徑，Tab 補全)"),
                     Act::Prefill(Mode::Prompt, "@"),
                 ),
             ],
@@ -237,7 +237,7 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
                 return Ok(());
             };
             let Some(item) = items.iter().find(|i| i.key == c).copied() else {
-                app.status = tr!("選單沒有 `{c}`（Backspace 返回、Esc 關閉）", c = c);
+                app.status = tr!("選單沒有 `{c}`(Backspace 返回、Esc 關閉)", c = c);
                 return Ok(());
             };
             match item.act {
@@ -284,10 +284,10 @@ pub(crate) struct Picker {
     pub items: Vec<(String, String)>,
     pub filter: String,
     pub cursor: usize,
-    /// 背景查詢 agent 可用 model 的結果（查到後併入 `items`）。
+    /// 背景查詢 agent 可用 model 的結果 (查到後併入 `items`)。
     pub pending: Option<std::sync::mpsc::Receiver<Vec<(String, String)>>>,
     pub loading: bool,
-    /// Antigravity 的 model id 把 effort 寫在尾巴（`-low`／`-medium`…）：清單只列基底名稱，
+    /// Antigravity 的 model id 把 effort 寫在尾巴 (`-low`／`-medium`…)：清單只列基底名稱，
     /// 這裡記錄每個基底有哪些 effort 變體。
     pub group_effort: bool,
     pub variants: std::collections::HashMap<String, Vec<String>>,
@@ -302,13 +302,13 @@ pub(crate) fn split_effort_suffix(id: &str) -> Option<(&str, &str)> {
 }
 
 impl Picker {
-    /// 把背景查詢的結果併進清單（每次繪製前呼叫）。
+    /// 把背景查詢的結果併進清單 (每次繪製前呼叫)。
     pub(crate) fn poll_pending(&mut self) {
         let Some(rx) = &self.pending else { return };
         match rx.try_recv() {
             Ok(found) => {
                 // 先依基底名稱分組，再決定要不要合併：只有出現兩個以上 effort 變體才視為
-                // 「同一個 model 的不同 effort」（ACP 的 model 選項不含 effort 尾巴）。
+                // 「同一個 model 的不同 effort」(ACP 的 model 選項不含 effort 尾巴)。
                 let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
                 for (label, value) in found {
                     let key = match split_effort_suffix(&value) {
@@ -405,7 +405,7 @@ const CLAUDE_MODELS: &[(&str, &str)] = &[
 
 /// 某個 agent 可選的 model：預設 + 內建清單 + config.toml 的 `models`／`model`。
 pub(crate) fn model_choices(kind: &AgentKind) -> Vec<(String, String)> {
-    let mut out = vec![(tr!("預設（依 config.toml）"), String::new())];
+    let mut out = vec![(tr!("預設 (依 config.toml)"), String::new())];
     if matches!(kind, AgentKind::ClaudeCode) {
         out.extend(CLAUDE_MODELS.iter().map(|(id, name)| {
             let name = termade_core::tr_dyn!(name);
@@ -426,8 +426,8 @@ pub(crate) fn model_choices(kind: &AgentKind) -> Vec<(String, String)> {
     out
 }
 
-/// 向 agent 的 CLI 查詢可用 model（`opencode models`、`agy models`），最多等 8 秒。
-/// 輸出每行第一欄是 model id，後面（以 tab 分隔）是顯示名稱。
+/// 向 agent 的 CLI 查詢可用 model (`opencode models`、`agy models`)，最多等 8 秒。
+/// 輸出每行第一欄是 model id，後面 (以 tab 分隔)是顯示名稱。
 pub(crate) fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
     let (bin, args): (&str, &[&str]) = match kind {
         AgentKind::OpenCode => ("opencode", &["models"]),
@@ -464,15 +464,15 @@ pub(crate) fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
     }
     match kind {
         AgentKind::Codex => parse_codex_models(&out),
-        // agy 的清單把 effort 寫進 model id（`xxx-high`），但 ACP 的 model 與 effort 是分開的選項。
+        // agy 的清單把 effort 寫進 model id (`xxx-high`)，但 ACP 的 model 與 effort 是分開的選項。
         AgentKind::Antigravity => split_effort_variants(parse_models(&out)),
         _ => parse_models(&out),
     }
 }
 
 /// 把 `base-low／-medium／-high／-xhigh／-max` 這類「model + effort 合在一起」的 id 合併成 `base`
-/// （effort 另外選）。只有同一個 base 有兩個以上變體才合併，避免把 `gpt-oss-120b-medium`
-/// 這種單一 id 誤拆。輸入是 `(顯示文字, id)`，保留原本的順序。
+/// (effort 另外選)。只有同一個 base 有兩個以上變體才合併，避免把 `gpt-oss-120b-medium`
+/// 這種單一 id 誤拆。輸入是 ` (顯示文字, id)`，保留原本的順序。
 pub(crate) fn split_effort_variants(models: Vec<(String, String)>) -> Vec<(String, String)> {
     let base_of = |id: &str| -> Option<String> {
         let (base, last) = id.rsplit_once('-')?;
@@ -552,7 +552,7 @@ pub(crate) fn parse_models(out: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// 交接：選接手的 agent 與 model，選完直接送出（簡報由 daemon 產生）。
+/// 交接：選接手的 agent 與 model，選完直接送出 (簡報由 daemon 產生)。
 pub(crate) fn start_handoff_picker(app: &mut App) {
     let Some(src) = app.selected_id() else {
         app.status = tr!("沒有選取的 session");
@@ -606,7 +606,7 @@ fn finish_picker(
             },
         )?;
         app.status = tr!(
-            "已要求交接給 {target}（舊 session 會停止，新 agent 沿用同一個工作目錄）",
+            "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同一個工作目錄)",
             target = format!(
                 "{}{}",
                 kind.id(),
@@ -617,7 +617,7 @@ fn finish_picker(
         return Ok(());
     }
     app.status = tr!(
-        "spawn → {target}：輸入 prompt 後 Enter（可留空）",
+        "spawn → {target}：輸入 prompt 後 Enter (可留空)",
         target = format!(
             "{}{}{}",
             kind.id(),
@@ -687,7 +687,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
             let custom = p.filter.trim().to_string();
             match p.stage.clone() {
                 PickStage::Agent => {
-                    // 沒有符合的項目時，也接受別名（例如 agy、oc）。
+                    // 沒有符合的項目時，也接受別名 (例如 agy、oc)。
                     let chosen =
                         chosen.or_else(|| AgentKind::parse(&custom).map(|k| k.id().to_string()));
                     let Some(kind) = chosen.and_then(|v| AgentKind::parse(&v)) else {
@@ -695,13 +695,13 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
                         return Ok(());
                     };
                     p.title = tr!(
-                        "{agent} 的 model（輸入可過濾；無符合時 Enter 使用輸入值）",
+                        "{agent} 的 model (輸入可過濾；無符合時 Enter 使用輸入值)",
                         agent = kind.id()
                     );
                     p.items = model_choices(&kind);
                     p.filter.clear();
                     p.cursor = 0;
-                    // 向 CLI 查詢可用 model（不阻塞介面）。
+                    // 向 CLI 查詢可用 model (不阻塞介面)。
                     let (tx, rx) = std::sync::mpsc::channel();
                     let k = kind.clone();
                     if matches!(

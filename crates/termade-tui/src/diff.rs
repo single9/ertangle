@@ -3,7 +3,7 @@
 use crate::app::{App, CenterView};
 use tr::tr;
 
-/// 在 Diff 視圖跳到上一個／下一個 hunk（`@@` 行）。
+/// 在 Diff 視圖跳到上一個／下一個 hunk (`@@` 行)。
 pub(crate) fn jump_hunk(app: &mut App, forward: bool) {
     if app.view != CenterView::Diff || app.diff_lines.is_empty() {
         return;
@@ -41,7 +41,7 @@ pub(crate) fn parse_hunk(line: &str) -> Option<(u64, u64)> {
     Some((old?, new?))
 }
 
-/// 為每行 diff 標上（舊檔行號, 新檔行號）；非內容行則為 `None`。
+/// 為每行 diff 標上 (舊檔行號, 新檔行號)；非內容行則為 `None`。
 pub(crate) fn build_gutter(lines: &[String]) -> Vec<(Option<u64>, Option<u64>)> {
     let mut out = Vec::with_capacity(lines.len());
     let (mut old, mut new) = (0u64, 0u64);

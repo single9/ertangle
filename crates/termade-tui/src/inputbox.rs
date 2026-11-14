@@ -2,11 +2,11 @@
 
 use unicode_width::UnicodeWidthChar;
 
-/// 輸入框最多顯示幾行內容（超過就捲動）。
+/// 輸入框最多顯示幾行內容 (超過就捲動)。
 pub(crate) const MAX_ROWS: usize = 8;
 
 /// 一個顯示列：`[start, end)` 是字元索引範圍；`hard` 表示這列結尾是真正的換行字元
-/// （換行字元本身在索引 `end`，不屬於任何列的內容）。
+/// (換行字元本身在索引 `end`，不屬於任何列的內容)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Row {
     pub(crate) start: usize,
@@ -91,7 +91,7 @@ pub(crate) fn index_at(text: &str, rows: &[Row], r: usize, col: usize) -> usize 
     idx
 }
 
-/// 目前所在邏輯行（以換行字元分隔）的起點與終點字元索引。
+/// 目前所在邏輯行 (以換行字元分隔)的起點與終點字元索引。
 pub(crate) fn line_bounds(text: &str, cursor: usize) -> (usize, usize) {
     let chars: Vec<char> = text.chars().collect();
     let cursor = cursor.min(chars.len());
@@ -114,7 +114,7 @@ pub(crate) fn row_text(text: &str, row: Row) -> String {
         .collect()
 }
 
-/// 輸入框需要的高度（含邊框）。
+/// 輸入框需要的高度 (含邊框)。
 pub(crate) fn height_for(text: &str, outer_width: u16) -> u16 {
     let inner = (outer_width as usize).saturating_sub(2);
     let n = rows(text, inner).len().clamp(1, MAX_ROWS);

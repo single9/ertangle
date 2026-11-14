@@ -110,7 +110,7 @@ fn paths_are_under_expected_dirs() {
 }
 
 // -----------------------------------------------------------------------
-// 喚醒行為測試（廣播 / 直接訊息 / 任務指派）
+// 喚醒行為測試 (廣播 / 直接訊息 / 任務指派)
 // -----------------------------------------------------------------------
 
 #[derive(Clone, Default)]
@@ -809,7 +809,7 @@ fn bus_guard_detects_loop_and_rate_limit() {
     assert!(err2.contains("速率限制"));
 }
 
-// ---- git 輔助函式（T02／T03）----
+// ---- git 輔助函式 (T02／T03)----
 
 fn git(dir: &Path, args: &[&str]) -> String {
     let o = Command::new("git")
@@ -975,7 +975,7 @@ fn termade_status_line_matches_only_termade_dir() {
     assert!(!is_termade_status_line(" M src/.termade/f"));
 }
 
-// ---- 重啟還原（T01）----
+// ---- 重啟還原 (T01)----
 
 fn restart_session(id: &str, status: SessionStatus) -> Session {
     Session {
@@ -1023,7 +1023,7 @@ fn restart_restores_state_and_continues_seq() {
     let inner = second.inner.lock().unwrap();
     assert!(inner.state.sessions.contains_key("ses-live"));
     assert!(inner.state.sessions.contains_key("ses-done"));
-    // 原本 live 的 session 被收斂為已結束（多一筆事件）。
+    // 原本 live 的 session 被收斂為已結束 (多一筆事件)。
     assert!(!inner.state.sessions["ses-live"].status.is_live());
     assert_eq!(inner.seq, n + 1);
     drop(inner);
@@ -1039,7 +1039,7 @@ fn restart_restores_state_and_continues_seq() {
     assert_eq!(recs.len() as u64, n + 2);
 }
 
-// ---- 接續（T14）----
+// ---- 接續 (T14)----
 
 #[test]
 fn native_id_survives_flush_and_replay_and_restart_leaves_resume_hint() {
@@ -1194,7 +1194,7 @@ fn hello_with_wrong_epoch_gets_snapshot() {
     assert!(!rx2.try_iter().any(|f| matches!(f, Frame::Snapshot { .. })));
 }
 
-// ---- 核准決策（T04）----
+// ---- 核准決策 (T04)----
 
 #[test]
 fn permission_decision_order() {
@@ -1236,7 +1236,7 @@ fn repo_policy_adds_deny_but_cannot_remove() {
     assert!(merged.deny.iter().any(|d| d == "git push --force"));
 }
 
-// ---- 併發與 log 輪替（T07 / T08）----
+// ---- 併發與 log 輪替 (T07 / T08)----
 
 fn out_event(i: usize) -> Event {
     Event::Output {
@@ -1333,7 +1333,7 @@ fn log_rotates_with_snapshot_and_continuous_seq() {
         serde_json::to_value(&live).unwrap()
     );
 
-    // seq 跨檔案連續（排除 snapshot 紀錄本身，它沿用前一筆的 seq）。
+    // seq 跨檔案連續 (排除 snapshot 紀錄本身，它沿用前一筆的 seq)。
     let (_, recs) = replay_log_all(&log).unwrap();
     let real: Vec<u64> = recs
         .iter()
@@ -1358,7 +1358,7 @@ fn unwritable_log_does_not_stop_daemon() {
     assert_eq!(shared.snapshot().seq, 2);
 }
 
-// ---- MCP 核准轉發（Claude --permission-prompt-tool）----
+// ---- MCP 核准轉發 (Claude --permission-prompt-tool)----
 
 fn ask_sess(id: &str, perm: PermissionPolicy) -> Session {
     let mut s = restart_session(id, SessionStatus::Idle);
@@ -1468,7 +1468,7 @@ fn restore_prunes_old_ended_sessions_but_keeps_branches_and_recent() {
 #[test]
 fn failed_spawn_leaves_no_session() {
     let shared = test_shared();
-    // 指向不存在的執行檔，讓啟動必定失敗（與本機是否安裝 agent 無關）。
+    // 指向不存在的執行檔，讓啟動必定失敗 (與本機是否安裝 agent 無關)。
     std::env::set_var("TERMADE_CLAUDE_BIN", "/nonexistent/claude-for-test");
     let (tx, rx) = client_channel(None);
     shared.handle(
@@ -1556,7 +1556,7 @@ fn high_quota_leaves_a_handoff_hint_once_per_crossing() {
         .clone()
         .unwrap();
     assert!(note.contains("handoff") && note.contains("95"), "{note}");
-    // 再來一次不重複提醒（先清掉備註確認）
+    // 再來一次不重複提醒 (先清掉備註確認)
     shared.emit(Event::SessionNote {
         session: "ses-c".into(),
         note: String::new(),
@@ -1629,7 +1629,7 @@ fn spawn_enforces_max_depth_and_max_children_only_for_child_sessions() {
         })
     };
 
-    // g1 的深度已是 2（root=0 -> c1=1 -> g1=2），再往下一層深度為 3 > max_depth(2)
+    // g1 的深度已是 2 (root=0 -> c1=1 -> g1=2)，再往下一層深度為 3 > max_depth(2)
     let (tx, rx) = client_channel(None);
     shared.handle(&tx, spawn_req(Some("g1")));
     let frames: Vec<Frame> = rx.try_iter().collect();
@@ -1643,7 +1643,7 @@ fn spawn_enforces_max_depth_and_max_children_only_for_child_sessions() {
         other => panic!("預期錯誤，得到 {other:?}"),
     }
 
-    // root 已有 2 個進行中的子 session（c1, c2），再衍生第 3 個應被 max_children(2) 拒絕
+    // root 已有 2 個進行中的子 session (c1, c2)，再衍生第 3 個應被 max_children(2) 拒絕
     let (tx, rx) = client_channel(None);
     shared.handle(&tx, spawn_req(Some("root")));
     let frames: Vec<Frame> = rx.try_iter().collect();
@@ -1657,7 +1657,7 @@ fn spawn_enforces_max_depth_and_max_children_only_for_child_sessions() {
         other => panic!("預期錯誤，得到 {other:?}"),
     }
 
-    // 若 c2 已結束（Exited），進行中的子 session 只剩 1 個，不再被 max_children 擋下
+    // 若 c2 已結束 (Exited)，進行中的子 session 只剩 1 個，不再被 max_children 擋下
     shared.emit(Event::SessionStatus {
         session: "c2".into(),
         status: SessionStatus::Exited,
@@ -2192,7 +2192,7 @@ fn queue_pop_clear_and_cap_20() {
     }
     assert_eq!(lock(&shared.inner).state.queues["ses_cap"].len(), 20);
 
-    // QueuePop 取回最後一則（item-20）
+    // QueuePop 取回最後一則 (item-20)
     shared.handle(
         &tx,
         Request::QueuePop {
@@ -2267,7 +2267,7 @@ fn queue_changed_updates_state_and_old_snapshot_parses_and_hides_attachment_data
     );
     shared.flush_log();
 
-    // State.queues 儲存的是原始輸入文字（含 @foo.rs）
+    // State.queues 儲存的是原始輸入文字 (含 @foo.rs)
     assert_eq!(
         shared.snapshot().queues.get("ses_att"),
         Some(&vec!["請看 @foo.rs".to_string()])
@@ -2285,7 +2285,7 @@ fn queue_changed_updates_state_and_old_snapshot_parses_and_hides_attachment_data
     );
     assert!(raw_log.contains("請看 @foo.rs"));
 
-    // 舊格式快照（不含 queues 欄位）仍可正常反序列化
+    // 舊格式快照 (不含 queues 欄位)仍可正常反序列化
     let old_state_json = r#"{
         "seq": 5,
         "sessions": {},
@@ -2339,7 +2339,7 @@ fn over_budget_holds_queue_rejects_new_prompts_and_resumes_after_raise() {
     assert!(ctl.inputs().is_empty(), "超限時不應送出排隊的 prompt");
     assert!(lock(&shared.inner).state.queues.contains_key("ses_ob"));
 
-    // 超限期間新的 prompt（立即或排隊）都被拒絕，佇列不變。
+    // 超限期間新的 prompt (立即或排隊)都被拒絕，佇列不變。
     for queue in [false, true] {
         shared.handle(
             &tx,
@@ -2434,7 +2434,7 @@ fn removing_session_whose_branch_and_worktree_are_gone_succeeds() {
     // 舊版行為留下的狀態：worktree 與分支已被刪掉，session 紀錄還在。
     remove_worktree(&repo, &a, false).unwrap();
     assert!(gc_block_reason(&repo, &a).is_none());
-    // 再刪一次也不算錯（分支不存在時跳過）。
+    // 再刪一次也不算錯 (分支不存在時跳過)。
     remove_worktree(&repo, &a, false).unwrap();
     for id in ["ses_a", "ses_b"] {
         let f = rm(&shared, id, false);
@@ -2574,7 +2574,7 @@ fn queued_prompt_goes_before_unread_nudge() {
 
 #[test]
 fn read_messages_are_not_nudged() {
-    // termade_wait 取走：以 inbox 已讀（cursor 前進）模擬同一個判斷
+    // termade_wait 取走：以 inbox 已讀 (cursor 前進)模擬同一個判斷
     let (shared, ctl) = nudge_setup(SessionStatus::Busy);
     send_to_n(&shared, MsgKind::Chat, "one");
     let (tx, rx) = client_channel(None);

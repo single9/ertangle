@@ -1,11 +1,11 @@
 //! 原生 Agent Client Protocol adapter。
 //!
-//! M0 用於 OpenCode（`opencode acp`），這是四家 agent 中唯一「原生、零額外相依性」
+//! M0 用於 OpenCode (`opencode acp`)，這是四家 agent 中唯一「原生、零額外相依性」
 //! 就提供結構化協定的一條，因此當作第一個結構化 adapter。
 //!
-//! 涵蓋的 ACP 子集：`initialize`、`session/new`、`session/load`（接續）、`session/prompt`、
+//! 涵蓋的 ACP 子集：`initialize`、`session/new`、`session/load` (接續)、`session/prompt`、
 //! `session/cancel`，
-//! 以及 server→client 的 `session/update`（串流）與 `session/request_permission`（核准）。
+//! 以及 server→client 的 `session/update` (串流)與 `session/request_permission` (核准)。
 
 use crate::stream::StreamBuf;
 use crate::{AgentControl, AgentEvent, SessionSpec};
@@ -27,23 +27,23 @@ const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
 const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 
 struct Conn {
-    /// 我們自己的 session id（事件關聯用）。
+    /// 我們自己的 session id (事件關聯用)。
     session_id: String,
-    /// agent 回傳的 ACP session id（prompt / cancel 用）。
+    /// agent 回傳的 ACP session id (prompt / cancel 用)。
     acp_session: Mutex<String>,
     stdin: Mutex<ChildStdin>,
     next_id: AtomicI64,
     pending: Mutex<HashMap<i64, Sender<Value>>>,
     /// 核准：內部 req id -> (JSON-RPC id, options)
     perms: Mutex<HashMap<String, (Value, Vec<Value>)>>,
-    /// 串流輸出的行緩衝（把 token 級 chunk 併成完整行）。
+    /// 串流輸出的行緩衝 (把 token 級 chunk 併成完整行)。
     stream: Mutex<StreamBuf>,
-    /// 第一則 prompt 前置的協作說明（取出一次即清空）。
+    /// 第一則 prompt 前置的協作說明 (取出一次即清空)。
     prepend_once: Mutex<Option<String>>,
-    /// agent 在 initialize 宣告支援圖片區塊（`promptCapabilities.image`）。
+    /// agent 在 initialize 宣告支援圖片區塊 (`promptCapabilities.image`)。
     image_ok: std::sync::atomic::AtomicBool,
     /// `session/load` 進行中：agent 會把歷史以 `session/update` 重播，這段期間的更新一律丟掉，
-    /// 否則逐字稿會重複。由 reader 在收到 load 的回應時清除（重播一定在回應之前）。
+    /// 否則逐字稿會重複。由 reader 在收到 load 的回應時清除 (重播一定在回應之前)。
     loading: std::sync::atomic::AtomicBool,
     /// 權限政策：`Auto` / `Bypass` 時由 adapter 直接代為核准。
     tx: Sender<AgentEvent>,
@@ -121,7 +121,7 @@ impl Conn {
                 let _ = self.tx.send(AgentEvent::Commands(names));
             }
             "usage_update" => {
-                // ACP: `used`（目前 context 佔用）與 `size`（視窗大小）。
+                // ACP: `used` (目前 context 佔用)與 `size` (視窗大小)。
                 if let Some(used) = update["used"].as_u64() {
                     let _ = self.tx.send(AgentEvent::Context {
                         used,
@@ -175,7 +175,7 @@ impl Conn {
         }
     }
 
-    /// 把行緩衝的殘留送出（換種類或工具呼叫前呼叫）。
+    /// 把行緩衝的殘留送出 (換種類或工具呼叫前呼叫)。
     fn flush_stream(&self) {
         let text = self.stream.lock().unwrap().flush();
         if !text.is_empty() {
@@ -188,7 +188,7 @@ impl Conn {
         let params = &msg["params"];
         let options = params["options"].as_array().cloned().unwrap_or_default();
 
-        // 一律轉給 daemon：規則引擎與 session 政策（auto／bypass 自動核准）都在那裡決定。
+        // 一律轉給 daemon：規則引擎與 session 政策 (auto／bypass 自動核准)都在那裡決定。
         let req = new_id("perm");
         let title = params["toolCall"]["title"]
             .as_str()
@@ -280,7 +280,7 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
 struct AcpControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
-    /// 最近一次回報的 `configOptions`（包成 `{"configOptions": [...]}`），執行期切換時用來驗證與找 configId。
+    /// 最近一次回報的 `configOptions` (包成 `{"configOptions": [...]}`)，執行期切換時用來驗證與找 configId。
     options: Mutex<Value>,
 }
 
@@ -381,7 +381,7 @@ fn take_effective_prompt(prepend_once: &Mutex<Option<String>>, text: &str) -> St
     }
 }
 
-/// ACP prompt 區塊：文字（含內嵌文字檔）；agent 支援圖片時另加 image 區塊，否則圖片改成一行說明。
+/// ACP prompt 區塊：文字 (含內嵌文字檔)；agent 支援圖片時另加 image 區塊，否則圖片改成一行說明。
 fn prompt_blocks(text: &str, atts: &[termade_core::Attachment], image_ok: bool) -> Value {
     let mut blocks =
         vec![json!({ "type": "text", "text": termade_core::compose_text(text, atts, !image_ok) })];
@@ -404,7 +404,7 @@ fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
         .find(|o| o["category"] == "model" || o["id"] == "model")
         .ok_or_else(|| {
             anyhow!(tr!(
-                "此 agent 沒有回報可選的 model（configOptions 無 model 項）"
+                "此 agent 沒有回報可選的 model (configOptions 無 model 項)"
             ))
         })?;
     let id = opt["id"].as_str().unwrap_or("model").to_string();
@@ -433,7 +433,7 @@ fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
     Ok((id, wanted.to_string()))
 }
 
-/// 從 `session/new` 的 `configOptions` 找出推理強度選項（id 或 category 含 effort／reasoning／thought）。
+/// 從 `session/new` 的 `configOptions` 找出推理強度選項 (id 或 category 含 effort／reasoning／thought)。
 fn pick_effort_option(new: &Value, wanted: &str) -> Result<(String, String)> {
     let opts = new["configOptions"].as_array().cloned().unwrap_or_default();
     let is_effort = |s: &str| {
@@ -448,7 +448,7 @@ fn pick_effort_option(new: &Value, wanted: &str) -> Result<(String, String)> {
         })
         .ok_or_else(|| {
             anyhow!(tr!(
-                "此 agent 沒有回報可設定的 effort（configOptions 無相關項）"
+                "此 agent 沒有回報可設定的 effort (configOptions 無相關項)"
             ))
         })?;
     let id = opt["id"].as_str().unwrap_or("effort").to_string();
@@ -527,7 +527,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         let child = child.clone();
         let tx = tx.clone();
         std::thread::spawn(move || {
-            // 用 try_wait 輪詢（而非阻塞 wait），否則會一直握著鎖，讓 `kill()` 永遠拿不到鎖而死鎖。
+            // 用 try_wait 輪詢 (而非阻塞 wait)，否則會一直握著鎖，讓 `kill()` 永遠拿不到鎖而死鎖。
             let code = loop {
                 let status = {
                     let mut c = child.lock().unwrap();

@@ -1,8 +1,8 @@
 #!/bin/sh
 # 假的 `codex app-server`。FAKE_MODE：
-#   auth    回合送出 `error` 通知（unauthorized）後 `turn/completed` 帶同一個 error
+#   auth    回合送出 `error` 通知 (unauthorized)後 `turn/completed` 帶同一個 error
 #   plain   同上但是普通錯誤
-#   die     往 stderr 印幾行後以代碼 3 結束（握手前就掛掉）
+#   die     往 stderr 印幾行後以代碼 3 結束 (握手前就掛掉)
 #   flood   握手前先往 stderr 灌大量輸出，之後正常回合，最後以代碼 1 結束
 case "$FAKE_MODE" in
   die)

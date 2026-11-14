@@ -1,12 +1,12 @@
 //! `termade-adapter` — 把各家 agent 的正規化層。
 //!
-//! 每個 agent 的協定（ACP、stream-json、app-server、PTY）都在這裡被翻譯成
+//! 每個 agent 的協定 (ACP、stream-json、app-server、PTY)都在這裡被翻譯成
 //! 同一組 [`AgentEvent`]，所以 daemon 之上完全不需要知道底下是哪一家。
 //!
-//! 結構化 adapter（原生、零額外相依性）：
-//! * [`acp`]：Agent Client Protocol — OpenCode（`opencode acp`）、Antigravity（`agy acp`）。
+//! 結構化 adapter (原生、零額外相依性)：
+//! * [`acp`]：Agent Client Protocol — OpenCode (`opencode acp`)、Antigravity (`agy acp`)。
 //! * [`claude`]：Claude Code 的 `--input-format/--output-format stream-json`。
-//! * [`codex`]：Codex 的 `codex app-server`（stdio JSON-RPC）。
+//! * [`codex`]：Codex 的 `codex app-server`(stdio JSON-RPC)。
 //!
 //! 萬用後備：
 //! * [`pty`]：PTY 直通，**對任何 CLI agent 都有效**。
@@ -32,7 +32,7 @@ use tr::tr;
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     Status(SessionStatus),
-    /// agent 的文字輸出（可含換行）。
+    /// agent 的文字輸出 (可含換行)。
     Output(String),
     ToolCall {
         name: String,
@@ -44,13 +44,13 @@ pub enum AgentEvent {
     Permission(PermissionRequest),
     Cost(Cost),
     Model(String),
-    /// agent 原生的斜線指令名稱（不含 `/`）。
+    /// agent 原生的斜線指令名稱 (不含 `/`)。
     Commands(Vec<String>),
-    /// agent 原生的對話 id（接續用）。只有之後能用這個 id 接續時才會送出。
+    /// agent 原生的對話 id (接續用)。只有之後能用這個 id 接續時才會送出。
     NativeId(String),
     /// 額度用完／被限流。
     Limited(String),
-    /// 設定 session 的狀態備註（例如失敗原因）。
+    /// 設定 session 的狀態備註 (例如失敗原因)。
     Note(String),
     /// session 的 context 用量。
     Context {
@@ -70,18 +70,18 @@ pub struct SessionSpec {
     pub kind: AgentKind,
     pub cwd: PathBuf,
     pub transport: Transport,
-    /// 自訂執行檔路徑或名稱（覆寫預設 PATH 探測）。
+    /// 自訂執行檔路徑或名稱 (覆寫預設 PATH 探測)。
     pub bin: Option<String>,
     /// 額外命令列參數。
     pub args: Vec<String>,
-    /// 要使用的 model（目前僅 Claude 結構化模式支援）。
+    /// 要使用的 model (目前僅 Claude 結構化模式支援)。
     pub model: Option<String>,
-    /// 推理強度（Claude `--effort`、Codex `model_reasoning_effort`、ACP configOption）。
+    /// 推理強度 (Claude `--effort`、Codex `model_reasoning_effort`、ACP configOption)。
     pub effort: Option<String>,
     /// Claude 專用：額外放行／禁止的工具。
     pub allowed_tools: Vec<String>,
     pub disallowed_tools: Vec<String>,
-    /// 唯讀模式（Claude 以 plan 模式達成）。
+    /// 唯讀模式 (Claude 以 plan 模式達成)。
     pub read_only: bool,
     /// Codex 專用 sandbox 模式。
     pub sandbox: Option<String>,
@@ -91,7 +91,7 @@ pub struct SessionSpec {
     pub permission: PermissionPolicy,
     /// 若提供 `termade` 執行檔路徑，adapter 會在啟動時將 `termade mcp` 注入該 agent。
     pub mcp_exe: Option<PathBuf>,
-    /// 附加在系統提示（Claude `--append-system-prompt`、Codex `developerInstructions`）
+    /// 附加在系統提示 (Claude `--append-system-prompt`、Codex `developerInstructions`)
     /// 或 ACP 第一則 prompt 前面的協作說明；PTY 不注入。
     pub system_append: Option<String>,
     /// 啟動後立刻送出的第一個 prompt。
@@ -112,24 +112,24 @@ pub trait AgentControl: Send + Sync {
     fn send_input_with(&self, text: &str, attachments: &[termade_core::Attachment]) -> Result<()> {
         self.send_input(&termade_core::compose_text(text, attachments, true))
     }
-    /// 中斷當前回合（不殺處理程序）。
+    /// 中斷當前回合 (不殺處理程序)。
     fn cancel(&self) -> Result<()>;
     /// 結束並殺掉處理程序。
     fn kill(&self) -> Result<()>;
-    /// 暫停子處理程序（SIGSTOP，用於閒置休眠）。
+    /// 暫停子處理程序 (SIGSTOP，用於閒置休眠)。
     fn sleep(&self) -> Result<()> {
         Ok(())
     }
-    /// 喚醒子處理程序（SIGCONT）。
+    /// 喚醒子處理程序 (SIGCONT)。
     fn wake(&self) -> Result<()> {
         Ok(())
     }
     /// 回覆核准請求。
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
-    /// 這個 session 實際使用的傳輸方式（顯示用）。
+    /// 這個 session 實際使用的傳輸方式 (顯示用)。
     fn transport(&self) -> &'static str;
-    /// 執行期切換 model 與／或 effort（下一個回合起生效）。
-    /// 成功回傳實際生效的 model（agent 有回報才有）；不支援的 adapter 回傳明確錯誤。
+    /// 執行期切換 model 與／或 effort (下一個回合起生效)。
+    /// 成功回傳實際生效的 model (agent 有回報才有)；不支援的 adapter 回傳明確錯誤。
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         let _ = (model, effort);
         bail!(
@@ -157,7 +157,7 @@ pub fn check_effort(e: &str) -> Result<()> {
     Ok(())
 }
 
-/// 對指定 PID 送出 Unix 訊號（例如 `-STOP` / `-CONT`）。
+/// 對指定 PID 送出 Unix 訊號 (例如 `-STOP` / `-CONT`)。
 pub fn signal_pid(pid: u32, sig: &str) -> Result<()> {
     let status = std::process::Command::new("kill")
         .args([sig, &pid.to_string()])
@@ -185,7 +185,7 @@ pub fn which(prog: &str) -> Option<PathBuf> {
     None
 }
 
-/// 找 agent 執行檔：先看環境變數覆寫（測試與自訂安裝位置用），否則在 PATH 找。
+/// 找 agent 執行檔：先看環境變數覆寫 (測試與自訂安裝位置用)，否則在 PATH 找。
 pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
     match std::env::var(env_var) {
         Ok(p) if !p.is_empty() => which(&p),
@@ -275,7 +275,7 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             bail!(
                 "{}",
                 tr!(
-                    "{kind} 尚不支援以結構化模式指定 model（{m}）；請改用 --transport pty 並以參數傳入",
+                    "{kind} 尚不支援以結構化模式指定 model ({m})；請改用 --transport pty 並以參數傳入",
                     kind = spec.kind,
                     m = m
                 )

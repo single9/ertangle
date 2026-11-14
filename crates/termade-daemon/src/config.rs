@@ -47,18 +47,18 @@ pub struct RoleCfg {
     pub session_usd: Option<f64>,
 }
 
-/// agent 自己（經 MCP／帶 `parent`）建立 session 時的防呆。只認全域設定：
+/// agent 自己 (經 MCP／帶 `parent`)建立 session 時的防呆。只認全域設定：
 /// repo 內的設定檔不可信，不能放寬使用者的成本防線。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AgentSpawnCfg {
-    /// 一律用獨立 worktree（預設 true；不在 git repo 內時略過）。
+    /// 一律用獨立 worktree (預設 true；不在 git repo 內時略過)。
     pub worktree: Option<bool>,
-    /// 免確認的 effort 上限（預設 `medium`）。
+    /// 免確認的 effort 上限 (預設 `medium`)。
     pub max_effort: Option<String>,
-    /// 免確認的 model 白名單（子字串比對，如 `["haiku", "sonnet"]`）；空 = 不限制。
+    /// 免確認的 model 白名單 (子字串比對，如 `["haiku", "sonnet"]`)；空 = 不限制。
     pub allowed_models: Vec<String>,
-    /// 何時先問使用者：`never`（超標直接調降／拒絕）、`costly`（超標才問，預設）、`always`。
+    /// 何時先問使用者：`never` (超標直接調降／拒絕)、`costly` (超標才問，預設)、`always`。
     pub confirm: Option<String>,
 }
 
@@ -107,7 +107,7 @@ impl AgentSpawnCfg {
                 let ok = self.allowed_models.iter().any(|a| m.contains(a.as_str()));
                 if !ok {
                     reasons.push(tr!(
-                        "model {m} 不在免確認清單（{list}）",
+                        "model {m} 不在免確認清單 ({list})",
                         m = m,
                         list = self.allowed_models.join(", ")
                     ));
@@ -128,15 +128,15 @@ impl AgentSpawnCfg {
     }
 }
 
-/// 注入每個 agent 的協作說明（`collab.rs`）。
+/// 注入每個 agent 的協作說明 (`collab.rs`)。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct CollabCfg {
-    /// 是否注入（預設開啟）。
+    /// 是否注入 (預設開啟)。
     pub instructions: Option<bool>,
     /// 附加在通則後面的文字。
     pub extra: Option<String>,
-    /// 全域的 ADE 系統提示檔（Markdown／文字），附加在每個 agent 的協作說明裡。只認全域設定。
+    /// 全域的 ADE 系統提示檔 (Markdown／文字)，附加在每個 agent 的協作說明裡。只認全域設定。
     pub prompt_file: Option<String>,
 }
 
@@ -149,9 +149,9 @@ pub struct TuiCfg {
     pub language: Option<String>,
     /// 通知方式：`bell`、`osc9`、`command`；空陣列 = 關閉，省略 = `["bell"]`。
     pub notify: Option<Vec<String>>,
-    /// `command` 方式執行的命令（`sh -c`），內容由 `TERMADE_NOTIFY_*` 環境變數帶入。
+    /// `command` 方式執行的命令 (`sh -c`)，內容由 `TERMADE_NOTIFY_*` 環境變數帶入。
     pub notify_command: Option<String>,
-    /// 回合短於這個秒數時，「做完了」不通知（預設 10）。
+    /// 回合短於這個秒數時，「做完了」不通知 (預設 10)。
     pub notify_min_turn_secs: Option<u64>,
 }
 
@@ -159,30 +159,30 @@ pub struct TuiCfg {
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct LimitsCfg {
-    /// 單一 session 的成本上限（美元）。
+    /// 單一 session 的成本上限 (美元)。
     pub session_usd: Option<f64>,
-    /// 沒有美金數字的 agent 用這個（輸入＋輸出 token 數）。
+    /// 沒有美金數字的 agent 用這個 (輸入＋輸出 token 數)。
     pub session_tokens: Option<u64>,
-    /// 一個 session 加上它所有後代的總和上限（美元）。
+    /// 一個 session 加上它所有後代的總和上限 (美元)。
     pub tree_usd: Option<f64>,
     /// 一個 session 同時 live 的直接子 agent 數上限。
     pub max_children: Option<usize>,
-    /// 子 agent 層數上限（人產生的是第 0 層）。
+    /// 子 agent 層數上限 (人產生的是第 0 層)。
     pub max_depth: Option<usize>,
-    /// 成本警告門檻（百分比，預設 80）。
+    /// 成本警告門檻 (百分比，預設 80)。
     pub warn_percent: Option<f64>,
 }
 
-/// 預設的成本警告門檻（百分比）。
+/// 預設的成本警告門檻 (百分比)。
 pub const DEFAULT_BUDGET_WARN_PERCENT: f64 = 80.0;
 
 /// 額度提醒與自動交接。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct HandoffCfg {
-    /// 帳號額度用量達到這個百分比就提醒（預設 90）。
+    /// 帳號額度用量達到這個百分比就提醒 (預設 90)。
     pub warn_percent: Option<f32>,
-    /// 額度用完時自動交接給 `fallback` 裡第一個可用的 agent（預設關閉，因為會動用另一邊的額度）。
+    /// 額度用完時自動交接給 `fallback` 裡第一個可用的 agent (預設關閉，因為會動用另一邊的額度)。
     pub auto: Option<bool>,
     /// 候選接手者，例如 `["codex", "claude:sonnet"]`。
     pub fallback: Vec<String>,
@@ -210,13 +210,13 @@ pub struct Resolved {
     pub env: Vec<(String, String)>,
     pub bin: Option<String>,
     pub permission: PermissionPolicy,
-    /// 有 parent 時的上限；`None` 表示不額外限制（仍受父 session 限制）。
+    /// 有 parent 時的上限；`None` 表示不額外限制 (仍受父 session 限制)。
     pub max_agent_permission: Option<PermissionPolicy>,
     pub allowed_tools: Vec<String>,
     pub disallowed_tools: Vec<String>,
     pub read_only: bool,
     pub sandbox: Option<String>,
-    /// 設定檔解析出的單一 session 成本上限（`roles.<role>.session_usd` > `limits.session_usd`）。
+    /// 設定檔解析出的單一 session 成本上限 (`roles.<role>.session_usd` > `limits.session_usd`)。
     pub session_usd: Option<f64>,
 }
 
@@ -224,7 +224,7 @@ fn kind_key(kind: &AgentKind) -> String {
     kind.id().to_string()
 }
 
-/// 疊加時只允許調低、不允許調高（用於 `limits` 與 repo 的 `roles.<role>.session_usd`）。
+/// 疊加時只允許調低、不允許調高 (用於 `limits` 與 repo 的 `roles.<role>.session_usd`)。
 fn min_opt<T: PartialOrd + Copy>(global: Option<T>, local: Option<T>) -> Option<T> {
     match (global, local) {
         (Some(g), Some(l)) => Some(if l < g { l } else { g }),
@@ -361,14 +361,14 @@ impl Config {
         out
     }
 
-    /// 把單一設定值寫進 `path`（不存在就建立）：`table` 是表格路徑（如 `["agents","claude"]`），
+    /// 把單一設定值寫進 `path` (不存在就建立)：`table` 是表格路徑 (如 `["agents","claude"]`)，
     /// 值為空字串代表刪除該鍵。會以 TOML 重新序列化，檔案內的註解不會保留。
     pub fn set_value(path: &Path, table: &[&str], key: &str, value: &str) -> anyhow::Result<()> {
         let v = (!value.is_empty()).then(|| toml::Value::String(value.to_string()));
         Config::set_toml(path, table, key, v)
     }
 
-    /// 同 `set_value`，但可寫任意 TOML 值（布林、數字…）；`None` 代表刪除該鍵。
+    /// 同 `set_value`，但可寫任意 TOML 值 (布林、數字…)；`None` 代表刪除該鍵。
     pub fn set_toml(
         path: &Path,
         table: &[&str],
@@ -405,7 +405,7 @@ impl Config {
         Ok(())
     }
 
-    /// 載入全域（`config_dir`）與 repo（`<cwd>/.termade/config.toml`）設定。
+    /// 載入全域 (`config_dir`)與 repo (`<cwd>/.termade/config.toml`)設定。
     pub fn load(global_dir: &Path, cwd: &Path) -> Config {
         Config::layered(
             Config::load_file(&global_dir.join("config.toml")),
@@ -475,7 +475,7 @@ impl Config {
         }
     }
 
-    /// 解析單一 session 的實際成本上限（優先序：請求覆寫 > `roles.<role>.session_usd` > `limits.session_usd`）。
+    /// 解析單一 session 的實際成本上限 (優先序：請求覆寫 > `roles.<role>.session_usd` > `limits.session_usd`)。
     pub fn resolve_budget_usd(&self, role: &Role, req_budget: Option<f64>) -> Option<f64> {
         req_budget
             .or_else(|| self.roles.get(role.id()).and_then(|r| r.session_usd))
@@ -646,7 +646,7 @@ notify_min_turn_secs = 30
         );
         assert_eq!(g.tui.notify_min_turn_secs, Some(30));
 
-        // repo 只覆寫有寫的欄位；空陣列也算有寫（用來關閉通知）。
+        // repo 只覆寫有寫的欄位；空陣列也算有寫 (用來關閉通知)。
         let l = Config::parse("[tui]\nnotify = []\nnotify_min_turn_secs = 5\n").unwrap();
         let c = Config::layered(g.clone(), l);
         assert_eq!(c.tui.notify, Some(vec![]));

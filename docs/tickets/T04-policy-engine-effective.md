@@ -18,16 +18,16 @@ README 與設計文件把它描述成已完成的「權限規則引擎」，使�
 - `crates/termade-adapter/src/acp.rs:159-167`：`auto_approves()` 時直接 `respond` 並 `return`，不送 `AgentEvent::Permission`。
 - `crates/termade-daemon/src/lib.rs:429-447`：`PolicyEngine::evaluate` 只在收到 `AgentEvent::Permission` 時被呼叫。
 - `crates/termade-adapter/src/claude.rs:267-269`：`resolve_permission` 直接 `bail!`。
-- `crates/termade-adapter/src/codex.rs:132`、`307`：Codex 有轉發與回覆路徑（README 註明未實機驗證）。
+- `crates/termade-adapter/src/codex.rs:132`、`307`：Codex 有轉發與回覆路徑 (README 註明未實機驗證)。
 - `crates/termade-core/src/lib.rs:891-904`：`combined.contains(pat)`；預設 `allow` 含 `"Read"`、`"Grep"`、`"Glob"`。
 - `crates/termade-daemon/src/lib.rs:93-103`、`1704`：`load_policy(&default_cwd)` 只在啟動時呼叫一次。
 
 ## 分析邏輯
 
-1. 從 `PolicyEngine::evaluate` 往回找唯一的呼叫點（`ingest`），再找哪些路徑會產生 `AgentEvent::Permission`。
+1. 從 `PolicyEngine::evaluate` 往回找唯一的呼叫點 (`ingest`)，再找哪些路徑會產生 `AgentEvent::Permission`。
 2. ACP 的 `on_permission` 在送事件之前就依 session 政策短路，所以 `auto`／`bypass` 下 daemon 看不到請求。
 3. 各 adapter 的情況：ACP 只有 `ask` 會到 daemon；Codex 由 `approvalPolicy` 決定是否發出請求；Claude 沒有路徑。
-4. 比對語意：`deny` 先於 `allow` 檢查，所以 `allow` 的誤觸發不會蓋過 `deny`。但在 `ask` 模式下，任何標題或輸入內容含 `Read` 的請求（例如指令中出現 `README`）會被自動放行而不問人。
+4. 比對語意：`deny` 先於 `allow` 檢查，所以 `allow` 的誤觸發不會蓋過 `deny`。但在 `ask` 模式下，任何標題或輸入內容含 `Read` 的請求 (例如指令中出現 `README`)會被自動放行而不問人。
 5. 沒有實機驗證各 agent 實際送出的 `title`／`rawInput` 格式，比對規則的誤觸發程度是從程式碼推論。
 
 ## 實作方式
@@ -38,9 +38,9 @@ README 與設計文件把它描述成已完成的「權限規則引擎」，使�
    3. session 政策是 `auto`／`bypass` → 依政策自動允許。
    4. 否則發 `PermissionRequested` 給人。
 
-   `ingest` 需要知道 session 的 `PermissionPolicy`。`Session` 目前沒有這個欄位（只有 `cwd`、`branch` 等），要在 spawn 時存進 `Session` 或 `SessionEntry`。
+   `ingest` 需要知道 session 的 `PermissionPolicy`。`Session` 目前沒有這個欄位 (只有 `cwd`、`branch` 等)，要在 spawn 時存進 `Session` 或 `SessionEntry`。
 2. **規則改成結構化比對**：
-   - 分開 `tool`（比對工具名稱，完全相等）與 `pattern`（比對輸入內容）。
+   - 分開 `tool` (比對工具名稱，完全相等)與 `pattern` (比對輸入內容)。
    - 內容比對至少做到以空白切詞後的前綴比對，避免 `Read` 命中 `README`。
    - 保留舊格式的解析，啟動時對舊格式印警告。
 3. **每個 repo 各自的規則**：以 session 的 repo 根目錄載入 `.termade/policy.toml`，疊在全域規則之上；`deny` 取聯集，repo 層級不能移除全域的 `deny`。

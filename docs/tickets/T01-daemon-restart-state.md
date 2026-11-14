@@ -14,7 +14,7 @@ daemon 每次啟動都從空狀態、`seq = 0` 開始，卻把事件接著寫進
 
 - `crates/termade-daemon/src/lib.rs:1698-1701`：log 以 `append(true)` 開啟。
 - `crates/termade-daemon/src/lib.rs:1708-1711`：`state: State::new()`、`seq: 0`、`backlog: VecDeque::new()`。
-- `crates/termade-daemon/src/lib.rs:106`：`replay_log` 存在，但唯一呼叫者是 `src/main.rs:856`（`termade replay`）。
+- `crates/termade-daemon/src/lib.rs:106`：`replay_log` 存在，但唯一呼叫者是 `src/main.rs:856`(`termade replay`)。
 - `crates/termade-daemon/src/lib.rs:571-577`：增量同步的條件是 `since + 1 >= backlog.front().seq || since == seq`。
 
 ## 分析邏輯
@@ -28,10 +28,10 @@ daemon 每次啟動都從空狀態、`seq = 0` 開始，卻把事件接著寫進
 ## 實作方式
 
 1. **啟動時重播**：`run_with_options` 先呼叫 `replay_log(log_path())`，用結果初始化 `state`，`seq` 設為最後一筆的 seq，並把尾端最多 `BACKLOG_CAP` 筆放進 `backlog`。
-2. **收斂孤兒 session**：重播後仍是 live 狀態的 session，其子處理程序已不受這個 daemon 管理。啟動時對每一個發出 `SessionExited`（或新增一個表示「daemon 重啟而遺失」的狀態），這樣狀態與 log 都一致。
-3. **daemon 世代識別**：`Frame::Ready` 增加 `epoch`（啟動時產生的隨機 id）。client 記住 epoch，重連時發現不同就丟掉本地狀態、不帶 `since`。做了第 1 步後 seq 已連續，這一步是防 log 被刪除或換機器的情況。
+2. **收斂孤兒 session**：重播後仍是 live 狀態的 session，其子處理程序已不受這個 daemon 管理。啟動時對每一個發出 `SessionExited` (或新增一個表示「daemon 重啟而遺失」的狀態)，這樣狀態與 log 都一致。
+3. **daemon 世代識別**：`Frame::Ready` 增加 `epoch` (啟動時產生的隨機 id)。client 記住 epoch，重連時發現不同就丟掉本地狀態、不帶 `since`。做了第 1 步後 seq 已連續，這一步是防 log 被刪除或換機器的情況。
 4. **`replay_log` 不再靜默略過壞行**：計數並以 `tracing::warn!` 回報略過了幾行。
-5. **收件匣游標**：`inbox_cursors` 目前只在記憶體。要嘛跟著事件落地（新增 `InboxAdvanced` 事件），要嘛明確記錄「重啟後未讀狀態重置」是已知行為。建議前者。
+5. **收件匣游標**：`inbox_cursors` 目前只在記憶體。要嘛跟著事件落地 (新增 `InboxAdvanced` 事件)，要嘛明確記錄「重啟後未讀狀態重置」是已知行為。建議前者。
 
 ## 驗收條件
 
@@ -42,4 +42,4 @@ daemon 每次啟動都從空狀態、`seq = 0` 開始，卻把事件接著寫進
 
 ## 備註
 
-log 很大時啟動重播會變慢，這由 T08（輪替時寫入 snapshot）處理。
+log 很大時啟動重播會變慢，這由 T08 (輪替時寫入 snapshot)處理。

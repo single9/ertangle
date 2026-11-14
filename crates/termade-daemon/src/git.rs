@@ -52,7 +52,7 @@ pub(crate) fn git_status_summary(cwd: &Path) -> (usize, String) {
     (count, summary)
 }
 
-/// 取得工作目錄的統一格式 diff（含已追蹤變更與新增未追蹤檔案的內容預覽）。
+/// 取得工作目錄的統一格式 diff (含已追蹤變更與新增未追蹤檔案的內容預覽)。
 pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
     if !cwd.is_dir() {
         bail!("{}", tr!("工作目錄不存在：{cwd}", cwd = format!("{cwd:?}")));
@@ -74,7 +74,7 @@ pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
         }
     }
 
-    // 2) 未追蹤的新檔案（排除 `.termade/`）：也產生 unified diff 樣式，方便在 TUI Diff 視圖審查與留註解。
+    // 2) 未追蹤的新檔案 (排除 `.termade/`)：也產生 unified diff 樣式，方便在 TUI Diff 視圖審查與留註解。
     let untracked = Command::new("git")
         .arg("-C")
         .arg(cwd)
@@ -143,7 +143,7 @@ pub(crate) fn session_repo(default_cwd: &Path, s: &Session) -> PathBuf {
         .unwrap_or_else(|| default_cwd.to_path_buf())
 }
 
-/// 目錄內是否有未 commit 的變更（忽略 `.termade/`）。
+/// 目錄內是否有未 commit 的變更 (忽略 `.termade/`)。
 pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
     let out = git_output(dir, &["status", "--porcelain"])?;
     if !out.status.success() {
@@ -225,7 +225,7 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
             bail!(
                 "{}",
                 tr!(
-                    "主工作區正在合併、rebase 中（{marker}），請先處理完畢",
+                    "主工作區正在合併、rebase 中 ({marker})，請先處理完畢",
                     marker = marker
                 )
             );
@@ -265,13 +265,13 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
             tr!("無未提交變更")
         } else {
             tr!(
-                "待提交檔案（{count}）：{files}",
+                "待提交檔案 ({count})：{files}",
                 count = pending_files.len(),
                 files = pending_files.join(", ")
             )
         };
         return Ok(tr!(
-            "[dry-run] 合併 {branch}（{label}）至 {target}：{ff_desc}，{pending_desc}",
+            "[dry-run] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}",
             branch = branch,
             label = session.label,
             target = target,
@@ -317,7 +317,7 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
         );
     }
     Ok(tr!(
-        "已將 {branch}（{label}）合併進 {target}",
+        "已將 {branch} ({label})合併進 {target}",
         branch = branch,
         label = session.label,
         target = target
@@ -361,7 +361,7 @@ pub(crate) fn branch_exists(main_repo: &Path, branch: &str) -> bool {
     .is_ok_and(|o| o.status.success())
 }
 
-/// session 的 worktree 目錄與分支都已不存在（沒有東西可清）。
+/// session 的 worktree 目錄與分支都已不存在 (沒有東西可清)。
 pub(crate) fn worktree_gone(main_repo: &Path, session: &Session) -> bool {
     !Path::new(&session.cwd).exists()
         && session
@@ -381,7 +381,7 @@ pub(crate) fn gc_block_reason(main_repo: &Path, session: &Session) -> Option<Str
         }
     }
     if let Some(branch) = &session.branch {
-        // 分支已不存在（例如共用 worktree 的另一個 session 已把它刪掉）：
+        // 分支已不存在 (例如共用 worktree 的另一個 session 已把它刪掉)：
         // 目錄也不在就沒有東西要保護；目錄還在則保守地擋下。
         if !branch_exists(main_repo, branch) {
             return wt_dir.exists().then(|| tr!("分支不存在，worktree 仍在"));

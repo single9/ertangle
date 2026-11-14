@@ -1,10 +1,10 @@
-//! 連線傳輸（Unix socket／TCP）與 client 端。
+//! 連線傳輸 (Unix socket／TCP)與 client 端。
 
 use super::*;
 use tr::tr;
 
 // ---------------------------------------------------------------------------
-// 雙模連線傳輸（Unix Socket + M5 TCP Remote）
+// 雙模連線傳輸 (Unix Socket + M5 TCP Remote)
 // ---------------------------------------------------------------------------
 
 pub enum ConnStream {
@@ -47,7 +47,7 @@ impl Write for ConnStream {
 }
 
 // ---------------------------------------------------------------------------
-// Client（給 TUI / CLI / MCP 用）
+// Client (給 TUI / CLI / MCP 用)
 // ---------------------------------------------------------------------------
 
 pub struct Client {
@@ -60,12 +60,12 @@ impl Client {
     pub fn connect() -> Result<Client> {
         let stream = if let Ok(remote) = std::env::var("TERMADE_REMOTE") {
             let tcp = TcpStream::connect(remote.trim())
-                .with_context(|| tr!("無法連線遠端 daemon（{remote}）", remote = remote))?;
+                .with_context(|| tr!("無法連線遠端 daemon ({remote})", remote = remote))?;
             ConnStream::Tcp(tcp)
         } else {
             let unix = UnixStream::connect(socket_path()).with_context(|| {
                 tr!(
-                    "無法連線 daemon（{path}）",
+                    "無法連線 daemon ({path})",
                     path = format!("{:?}", socket_path())
                 )
             })?;
@@ -94,7 +94,7 @@ impl Client {
         Ok(())
     }
 
-    /// 取得一個可獨立寫入的 stream（給需要「同時讀與寫」的 client，例如 TUI）。
+    /// 取得一個可獨立寫入的 stream (給需要「同時讀與寫」的 client，例如 TUI)。
     pub fn try_clone_stream(&self) -> Result<ConnStream> {
         Ok(self.stream.try_clone()?)
     }
@@ -113,7 +113,7 @@ pub fn is_running() -> bool {
     Client::connect().is_ok()
 }
 
-/// 送一個請求到一個 stream（給持有寫入端的 client 用）。
+/// 送一個請求到一個 stream (給持有寫入端的 client 用)。
 pub fn send_request(stream: &mut ConnStream, req: &Request) -> Result<()> {
     let line = encode_line(req)?;
     stream.write_all(line.as_bytes())?;
@@ -168,7 +168,7 @@ pub fn ensure_daemon() -> Result<()> {
                 })
                 .unwrap_or_default();
             if detail.is_empty() {
-                bail!("{}", tr!("daemon 異常退出（{status}）", status = status));
+                bail!("{}", tr!("daemon 異常退出 ({status})", status = status));
             } else {
                 bail!("{}", tr!("daemon 啟動失敗：{detail}", detail = detail));
             }
@@ -177,7 +177,7 @@ pub fn ensure_daemon() -> Result<()> {
     bail!(
         "{}",
         tr!(
-            "daemon 啟動逾時（{path}）",
+            "daemon 啟動逾時 ({path})",
             path = format!("{:?}", socket_path())
         )
     )

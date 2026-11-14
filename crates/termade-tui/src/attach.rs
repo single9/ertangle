@@ -12,8 +12,8 @@ static FILE_CACHE: std::sync::OnceLock<FileCache> = std::sync::OnceLock::new();
 const FILE_CACHE_TTL: Duration = Duration::from_secs(5);
 const MAX_FILES: usize = 20_000;
 
-/// 專案內的檔案清單（相對 `root` 的路徑）：優先用 `git ls-files`（含未追蹤、排除 .gitignore），
-/// 不是 git repo 時退回走訪目錄（略過隱藏目錄、target、node_modules）。結果快取 5 秒。
+/// 專案內的檔案清單 (相對 `root` 的路徑)：優先用 `git ls-files` (含未追蹤、排除 .gitignore)，
+/// 不是 git repo 時退回走訪目錄 (略過隱藏目錄、target、node_modules)。結果快取 5 秒。
 pub(crate) fn project_files(root: &Path) -> Vec<String> {
     let cache = FILE_CACHE.get_or_init(Default::default);
     if let Some((t, v)) = cache.lock().unwrap().get(root) {
@@ -177,7 +177,7 @@ fn resolve(token: &str) -> PathBuf {
     PathBuf::from(token)
 }
 
-/// 從一個 `@` token（不含 `@`）找出實際存在的檔案；會嘗試去掉結尾的標點。
+/// 從一個 `@` token (不含 `@`)找出實際存在的檔案；會嘗試去掉結尾的標點。
 fn existing_file(token: &str, root: &Path) -> Option<(PathBuf, usize)> {
     let mut t = token;
     loop {
@@ -200,21 +200,21 @@ fn existing_file(token: &str, root: &Path) -> Option<(PathBuf, usize)> {
     }
 }
 
-/// 切出游標之前以空白分隔的最後一個 token 的起點（支援 `@"含 空白 的路徑"`）。
+/// 切出游標之前以空白分隔的最後一個 token 的起點 (支援 `@"含 空白 的路徑"`)。
 fn token_len(s: &str) -> (String, usize) {
     if let Some(rest) = s.strip_prefix('"') {
         if let Some(end) = rest.find('"') {
             return (rest[..end].to_string(), end + 2);
         }
     }
-    // 空白與全形標點都結束 token（中文句子裡 `@a.png，然後…` 很常見）。
+    // 空白與全形標點都結束 token (中文句子裡 `@a.png，然後…` 很常見)。
     let end = s
-        .find(|c: char| c.is_whitespace() || "，。、；：！？（）「」『』【】《》".contains(c))
+        .find(|c: char| c.is_whitespace() || "，。、；：！？()「」『』【】《》".contains(c))
         .unwrap_or(s.len());
     (s[..end].to_string(), end)
 }
 
-/// prompt 的第一個 token 是不是 `@存在的檔案`（用來和 `@peer` 訊息區分）。
+/// prompt 的第一個 token 是不是 `@存在的檔案` (用來和 `@peer` 訊息區分)。
 pub(crate) fn leads_with_file(text: &str, root: &Path) -> bool {
     let t = text.trim_start();
     let Some(rest) = t.strip_prefix('@') else {
@@ -225,7 +225,7 @@ pub(crate) fn leads_with_file(text: &str, root: &Path) -> bool {
 }
 
 /// 把文字中的 `@檔案` 取出成附件，並把 token 換成檔名。不存在的 `@xxx` 原樣保留。
-/// 附件讀取失敗（例如圖片太大）時回傳錯誤訊息。
+/// 附件讀取失敗 (例如圖片太大)時回傳錯誤訊息。
 pub(crate) fn extract_attachments(
     text: &str,
     root: &Path,
@@ -270,7 +270,7 @@ pub(crate) fn extract_attachments(
     Ok((out, atts))
 }
 
-/// 路徑補全：回傳符合的完整路徑字串（目錄結尾加 `/`）。
+/// 路徑補全：回傳符合的完整路徑字串 (目錄結尾加 `/`)。
 pub(crate) fn complete_path(prefix: &str) -> Vec<String> {
     let (dir_part, name_part) = match prefix.rfind('/') {
         Some(i) => (&prefix[..=i], &prefix[i + 1..]),
@@ -322,7 +322,7 @@ pub(crate) fn common_prefix(items: &[String]) -> String {
     first[..len].to_string()
 }
 
-/// 貼上的文字若就是一個存在的檔案路徑（拖曳檔案進終端機常見：可能帶引號或 `file://`），
+/// 貼上的文字若就是一個存在的檔案路徑 (拖曳檔案進終端機常見：可能帶引號或 `file://`)，
 /// 回傳對應的 `@path` 寫法。
 pub(crate) fn pasted_file_ref(pasted: &str) -> Option<String> {
     let mut t = pasted.trim().trim_matches(['\'', '"']).to_string();
@@ -358,7 +358,7 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).to_string()
 }
 
-/// 從系統剪貼簿取圖片（Linux：wl-paste 或 xclip），存成暫存 PNG 並回傳路徑。
+/// 從系統剪貼簿取圖片 (Linux：wl-paste 或 xclip)，存成暫存 PNG 並回傳路徑。
 pub(crate) fn clipboard_image() -> Result<PathBuf, String> {
     let attempts: [(&str, &[&str]); 2] = [
         ("wl-paste", &["--type", "image/png"]),
@@ -385,5 +385,5 @@ pub(crate) fn clipboard_image() -> Result<PathBuf, String> {
             return Ok(path);
         }
     }
-    Err(tr!("剪貼簿裡沒有圖片（需要 wl-paste 或 xclip）"))
+    Err(tr!("剪貼簿裡沒有圖片 (需要 wl-paste 或 xclip)"))
 }

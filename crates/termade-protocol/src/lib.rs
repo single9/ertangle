@@ -1,7 +1,7 @@
 //! `termade-protocol` — daemon ↔ client 的控制介面。
 //!
-//! 傳輸：Unix domain socket，**newline-delimited JSON**（一行一個訊息）。
-//! 語意：client 送出 [`Request`]，daemon 回覆 [`Frame`]（含事件串流與快照）。
+//! 傳輸：Unix domain socket，**newline-delimited JSON** (一行一個訊息)。
+//! 語意：client 送出 [`Request`]，daemon 回覆 [`Frame`] (含事件串流與快照)。
 //!
 //! 這個 crate 只有 wire 型別與編解碼，不含任何 IO，方便日後換成 TCP / JSON-RPC。
 
@@ -23,13 +23,13 @@ fn default_wait_timeout() -> u64 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Transport {
-    /// 有原生結構化協定就用（ACP / stream-json / app-server），否則退回 PTY。
+    /// 有原生結構化協定就用 (ACP / stream-json / app-server)，否則退回 PTY。
     #[default]
     Auto,
     /// 強制原生結構化協定。
     #[serde(alias = "acp")]
     Structured,
-    /// 強制 PTY 直通（對任何 CLI agent 都有效）。
+    /// 強制 PTY 直通 (對任何 CLI agent 都有效)。
     Pty,
 }
 
@@ -37,7 +37,7 @@ pub enum Transport {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpawnRequest {
     pub kind: AgentKind,
-    /// 工作目錄；`None` = daemon 的預設（通常是 daemon 的 cwd）。
+    /// 工作目錄；`None` = daemon 的預設 (通常是 daemon 的 cwd)。
     #[serde(default)]
     pub cwd: Option<String>,
     #[serde(default)]
@@ -55,25 +55,25 @@ pub struct SpawnRequest {
     /// 統一權限政策。
     #[serde(default)]
     pub permission: Option<PermissionPolicy>,
-    /// 由哪個 session 產生（人類產生則為 `None`）。
+    /// 由哪個 session 產生 (人類產生則為 `None`)。
     #[serde(default)]
     pub parent: Option<SessionId>,
     /// 指定 model；省略時依 `config.toml` 決定。
     #[serde(default)]
     pub model: Option<String>,
-    /// 推理強度（low／medium／high／xhigh／max）；省略時依 config.toml。
+    /// 推理強度 (low／medium／high／xhigh／max)；省略時依 config.toml。
     #[serde(default)]
     pub effort: Option<String>,
     /// 初始 prompt 的附件。
     #[serde(default)]
     pub attachments: Vec<Attachment>,
-    /// 沿用該 session 的工作目錄、分支與 repo（交接用，不建立新 worktree）。
+    /// 沿用該 session 的工作目錄、分支與 repo (交接用，不建立新 worktree)。
     #[serde(default)]
     pub inherit_from: Option<SessionId>,
-    /// 一次性額外命令列參數（附加在設定檔的 args 之後）。
+    /// 一次性額外命令列參數 (附加在設定檔的 args 之後)。
     #[serde(default)]
     pub args: Vec<String>,
-    /// 單一 session 的成本上限（美元）；省略時依 `config.toml` 決定。
+    /// 單一 session 的成本上限 (美元)；省略時依 `config.toml` 決定。
     #[serde(default)]
     pub budget_usd: Option<f64>,
 }
@@ -82,7 +82,7 @@ pub struct SpawnRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
-    /// 打招呼並（可選）要求補齊 `since` 之後的事件；遠端連線可帶 `token`。
+    /// 打招呼並 (可選)要求補齊 `since` 之後的事件；遠端連線可帶 `token`。
     Hello {
         client: String,
         #[serde(default)]
@@ -100,7 +100,7 @@ pub enum Request {
     Prompt {
         session: SessionId,
         text: String,
-        /// 附件（檔案、圖片）。
+        /// 附件 (檔案、圖片)。
         #[serde(default)]
         attachments: Vec<Attachment>,
         /// 若為 `true`：session 忙或佇列非空時改進待送佇列，閒下來再依序送出。
@@ -111,15 +111,15 @@ pub enum Request {
     QueueClear {
         session: SessionId,
     },
-    /// 取出（移除）某個 session 待送佇列的最後一則，透過 `Frame::Ok { note }` 回傳原始文字。
+    /// 取出 (移除)某個 session 待送佇列的最後一則，透過 `Frame::Ok { note }` 回傳原始文字。
     QueuePop {
         session: SessionId,
     },
-    /// 中斷當前回合（不殺處理程序）。
+    /// 中斷當前回合 (不殺處理程序)。
     Cancel {
         session: SessionId,
     },
-    /// 從清單移除已結束的 session；有 worktree 分支時比照 gc（未合併或有未 commit 變更需 `force`）。
+    /// 從清單移除已結束的 session；有 worktree 分支時比照 gc (未合併或有未 commit 變更需 `force`)。
     SessionRemove {
         session: SessionId,
         #[serde(default)]
@@ -141,22 +141,22 @@ pub enum Request {
     Kill {
         session: SessionId,
     },
-    /// 接續已結束的 session：用 agent 原生的對話 id 接回原對話（session id 不變）。
+    /// 接續已結束的 session：用 agent 原生的對話 id 接回原對話 (session id 不變)。
     Resume {
         session: SessionId,
         /// 接續成功後立刻送出的 prompt。
         #[serde(default)]
         prompt: Option<String>,
     },
-    /// 暫停閒置 session 子處理程序（SIGSTOP）。
+    /// 暫停閒置 session 子處理程序 (SIGSTOP)。
     Sleep {
         session: SessionId,
     },
-    /// 唤醒休眠中的 session 子處理程序（SIGCONT）。
+    /// 唤醒休眠中的 session 子處理程序 (SIGCONT)。
     Wake {
         session: SessionId,
     },
-    /// 執行期切換指定 session 的 model 與／或 effort（下一個回合起生效）。
+    /// 執行期切換指定 session 的 model 與／或 effort (下一個回合起生效)。
     SessionConfig {
         session: SessionId,
         #[serde(default)]
@@ -164,16 +164,16 @@ pub enum Request {
         #[serde(default)]
         effort: Option<String>,
     },
-    /// 設定或調高指定 session 的成本上限（美元），並解除 `over_budget`。
+    /// 設定或調高指定 session 的成本上限 (美元)，並解除 `over_budget`。
     SessionBudget {
         session: SessionId,
         budget_usd: f64,
     },
-    /// agent（經 MCP `termade_approve`）請求核准並等待結果；回覆 `Ok` 的 note 為 `allow` 或 `deny`。
+    /// agent (經 MCP `termade_approve`)請求核准並等待結果；回覆 `Ok` 的 note 為 `allow` 或 `deny`。
     ApprovalAsk {
         session: SessionId,
         tool: String,
-        /// 工具輸入（JSON 字串）。
+        /// 工具輸入 (JSON 字串)。
         input: String,
     },
     /// 回覆核准請求。
@@ -182,7 +182,7 @@ pub enum Request {
         req: String,
         decision: Decision,
     },
-    /// 送訊息到匯流排（agent 之間溝通）。
+    /// 送訊息到匯流排 (agent 之間溝通)。
     BusSend {
         #[serde(default)]
         from: Option<SessionId>,
@@ -193,13 +193,13 @@ pub enum Request {
         #[serde(default)]
         reply_to: Option<MsgId>,
     },
-    /// 讀取某個 session 的收件匣（預設只讀未讀並推進游標）。
+    /// 讀取某個 session 的收件匣 (預設只讀未讀並推進游標)。
     BusInbox {
         session: SessionId,
         #[serde(default = "default_true")]
         unread_only: bool,
     },
-    /// 阻塞等待下一則進收件匣的訊息（可選篩選發送者或 `reply_to`）。
+    /// 阻塞等待下一則進收件匣的訊息 (可選篩選發送者或 `reply_to`)。
     BusWait {
         session: SessionId,
         #[serde(default)]
@@ -229,12 +229,12 @@ pub enum Request {
         #[serde(default)]
         detail: Option<String>,
     },
-    /// 更新某個 session 的簡短狀態字串（對應 `termade_status`）。
+    /// 更新某個 session 的簡短狀態字串 (對應 `termade_status`)。
     SessionNote {
         session: SessionId,
         note: String,
     },
-    /// 分享產出（檔案、分支或 diff）。
+    /// 分享產出 (檔案、分支或 diff)。
     ArtifactShare {
         session: SessionId,
         #[serde(default)]
@@ -245,7 +245,7 @@ pub enum Request {
     },
     /// 列出所有受管 worktree。
     WorktreeList,
-    /// 取得某個 session 工作區的 `git diff`（含未追蹤檔案摘要）。
+    /// 取得某個 session 工作區的 `git diff` (含未追蹤檔案摘要)。
     WorktreeDiff {
         session: SessionId,
     },
@@ -255,14 +255,14 @@ pub enum Request {
         #[serde(default)]
         dry_run: bool,
     },
-    /// 為某個 session 的分支建立 Pull Request（透過 `gh`）。
+    /// 為某個 session 的分支建立 Pull Request (透過 `gh`)。
     WorktreePr {
         session: SessionId,
         title: String,
         #[serde(default)]
         body: String,
     },
-    /// 清除已結束 session 的 worktree（若指定 `session` 則清除該筆）。
+    /// 清除已結束 session 的 worktree (若指定 `session` 則清除該筆)。
     WorktreeGc {
         #[serde(default)]
         session: Option<SessionId>,
@@ -292,7 +292,7 @@ pub enum Frame {
         #[serde(default)]
         epoch: String,
     },
-    /// 完整狀態（初次連線或要求 Snapshot 時）。
+    /// 完整狀態 (初次連線或要求 Snapshot 時)。
     Snapshot {
         state: Box<State>,
     },
@@ -318,7 +318,7 @@ pub enum Frame {
     Worktrees {
         worktrees: Vec<WorktreeInfo>,
     },
-    /// 操作成功（可帶說明）。
+    /// 操作成功 (可帶說明)。
     Ok {
         #[serde(default)]
         note: Option<String>,
@@ -344,7 +344,7 @@ impl Frame {
     }
 }
 
-/// 把訊息編成一行 JSON（含結尾 `\n`）。
+/// 把訊息編成一行 JSON (含結尾 `\n`)。
 pub fn encode_line<T: Serialize>(value: &T) -> std::io::Result<String> {
     let mut s = serde_json::to_string(value)?;
     s.push('\n');

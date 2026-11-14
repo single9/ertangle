@@ -1,4 +1,4 @@
-//! 成本統計與事件重播子命令（cost、replay）。
+//! 成本統計與事件重播子命令 (cost、replay)。
 
 use std::path::PathBuf;
 
@@ -25,7 +25,7 @@ pub(crate) fn cmd_quota(json: bool) -> Result<()> {
         println!(
             "{}",
             tr!(
-                "{summary}   （{age} 前更新）",
+                "{summary}   ({age} 前更新)",
                 summary = q.summary(now),
                 age = termade_core::format_remaining(now.saturating_sub(q.updated_ms))
             )
@@ -131,7 +131,7 @@ pub(crate) fn cmd_replay(since: u64, file: Option<PathBuf>, all: bool, json: boo
     println!(
         "{}",
         tr!(
-            "重播 {path}：共 {count} 筆事件（最新 seq={seq}，sessions={sessions}，tasks={tasks}，messages={messages}）",
+            "重播 {path}：共 {count} 筆事件 (最新 seq={seq}，sessions={sessions}，tasks={tasks}，messages={messages})",
             path = format!("{path:?}"),
             count = filtered.len(),
             seq = state.seq,

@@ -63,7 +63,7 @@ fn handle_ctrl_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             app.mode = Mode::Jump;
             app.input.clear();
             app.input_cursor = 0;
-            app.status = tr!("輸入關鍵字跳轉至匹配的 session（label / id / branch）");
+            app.status = tr!("輸入關鍵字跳轉至匹配的 session (label / id / branch)");
             Ok(true)
         }
         KeyCode::Char('d') => {
@@ -161,7 +161,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.input.clear();
             app.input_cursor = 0;
             let loc = app.current_diff_location();
-            app.status = tr!("對 `{loc}` 留下審查註解（Enter 送回 agent）", loc = loc);
+            app.status = tr!("對 `{loc}` 留下審查註解 (Enter 送回 agent)", loc = loc);
         }
         KeyCode::Char('M') => {
             if let Some(id) = app.selected_id() {
@@ -203,7 +203,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.mode = Mode::Command;
             app.input.clear();
             app.input_cursor = 0;
-            app.status = tr!("命令（Tab 補全）：spawn rm clean kill merge diff gc task …");
+            app.status = tr!("命令 (Tab 補全)：spawn rm clean kill merge diff gc task …");
         }
         KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
         KeyCode::Enter | KeyCode::Char('i') => {
@@ -257,9 +257,9 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.mouse_capture = !app.mouse_capture;
             set_mouse_capture(app.mouse_capture)?;
             app.status = if app.mouse_capture {
-                tr!("滑鼠擷取：開（可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取）")
+                tr!("滑鼠擷取：開 (可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取)")
             } else {
-                tr!("滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端機 alternate scroll）")
+                tr!("滑鼠擷取：關 (可直接拖曳選取複製；滾輪用終端機 alternate scroll)")
             };
         }
         KeyCode::Char('T') => toggle_thoughts(app),
@@ -269,7 +269,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         KeyCode::Char('b') => {
             app.bus_overlay = !app.bus_overlay;
             app.status = if app.bus_overlay {
-                tr!("Bus：顯示（b 或 Esc 關閉；僅在兩欄／分頁模式有浮層）")
+                tr!("Bus：顯示 (b 或 Esc 關閉；僅在兩欄／分頁模式有浮層)")
             } else {
                 tr!("Bus：隱藏")
             };
@@ -534,14 +534,14 @@ pub(crate) fn handle_input_mode(
     Ok(())
 }
 
-/// 目前 `@token` 的內容（不含 `@`）。
+/// 目前 `@token` 的內容 (不含 `@`)。
 fn at_token_text(app: &App) -> String {
     crate::attach::current_at_token(&app.input, app.input_cursor)
         .map(|(_, t)| t)
         .unwrap_or_default()
 }
 
-/// 在 Prompt／Spawn／Message 輸入 `@xxx` 時的專案內模糊搜尋建議（相對路徑或 `~`、`/` 開頭的字面路徑不搜尋）。
+/// 在 Prompt／Spawn／Message 輸入 `@xxx` 時的專案內模糊搜尋建議 (相對路徑或 `~`、`/` 開頭的字面路徑不搜尋)。
 pub(crate) fn at_candidates(app: &App) -> Option<(usize, Vec<String>)> {
     if !matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) {
         return None;
@@ -554,7 +554,7 @@ pub(crate) fn at_candidates(app: &App) -> Option<(usize, Vec<String>)> {
     (!c.is_empty()).then_some((start, c))
 }
 
-/// 用選取的建議取代游標前的 `@token`（路徑含空白時加引號），後面補一個空白。
+/// 用選取的建議取代游標前的 `@token` (路徑含空白時加引號)，後面補一個空白。
 fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
     let rep = if path.contains(char::is_whitespace) {
         format!("@\"{path}\" ")
@@ -652,7 +652,7 @@ fn complete_command(app: &mut App) {
     }
 }
 
-/// 命令參數的 Tab 補全：唯一候選就補完（後面補空白，若還有下一個參數可接著打），多個補到共同前綴並列出。
+/// 命令參數的 Tab 補全：唯一候選就補完 (後面補空白，若還有下一個參數可接著打)，多個補到共同前綴並列出。
 fn complete_arg(app: &mut App) {
     let Some((cur, cands)) = crate::commands::arg_candidates(app, &app.input) else {
         return;
@@ -683,7 +683,7 @@ fn complete_arg(app: &mut App) {
     app.input_cursor = app.input.chars().count();
 }
 
-/// 以 Unicode 字元索引取得對應的 byte offset（超出長度時回傳字串長度）。
+/// 以 Unicode 字元索引取得對應的 byte offset (超出長度時回傳字串長度)。
 pub(crate) fn byte_index(s: &str, char_idx: usize) -> usize {
     s.char_indices()
         .nth(char_idx)
@@ -724,13 +724,13 @@ pub(crate) fn delete_input(app: &mut App) {
     app.input.remove(b);
 }
 
-/// 貼上（bracketed paste）：只插入目前輸入框；換行轉成空白以維持單行輸入。
+/// 貼上 (bracketed paste)：只插入目前輸入框；換行轉成空白以維持單行輸入。
 pub(crate) fn handle_paste(app: &mut App, text: &str) {
     // 拖曳檔案進終端機會貼上它的路徑：轉成 `@path` 附件引用。
     if matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) {
         if let Some(r) = crate::attach::pasted_file_ref(text) {
             insert_str_input(app, &r);
-            app.status = "已加入附件引用（送出時一併附上）".into();
+            app.status = "已加入附件引用 (送出時一併附上)".into();
             return;
         }
     }
@@ -746,7 +746,7 @@ pub(crate) fn handle_paste(app: &mut App, text: &str) {
     }
 }
 
-/// ↑／↓ 回顧輸入歷史（Prompt 與 Command 各有自己的一份）。
+/// ↑／↓ 回顧輸入歷史 (Prompt 與 Command 各有自己的一份)。
 pub(crate) fn recall_history(app: &mut App, older: bool) {
     let cur = app.input.clone();
     let hist = if app.mode == Mode::Command {
@@ -761,7 +761,7 @@ pub(crate) fn recall_history(app: &mut App, older: bool) {
     }
 }
 
-/// 這些模式的輸入框允許多行（Ctrl-J／Shift-Enter 換行、貼上保留換行）。
+/// 這些模式的輸入框允許多行 (Ctrl-J／Shift-Enter 換行、貼上保留換行)。
 pub(crate) fn is_multiline(mode: Mode) -> bool {
     matches!(
         mode,
@@ -769,7 +769,7 @@ pub(crate) fn is_multiline(mode: Mode) -> bool {
     )
 }
 
-/// 在多行內容裡上下移動游標；已在最上／最下一列（或只有一列）回傳 `false`，交給歷史處理。
+/// 在多行內容裡上下移動游標；已在最上／最下一列 (或只有一列)回傳 `false`，交給歷史處理。
 pub(crate) fn move_cursor_row(app: &mut App, up: bool) -> bool {
     if !is_multiline(app.mode) {
         return false;

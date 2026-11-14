@@ -1,4 +1,4 @@
-//! 在逐字稿與 diff 裡搜尋（`f` 或 `:find <文字>`）。
+//! 在逐字稿與 diff 裡搜尋 (`f` 或 `:find <文字>`)。
 //!
 //! 搜尋的對象是畫面上實際顯示的行：逐字稿是 `App.md_cache` 裡渲染、換行後的行，
 //! diff 是 `App.diff_lines`。符合項的索引可以直接當捲動位置或游標行用。
@@ -15,7 +15,7 @@ use crate::input::{backspace_input, byte_index, delete_input, insert_input};
 
 pub(crate) struct Search {
     pub(crate) query: String,
-    /// 符合的顯示行索引（遞增）。
+    /// 符合的顯示行索引 (遞增)。
     pub(crate) matches: Vec<usize>,
     /// `matches` 裡目前所在的那一個。
     pub(crate) current: usize,
@@ -74,7 +74,7 @@ pub(crate) fn open(app: &mut App, prefill: Option<&str>) {
         CenterView::Transcript => app.transcript_offset,
         CenterView::Diff => app.diff_cursor,
         CenterView::Worktrees | CenterView::Tasks => {
-            app.status = tr!("這個視圖不支援搜尋（逐字稿與 Diff 才有）");
+            app.status = tr!("這個視圖不支援搜尋 (逐字稿與 Diff 才有)");
             return;
         }
     };
@@ -90,7 +90,7 @@ pub(crate) fn open(app: &mut App, prefill: Option<&str>) {
     query_changed(app);
 }
 
-/// 查詢文字變了：重算符合項，跳到開始位置之後的第一個（沒有就繞回第一個）。
+/// 查詢文字變了：重算符合項，跳到開始位置之後的第一個 (沒有就繞回第一個)。
 /// 沒有符合項時不動捲動位置。
 pub(crate) fn query_changed(app: &mut App) {
     let query = app.input.clone();
@@ -102,7 +102,7 @@ pub(crate) fn query_changed(app: &mut App) {
     jump(app);
 }
 
-/// 顯示內容變了（新輸出、寬度改變、換 session、diff 重新載入）：重算符合項，
+/// 顯示內容變了 (新輸出、寬度改變、換 session、diff 重新載入)：重算符合項，
 /// 停在原本那一行或它之後最近的一個，不捲動畫面。
 pub(crate) fn refresh(app: &mut App) {
     let Some(query) = app.search.as_ref().map(|s| s.query.clone()) else {
@@ -154,7 +154,7 @@ pub(crate) fn close(app: &mut App) {
             tr!("找不到「{query}」", query = s.query)
         } else {
             tr!(
-                "搜尋「{query}」停在 {current}/{total}（f 再搜尋）",
+                "搜尋「{query}」停在 {current}/{total} (f 再搜尋)",
                 query = s.query,
                 current = s.current + 1,
                 total = s.matches.len()
@@ -198,11 +198,11 @@ pub(crate) fn handle_search_key(app: &mut App, key: KeyEvent) {
     }
 }
 
-/// 搜尋模式下狀態列要顯示的文字（`3/17`、「找不到」）。
+/// 搜尋模式下狀態列要顯示的文字 (`3/17`、「找不到」)。
 pub(crate) fn status_text(app: &App) -> Option<String> {
     let s = app.search.as_ref()?;
     Some(if s.query.is_empty() {
-        tr!("搜尋：輸入文字（只找畫面上顯示的內容）")
+        tr!("搜尋：輸入文字 (只找畫面上顯示的內容)")
     } else if s.matches.is_empty() {
         tr!("搜尋：找不到「{query}」", query = s.query)
     } else {

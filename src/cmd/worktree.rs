@@ -1,4 +1,4 @@
-//! Worktree 與程式碼審查子命令（worktrees、diff、review、merge、pr、gc）。
+//! Worktree 與程式碼審查子命令 (worktrees、diff、review、merge、pr、gc)。
 
 use anyhow::{bail, Result};
 use termade_protocol::{Frame, Request};

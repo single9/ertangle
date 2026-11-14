@@ -34,7 +34,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
                 version: VERSION.to_string(),
                 epoch: shared.epoch.clone(),
             });
-            // epoch 不符（或未帶）表示 client 的 seq 屬於別的 log，不能增量。
+            // epoch 不符 (或未帶)表示 client 的 seq 屬於別的 log，不能增量。
             let since = since.filter(|_| epoch.as_deref() == Some(shared.epoch.as_str()));
 
             // M4 增量事件同步：若 `since` 在 backlog 範圍內，只補齊差異事件。

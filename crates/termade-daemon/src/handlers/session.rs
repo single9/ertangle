@@ -1,4 +1,4 @@
-//! Session 生命週期與控制請求處理（Spawn、Prompt、Kill、Sleep、Wake、Permission 等）。
+//! Session 生命週期與控制請求處理 (Spawn、Prompt、Kill、Sleep、Wake、Permission 等)。
 
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -35,7 +35,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         .unwrap_or_else(|| shared.default_cwd());
     let mut branch = None;
     let mut repo_root = None;
-    // 交接：沿用來源 session 的工作目錄、分支與 repo（不建立新 worktree）。
+    // 交接：沿用來源 session 的工作目錄、分支與 repo (不建立新 worktree)。
     if let Some(src) = &spawn.inherit_from {
         let sid = shared.resolve_session(src);
         if let Some(s) = lock(&shared.inner).state.sessions.get(&sid) {
@@ -75,7 +75,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         spawn.permission,
     );
 
-    // agent 自己建立 session：先檢查 model／effort 是否超出免確認範圍（避免自動開出高消耗的 session）。
+    // agent 自己建立 session：先檢查 model／effort 是否超出免確認範圍 (避免自動開出高消耗的 session)。
     let mut spawn_note: Option<String> = None;
     if let Some(pid) = &parent {
         let pol = &cfg.agent_spawn;
@@ -105,7 +105,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             let d = ask_user(shared, pid, tr!("建立子 agent"), detail, false);
             if d == Decision::Deny {
                 let _ = reply.send(Frame::error(tr!(
-                    "使用者拒絕（或逾時未回應）建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
+                    "使用者拒絕 (或逾時未回應)建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
                 )));
                 return;
             }
@@ -118,7 +118,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             // confirm = never：effort 調降，model 直接拒絕。
             if model_not_allowed {
                 let _ = reply.send(Frame::error(tr!(
-                    "{reasons}（agent_spawn.confirm = never）",
+                    "{reasons} (agent_spawn.confirm = never)",
                     reasons = reasons.join("；")
                 )));
                 return;
@@ -143,7 +143,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         if let Some(max_depth) = cfg.limits.max_depth {
             if depth > max_depth {
                 let _ = reply.send(Frame::error(tr!(
-                    "超過子 agent 層數上限 max_depth：目前第 {depth} 層（上限 {max_depth}）",
+                    "超過子 agent 層數上限 max_depth：目前第 {depth} 層 (上限 {max_depth})",
                     depth = depth,
                     max_depth = max_depth
                 )));
@@ -154,7 +154,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             let live_children = inner.state.live_children_count(pid);
             if live_children >= max_children {
                 let _ = reply.send(Frame::error(tr!(
-                    "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中（上限 {max_children}）",
+                    "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中 (上限 {max_children})",
                     live_children = live_children,
                     max_children = max_children
                 )));
@@ -165,7 +165,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             let tree_spent = inner.state.tree_cost_usd(pid);
             if tree_spent >= tree_usd {
                 let _ = reply.send(Frame::error(tr!(
-                    "已達整棵樹成本上限 tree_usd：目前已花費 ${spent}（上限 ${limit}）",
+                    "已達整棵樹成本上限 tree_usd：目前已花費 ${spent} (上限 ${limit})",
                     spent = format!("{tree_spent:.2}"),
                     limit = format!("{tree_usd:.2}")
                 )));
@@ -175,7 +175,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         if let Some(p_sess) = inner.state.sessions.get(pid) {
             if p_sess.over_budget {
                 let _ = reply.send(Frame::error(tr!(
-                    "父 session {label} 已達成本上限 session_usd（over_budget），無法產生子 agent",
+                    "父 session {label} 已達成本上限 session_usd (over_budget)，無法產生子 agent",
                     label = p_sess.label
                 )));
                 return;
@@ -184,7 +184,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                 let rem = (p_limit - p_sess.cost.usd).max(0.0);
                 if rem <= 0.0 {
                     let _ = reply.send(Frame::error(tr!(
-                        "父 session {label} 剩餘預算 session_usd 為 $0.00（已花費 ${spent} / 上限 ${limit}），無法產生子 agent",
+                        "父 session {label} 剩餘預算 session_usd 為 $0.00 (已花費 ${spent} / 上限 ${limit})，無法產生子 agent",
                         label = p_sess.label,
                         spent = format!("{:.2}", p_sess.cost.usd),
                         limit = format!("{p_limit:.2}")
@@ -196,7 +196,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
     }
 
-    // agent 自己建立的 session 預設用 worktree（`[agent_spawn] worktree`）；不在 git repo 內就略過。
+    // agent 自己建立的 session 預設用 worktree (`[agent_spawn] worktree`)；不在 git repo 內就略過。
     let forced_worktree = parent.is_some()
         && spawn.inherit_from.is_none()
         && cfg.agent_spawn.worktree()
@@ -216,7 +216,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
     }
 
-    // 子 agent 的權限不得高於父 session 與設定的上限（防呆，不是安全邊界）。
+    // 子 agent 的權限不得高於父 session 與設定的上限 (防呆，不是安全邊界)。
     let mut permission = resolved.permission;
     let mut downgraded = None;
     if let Some(pid) = &parent {
@@ -290,29 +290,29 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     };
     match launch_session(shared, launch) {
         Ok(()) => {
-            // 交接：把舊 session 的匯流排身分移交給新 session（之後送給舊 session 的訊息改投這裡）。
+            // 交接：把舊 session 的匯流排身分移交給新 session (之後送給舊 session 的訊息改投這裡)。
             if let Some(src) = &spawn.inherit_from {
                 let from = shared.resolve_session(src);
                 shared.emit(Event::SessionHandedOff {
                     from: from.clone(),
                     to: id.clone(),
                 });
-                // 舊 session 還沒提醒的未讀訊息已列在交接簡報裡，不再另外提醒接手者（T25）。
+                // 舊 session 還沒提醒的未讀訊息已列在交接簡報裡，不再另外提醒接手者 (T25)。
                 lock(&shared.inner).pending_nudge.remove(&from);
             }
             let mut note = tr!("已建立 session {id}", id = id);
             if let Some((from, to)) = downgraded {
                 note.push_str(&tr!(
-                    "（權限由 {from} 調降為 {to}：不得高於父 session／設定上限）",
+                    "(權限由 {from} 調降為 {to}：不得高於父 session／設定上限)",
                     from = from.id(),
                     to = to.id()
                 ));
             }
             if let Some(n) = &spawn_note {
-                note.push_str(&tr!("（{n}）", n = n));
+                note.push_str(&tr!("({n})", n = n));
             }
             if forced_worktree && !spawn.worktree {
-                note.push_str(&tr!("（依 agent_spawn.worktree 使用獨立 worktree）"));
+                note.push_str(&tr!("(依 agent_spawn.worktree 使用獨立 worktree)"));
             }
             let _ = reply.send(Frame::ok_note(note));
         }
@@ -335,7 +335,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     }
 }
 
-/// 啟動（或接續）一個 agent 處理程序所需的資訊；`Session` 本身必須已經在 state 裡。
+/// 啟動 (或接續)一個 agent 處理程序所需的資訊；`Session` 本身必須已經在 state 裡。
 struct Launch {
     id: String,
     kind: termade_core::AgentKind,
@@ -352,7 +352,7 @@ struct Launch {
 }
 
 /// spawn 與 resume 共用：組 `SessionSpec` → 啟動 adapter → 登記 `SessionEntry` → 起 ingest 執行緒。
-/// 成功時送出 `Idle`（以及初始 prompt 的回顯）；失敗時不動 state，由呼叫端決定怎麼收尾。
+/// 成功時送出 `Idle` (以及初始 prompt 的回顯)；失敗時不動 state，由呼叫端決定怎麼收尾。
 fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
     let Launch {
         id,
@@ -366,7 +366,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
         resume,
         cost_base,
     } = launch;
-    // 協作說明（T20）：spawn 與 resume 都重新組，接續時 agent 的系統提示不會保留上一次的。
+    // 協作說明 (T20)：spawn 與 resume 都重新組，接續時 agent 的系統提示不會保留上一次的。
     let system_append = {
         let inner = lock(&shared.inner);
         crate::collab::for_session(&inner.state, &id, &config_dir(), &cwd)
@@ -420,7 +420,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
     let transport = ctl.transport().to_string();
     let run = new_id("run");
     {
-        // 先登記再送 Idle：舊處理程序遲到的事件從這一刻起就會被擋掉（見下方的 ingest 執行緒）。
+        // 先登記再送 Idle：舊處理程序遲到的事件從這一刻起就會被擋掉 (見下方的 ingest 執行緒)。
         let mut inner = lock(&shared.inner);
         if let Some(s) = inner.state.sessions.get_mut(&id) {
             s.transport = transport.clone();
@@ -449,7 +449,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
     let shared_worker = shared.clone();
     std::thread::spawn(move || {
         for mut ev in rx {
-            // 這個 session 已被接續成另一個處理程序：舊處理程序遲到的事件（尤其是 Exited）不能再套用，
+            // 這個 session 已被接續成另一個處理程序：舊處理程序遲到的事件 (尤其是 Exited)不能再套用，
             // 否則會把剛接回來的 session 標成結束並拿掉新的控制把手。
             let superseded = lock(&shared_worker.inner)
                 .sessions
@@ -493,7 +493,7 @@ pub(crate) fn handle_resume(
     }
     let Some(native_id) = s.native_id.clone() else {
         let _ = reply.send(Frame::error(tr!(
-            "{label} 沒有可接續的對話 id（PTY、舊版 log，或 agent 還沒回報就結束了）；請改用交接（handoff）",
+            "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 還沒回報就結束了)；請改用交接 (handoff)",
             label = s.label
         )));
         return;
@@ -530,7 +530,7 @@ pub(crate) fn handle_resume(
         Some(s.permission),
     );
     resolved.permission = s.permission;
-    // 只有 Claude 的成本是處理程序內累計（新處理程序從 0 算）；Codex 回報的是 thread 累計的 token。
+    // 只有 Claude 的成本是處理程序內累計 (新處理程序從 0 算)；Codex 回報的是 thread 累計的 token。
     let cost_base = if matches!(s.kind, termade_core::AgentKind::ClaudeCode) {
         s.cost
     } else {
@@ -569,7 +569,7 @@ pub(crate) fn handle_resume(
     }
 }
 
-/// 實際送出一則 prompt 給目標 session（由 `handle_prompt` 與佇列自動送出共用）。
+/// 實際送出一則 prompt 給目標 session (由 `handle_prompt` 與佇列自動送出共用)。
 pub(crate) fn send_prompt(
     shared: &Arc<Shared>,
     sid: &str,
@@ -630,7 +630,7 @@ pub(crate) fn handle_prompt(
         let msg = match resumable {
             Some(true) => {
                 tr!(
-                    "{session} 已結束；可用 :resume（或 `termade resume`）接續原對話",
+                    "{session} 已結束；可用 :resume (或 `termade resume`)接續原對話",
                     session = session
                 )
             }
@@ -640,7 +640,7 @@ pub(crate) fn handle_prompt(
         let _ = reply.send(Frame::error(msg));
         return;
     };
-    // 超過成本上限（T17）：立即送出與排隊都拒絕，已在佇列裡的保留到調高上限。
+    // 超過成本上限 (T17)：立即送出與排隊都拒絕，已在佇列裡的保留到調高上限。
     if let Some(s) = lock(&shared.inner)
         .state
         .sessions
@@ -648,7 +648,7 @@ pub(crate) fn handle_prompt(
         .filter(|s| s.over_budget)
     {
         let _ = reply.send(Frame::error(tr!(
-            "session {label} 已超過成本上限（over_budget）；請先用 `termade budget {label} <金額>` 或 TUI `:budget <金額>` 調高上限",
+            "session {label} 已超過成本上限 (over_budget)；請先用 `termade budget {label} <金額>` 或 TUI `:budget <金額>` 調高上限",
             label = s.label
         )));
         return;
@@ -678,7 +678,7 @@ pub(crate) fn handle_prompt(
                 if q.len() >= MAX_QUEUE_LEN {
                     (
                         false,
-                        Err(tr!("排隊已滿（上限 {max} 則）", max = MAX_QUEUE_LEN)),
+                        Err(tr!("排隊已滿 (上限 {max} 則)", max = MAX_QUEUE_LEN)),
                     )
                 } else {
                     q.push_back(QueuedPrompt {
@@ -700,7 +700,7 @@ pub(crate) fn handle_prompt(
                         items,
                     });
                     let _ = reply.send(Frame::ok_note(tr!(
-                        "已排隊（共 {n} 則，閒下來自動送出）",
+                        "已排隊 (共 {n} 則，閒下來自動送出)",
                         n = n
                     )));
                 }
@@ -831,7 +831,7 @@ pub(crate) fn handle_handoff(
     let mut git_note = String::new();
     if src.branch.is_some() && wt.is_dir() {
         if let Err(e) = crate::git::auto_commit_worktree(wt, &src.label) {
-            git_note = format!("（自動 commit 失敗：{e}）\n");
+            git_note = format!("(自動 commit 失敗：{e})\n");
         }
     }
     let (_, status) = crate::git::git_status_summary(wt);
@@ -921,7 +921,7 @@ pub(crate) fn handle_budget(
     };
     if budget_usd <= s.cost.usd {
         let _ = reply.send(Frame::error(tr!(
-            "新的上限（${budget}）必須高於目前已花費金額（${spent}）",
+            "新的上限 (${budget})必須高於目前已花費金額 (${spent})",
             budget = format!("{budget_usd:.2}"),
             spent = format!("{:.2}", s.cost.usd)
         )));
@@ -934,8 +934,8 @@ pub(crate) fn handle_budget(
         session: sid.clone(),
         budget_usd: Some(budget_usd),
     });
-    // 超限期間保留的排隊 prompt（T19）在這裡恢復送出。
-    // 佇列沒有送出東西時，補提醒超限期間累積的未讀訊息（T25）。
+    // 超限期間保留的排隊 prompt (T19)在這裡恢復送出。
+    // 佇列沒有送出東西時，補提醒超限期間累積的未讀訊息 (T25)。
     if !shared.flush_queue_if_idle(&sid) {
         shared.nudge_unread_if_idle(&sid);
     }
@@ -972,7 +972,7 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         return;
     };
     if s.status.is_live() {
-        let _ = reply.send(Frame::error(tr!("session 仍在執行，請先結束（kill）")));
+        let _ = reply.send(Frame::error(tr!("session 仍在執行，請先結束 (kill)")));
         return;
     }
     if let Some(user) = shared.cwd_in_use_by_other(&s) {
@@ -982,7 +982,7 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         )));
         return;
     }
-    // 共用 worktree（handoff）：還有其他 session 參照時只移除紀錄，worktree 與分支留給最後一個。
+    // 共用 worktree (handoff)：還有其他 session 參照時只移除紀錄，worktree 與分支留給最後一個。
     let sharers = if s.branch.is_some() {
         shared.cwd_shared_with(&s)
     } else {
@@ -994,7 +994,7 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         });
         shared.clear_queue_for_ended(&sid, true);
         let _ = reply.send(Frame::ok_note(tr!(
-            "已移除 {label}（worktree 仍由 {sharers} 參照，保留）",
+            "已移除 {label} (worktree 仍由 {sharers} 參照，保留)",
             label = s.label,
             sharers = sharers.join("、")
         )));
@@ -1005,7 +1005,7 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         if !force {
             if let Some(reason) = crate::git::gc_block_reason(&repo, &s) {
                 let _ = reply.send(Frame::error(tr!(
-                    "{label}（{reason}）：請先 merge，或用 force 強制移除",
+                    "{label} ({reason})：請先 merge，或用 force 強制移除",
                     label = s.label,
                     reason = reason
                 )));
@@ -1030,7 +1030,7 @@ pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
         Some((sid, ctl)) => {
             let _ = ctl.kill();
             // 立刻拿掉控制把手：處理程序的結束事件要過一會才到，這段期間送來的 prompt
-            // 不該再寫進已經被殺掉的處理程序（會把剛標成結束的 session 又變回 busy，擋住接續）。
+            // 不該再寫進已經被殺掉的處理程序 (會把剛標成結束的 session 又變回 busy，擋住接續)。
             lock(&shared.inner).sessions.remove(&sid);
             shared.emit(Event::SessionExited {
                 session: sid.clone(),
@@ -1090,7 +1090,7 @@ pub(crate) fn handle_config(
                 parts.push(format!("effort={e}"));
             }
             let _ = reply.send(Frame::ok_note(tr!(
-                "{sid} 已切換 {parts}（下一個回合起生效）",
+                "{sid} 已切換 {parts} (下一個回合起生效)",
                 sid = sid,
                 parts = parts.join(" ")
             )));
@@ -1190,7 +1190,7 @@ pub(crate) fn handle_permission(
     }
 }
 
-/// MCP `termade_approve`：先套用規則與政策，沒有結論就發核准請求並等人回覆（逾時視為拒絕）。
+/// MCP `termade_approve`：先套用規則與政策，沒有結論就發核准請求並等人回覆 (逾時視為拒絕)。
 pub(crate) fn handle_approval_ask(
     shared: &Arc<Shared>,
     reply: &ClientTx,
@@ -1207,8 +1207,8 @@ pub(crate) fn handle_approval_ask(
     let _ = reply.send(Frame::ok_note(word));
 }
 
-/// 向使用者請求核准並阻塞等待（最多 5 分鐘，逾時視為拒絕）。
-/// `use_policy` 為真時先讓政策引擎自動決定（agent 的工具核准用）；
+/// 向使用者請求核准並阻塞等待 (最多 5 分鐘，逾時視為拒絕)。
+/// `use_policy` 為真時先讓政策引擎自動決定 (agent 的工具核准用)；
 /// 對 spawn 這類「一定要問人」的確認傳 `false`。
 pub(crate) fn ask_user(
     shared: &Arc<Shared>,

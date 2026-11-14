@@ -150,7 +150,7 @@ pub(crate) fn handle_gc(
     };
     let mut removed = 0usize;
     let mut skipped: Vec<String> = Vec::new();
-    // 共用 worktree（handoff）的多個 session 只清一次。
+    // 共用 worktree (handoff)的多個 session 只清一次。
     let mut seen_cwd = std::collections::HashSet::new();
     for s in candidates {
         let repo = session_repo(&default_cwd, &s);
@@ -159,7 +159,7 @@ pub(crate) fn handle_gc(
         }
         if let Some(user) = shared.cwd_in_use_by_other(&s) {
             skipped.push(tr!(
-                "{label}（worktree 仍被 {user} 使用）",
+                "{label} (worktree 仍被 {user} 使用)",
                 label = s.label,
                 user = user
             ));
@@ -167,19 +167,19 @@ pub(crate) fn handle_gc(
         }
         if !force {
             if let Some(reason) = gc_block_reason(&repo, &s) {
-                skipped.push(tr!("{label}（{reason}）", label = s.label, reason = reason));
+                skipped.push(tr!("{label} ({reason})", label = s.label, reason = reason));
                 continue;
             }
         }
         match remove_worktree(&repo, &s, force) {
             Ok(()) => removed += 1,
-            Err(e) => skipped.push(tr!("{label}（移除失敗：{e}）", label = s.label, e = e)),
+            Err(e) => skipped.push(tr!("{label} (移除失敗：{e})", label = s.label, e = e)),
         }
     }
     let mut note = tr!("已清理 {removed} 個 worktree", removed = removed);
     if !skipped.is_empty() {
         note.push_str(&tr!(
-            "；略過 {count} 個：{list}（可用 --force 強制移除）",
+            "；略過 {count} 個：{list} (可用 --force 強制移除)",
             count = skipped.len(),
             list = skipped.join("、")
         ));

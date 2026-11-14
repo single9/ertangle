@@ -1,7 +1,7 @@
 # termade Makefile
 
 CARGO       ?= $(shell PATH="$(HOME)/.cargo/bin:$(PATH)" which cargo 2>/dev/null || echo cargo)
-# 自動偵測 pip 安裝的 ziglang；找不到時留空（可用 ZIG_DIR=... 覆寫）
+# 自動偵測 pip 安裝的 ziglang；找不到時留空 (可用 ZIG_DIR=... 覆寫)
 ZIG_DIR     ?= $(shell python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))' 2>/dev/null)
 BUILD_PATH  := $(if $(ZIG_DIR),$(ZIG_DIR):)$(HOME)/.cargo/bin:$(HOME)/.local/bin:$(PATH)
 
@@ -20,7 +20,7 @@ BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/termade
 
 all: build
 
-## 檢查 cargo-zigbuild 是否可用（macOS 交叉編譯前置）
+## 檢查 cargo-zigbuild 是否可用 (macOS 交叉編譯前置)
 check-zigbuild:
 	@PATH="$(BUILD_PATH)" $(CARGO) zigbuild --help >/dev/null 2>&1 || { \
 	  echo "找不到 cargo-zigbuild。請先安裝："; \
@@ -36,7 +36,7 @@ build:
 dev:
 	PATH="$(BUILD_PATH)" $(CARGO) build
 
-## 啟動 TUI（若 daemon 未執行會自動背景啟動）
+## 啟動 TUI (若 daemon 未執行會自動背景啟動)
 run tui: build
 	./$(BIN_LINUX)
 
@@ -52,7 +52,7 @@ shutdown:
 test:
 	PATH="$(BUILD_PATH)" $(CARGO) test
 
-## 執行 Clippy 靜態檢查（零警告）
+## 執行 Clippy 靜態檢查 (零警告)
 clippy lint:
 	PATH="$(BUILD_PATH)" $(CARGO) clippy --all-targets -- -D warnings
 
@@ -60,7 +60,7 @@ clippy lint:
 fmt:
 	PATH="$(BUILD_PATH)" $(CARGO) fmt
 
-## 從原始碼抽出 tr! 字串更新 locales/termade.pot 與各 .po（需要 xtr 與 gettext 的 msgmerge）
+## 從原始碼抽出 tr! 字串更新 locales/termade.pot 與各 .po (需要 xtr 與 gettext 的 msgmerge)
 i18n-extract:
 	PATH="$(BUILD_PATH)" sh scripts/i18n-extract.sh
 
@@ -93,20 +93,20 @@ dist: build macos
 	cp $(BIN_MACOS_UNIVERSAL) $(DIST_DIR)/termade-macos-universal
 	@ls -lh $(DIST_DIR)/
 
-## 安裝本機執行檔至 $(BINDIR)/termade（預設 ~/.local/bin/termade）
+## 安裝本機執行檔至 $(BINDIR)/termade (預設 ~/.local/bin/termade)
 install: build
 	@mkdir -p $(BINDIR)
 	install -m 755 $(BIN_LINUX) $(BINDIR)/termade
 	@echo "已安裝至 $(BINDIR)/termade"
 
-## 依目前 SHELL 安裝 shell 補全腳本（zsh / bash / fish）
+## 依目前 SHELL 安裝 shell 補全腳本 (zsh / bash / fish)
 install-completions: build
 	@sh_name="$$(basename "$${SHELL:-}")"; \
 	case "$$sh_name" in \
 	  zsh)  dest="$(HOME)/.local/share/zsh/site-functions/_termade" ;; \
 	  bash) dest="$(HOME)/.local/share/bash-completion/completions/termade" ;; \
 	  fish) dest="$(HOME)/.config/fish/completions/termade.fish" ;; \
-	  *)    echo "無法從 SHELL='$${SHELL:-}' 判斷 shell（請指定 SHELL=zsh|bash|fish）" >&2; exit 1 ;; \
+	  *)    echo "無法從 SHELL='$${SHELL:-}' 判斷 shell (請指定 SHELL=zsh|bash|fish)" >&2; exit 1 ;; \
 	esac; \
 	mkdir -p "$$(dirname "$$dest")"; \
 	./$(BIN_LINUX) completions "$$sh_name" > "$$dest"; \

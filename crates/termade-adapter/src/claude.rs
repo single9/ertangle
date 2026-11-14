@@ -1,9 +1,9 @@
-//! Claude Code 的原生 adapter（`--input-format stream-json --output-format stream-json`）。
+//! Claude Code 的原生 adapter (`--input-format stream-json --output-format stream-json`)。
 //!
 //! 這是雙向 NDJSON：我們往 stdin 寫「使用者訊息」，Claude 往 stdout 吐事件。
 //! 因為 Claude Code 沒有原生 ACP，這是它唯一「零額外相依性」的結構化介面。
 //!
-//! 觀察到的 wire 形狀（claude 2.1.x）：
+//! 觀察到的 wire 形狀 (claude 2.1.x)：
 //!
 //! ```text
 //! → {"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}
@@ -31,7 +31,7 @@ use tr::tr;
 struct Conn {
     stdin: Mutex<ChildStdin>,
     stream: Mutex<StreamBuf>,
-    /// 這一則訊息是否已經用 delta 串流過（避免與完整 assistant 訊息重複）。
+    /// 這一則訊息是否已經用 delta 串流過 (避免與完整 assistant 訊息重複)。
     saw_delta: AtomicBool,
     tx: Sender<AgentEvent>,
 }
@@ -97,7 +97,7 @@ impl Conn {
         }
     }
 
-    /// 逐字串流（需要 `--include-partial-messages`）。
+    /// 逐字串流 (需要 `--include-partial-messages`)。
     fn on_stream_event(&self, msg: &Value) {
         let ev = &msg["event"];
         match ev["type"].as_str().unwrap_or("") {
@@ -135,7 +135,7 @@ impl Conn {
         }
     }
 
-    /// 完整的 assistant 訊息：補上工具呼叫，以及（沒開 partial 時的）文字。
+    /// 完整的 assistant 訊息：補上工具呼叫，以及 (沒開 partial 時的)文字。
     fn on_assistant(&self, msg: &Value) {
         let content = msg["message"]["content"]
             .as_array()
@@ -167,7 +167,7 @@ impl Conn {
                 _ => {}
             }
         }
-        // context 用量 = 這一則 assistant 訊息的輸入側 token（含快取）；視窗大小在 `result` 才知道。
+        // context 用量 = 這一則 assistant 訊息的輸入側 token (含快取)；視窗大小在 `result` 才知道。
         let u = &msg["message"]["usage"];
         if !u.is_null() {
             let used = u["input_tokens"].as_u64().unwrap_or(0)
@@ -181,7 +181,7 @@ impl Conn {
         // 讓畫面上的成本與 token 在回合中途往回跳。累計值只以 `result` 為準。
     }
 
-    /// 工具結果（Claude 用 `user` 訊息回報）。
+    /// 工具結果 (Claude 用 `user` 訊息回報)。
     fn on_tool_results(&self, msg: &Value) {
         let content = msg["message"]["content"]
             .as_array()
@@ -242,7 +242,7 @@ impl Conn {
     }
 }
 
-/// 解析 `rate_limit_event`：`unifiedWindows` 每個視窗有 `utilization`（0..1）與 `resetsAt`（秒）。
+/// 解析 `rate_limit_event`：`unifiedWindows` 每個視窗有 `utilization`(0..1)與 `resetsAt` (秒)。
 pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<termade_core::Quota> {
     let info = &msg["rate_limit_info"];
     let mut windows: Vec<termade_core::QuotaWindow> = Vec::new();
@@ -277,7 +277,7 @@ pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<termade_core::Quota>
     })
 }
 
-/// 從 Anthropic 的 usage 區塊估算成本（Claude 只在 `result` 給總額）。
+/// 從 Anthropic 的 usage 區塊估算成本 (Claude 只在 `result` 給總額)。
 fn result_cost(msg: &Value) -> Option<Cost> {
     let usd = msg["total_cost_usd"].as_f64()?;
     let usage = &msg["usage"];
@@ -329,7 +329,7 @@ impl AgentControl for ClaudeControl {
         }))
     }
 
-    /// 送一個 interrupt 控制訊息（best-effort；Claude 沒有公開的取消 API）。
+    /// 送一個 interrupt 控制訊息 (best-effort；Claude 沒有公開的取消 API)。
     fn cancel(&self) -> Result<()> {
         self.conn.flush_stream();
         self.conn.send_raw(&json!({
@@ -358,7 +358,7 @@ impl AgentControl for ClaudeControl {
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
         bail!(
             "{}",
-            tr!("claude adapter 尚未支援逐項核准（請用 --permission auto/bypass）")
+            tr!("claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)")
         )
     }
 
@@ -366,7 +366,7 @@ impl AgentControl for ClaudeControl {
         "stream-json"
     }
 
-    /// `control_request` 的 `set_model`（實測可用）與 `apply_flag_settings`（effortLevel）。
+    /// `control_request` 的 `set_model` (實測可用)與 `apply_flag_settings`(effortLevel)。
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         if let Some(e) = effort {
             crate::check_effort(e)?;
@@ -389,7 +389,7 @@ impl AgentControl for ClaudeControl {
 // 啟動
 // ---------------------------------------------------------------------------
 
-/// Claude 的 user content：文字（含內嵌的文字檔）加上 base64 圖片區塊。
+/// Claude 的 user content：文字 (含內嵌的文字檔)加上 base64 圖片區塊。
 fn user_content(text: &str, atts: &[termade_core::Attachment]) -> Value {
     let mut blocks =
         vec![json!({ "type": "text", "text": termade_core::compose_text(text, atts, false) })];
@@ -404,7 +404,7 @@ fn user_content(text: &str, atts: &[termade_core::Attachment]) -> Value {
     Value::Array(blocks)
 }
 
-/// 權限與系統提示相關的命令列參數（唯讀、放行／禁止工具、固定放行的 termade MCP 工具、附加系統提示）。
+/// 權限與系統提示相關的命令列參數 (唯讀、放行／禁止工具、固定放行的 termade MCP 工具、附加系統提示)。
 pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     if let Some(e) = &spec.effort {
@@ -418,7 +418,7 @@ pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     } else {
         out.extend(spec.permission.claude_flags().into_iter().map(String::from));
     }
-    // 非 bypass 時，需要核准的工具呼叫交給 termade（規則引擎／使用者）決定。
+    // 非 bypass 時，需要核准的工具呼叫交給 termade (規則引擎／使用者)決定。
     if spec.mcp_exe.is_some() && spec.permission != termade_core::PermissionPolicy::Bypass {
         out.push("--permission-prompt-tool=mcp__termade__termade_approve".into());
     }
@@ -438,7 +438,7 @@ pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     out
 }
 
-/// 固定的 stream-json 參數，加上 model 與接續（`--resume <id>`：接回原對話，實測 id 不變）。
+/// 固定的 stream-json 參數，加上 model 與接續 (`--resume <id>`：接回原對話，實測 id 不變)。
 fn base_args(spec: &SessionSpec) -> Vec<String> {
     let mut out: Vec<String> = [
         "-p",

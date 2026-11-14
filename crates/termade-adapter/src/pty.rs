@@ -112,7 +112,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 
     // 讀取輸出：剝掉終端機控制碼後即時送出，但略過「整段都是空白」的重繪 chunk。
     //
-    // 註：全螢幕 TUI（opencode/claude/agy 互動模式）是螢幕導向輸出，只靠 escape
+    // 註：全螢幕 TUI (opencode/claude/agy 互動模式)是螢幕導向輸出，只靠 escape
     // 序列定位，純文字抽取天生不完美。可讀的結構化輸出請走 ACP / headless；
     // 這裡是萬用後備。完整的 vt100 終端機模擬留待後續。
     {
@@ -139,7 +139,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         });
     }
 
-    // 等待結束（用 try_wait 輪詢，避免在阻塞 wait 期間一直握著鎖而讓 kill 死鎖）。
+    // 等待結束 (用 try_wait 輪詢，避免在阻塞 wait 期間一直握著鎖而讓 kill 死鎖)。
     let child = Arc::new(Mutex::new(child));
     {
         let child = child.clone();

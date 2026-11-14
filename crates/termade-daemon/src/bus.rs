@@ -78,13 +78,13 @@ impl BusGuard {
 
 /// 哪些訊息種類值得主動叫醒閒置的收件者。
 ///
-/// `Status` 與 `Artifact` 屬於被動資訊（更新狀態、分享產出），留在收件匣即可；
-/// 其餘（chat / handoff / question / answer）都代表對方可能需要動作。
+/// `Status` 與 `Artifact` 屬於被動資訊 (更新狀態、分享產出)，留在收件匣即可；
+/// 其餘 (chat / handoff / question / answer)都代表對方可能需要動作。
 pub(crate) fn kind_wakes_recipient(kind: MsgKind) -> bool {
     !matches!(kind, MsgKind::Status | MsgKind::Artifact)
 }
 
-/// 阻塞等待訊息的註冊項（`BusWait` / `termade_wait` / `termade_ask`）。
+/// 阻塞等待訊息的註冊項 (`BusWait` / `termade_wait` / `termade_ask`)。
 pub(crate) struct Waiter {
     pub(crate) session: SessionId,
     pub(crate) from: Option<SessionId>,
@@ -132,7 +132,7 @@ impl Shared {
         body: String,
         reply_to: Option<MsgId>,
     ) {
-        // 已交接的收件者會改投給接手者（T24），超限判斷要看實際收件者（T25）。
+        // 已交接的收件者會改投給接手者 (T24)，超限判斷要看實際收件者 (T25)。
         let over_budget_target = match &to {
             Target::Direct(t) => {
                 let sid = self.resolve_session(t);
@@ -159,14 +159,14 @@ impl Shared {
             Ok((msg_id, route_notes)) => {
                 let mut note = if over_budget_target && kind_wakes_recipient(kind) {
                     tr!(
-                        "已送出訊息 {msg_id}（收件者已超過成本上限 over_budget，拒絕自動喚醒）",
+                        "已送出訊息 {msg_id} (收件者已超過成本上限 over_budget，拒絕自動喚醒)",
                         msg_id = msg_id
                     )
                 } else {
                     tr!("已送出訊息 {msg_id}", msg_id = msg_id)
                 };
                 for n in route_notes {
-                    note.push_str(&tr!("（{n}）", n = n));
+                    note.push_str(&tr!("({n})", n = n));
                 }
                 let _ = reply.send(Frame::ok_note(note));
             }
@@ -177,15 +177,15 @@ impl Shared {
     }
 
     /// 把訊息送進匯流排：防呆檢查、喚醒阻塞中的 waiter、寫入各 session 的
-    /// mailbox，並主動叫醒閒置（`Idle`）或休眠（`Sleeping`）的收件者。
+    /// mailbox，並主動叫醒閒置 (`Idle`)或休眠 (`Sleeping`)的收件者。
     ///
     /// 喚醒規則：
-    /// * 直接訊息（`Direct`）與廣播／頻道（`Broadcast` / `Channel`）都會喚醒收件者。
+    /// * 直接訊息 (`Direct`)與廣播／頻道 (`Broadcast` / `Channel`)都會喚醒收件者。
     /// * 只喚醒狀態為 `Idle` / `Sleeping` 的 session；`Busy` 代表正在工作，
     ///   訊息留在收件匣，並記入 `pending_nudge`：該 session 回到 `Idle`、
-    ///   且排隊的 prompt（T19）送完後，由 [`Self::nudge_unread_if_idle`] 把
-    ///   仍未讀的訊息合併成一則提醒（每則訊息只提醒一次；已被 waiter 取走或
-    ///   `termade_inbox` 讀過的、`over_budget` 的 session 不提醒）。
+    ///   且排隊的 prompt (T19)送完後，由 [`Self::nudge_unread_if_idle`] 把
+    ///   仍未讀的訊息合併成一則提醒 (每則訊息只提醒一次；已被 waiter 取走或
+    ///   `termade_inbox` 讀過的、`over_budget` 的 session 不提醒)。
     /// * 已經透過 `termade_wait` / `termade_ask` 取得訊息的 session 不重複打擾。
     /// * `Status` / `Artifact` 屬於被動資訊，不主動喚醒任何人。
     pub(crate) fn deliver_message(
@@ -200,10 +200,10 @@ impl Shared {
             .map(|(id, _)| id)
     }
 
-    /// 同 [`Self::deliver_message`]，另回傳投遞路徑的說明（改投給接手者、收件者已結束等）。
+    /// 同 [`Self::deliver_message`]，另回傳投遞路徑的說明 (改投給接手者、收件者已結束等)。
     ///
     /// 直接訊息的收件者若已結束且已被交接，改投給 [`State::successor_of`] 的結果，
-    /// body 開頭註明原收件者；已結束又沒有接手者時仍照常投遞（留作紀錄），但說明不會被讀取。
+    /// body 開頭註明原收件者；已結束又沒有接手者時仍照常投遞 (留作紀錄)，但說明不會被讀取。
     pub(crate) fn deliver_message_noted(
         self: &Arc<Self>,
         from: Option<SessionId>,
@@ -237,9 +237,9 @@ impl Shared {
                                 .get(&succ)
                                 .map(|s| s.label.clone())
                                 .unwrap_or_else(|| succ.clone());
-                            body = format!("（原收件者 {t}，已交接）\n{body}");
+                            body = format!("(原收件者 {t}，已交接)\n{body}");
                             route_notes.push(tr!(
-                                "收件者 {t} 已交接，訊息改投給接手的 {succ_label}（{succ}）",
+                                "收件者 {t} 已交接，訊息改投給接手的 {succ_label} ({succ})",
                                 t = t,
                                 succ_label = succ_label,
                                 succ = succ
@@ -340,7 +340,7 @@ impl Shared {
             self.wake_if_sleeping(&target_sid, &ctl);
             let reply_hint = match &message.to {
                 Target::Direct(_) => format!(
-                    "請處理並使用 termade_send（或 `termade send --to {}`）回覆。",
+                    "請處理並使用 termade_send (或 `termade send --to {}`)回覆。",
                     message.from
                 ),
                 _ => "請處理；可先呼叫 termade_inbox 查看完整收件匣，再用 termade_send 回覆。"
@@ -359,9 +359,9 @@ impl Shared {
         Ok((msg_id, route_notes))
     }
 
-    /// 回到 `Idle` 時，把忙碌期間收到、至今仍未讀的訊息合併成一則提醒 prompt（T25）。
+    /// 回到 `Idle` 時，把忙碌期間收到、至今仍未讀的訊息合併成一則提醒 prompt (T25)。
     ///
-    /// 已被 `inbox_cursors` 涵蓋（waiter 取走或 `termade_inbox` 讀過）的不提醒；
+    /// 已被 `inbox_cursors` 涵蓋 (waiter 取走或 `termade_inbox` 讀過)的不提醒；
     /// `over_budget` 的 session 保留記錄不送，調高上限後下一次回到 `Idle` 再補。
     pub(crate) fn nudge_unread_if_idle(self: &Arc<Self>, sid: &SessionId) {
         let (ids, text) = {

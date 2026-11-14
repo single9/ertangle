@@ -1,4 +1,4 @@
-//! 輸入歷史（↑↓ 回顧、跨重開儲存）。
+//! 輸入歷史 (↑↓ 回顧、跨重開儲存)。
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// 每種歷史最多保留幾筆。
 const MAX_ENTRIES: usize = 500;
 
-/// 一種輸入的歷史（prompt 或命令）。
+/// 一種輸入的歷史 (prompt 或命令)。
 #[derive(Default)]
 pub(crate) struct History {
     entries: Vec<String>,
@@ -18,7 +18,7 @@ pub(crate) struct History {
 }
 
 impl History {
-    /// 從檔案載入（每行一個 JSON 字串）；`path` 為 `None` 時只存在記憶體（測試用）。
+    /// 從檔案載入 (每行一個 JSON 字串)；`path` 為 `None` 時只存在記憶體 (測試用)。
     pub(crate) fn load(path: Option<PathBuf>) -> Self {
         let mut entries: Vec<String> = path
             .as_ref()
@@ -65,7 +65,7 @@ impl History {
         }
     }
 
-    /// 往前一筆（較舊）。`current` 是輸入框目前的內容，第一次回顧時當草稿存起來。
+    /// 往前一筆 (較舊)。`current` 是輸入框目前的內容，第一次回顧時當草稿存起來。
     pub(crate) fn prev(&mut self, current: &str) -> Option<String> {
         if self.entries.is_empty() {
             return None;
@@ -82,7 +82,7 @@ impl History {
         Some(self.entries[next].clone())
     }
 
-    /// 往後一筆（較新）；越過最新一筆就回到草稿。
+    /// 往後一筆 (較新)；越過最新一筆就回到草稿。
     pub(crate) fn next(&mut self) -> Option<String> {
         let i = self.pos?;
         if i + 1 < self.entries.len() {

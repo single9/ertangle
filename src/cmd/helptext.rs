@@ -80,13 +80,13 @@ mod tests {
 
     #[test]
     fn localize_translates_about_args_and_subcommands() {
-        let cmd = Command::new("t").about("啟動 TUI（預設行為）").subcommand(
+        let cmd = Command::new("t").about("啟動 TUI (預設行為)").subcommand(
             Command::new("s")
                 .about("列出所有 session")
                 .arg(
                     clap::Arg::new("a")
                         .long("a")
-                        .help("附加檔案或圖片（可重複）"),
+                        .help("附加檔案或圖片 (可重複)"),
                 )
                 .arg(clap::Arg::new("b").long("b").help("沒有翻譯的說明")),
         );

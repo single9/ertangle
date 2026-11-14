@@ -1,5 +1,5 @@
 #!/bin/sh
-# 假的 ACP agent（stdio JSON-RPC）：initialize、session/new、session/load、session/prompt。
+# 假的 ACP agent (stdio JSON-RPC)：initialize、session/new、session/load、session/prompt。
 # `session/load` 會先重播一段歷史再回應，用來驗證載入期間的輸出不會往上送。
 # 環境變數 FAKE_ACP_NO_LOAD=1 時不宣告 loadSession。
 load=true

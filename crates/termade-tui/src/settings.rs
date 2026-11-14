@@ -1,7 +1,7 @@
 //! 設定面板：用清單切換 config.toml 的預設值，不必記 `:set` 的語法。
 //!
-//! `:settings`、`:set`（不帶參數）或 `Space ,` 開啟。↑↓ 選項目，←→／Space／Enter 切換值，
-//! 每次切換立即寫進全域 `config.toml`（只對之後新建立的 session 生效）。
+//! `:settings`、`:set` (不帶參數)或 `Space ,` 開啟。↑↓ 選項目，←→／Space／Enter 切換值，
+//! 每次切換立即寫進全域 `config.toml` (只對之後新建立的 session 生效)。
 
 use crossterm::event::{KeyCode, KeyEvent};
 use termade_core::AgentKind;
@@ -51,7 +51,7 @@ pub(crate) struct Sub {
 
 pub(crate) struct Settings {
     pub sub: Option<Sub>,
-    /// 向 agent CLI 查到的 model 清單（背景執行緒填入，`opencode models` 等最多要等幾秒）。
+    /// 向 agent CLI 查到的 model 清單 (背景執行緒填入，`opencode models` 等最多要等幾秒)。
     live: LiveModels,
     requested: std::collections::HashSet<String>,
     pub cursor: usize,
@@ -84,7 +84,7 @@ pub(crate) fn open(app: &mut App) {
 }
 
 impl Settings {
-    /// 對目前的 agent 在背景查 model 清單（每個 agent 只查一次）。
+    /// 對目前的 agent 在背景查 model 清單 (每個 agent 只查一次)。
     fn fetch_models(&mut self) {
         let Some(kind) = AgentKind::parse(&self.agent) else {
             return;
@@ -122,7 +122,7 @@ impl Item {
             Item::DefaultPermission => tr!("預設權限"),
             Item::TargetAgent => tr!("下面兩項設定的對象 agent"),
             Item::Model if s.loading_models() => {
-                tr!("{agent} 的預設 model（清單載入中…）", agent = s.agent)
+                tr!("{agent} 的預設 model (清單載入中…)", agent = s.agent)
             }
             Item::Model => tr!("{agent} 的預設 model", agent = s.agent),
             Item::Effort => tr!("{agent} 的預設 effort", agent = s.agent),
@@ -134,7 +134,7 @@ impl Item {
         }
     }
 
-    /// 目前儲存的值（空字串＝未設定）。
+    /// 目前儲存的值 (空字串＝未設定)。
     fn current(self, s: &Settings) -> String {
         let c = &s.cfg;
         let agent = c.agents.get(&s.agent);
@@ -152,7 +152,7 @@ impl Item {
         }
     }
 
-    /// 可選的值：`(儲存值, 顯示文字)`。
+    /// 可選的值：` (儲存值, 顯示文字)`。
     fn choices(self, s: &Settings) -> Vec<(String, String)> {
         let pair = |v: &str, l: &str| (v.to_string(), l.to_string());
         let mut out = match self {
@@ -162,7 +162,7 @@ impl Item {
                 v
             }
             Item::DefaultPermission => vec![
-                pair("", &tr!("未設定（auto）")),
+                pair("", &tr!("未設定 (auto)")),
                 pair("ask", &tr!("ask：每個動作都問")),
                 pair("auto", &tr!("auto：自動核准一般動作")),
                 pair("bypass", &tr!("bypass：完全不問")),
@@ -170,7 +170,7 @@ impl Item {
             Item::TargetAgent => AGENTS.iter().map(|a| pair(a, a)).collect(),
             Item::Model => {
                 let kind = AgentKind::parse(&s.agent);
-                let mut v = vec![pair("", &tr!("未設定（agent 自己的預設）"))];
+                let mut v = vec![pair("", &tr!("未設定 (agent 自己的預設)"))];
                 if let Some(k) = kind {
                     v.extend(
                         crate::menu::model_choices(&k)
@@ -203,7 +203,7 @@ impl Item {
             Item::SpawnConfirm => vec![
                 pair("costly", &tr!("超出範圍才問使用者")),
                 pair("always", &tr!("每次都問使用者")),
-                pair("never", &tr!("不問（effort 調降、model 拒絕）")),
+                pair("never", &tr!("不問 (effort 調降、model 拒絕)")),
             ],
             Item::SpawnMaxEffort => termade_adapter::EFFORT_LEVELS
                 .iter()
@@ -246,7 +246,7 @@ fn on_off(b: bool) -> String {
     if b { "on" } else { "off" }.to_string()
 }
 
-/// 把目前列切到下一個（`dir = 1`）或上一個（`-1`）值並寫入設定檔。
+/// 把目前列切到下一個 (`dir = 1`)或上一個 (`-1`)值並寫入設定檔。
 fn cycle(app: &mut App, dir: isize) {
     let Some(s) = app.settings.as_mut() else {
         return;
@@ -310,7 +310,7 @@ fn apply_value(app: &mut App, value: String) {
                 return;
             }
             app.status = tr!(
-                "已儲存到 {path}（新建立的 session 起生效）",
+                "已儲存到 {path} (新建立的 session 起生效)",
                 path = path.display()
             );
         }
@@ -319,7 +319,7 @@ fn apply_value(app: &mut App, value: String) {
 }
 
 impl Settings {
-    /// 值選擇清單目前顯示的項目（依過濾字）。
+    /// 值選擇清單目前顯示的項目 (依過濾字)。
     pub(crate) fn sub_visible(&self) -> Vec<(String, String)> {
         let f = self.sub.as_ref().map(|s| s.filter.to_lowercase());
         ITEMS[self.cursor]
@@ -403,7 +403,7 @@ pub(crate) fn handle_key(app: &mut App, key: KeyEvent) {
                 s.cursor = (s.cursor + ITEMS.len() - 1) % ITEMS.len();
             }
         }
-        // 開關直接切換；其他項目開清單選（清單長，不適合左右輪替）。
+        // 開關直接切換；其他項目開清單選 (清單長，不適合左右輪替)。
         KeyCode::Char(' ') | KeyCode::Enter => {
             let toggle = app
                 .settings

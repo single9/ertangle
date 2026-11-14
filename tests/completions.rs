@@ -81,7 +81,7 @@ fn cli_completions_and_complete_sessions_e2e() {
     assert!(out.stdout.is_empty());
     assert!(t0.elapsed() < Duration::from_secs(2), "應在逾時後快速返回");
 
-    // 4. daemon 有 session 時，輸出目前專案的 session label（不列其他專案）。
+    // 4. daemon 有 session 時，輸出目前專案的 session label (不列其他專案)。
     let live_sock = root.join("d.sock");
     let mut daemon = cmd_with_env(&root, &live_sock)
         .arg("daemon")

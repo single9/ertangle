@@ -1,4 +1,4 @@
-//! Daemon 管理子命令（daemon、shutdown）。
+//! Daemon 管理子命令 (daemon、shutdown)。
 
 use std::path::PathBuf;
 

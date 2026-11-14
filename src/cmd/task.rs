@@ -1,4 +1,4 @@
-//! 任務看板子命令（tasks、task、task-update）。
+//! 任務看板子命令 (tasks、task、task-update)。
 
 use anyhow::{bail, Context, Result};
 use termade_core::TaskStatus;
@@ -31,7 +31,7 @@ pub(crate) fn cmd_tasks(json: bool) -> Result<()> {
         let waiting = if waiting.is_empty() {
             String::new()
         } else {
-            tr!("  （等待 {list}）", list = waiting.join("、"))
+            tr!("  (等待 {list})", list = waiting.join("、"))
         };
         println!(
             "{}  {:<9} {:<16} {}{waiting}",
@@ -73,7 +73,7 @@ pub(crate) fn cmd_task_update(
     let status = match status.as_deref() {
         Some(s) => Some(
             TaskStatus::parse(s)
-                .with_context(|| tr!("未知的狀態：{s}（todo/doing/done/blocked）", s = s))?,
+                .with_context(|| tr!("未知的狀態：{s} (todo/doing/done/blocked)", s = s))?,
         ),
         None => None,
     };

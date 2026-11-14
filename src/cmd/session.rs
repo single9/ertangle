@@ -1,4 +1,4 @@
-//! Session 相關子命令（whoami、sessions、spawn、prompt、cancel、kill、sleep、wake、status）。
+//! Session 相關子命令 (whoami、sessions、spawn、prompt、cancel、kill、sleep、wake、status)。
 
 use anyhow::{bail, Context, Result};
 use termade_core::{AgentKind, PermissionPolicy, Role};
@@ -111,7 +111,7 @@ pub(crate) fn cmd_spawn(
     let model = model.or(kind_model);
     let kind = AgentKind::parse(&kind_str).with_context(|| {
         tr!(
-            "未知的 agent：{kind_str}（opencode/claude/codex/antigravity）",
+            "未知的 agent：{kind_str} (opencode/claude/codex/antigravity)",
             kind_str = kind_str
         )
     })?;
@@ -122,7 +122,7 @@ pub(crate) fn cmd_spawn(
         other => bail!(
             "{}",
             tr!(
-                "未知的 transport：{other}（auto/structured/acp/pty）",
+                "未知的 transport：{other} (auto/structured/acp/pty)",
                 other = other
             )
         ),
@@ -130,12 +130,12 @@ pub(crate) fn cmd_spawn(
     let permission = match permission {
         Some(p) => Some(
             PermissionPolicy::parse(&p)
-                .with_context(|| tr!("未知的權限政策：{p}（ask/auto/bypass）", p = p))?,
+                .with_context(|| tr!("未知的權限政策：{p} (ask/auto/bypass)", p = p))?,
         ),
         None => None,
     };
     let parent = parent.or_else(|| std::env::var("TERMADE_SESSION").ok());
-    // 沒指定 --cwd 時用呼叫者所在的目錄（daemon 是共用的，它的 cwd 不一定是這個專案）。
+    // 沒指定 --cwd 時用呼叫者所在的目錄 (daemon 是共用的，它的 cwd 不一定是這個專案)。
     let cwd = cwd.or_else(|| {
         std::env::current_dir()
             .ok()
@@ -253,7 +253,7 @@ pub(crate) fn cmd_handoff(
     };
     let kind = AgentKind::parse(&kind_str).with_context(|| {
         tr!(
-            "未知的 agent：{kind_str}（opencode/claude/codex/antigravity）",
+            "未知的 agent：{kind_str} (opencode/claude/codex/antigravity)",
             kind_str = kind_str
         )
     })?;
