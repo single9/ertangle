@@ -32,7 +32,7 @@
 | [T24](T24-handoff-message-forwarding.md) | 交接後，發給舊 session 的訊息轉給接手的 session（已完成） | P2 | — |
 | [T25](T25-unread-nudge-on-idle.md) | 收件者忙完後提醒未讀訊息；超限判斷看實際收件者（已完成） | P2 | T24 |
 | [T26](T26-runtime-model-effort.md) | 執行期切換 model／effort，並可從 TUI 寫入預設值（已完成） | P1 | T11 |
-| [T27](T27-i18n-english.md) | 多國語系：以 gettext `.po` 提供英文介面（規劃，尚未動工） | P2 | — |
+| [T27](T27-i18n-english.md) | 多國語系：以 gettext `.po` 提供英文介面（已實作，待審查） | P2 | — |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

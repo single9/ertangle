@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-tui`、`termade-daemon`、`termade-adapter`、`src/`、CI　相依：—
 
-Status: needs-triage（規劃，尚未動工）
+Status: ready-for-human（已實作於 `t27-i18n` 分支，待審查）
 
 ## 目標與範圍
 
@@ -61,6 +61,22 @@ daemon 是共用的常駐行程。這張票先讓 daemon 回傳的訊息跟「da
 
 - 協作說明是否也跟介面語言走，或固定一種語言。建議本票先不動。
 - 是否接 Weblate（託管版對開源專案免費）：等英文完成、有社群需求再決定。
+
+## 實作紀錄 (2026-11-14)
+
+- **步驟 1 的發現**：`tr::PoTranslator::from_vec_u8` 讀不到 `.po` 內容。它把資料交給 rspolib 的 `byte_content`，但 rspolib 0.1.2 只在讀 `.mo` 時使用這個欄位，結果翻譯表永遠是空的。因此只用 `tr!` 巨集與翻譯器登記，翻譯表改由 `termade_core::i18n` 直接用 `rspolib::pofile(&str)` 建立，順便略過 fuzzy、過時與空白翻譯。`tr` 不啟用任何 feature。
+- `tr` 依 crate 分別登記翻譯器，`i18n::DOMAINS` 列出所有會呼叫 `tr!` 的 crate，新增 crate 時要加進去。
+- `&'static str` 表格 (`COMMANDS`、`HELP`、選單、Claude model 清單) 不改型別，改用 `tr_noop!` 標記讓 xtr 抽取，顯示時用 `tr_dyn!` 翻譯。
+- 同一個原文需要不同譯法時用 context，例如 `tr!("列表分隔" => "、")`。
+- `termade ask` 原本以「回覆附註的最後一個字」取訊息 id，翻譯後 (以及附帶路由附註時) 會取錯，改成搜尋 `msg_` 開頭的 id。
+- `.pot` 只記檔名不記行號，避免改一行程式碼就讓 `.pot` 整份變動，也拿掉 `POT-Creation-Date`，CI 才能比對是否過期。
+- 共約 610 條字串。TUI 由 Claude 改寫，daemon、adapter、core、CLI 由 agy 協作改寫，英文翻譯全部完成。
+- 已在 tmux 以 140×40 實際檢視英文介面：主畫面、說明面板、選單、設定面板、命令提示、spawn 選擇器。設定面板底部提示原本被截斷，已縮短英文。
+
+### 未完成、建議另開票
+
+- CLI 的 `--help` (clap 的 doc comment) 仍是中文。xtr 抽不到 doc comment，需要另外設計執行時期替換 `Command` 的 about／help。
+- 刻意不翻的給 agent 看的文字：協作說明、交接簡報、審查註解 prompt、任務指派內文、附件內嵌文字。
 
 ## 驗收條件
 

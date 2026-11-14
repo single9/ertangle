@@ -298,6 +298,7 @@ termade completions <bash|zsh|fish>               # 產生 Shell 自動補齊腳
 
 ```toml
 [tui]
+language = "auto"                 # 介面語言："auto" (依 LANG) | "zh-TW" | "en"；只認全域設定
 layout = "two"                    # 預設版面："two" | "three" | "tabs"
 notify = ["bell", "command"]      # 通知方式："bell" | "osc9" | "command" (可複選)
 notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
@@ -319,6 +320,9 @@ fallback = ["codex", "claude:sonnet"]
 instructions = true               # 是否自動向 Agent 注入 termade 協作工具使用規範
 extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
 ```
+
+> [!NOTE]
+> 介面語言也可以在設定面板 (`:settings`) 切換，立即生效。daemon 回傳的訊息跟 daemon 啟動時的語言走，切換後要重啟 daemon 才會一致。想協助翻譯請見 [翻譯指南](docs/TRANSLATING.md)。
 
 > [!TIP]
 > 專案內可建立 `.termade/instructions.md` (上限 8 KB)，內容會在啟動時自動附加至 Agent 的 System Prompt 底部。
