@@ -3,13 +3,14 @@
 use anyhow::{bail, Context, Result};
 use termade_core::TaskStatus;
 use termade_protocol::{Frame, Request};
+use tr::tr;
 
 use super::roundtrip;
 
 pub(crate) fn cmd_tasks(json: bool) -> Result<()> {
     let frame = roundtrip(&Request::Snapshot)?;
     let Frame::Snapshot { state } = frame else {
-        bail!("未取得快照");
+        bail!("{}", tr!("未取得快照"));
     };
     if json {
         let tasks: Vec<_> = state.tasks.values().collect();
@@ -17,7 +18,7 @@ pub(crate) fn cmd_tasks(json: bool) -> Result<()> {
         return Ok(());
     }
     if state.tasks.is_empty() {
-        println!("(沒有任務)");
+        println!("{}", tr!("(沒有任務)"));
         return Ok(());
     }
     for t in state.tasks.values() {
@@ -30,7 +31,7 @@ pub(crate) fn cmd_tasks(json: bool) -> Result<()> {
         let waiting = if waiting.is_empty() {
             String::new()
         } else {
-            format!("  （等待 {}）", waiting.join("、"))
+            tr!("  （等待 {list}）", list = waiting.join("、"))
         };
         println!(
             "{}  {:<9} {:<16} {}{waiting}",
@@ -72,7 +73,7 @@ pub(crate) fn cmd_task_update(
     let status = match status.as_deref() {
         Some(s) => Some(
             TaskStatus::parse(s)
-                .with_context(|| format!("未知的狀態：{s}（todo/doing/done/blocked）"))?,
+                .with_context(|| tr!("未知的狀態：{s}（todo/doing/done/blocked）", s = s))?,
         ),
         None => None,
     };

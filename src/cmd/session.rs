@@ -3,6 +3,7 @@
 use anyhow::{bail, Context, Result};
 use termade_core::{AgentKind, PermissionPolicy, Role};
 use termade_protocol::{Frame, Request, SpawnRequest, Transport};
+use tr::tr;
 
 use super::{join, resolve_self_session, roundtrip};
 
@@ -11,7 +12,7 @@ pub(crate) fn cmd_whoami(session: Option<String>, json: bool) -> Result<()> {
         .or_else(|| std::env::var("TERMADE_SESSION").ok())
         .unwrap_or_else(|| "human".into());
     let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
-        bail!("未取得快照");
+        bail!("{}", tr!("未取得快照"));
     };
     let resolved = state
         .resolve_session_id(&sid)
@@ -34,7 +35,7 @@ pub(crate) fn cmd_whoami(session: Option<String>, json: bool) -> Result<()> {
     } else if json {
         println!("{}", serde_json::json!({ "id": sid, "role": "human" }));
     } else {
-        println!("{sid}  (非受管 session)");
+        println!("{}", tr!("{sid}  (非受管 session)", sid = sid));
     }
     Ok(())
 }
@@ -42,14 +43,14 @@ pub(crate) fn cmd_whoami(session: Option<String>, json: bool) -> Result<()> {
 pub(crate) fn cmd_sessions(json: bool) -> Result<()> {
     let frame = roundtrip(&Request::Snapshot)?;
     let Frame::Snapshot { state } = frame else {
-        bail!("未取得快照");
+        bail!("{}", tr!("未取得快照"));
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&*state)?);
         return Ok(());
     }
     if state.sessions.is_empty() {
-        println!("(沒有 session)");
+        println!("{}", tr!("(沒有 session)"));
         return Ok(());
     }
     for s in state.sessions_sorted() {
@@ -109,18 +110,27 @@ pub(crate) fn cmd_spawn(
     };
     let model = model.or(kind_model);
     let kind = AgentKind::parse(&kind_str).with_context(|| {
-        format!("未知的 agent：{kind_str}（opencode/claude/codex/antigravity）")
+        tr!(
+            "未知的 agent：{kind_str}（opencode/claude/codex/antigravity）",
+            kind_str = kind_str
+        )
     })?;
     let transport = match transport.as_str() {
         "auto" => Transport::Auto,
         "structured" | "acp" => Transport::Structured,
         "pty" => Transport::Pty,
-        other => bail!("未知的 transport：{other}（auto/structured/acp/pty）"),
+        other => bail!(
+            "{}",
+            tr!(
+                "未知的 transport：{other}（auto/structured/acp/pty）",
+                other = other
+            )
+        ),
     };
     let permission = match permission {
         Some(p) => Some(
             PermissionPolicy::parse(&p)
-                .with_context(|| format!("未知的權限政策：{p}（ask/auto/bypass）"))?,
+                .with_context(|| tr!("未知的權限政策：{p}（ask/auto/bypass）", p = p))?,
         ),
         None => None,
     };
@@ -150,7 +160,7 @@ pub(crate) fn cmd_spawn(
     });
     match roundtrip(&req)? {
         Frame::Ok { note } => {
-            println!("{}", note.unwrap_or_else(|| "已建立 session".into()));
+            println!("{}", note.unwrap_or_else(|| tr!("已建立 session")));
             Ok(())
         }
         Frame::Error { message } => bail!("{message}"),
@@ -187,18 +197,18 @@ pub(crate) fn cmd_prompt(
 pub(crate) fn cmd_queue(session: String, clear: bool) -> Result<()> {
     if clear {
         if let Frame::Ok { note } = roundtrip(&Request::QueueClear { session })? {
-            println!("{}", note.unwrap_or_else(|| "已清空排隊".into()));
+            println!("{}", note.unwrap_or_else(|| tr!("已清空排隊")));
         }
         return Ok(());
     }
     let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
-        bail!("未取得快照");
+        bail!("{}", tr!("未取得快照"));
     };
     let sid = state
         .resolve_session_id(&session)
         .unwrap_or_else(|| session.clone());
     if !state.sessions.contains_key(&sid) {
-        bail!("找不到 session {session}");
+        bail!("{}", tr!("找不到 session {session}", session = session));
     }
     match state.queues.get(&sid) {
         Some(items) if !items.is_empty() => {
@@ -206,7 +216,7 @@ pub(crate) fn cmd_queue(session: String, clear: bool) -> Result<()> {
                 println!("{}. {item}", i + 1);
             }
         }
-        _ => println!("(排隊為空)"),
+        _ => println!("{}", tr!("(排隊為空)")),
     }
     Ok(())
 }
@@ -224,7 +234,7 @@ pub(crate) fn cmd_kill(session: String) -> Result<()> {
 pub(crate) fn cmd_resume(session: String, text: Vec<String>) -> Result<()> {
     let prompt = Some(join(text)).filter(|t| !t.trim().is_empty());
     match roundtrip(&Request::Resume { session, prompt })? {
-        Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| "已接續".into())),
+        Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| tr!("已接續"))),
         Frame::Error { message } => bail!("{message}"),
         _ => {}
     }
@@ -242,7 +252,10 @@ pub(crate) fn cmd_handoff(
         _ => (to.clone(), None),
     };
     let kind = AgentKind::parse(&kind_str).with_context(|| {
-        format!("未知的 agent：{kind_str}（opencode/claude/codex/antigravity）")
+        tr!(
+            "未知的 agent：{kind_str}（opencode/claude/codex/antigravity）",
+            kind_str = kind_str
+        )
     })?;
     match roundtrip(&Request::Handoff {
         session,
@@ -251,7 +264,7 @@ pub(crate) fn cmd_handoff(
         effort,
         note,
     })? {
-        Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| "已交接".into())),
+        Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| tr!("已交接"))),
         Frame::Error { message } => bail!("{message}"),
         _ => {}
     }
@@ -260,7 +273,7 @@ pub(crate) fn cmd_handoff(
 
 pub(crate) fn cmd_rm(session: String, force: bool) -> Result<()> {
     if let Frame::Ok { note } = roundtrip(&Request::SessionRemove { session, force })? {
-        println!("{}", note.unwrap_or_else(|| "已移除".into()));
+        println!("{}", note.unwrap_or_else(|| tr!("已移除")));
     }
     Ok(())
 }
@@ -268,7 +281,7 @@ pub(crate) fn cmd_rm(session: String, force: bool) -> Result<()> {
 pub(crate) fn cmd_sleep(session: String) -> Result<()> {
     let frame = roundtrip(&Request::Sleep { session })?;
     if let Frame::Ok { note } = frame {
-        println!("{}", note.unwrap_or_else(|| "已休眠".into()));
+        println!("{}", note.unwrap_or_else(|| tr!("已休眠")));
     }
     Ok(())
 }
@@ -279,7 +292,7 @@ pub(crate) fn cmd_model(
     effort: Option<String>,
 ) -> Result<()> {
     if model.is_none() && effort.is_none() {
-        anyhow::bail!("請指定 model 或 --effort");
+        anyhow::bail!("{}", tr!("請指定 model 或 --effort"));
     }
     let frame = roundtrip(&Request::SessionConfig {
         session,
@@ -287,7 +300,7 @@ pub(crate) fn cmd_model(
         effort,
     })?;
     if let Frame::Ok { note } = frame {
-        println!("{}", note.unwrap_or_else(|| "已切換".into()));
+        println!("{}", note.unwrap_or_else(|| tr!("已切換")));
     }
     Ok(())
 }
@@ -295,7 +308,7 @@ pub(crate) fn cmd_model(
 pub(crate) fn cmd_wake(session: String) -> Result<()> {
     let frame = roundtrip(&Request::Wake { session })?;
     if let Frame::Ok { note } = frame {
-        println!("{}", note.unwrap_or_else(|| "已喚醒".into()));
+        println!("{}", note.unwrap_or_else(|| tr!("已喚醒")));
     }
     Ok(())
 }
@@ -314,7 +327,7 @@ pub(crate) fn cmd_budget(session: String, budget_usd: f64) -> Result<()> {
         session,
         budget_usd,
     })? {
-        println!("{}", note.unwrap_or_else(|| "已更新成本上限".into()));
+        println!("{}", note.unwrap_or_else(|| tr!("已更新成本上限")));
     }
     Ok(())
 }

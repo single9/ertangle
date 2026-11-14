@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use termade_daemon::RemoteOptions;
 use termade_protocol::Request;
+use tr::tr;
 
 use super::roundtrip;
 
@@ -24,6 +25,6 @@ pub(crate) fn cmd_daemon(
 
 pub(crate) fn cmd_shutdown() -> Result<()> {
     roundtrip(&Request::Shutdown)?;
-    println!("已要求 daemon 關閉");
+    println!("{}", tr!("已要求 daemon 關閉"));
     Ok(())
 }

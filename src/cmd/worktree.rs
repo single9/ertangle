@@ -2,19 +2,20 @@
 
 use anyhow::{bail, Result};
 use termade_protocol::{Frame, Request};
+use tr::tr;
 
 use super::{join, roundtrip};
 
 pub(crate) fn cmd_worktrees(json: bool) -> Result<()> {
     let Frame::Worktrees { worktrees } = roundtrip(&Request::WorktreeList)? else {
-        bail!("未取得 worktree 清單");
+        bail!("{}", tr!("未取得 worktree 清單"));
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&worktrees)?);
         return Ok(());
     }
     if worktrees.is_empty() {
-        println!("(沒有受管 worktree)");
+        println!("{}", tr!("(沒有受管 worktree)"));
         return Ok(());
     }
     for w in worktrees {
@@ -29,7 +30,7 @@ pub(crate) fn cmd_worktrees(json: bool) -> Result<()> {
 
 pub(crate) fn cmd_diff(session: String) -> Result<()> {
     let Frame::Diff { diff, .. } = roundtrip(&Request::WorktreeDiff { session })? else {
-        bail!("未取得 diff");
+        bail!("{}", tr!("未取得 diff"));
     };
     print!("{diff}");
     Ok(())
@@ -50,7 +51,7 @@ pub(crate) fn cmd_review(session: String, location: String, comment: Vec<String>
 pub(crate) fn cmd_merge(session: String, dry_run: bool) -> Result<()> {
     let frame = roundtrip(&Request::WorktreeMerge { session, dry_run })?;
     if let Frame::Ok { note } = frame {
-        println!("{}", note.unwrap_or_else(|| "已合併至 main".into()));
+        println!("{}", note.unwrap_or_else(|| tr!("已合併至 main")));
     }
     Ok(())
 }
@@ -62,7 +63,7 @@ pub(crate) fn cmd_pr(session: String, title: String, body: String) -> Result<()>
         body,
     })?;
     if let Frame::Ok { note } = frame {
-        println!("{}", note.unwrap_or_else(|| "已建立 PR".into()));
+        println!("{}", note.unwrap_or_else(|| tr!("已建立 PR")));
     }
     Ok(())
 }

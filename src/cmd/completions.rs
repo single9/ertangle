@@ -9,6 +9,7 @@ use clap::{Arg, Command, CommandFactory};
 use clap_complete::Shell;
 use termade_core::{AgentKind, State};
 use termade_protocol::{Frame, Request};
+use tr::tr;
 
 // ---------------------------------------------------------------------------
 // 旗標的可用值（補全腳本會列出這些；別名仍可解析但不列出）
@@ -35,8 +36,9 @@ impl TypedValueParser for KindParser {
         if AgentKind::parse(kind).is_none() {
             return Err(clap::Error::raw(
                 clap::error::ErrorKind::InvalidValue,
-                format!(
-                    "未知的 agent：{kind}（opencode/claude/codex/antigravity，可加 `:model`）\n"
+                tr!(
+                    "未知的 agent：{kind}（opencode/claude/codex/antigravity，可加 `:model`）\n",
+                    kind = kind
                 ),
             )
             .with_cmd(cmd));
