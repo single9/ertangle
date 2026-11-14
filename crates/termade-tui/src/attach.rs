@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use termade_core::Attachment;
+use tr::tr;
 
 type FileCache = Mutex<HashMap<PathBuf, (Instant, Vec<String>)>>;
 static FILE_CACHE: std::sync::OnceLock<FileCache> = std::sync::OnceLock::new();
@@ -380,9 +381,9 @@ pub(crate) fn clipboard_image() -> Result<PathBuf, String> {
                 .map(|d| d.as_millis())
                 .unwrap_or(0);
             let path = std::env::temp_dir().join(format!("termade-clip-{ts}.png"));
-            std::fs::write(&path, &out.stdout).map_err(|e| format!("寫入暫存圖片失敗：{e}"))?;
+            std::fs::write(&path, &out.stdout).map_err(|e| tr!("寫入暫存圖片失敗：{e}", e = e))?;
             return Ok(path);
         }
     }
-    Err("剪貼簿裡沒有圖片（需要 wl-paste 或 xclip）".into())
+    Err(tr!("剪貼簿裡沒有圖片（需要 wl-paste 或 xclip）"))
 }

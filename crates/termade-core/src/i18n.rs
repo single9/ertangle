@@ -8,6 +8,29 @@
 //! 要對每個會呼叫 `tr!` 的 crate 都登記一次，見 [`DOMAINS`]。
 
 use std::borrow::Cow;
+
+#[doc(hidden)]
+pub use tr as __tr;
+
+/// 標記要翻譯但先不翻的字串字面值 (gettext 的 `N_`)：給 `&'static str` 表格用，
+/// 讓 `xtr -k tr_noop` 抽得到；顯示時再用 [`tr_dyn!`] 翻譯。
+#[macro_export]
+macro_rules! tr_noop {
+    ($s:literal) => {
+        $s
+    };
+}
+
+/// 翻譯執行時期才知道的字串 (通常來自 [`tr_noop!`] 標記的表格)，回傳 `String`。
+/// 不是字面值，xtr 抽不到，所以原文一定要在別處用 `tr_noop!` 或 `tr!` 標記過。
+#[macro_export]
+macro_rules! tr_dyn {
+    ($s:expr) => {
+        $crate::i18n::__tr::internal::with_translator(module_path!(), |t| {
+            t.translate($s, None).into_owned()
+        })
+    };
+}
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};

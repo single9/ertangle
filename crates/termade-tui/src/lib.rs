@@ -81,6 +81,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 use termade_daemon::{Client, ConnStream};
 use termade_protocol::{Frame, Request};
+use tr::tr;
 
 /// 啟動 TUI（會先確保 daemon 在跑）。
 pub fn run() -> Result<()> {
@@ -183,7 +184,7 @@ fn event_loop(
                     if !app.disconnected {
                         app.disconnected = true;
                         app.status =
-                            "daemon 連線已中斷（可能被關閉了）。畫面是最後的狀態，按 q 離開後重新啟動".into();
+                            tr!("daemon 連線已中斷（可能被關閉了）。畫面是最後的狀態，按 q 離開後重新啟動");
                         dirty = true;
                     }
                     break;
@@ -214,7 +215,7 @@ fn event_loop(
                     if let Err(e) = handle_key(&mut app, writer, key) {
                         // 連線已斷時，送出請求失敗不該讓整個 TUI 崩掉。
                         if app.disconnected {
-                            app.status = "daemon 已斷線，無法送出；按 q 離開".into();
+                            app.status = tr!("daemon 已斷線，無法送出；按 q 離開");
                         } else {
                             return Err(e);
                         }
@@ -284,7 +285,7 @@ fn apply_frame(app: &mut App, frame: Frame) {
             }
         }
         Frame::Error { message } => {
-            app.status = format!("錯誤：{message}");
+            app.status = tr!("錯誤：{message}", message = message);
         }
     }
 }

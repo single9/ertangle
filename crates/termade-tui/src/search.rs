@@ -8,6 +8,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
+use tr::tr;
 
 use crate::app::{App, CenterView, Mode};
 use crate::input::{backspace_input, byte_index, delete_input, insert_input};
@@ -73,7 +74,7 @@ pub(crate) fn open(app: &mut App, prefill: Option<&str>) {
         CenterView::Transcript => app.transcript_offset,
         CenterView::Diff => app.diff_cursor,
         CenterView::Worktrees | CenterView::Tasks => {
-            app.status = "這個視圖不支援搜尋（逐字稿與 Diff 才有）".into();
+            app.status = tr!("這個視圖不支援搜尋（逐字稿與 Diff 才有）");
             return;
         }
     };
@@ -148,15 +149,15 @@ fn jump(app: &mut App) {
 pub(crate) fn close(app: &mut App) {
     if let Some(s) = app.search.take() {
         app.status = if s.query.is_empty() {
-            "已離開搜尋".into()
+            tr!("已離開搜尋")
         } else if s.matches.is_empty() {
-            format!("找不到「{}」", s.query)
+            tr!("找不到「{query}」", query = s.query)
         } else {
-            format!(
-                "搜尋「{}」停在 {}/{}（f 再搜尋）",
-                s.query,
-                s.current + 1,
-                s.matches.len()
+            tr!(
+                "搜尋「{query}」停在 {current}/{total}（f 再搜尋）",
+                query = s.query,
+                current = s.current + 1,
+                total = s.matches.len()
             )
         };
         if !s.query.is_empty() {
@@ -201,11 +202,15 @@ pub(crate) fn handle_search_key(app: &mut App, key: KeyEvent) {
 pub(crate) fn status_text(app: &App) -> Option<String> {
     let s = app.search.as_ref()?;
     Some(if s.query.is_empty() {
-        "搜尋：輸入文字（只找畫面上顯示的內容）".into()
+        tr!("搜尋：輸入文字（只找畫面上顯示的內容）")
     } else if s.matches.is_empty() {
-        format!("搜尋：找不到「{}」", s.query)
+        tr!("搜尋：找不到「{query}」", query = s.query)
     } else {
-        format!("搜尋 {}/{}", s.current + 1, s.matches.len())
+        tr!(
+            "搜尋 {current}/{total}",
+            current = s.current + 1,
+            total = s.matches.len()
+        )
     })
 }
 

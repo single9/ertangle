@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use tr::tr;
 
 use termade_core::{Event, Record, SessionId, SessionStatus, State};
 use termade_daemon::config::TuiCfg;
@@ -155,18 +156,18 @@ pub(crate) fn notices_for(before: &State, record: &Record, ctx: &NotifyCtx) -> V
     }
     let label = sanitize(&s.label);
     let what = match (kind, extra) {
-        (NoticeKind::Done, _) => "做完了".to_string(),
-        (NoticeKind::Failed, _) => "失敗".to_string(),
+        (NoticeKind::Done, _) => tr!("做完了"),
+        (NoticeKind::Failed, _) => tr!("失敗"),
         (NoticeKind::Approval, Some(tool)) if !tool.trim().is_empty() => {
-            format!("等待核准 {tool}")
+            tr!("等待核准 {tool}", tool = tool)
         }
-        (NoticeKind::Approval, _) => "等待核准".to_string(),
-        (NoticeKind::Limited, _) => "額度用完".to_string(),
+        (NoticeKind::Approval, _) => tr!("等待核准"),
+        (NoticeKind::Limited, _) => tr!("額度用完"),
     };
     vec![Notice {
         kind,
         session: session.clone(),
-        text: sanitize(&format!("{label}：{what}")),
+        text: sanitize(&tr!("{label}：{what}", label = label, what = what)),
         label,
     }]
 }
@@ -255,20 +256,24 @@ impl Notifier {
     /// 目前狀態的一行說明（`:notify` 與切換後顯示在狀態列）。
     pub(crate) fn describe(&self) -> String {
         let mut out = if self.methods.is_empty() {
-            "通知：關閉（config.toml 的 [tui] notify 是空的）".to_string()
+            tr!("通知：關閉（config.toml 的 [tui] notify 是空的）")
         } else {
             let names: Vec<&str> = self.methods.iter().map(|m| m.id()).collect();
-            format!(
-                "通知：{}（{}）",
-                if self.enabled { "開" } else { "關" },
-                names.join("、")
-            )
+            let methods = names.join(&tr!("列表分隔" => "、"));
+            if self.enabled {
+                tr!("通知：開（{methods}）", methods = methods)
+            } else {
+                tr!("通知：關（{methods}）", methods = methods)
+            }
         };
         if self.methods.contains(&Method::Command) && self.command.is_none() {
-            out.push_str("；notify_command 未設定");
+            out.push_str(&tr!("；notify_command 未設定"));
         }
         if !self.unknown.is_empty() {
-            out.push_str(&format!("；忽略未知方式：{}", self.unknown.join("、")));
+            out.push_str(&tr!(
+                "；忽略未知方式：{methods}",
+                methods = self.unknown.join(&tr!("列表分隔" => "、"))
+            ));
         }
         out
     }
@@ -351,11 +356,11 @@ impl Notifier {
                     if let Err(e) =
                         write_escape(out, *method, &notice.text).and_then(|()| out.flush())
                     {
-                        result = Err(format!("通知寫入終端機失敗：{e}"));
+                        result = Err(tr!("通知寫入終端機失敗：{e}", e = e));
                     }
                 }
                 Method::Command => match &self.command {
-                    None => result = Err("通知：notify_command 未設定".to_string()),
+                    None => result = Err(tr!("通知：notify_command 未設定")),
                     Some(command) => match notify_command(command, notice).spawn() {
                         // 不等待結果；另開執行緒回收子處理程序，避免留下殭屍。
                         Ok(mut child) => {
@@ -363,7 +368,7 @@ impl Notifier {
                                 let _ = child.wait();
                             });
                         }
-                        Err(e) => result = Err(format!("通知命令執行失敗：{e}")),
+                        Err(e) => result = Err(tr!("通知命令執行失敗：{e}", e = e)),
                     },
                 },
             }

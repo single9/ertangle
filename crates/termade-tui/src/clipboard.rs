@@ -1,6 +1,7 @@
 //! 終端機剪貼簿輔助（OSC 52）與區塊複製。
 
 use std::io::{self, Write};
+use tr::tr;
 
 use crate::app::{main_pane_text, App};
 
@@ -39,14 +40,17 @@ pub(crate) fn base64_encode(data: &[u8]) -> String {
 pub(crate) fn copy_main_pane(app: &mut App) {
     let text = main_pane_text(app);
     if text.is_empty() {
-        app.status = "沒有可複製的內容".into();
+        app.status = tr!("沒有可複製的內容");
         return;
     }
     match write_clipboard(&text) {
         Ok(()) => {
             let lines = text.lines().count().max(1);
-            app.status = format!("已複製主要區塊 {lines} 行（OSC 52；失敗時可用 Shift+拖曳選取）");
+            app.status = tr!(
+                "已複製主要區塊 {lines} 行（OSC 52；失敗時可用 Shift+拖曳選取）",
+                lines = lines
+            );
         }
-        Err(e) => app.status = format!("複製失敗：{e}"),
+        Err(e) => app.status = tr!("複製失敗：{e}", e = e),
     }
 }

@@ -1,6 +1,7 @@
 //! 所有繪製函式（版面、標題、sessions、transcript、diff、bus、輸入框）。
 
 use super::*;
+use tr::tr;
 
 pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     app.input_inner_w = f.area().width.saturating_sub(2) as usize;
@@ -118,9 +119,13 @@ pub(crate) fn draw_menu(f: &mut TuiFrame, input_area: Rect, app: &App) {
     let Some((title, items)) = crate::menu::menu_items(&app.menu_path) else {
         return;
     };
-    let label_w = items
+    let labels: Vec<String> = items
         .iter()
-        .map(|i| UnicodeWidthStr::width(i.label))
+        .map(|i| termade_core::tr_dyn!(i.label))
+        .collect();
+    let label_w = labels
+        .iter()
+        .map(|l| UnicodeWidthStr::width(l.as_str()))
         .max()
         .unwrap_or(10);
     let w = (label_w + 8)
@@ -131,7 +136,8 @@ pub(crate) fn draw_menu(f: &mut TuiFrame, input_area: Rect, app: &App) {
     let area = Rect::new(x, input_area.y.saturating_sub(h), w, h);
     let lines: Vec<Line> = items
         .iter()
-        .map(|i| {
+        .zip(labels)
+        .map(|(i, label)| {
             Line::from(vec![
                 Span::styled(
                     format!(" {} ", i.key),
@@ -139,7 +145,7 @@ pub(crate) fn draw_menu(f: &mut TuiFrame, input_area: Rect, app: &App) {
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(i.label),
+                Span::raw(label),
             ])
         })
         .collect();
@@ -195,7 +201,7 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(" 命令（Tab 補全） "),
+                .title(tr!(" 命令（Tab 補全） ")),
         ),
         area,
     );
@@ -243,7 +249,7 @@ pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &Ap
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(" 專案檔案（Tab 採用） "),
+                .title(tr!(" 專案檔案（Tab 採用） ")),
         ),
         area,
     );
@@ -298,7 +304,7 @@ pub(crate) fn draw_help(f: &mut TuiFrame, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(" 說明（Esc 關閉） "),
+                .title(tr!(" 說明（Esc 關閉） ")),
         ),
         area,
     );
@@ -349,7 +355,7 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
         .collect();
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
-        " ↑↓ 選項目 · Enter 開清單選擇（開關直接切換）· ←→ 輪替 · Esc 關閉　變更立即儲存",
+        tr!(" ↑↓ 選項目 · Enter 開清單選擇（開關直接切換）· ←→ 輪替 · Esc 關閉　變更立即儲存"),
         Style::default().fg(Color::Gray),
     )));
     f.render_widget(ratatui::widgets::Clear, area);
@@ -358,7 +364,7 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(" 設定（寫入全域 config.toml） "),
+                .title(tr!(" 設定（寫入全域 config.toml） ")),
         ),
         area,
     );
@@ -390,13 +396,13 @@ fn draw_settings_sub(
     let top = sub.cursor.saturating_sub(rows.saturating_sub(1));
     let cur = item.display(s);
     let mut lines: Vec<Line> = vec![Line::from(vec![
-        Span::styled(" 過濾：", Style::default().fg(Color::Gray)),
+        Span::styled(tr!(" 過濾："), Style::default().fg(Color::Gray)),
         Span::raw(sub.filter.clone()),
         Span::styled("▏", Style::default().fg(Color::Yellow)),
     ])];
     if all.is_empty() {
         lines.push(Line::from(Span::styled(
-            " （沒有符合的項目）",
+            tr!(" （沒有符合的項目）"),
             Style::default().fg(Color::Gray),
         )));
     }
@@ -410,10 +416,14 @@ fn draw_settings_sub(
         lines.push(Line::from(Span::styled(format!(" {mark} {label}"), style)));
     }
     let loading = item == crate::settings::Item::Model && s.loading_models_pub();
-    let title = format!(
-        " {}{} · Enter 選定 · Esc 返回 ",
-        item.label(s),
-        if loading { "（載入中…）" } else { "" }
+    let title = tr!(
+        " {item}{loading} · Enter 選定 · Esc 返回 ",
+        item = item.label(s),
+        loading = if loading {
+            tr!("（載入中…）")
+        } else {
+            String::new()
+        }
     );
     f.render_widget(ratatui::widgets::Clear, area);
     f.render_widget(
@@ -462,16 +472,16 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     }
     if loading {
         lines.push(Line::from(Span::styled(
-            "  載入可用 model 中…",
+            tr!("  載入可用 model 中…"),
             Style::default().fg(Color::DarkGray),
         )));
     }
     if vis.is_empty() && !loading {
         lines.push(Line::from(Span::styled(
             if p.filter.is_empty() {
-                "（沒有選項）".to_string()
+                tr!("（沒有選項）")
             } else {
-                format!("Enter 使用自訂值：{}", p.filter)
+                tr!("Enter 使用自訂值：{value}", value = p.filter)
             },
             Style::default().fg(Color::DarkGray),
         )));
@@ -509,14 +519,17 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
         String::new()
     };
     let keys = if mine {
-        "[a]llow [A]lways [d]eny"
+        tr!("[a]llow [A]lways [d]eny")
     } else {
-        "(j/k 選取該 session 後 a/d)"
+        tr!("(j/k 選取該 session 後 a/d)")
     };
-    let text = format!(
-        "⏸ {label} 要求 {}：{}{more} {keys}",
-        p.title,
-        truncate(&p.detail, 40)
+    let text = tr!(
+        "⏸ {label} 要求 {title}：{detail}{more} {keys}",
+        label = label,
+        title = p.title,
+        detail = truncate(&p.detail, 40),
+        more = more,
+        keys = keys
     );
     f.render_widget(
         Paragraph::new(Line::styled(
@@ -536,7 +549,7 @@ pub(crate) fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
     if ids.is_empty() || area.width == 0 {
         f.render_widget(
             Paragraph::new(Span::styled(
-                " （尚無 session，按 n 建立）",
+                tr!(" （尚無 session，按 n 建立）"),
                 Style::default().fg(Color::DarkGray),
             )),
             area,
@@ -722,7 +735,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         quota_span(app),
         Span::styled(
             if app.unread_bus() > 0 {
-                format!("  bus:{} 未讀", app.unread_bus())
+                tr!("  bus:{n} 未讀", n = app.unread_bus())
             } else {
                 String::new()
             },
@@ -731,12 +744,12 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         // 只顯示偏離預設的狀態，預設值不佔版面。
         Span::styled(
             [
-                app.raw_md.then_some("raw"),
-                app.show_thoughts.then_some("思考"),
-                app.show_tools.then_some("工具展開"),
-                (!app.mouse_capture).then_some("滑鼠關"),
+                app.raw_md.then(|| "raw".to_string()),
+                app.show_thoughts.then(|| tr!("思考")),
+                app.show_tools.then(|| tr!("工具展開")),
+                (!app.mouse_capture).then(|| tr!("滑鼠關")),
                 (app.view == CenterView::Transcript && app.transcript_scroll.is_some())
-                    .then_some("⏸暫停跟隨"),
+                    .then(|| tr!("⏸暫停跟隨")),
             ]
             .into_iter()
             .flatten()
@@ -877,11 +890,11 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 .borders(Borders::ALL)
                 .title(if app.scope_here {
                     match hidden {
-                        0 => " Sessions · 本專案 ".to_string(),
-                        n => format!(" Sessions · 本專案（另 {n} 個在別處，P 顯示） "),
+                        0 => tr!(" Sessions · 本專案 "),
+                        n => tr!(" Sessions · 本專案（另 {n} 個在別處，P 顯示） ", n = n),
                     }
                 } else if show_project {
-                    " Sessions · 全部專案 ".to_string()
+                    tr!(" Sessions · 全部專案 ")
                 } else {
                     " Sessions ".to_string()
                 }),
@@ -1050,7 +1063,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 if app.raw_md { "raw" } else { "md" },
             )
         }
-        None => " (尚無 session：按 n 建立) ".into(),
+        None => tr!(" (尚無 session：按 n 建立) "),
     };
 
     let selection = app.selection;
@@ -1070,7 +1083,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     }
     if visible.is_empty() {
         visible.push(Line::styled(
-            "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。",
+            tr!("這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -1121,12 +1134,12 @@ pub(crate) fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.selected_id() {
         Some(id) => {
             let s = &app.state.sessions[&id];
-            format!(
-                " Diff: {} ({})  +{} -{}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session ",
-                s.label,
-                s.branch.as_deref().unwrap_or("main"),
-                app.diff_added,
-                app.diff_removed,
+            tr!(
+                " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session ",
+                label = s.label,
+                branch = s.branch.as_deref().unwrap_or("main"),
+                added = app.diff_added,
+                removed = app.diff_removed,
             )
         }
         None => " Diff ".into(),
@@ -1134,7 +1147,7 @@ pub(crate) fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
 
     let items: Vec<ListItem> = if app.diff_lines.is_empty() {
         vec![ListItem::new(Line::styled(
-            "(尚無 diff 資料，按 r 重新載入)",
+            tr!("(尚無 diff 資料，按 r 重新載入)"),
             Style::default().fg(Color::DarkGray),
         ))]
     } else {
@@ -1210,7 +1223,7 @@ pub(crate) fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
     let mut lines: Vec<Line> = Vec::new();
     if app.worktrees.is_empty() {
         lines.push(Line::styled(
-            "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)",
+            tr!("(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"),
             Style::default().fg(Color::DarkGray),
         ));
     } else {
@@ -1241,17 +1254,21 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     for p in app.state.pending_permissions.values() {
         lines.push(Line::from(vec![
             Span::styled(
-                "⏸ 核准 ",
+                tr!("⏸ 核准 "),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(format!("{}：{}", p.title, truncate(&p.detail, 40))),
+            Span::raw(tr!(
+                "{title}：{detail}",
+                title = p.title,
+                detail = truncate(&p.detail, 40)
+            )),
         ]));
     }
     if !app.state.pending_permissions.is_empty() {
         lines.push(Line::styled(
-            "  [a] 允許  [A] 一律允許  [d] 拒絕",
+            tr!("  [a] 允許  [A] 一律允許  [d] 拒絕"),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -1294,7 +1311,7 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     }
     if lines.is_empty() {
         lines.push(Line::styled(
-            "agent 之間的訊息與任務看板會出現在這裡。",
+            tr!("agent 之間的訊息與任務看板會出現在這裡。"),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -1311,41 +1328,46 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = match app.mode {
-        Mode::Normal => " 輸入（i 輸入 · ? 說明） ".to_string(),
-        Mode::Help => " 說明 ".to_string(),
-        Mode::Settings => " 設定 ".to_string(),
+        Mode::Normal => tr!(" 輸入（i 輸入 · ? 說明） "),
+        Mode::Help => tr!(" 說明 "),
+        Mode::Settings => tr!(" 設定 "),
         Mode::Prompt => match app
             .selected_id()
             .and_then(|id| app.state.queues.get(&id).map(Vec::len))
             .unwrap_or(0)
         {
-            0 => " prompt（@ 附檔 · Enter 送出 · Alt-Enter 排隊） ".to_string(),
-            n => format!(" prompt（排隊 {n} 則 · Alt-Enter 再排） "),
+            0 => tr!(" prompt（@ 附檔 · Enter 送出 · Alt-Enter 排隊） "),
+            n => tr!(" prompt（排隊 {n} 則 · Alt-Enter 再排） ", n = n),
         },
         Mode::Spawn => match &app.spawn_target {
-            Some((kind, model)) => format!(
-                " spawn → {}{}{} · worktree={} · 權限={} ",
-                kind.id(),
-                model
-                    .as_deref()
-                    .map(|m| format!(":{m}"))
-                    .unwrap_or_default(),
-                app.spawn_effort
-                    .as_deref()
-                    .map(|e| format!(" effort={e}"))
-                    .unwrap_or_default(),
-                if app.spawn_worktree { "on" } else { "off" },
-                app.spawn_permission.map_or("預設", |p| p.id()),
+            Some((kind, model)) => tr!(
+                " spawn → {target} · worktree={worktree} · 權限={permission} ",
+                target = format!(
+                    "{}{}{}",
+                    kind.id(),
+                    model
+                        .as_deref()
+                        .map(|m| format!(":{m}"))
+                        .unwrap_or_default(),
+                    app.spawn_effort
+                        .as_deref()
+                        .map(|e| format!(" effort={e}"))
+                        .unwrap_or_default(),
+                ),
+                worktree = if app.spawn_worktree { "on" } else { "off" },
+                permission = app
+                    .spawn_permission
+                    .map_or_else(|| tr!("預設"), |p| p.id().to_string()),
             ),
-            None => " spawn：<agent[:model]> <prompt> ".to_string(),
+            None => tr!(" spawn：<agent[:model]> <prompt> "),
         },
-        Mode::Menu => " 選單 ".to_string(),
-        Mode::Pick => " 選擇（Enter 確認 · Esc 取消） ".to_string(),
-        Mode::Message => " message → 選取的 session ".to_string(),
-        Mode::Review => " review 註解 → 選取的 session ".to_string(),
-        Mode::Command => " 命令（Tab 補全） ".to_string(),
-        Mode::Jump => " 跳轉 session ".to_string(),
-        Mode::Search => " 搜尋（Enter／↓ 下一個 · ↑ 上一個 · Esc 離開） ".to_string(),
+        Mode::Menu => tr!(" 選單 "),
+        Mode::Pick => tr!(" 選擇（Enter 確認 · Esc 取消） "),
+        Mode::Message => tr!(" message → 選取的 session "),
+        Mode::Review => tr!(" review 註解 → 選取的 session "),
+        Mode::Command => tr!(" 命令（Tab 補全） "),
+        Mode::Jump => tr!(" 跳轉 session "),
+        Mode::Search => tr!(" 搜尋（Enter／↓ 下一個 · ↑ 上一個 · Esc 離開） "),
     };
     let style = if app.mode == Mode::Normal {
         Style::default()
@@ -1387,10 +1409,10 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     let hints = match app.view {
-        CenterView::Transcript => "  ? 說明  Space 選單  : 命令  q 離開",
-        CenterView::Diff => "  ? 說明  c 註解  M 合併  q 離開",
-        CenterView::Worktrees => "  ? 說明  M 合併  G 清理  q 離開",
-        CenterView::Tasks => "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明",
+        CenterView::Transcript => tr!("  ? 說明  Space 選單  : 命令  q 離開"),
+        CenterView::Diff => tr!("  ? 說明  c 註解  M 合併  q 離開"),
+        CenterView::Worktrees => tr!("  ? 說明  M 合併  G 清理  q 離開"),
+        CenterView::Tasks => tr!("  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"),
     };
     let text = Line::from(vec![
         Span::styled(

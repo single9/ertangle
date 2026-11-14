@@ -5,6 +5,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use termade_daemon::ConnStream;
+use tr::tr;
 use unicode_width::UnicodeWidthChar;
 
 use crate::app::{scroll_transcript_lines, App, CenterView};
@@ -81,7 +82,11 @@ pub(crate) fn handle_mouse(
             ) {
                 app.selection = Some((sel.0, p));
                 let ((l0, _), (l1, _)) = normalize_selection((sel.0, p));
-                app.status = format!("選取第 {}–{} 行（放開滑鼠複製）", l0 + 1, l1 + 1);
+                app.status = tr!(
+                    "選取第 {from}–{to} 行（放開滑鼠複製）",
+                    from = l0 + 1,
+                    to = l1 + 1
+                );
             }
         }
         MouseEventKind::Up(MouseButton::Left) if app.view == CenterView::Transcript => {
@@ -92,15 +97,15 @@ pub(crate) fn handle_mouse(
                 } else {
                     let text = selection_text(app);
                     if text.is_empty() {
-                        app.status = "選取範圍沒有文字".into();
+                        app.status = tr!("選取範圍沒有文字");
                     } else {
                         match write_clipboard(&text) {
                             Ok(()) => {
                                 let n = text.lines().count().max(1);
                                 app.status =
-                                    format!("已複製選取 {n} 行（OSC 52；Shift+拖曳可原生選取）");
+                                    tr!("已複製選取 {n} 行（OSC 52；Shift+拖曳可原生選取）", n = n);
                             }
-                            Err(e) => app.status = format!("複製失敗：{e}"),
+                            Err(e) => app.status = tr!("複製失敗：{e}", e = e),
                         }
                     }
                 }

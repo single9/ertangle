@@ -4,6 +4,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use termade_core::AgentKind;
 use termade_daemon::ConnStream;
+use tr::tr;
 
 use crate::app::{App, Mode};
 use crate::commands::execute_command;
@@ -46,42 +47,86 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 it('m', "message ▸", Act::Menu),
                 it(
                     ',',
-                    "設定（預設 model／effort／權限…）",
+                    termade_core::tr_noop!("設定（預設 model／effort／權限…）"),
                     Act::Cmd("settings"),
                 ),
-                it('y', "複製目前畫面", Act::Cmd("copy")),
-                it('?', "說明（所有按鍵與命令）", Act::Cmd("help")),
-                it('q', "離開（保留 daemon）", Act::Cmd("quit")),
-                it('x', "結束本專案所有 session", Act::Cmd("stop")),
-                it('Q', "關閉共用 daemon 並離開", Act::Cmd("shutdown")),
+                it(
+                    'y',
+                    termade_core::tr_noop!("複製目前畫面"),
+                    Act::Cmd("copy"),
+                ),
+                it(
+                    '?',
+                    termade_core::tr_noop!("說明（所有按鍵與命令）"),
+                    Act::Cmd("help"),
+                ),
+                it(
+                    'q',
+                    termade_core::tr_noop!("離開（保留 daemon）"),
+                    Act::Cmd("quit"),
+                ),
+                it(
+                    'x',
+                    termade_core::tr_noop!("結束本專案所有 session"),
+                    Act::Cmd("stop"),
+                ),
+                it(
+                    'Q',
+                    termade_core::tr_noop!("關閉共用 daemon 並離開"),
+                    Act::Cmd("shutdown"),
+                ),
             ],
         ),
         ['s'] => (
             "SPC s · session",
             vec![
-                it('n', "新增 agent…（選 agent 與 model）", Act::Spawn),
-                it('h', "交接給其他 agent（額度用完時）", Act::Handoff),
+                it(
+                    'n',
+                    termade_core::tr_noop!("新增 agent…（選 agent 與 model）"),
+                    Act::Spawn,
+                ),
+                it(
+                    'h',
+                    termade_core::tr_noop!("交接給其他 agent（額度用完時）"),
+                    Act::Handoff,
+                ),
                 it(
                     'r',
-                    "接續已結束的 session（接回原對話）",
+                    termade_core::tr_noop!("接續已結束的 session（接回原對話）"),
                     Act::Cmd("resume"),
                 ),
                 it(
                     'm',
-                    "切換 model（執行中）",
+                    termade_core::tr_noop!("切換 model（執行中）"),
                     Act::Prefill(Mode::Command, "model "),
                 ),
                 it(
                     'e',
-                    "切換 effort（執行中）",
+                    termade_core::tr_noop!("切換 effort（執行中）"),
                     Act::Prefill(Mode::Command, "effort "),
                 ),
-                it('c', "中斷目前回合", Act::Cmd("cancel")),
-                it('k', "結束 session", Act::Cmd("kill")),
-                it('z', "休眠", Act::Cmd("sleep")),
-                it('w', "喚醒", Act::Cmd("wake")),
-                it('x', "移除已結束的 session", Act::Cmd("rm")),
-                it('X', "清除所有已結束的 session", Act::Cmd("clean")),
+                it(
+                    'c',
+                    termade_core::tr_noop!("中斷目前回合"),
+                    Act::Cmd("cancel"),
+                ),
+                it(
+                    'k',
+                    termade_core::tr_noop!("結束 session"),
+                    Act::Cmd("kill"),
+                ),
+                it('z', termade_core::tr_noop!("休眠"), Act::Cmd("sleep")),
+                it('w', termade_core::tr_noop!("喚醒"), Act::Cmd("wake")),
+                it(
+                    'x',
+                    termade_core::tr_noop!("移除已結束的 session"),
+                    Act::Cmd("rm"),
+                ),
+                it(
+                    'X',
+                    termade_core::tr_noop!("清除所有已結束的 session"),
+                    Act::Cmd("clean"),
+                ),
             ],
         ),
         ['g'] => (
@@ -89,37 +134,77 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
             vec![
                 it('d', "diff", Act::Cmd("diff")),
                 it('w', "worktrees", Act::Cmd("worktrees")),
-                it('m', "merge 回主工作區", Act::Cmd("merge")),
-                it('n', "merge 乾跑（dry-run）", Act::Cmd("merge --dry-run")),
-                it('c', "gc 已合併的 worktree", Act::Cmd("gc")),
+                it(
+                    'm',
+                    termade_core::tr_noop!("merge 回主工作區"),
+                    Act::Cmd("merge"),
+                ),
+                it(
+                    'n',
+                    termade_core::tr_noop!("merge 乾跑（dry-run）"),
+                    Act::Cmd("merge --dry-run"),
+                ),
+                it(
+                    'c',
+                    termade_core::tr_noop!("gc 已合併的 worktree"),
+                    Act::Cmd("gc"),
+                ),
             ],
         ),
         ['v'] => (
             "SPC v · view",
             vec![
                 it('o', "overview", Act::Cmd("overview")),
-                it('k', "任務視圖", Act::Cmd("tasks")),
-                it('l', "切換版面", Act::Cmd("layout")),
-                it('r', "原始文字／Markdown", Act::Cmd("raw")),
-                it('t', "顯示／隱藏思考", Act::Cmd("thoughts")),
-                it('x', "展開／摺疊工具呼叫", Act::Cmd("tools")),
-                it('p', "只看本專案／全部專案", Act::Cmd("scope")),
-                it('b', "顯示／隱藏 Bus", Act::Cmd("bus")),
+                it('k', termade_core::tr_noop!("任務視圖"), Act::Cmd("tasks")),
+                it('l', termade_core::tr_noop!("切換版面"), Act::Cmd("layout")),
+                it(
+                    'r',
+                    termade_core::tr_noop!("原始文字／Markdown"),
+                    Act::Cmd("raw"),
+                ),
+                it(
+                    't',
+                    termade_core::tr_noop!("顯示／隱藏思考"),
+                    Act::Cmd("thoughts"),
+                ),
+                it(
+                    'x',
+                    termade_core::tr_noop!("展開／摺疊工具呼叫"),
+                    Act::Cmd("tools"),
+                ),
+                it(
+                    'p',
+                    termade_core::tr_noop!("只看本專案／全部專案"),
+                    Act::Cmd("scope"),
+                ),
+                it(
+                    'b',
+                    termade_core::tr_noop!("顯示／隱藏 Bus"),
+                    Act::Cmd("bus"),
+                ),
             ],
         ),
         ['m'] => (
             "SPC m · message",
             vec![
-                it('m', "訊息給選取的 session", Act::Prefill(Mode::Message, "")),
+                it(
+                    'm',
+                    termade_core::tr_noop!("訊息給選取的 session"),
+                    Act::Prefill(Mode::Message, ""),
+                ),
                 it(
                     'b',
-                    "廣播給所有人",
+                    termade_core::tr_noop!("廣播給所有人"),
                     Act::Prefill(Mode::Command, "broadcast "),
                 ),
-                it('t', "新增任務", Act::Prefill(Mode::Command, "task ")),
+                it(
+                    't',
+                    termade_core::tr_noop!("新增任務"),
+                    Act::Prefill(Mode::Command, "task "),
+                ),
                 it(
                     'f',
-                    "附加檔案／圖片…（@路徑，Tab 補全）",
+                    termade_core::tr_noop!("附加檔案／圖片…（@路徑，Tab 補全）"),
                     Act::Prefill(Mode::Prompt, "@"),
                 ),
             ],
@@ -152,7 +237,7 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
                 return Ok(());
             };
             let Some(item) = items.iter().find(|i| i.key == c).copied() else {
-                app.status = format!("選單沒有 `{c}`（Backspace 返回、Esc 關閉）");
+                app.status = tr!("選單沒有 `{c}`（Backspace 返回、Esc 關閉）", c = c);
                 return Ok(());
             };
             match item.act {
@@ -299,10 +384,10 @@ impl Picker {
 /// Claude Code 可用的 model。`claude` CLI 沒有列出 model 的子命令，只能內建：
 /// 前段是別名 (永遠指向該系列最新版)，後段是完整 id (固定版本)。新模型推出時要更新這裡。
 const CLAUDE_MODELS: &[(&str, &str)] = &[
-    ("fable", "最新 Fable"),
-    ("opus", "最新 Opus"),
-    ("sonnet", "最新 Sonnet"),
-    ("haiku", "最新 Haiku"),
+    ("fable", termade_core::tr_noop!("最新 Fable")),
+    ("opus", termade_core::tr_noop!("最新 Opus")),
+    ("sonnet", termade_core::tr_noop!("最新 Sonnet")),
+    ("haiku", termade_core::tr_noop!("最新 Haiku")),
     ("claude-fable-5-2", "Claude Fable 5.2"),
     ("claude-fable-5-1", "Claude Fable 5.1"),
     ("claude-fable-5", "Claude Fable 5"),
@@ -320,13 +405,12 @@ const CLAUDE_MODELS: &[(&str, &str)] = &[
 
 /// 某個 agent 可選的 model：預設 + 內建清單 + config.toml 的 `models`／`model`。
 pub(crate) fn model_choices(kind: &AgentKind) -> Vec<(String, String)> {
-    let mut out = vec![("預設（依 config.toml）".to_string(), String::new())];
+    let mut out = vec![(tr!("預設（依 config.toml）"), String::new())];
     if matches!(kind, AgentKind::ClaudeCode) {
-        out.extend(
-            CLAUDE_MODELS
-                .iter()
-                .map(|(id, name)| (format!("{id}  ({name})"), id.to_string())),
-        );
+        out.extend(CLAUDE_MODELS.iter().map(|(id, name)| {
+            let name = termade_core::tr_dyn!(name);
+            (format!("{id}  ({name})"), id.to_string())
+        }));
     }
     let mut values: Vec<String> = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_default();
@@ -471,13 +555,13 @@ pub(crate) fn parse_models(out: &str) -> Vec<(String, String)> {
 /// 交接：選接手的 agent 與 model，選完直接送出（簡報由 daemon 產生）。
 pub(crate) fn start_handoff_picker(app: &mut App) {
     let Some(src) = app.selected_id() else {
-        app.status = "沒有選取的 session".into();
+        app.status = tr!("沒有選取的 session");
         return;
     };
     start_spawn_picker(app);
     app.handoff_from = Some(src);
     if let Some(p) = app.picker.as_mut() {
-        p.title = "交接給哪個 agent".into();
+        p.title = tr!("交接給哪個 agent");
     }
 }
 
@@ -489,7 +573,7 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
         .collect();
     app.picker = Some(Picker {
         stage: PickStage::Agent,
-        title: "選擇 agent".into(),
+        title: tr!("選擇 agent"),
         items,
         filter: String::new(),
         cursor: 0,
@@ -521,25 +605,31 @@ fn finish_picker(
                 note: None,
             },
         )?;
-        app.status = format!(
-            "已要求交接給 {}{}（舊 session 會停止，新 agent 沿用同一個工作目錄）",
-            kind.id(),
-            model.map(|m| format!(":{m}")).unwrap_or_default()
+        app.status = tr!(
+            "已要求交接給 {target}（舊 session 會停止，新 agent 沿用同一個工作目錄）",
+            target = format!(
+                "{}{}",
+                kind.id(),
+                model.map(|m| format!(":{m}")).unwrap_or_default()
+            )
         );
         app.spawn_variants.clear();
         return Ok(());
     }
-    app.status = format!(
-        "spawn → {}{}{}：輸入 prompt 後 Enter（可留空）",
-        kind.id(),
-        model
-            .as_deref()
-            .map(|m| format!(":{m}"))
-            .unwrap_or_default(),
-        effort
-            .as_deref()
-            .map(|e| format!(" effort={e}"))
-            .unwrap_or_default(),
+    app.status = tr!(
+        "spawn → {target}：輸入 prompt 後 Enter（可留空）",
+        target = format!(
+            "{}{}{}",
+            kind.id(),
+            model
+                .as_deref()
+                .map(|m| format!(":{m}"))
+                .unwrap_or_default(),
+            effort
+                .as_deref()
+                .map(|e| format!(" effort={e}"))
+                .unwrap_or_default(),
+        )
     );
     app.spawn_target = Some((kind, model));
     app.spawn_effort = effort;
@@ -601,12 +691,12 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut ConnStream, key: KeyEv
                     let chosen =
                         chosen.or_else(|| AgentKind::parse(&custom).map(|k| k.id().to_string()));
                     let Some(kind) = chosen.and_then(|v| AgentKind::parse(&v)) else {
-                        app.status = "沒有符合的 agent".into();
+                        app.status = tr!("沒有符合的 agent");
                         return Ok(());
                     };
-                    p.title = format!(
-                        "{} 的 model（輸入可過濾；無符合時 Enter 使用輸入值）",
-                        kind.id()
+                    p.title = tr!(
+                        "{agent} 的 model（輸入可過濾；無符合時 Enter 使用輸入值）",
+                        agent = kind.id()
                     );
                     p.items = model_choices(&kind);
                     p.filter.clear();

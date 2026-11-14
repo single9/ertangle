@@ -4,6 +4,7 @@ use anyhow::Result;
 use termade_core::{AgentKind, Decision, MsgKind, PermissionPolicy, Role, Target};
 use termade_daemon::ConnStream;
 use termade_protocol::{Request, SpawnRequest, Transport};
+use tr::tr;
 
 use crate::app::{toggle_scope, toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode};
 use crate::clipboard::copy_main_pane;
@@ -40,7 +41,7 @@ pub(crate) fn submit_prompt_or_route(
                     reply_to: None,
                 },
             )?;
-            app.status = format!("已傳送訊息至 {target_str}");
+            app.status = tr!("已傳送訊息至 {target_str}", target_str = target_str);
             return Ok(());
         }
     }
@@ -49,7 +50,7 @@ pub(crate) fn submit_prompt_or_route(
             match crate::attach::extract_attachments(trimmed, &app.search_root()) {
                 Ok(r) => r,
                 Err(e) => {
-                    app.status = format!("附件錯誤：{e}");
+                    app.status = tr!("附件錯誤：{e}", e = e);
                     return Ok(());
                 }
             };
@@ -64,12 +65,12 @@ pub(crate) fn submit_prompt_or_route(
             },
         )?;
         app.status = if n > 0 {
-            format!("已送出 prompt（含 {n} 個附件）")
+            tr!("已送出 prompt（含 {n} 個附件）", n = n)
         } else {
-            "已送出 prompt".into()
+            tr!("已送出 prompt")
         };
     } else {
-        app.status = "沒有選取的 session".into();
+        app.status = tr!("沒有選取的 session");
     }
     Ok(())
 }
@@ -86,21 +87,21 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
         || (trimmed.starts_with('@')
             && !crate::attach::leads_with_file(trimmed, &app.search_root()));
     let Some(id) = app.selected_id() else {
-        app.status = "沒有選取的 session".into();
+        app.status = tr!("沒有選取的 session");
         return Ok(());
     };
     if routed {
         return submit_prompt_or_route(app, writer, text);
     }
     if app.state.sessions.get(&id).is_some_and(|s| s.over_budget) {
-        app.status = "已超過成本上限，先用 :budget <金額> 調高".into();
+        app.status = tr!("已超過成本上限，先用 :budget <金額> 調高");
         return Ok(());
     }
     let (body, attachments) = match crate::attach::extract_attachments(trimmed, &app.search_root())
     {
         Ok(r) => r,
         Err(e) => {
-            app.status = format!("附件錯誤：{e}");
+            app.status = tr!("附件錯誤：{e}", e = e);
             return Ok(());
         }
     };
@@ -122,16 +123,16 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
         && app.state.queues.get(&id).is_none_or(|q| q.is_empty());
     if idle_and_empty {
         app.status = if n_att > 0 {
-            format!("已送出 prompt（含 {n_att} 個附件）")
+            tr!("已送出 prompt（含 {n_att} 個附件）", n_att = n_att)
         } else {
-            "已送出 prompt".into()
+            tr!("已送出 prompt")
         };
     } else {
         let q = app.state.queues.entry(id).or_default();
         if q.len() < 20 {
             q.push(trimmed.to_string());
         }
-        app.status = format!("已排隊（共 {} 則，閒下來自動送出）", q.len());
+        app.status = tr!("已排隊（共 {n} 則，閒下來自動送出）", n = q.len());
     }
     Ok(())
 }
@@ -139,28 +140,32 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
 /// `:queue [文字|clear]`、`:unqueue`。
 fn queue_command(app: &mut App, writer: &mut ConnStream, rest: &str) -> Result<()> {
     let Some(id) = app.selected_id() else {
-        app.status = "沒有選取的 session".into();
+        app.status = tr!("沒有選取的 session");
         return Ok(());
     };
     match rest.trim() {
         "" => {
             let items = app.state.queues.get(&id).cloned().unwrap_or_default();
             app.status = if items.is_empty() {
-                "排隊為空（:queue <文字> 排入，或在輸入框按 Alt-Enter）".into()
+                tr!("排隊為空（:queue <文字> 排入，或在輸入框按 Alt-Enter）")
             } else {
                 let list: Vec<String> = items
                     .iter()
                     .enumerate()
                     .map(|(i, t)| format!("{}.{}", i + 1, t.chars().take(24).collect::<String>()))
                     .collect();
-                format!("排隊 {} 則：{}", items.len(), list.join(" | "))
+                tr!(
+                    "排隊 {n} 則：{list}",
+                    n = items.len(),
+                    list = list.join(" | ")
+                )
             };
             Ok(())
         }
         "clear" => {
             let n = app.state.queues.remove(&id).map_or(0, |q| q.len());
             send(writer, &Request::QueueClear { session: id })?;
-            app.status = format!("已清空 {n} 則排隊 prompt");
+            app.status = tr!("已清空 {n} 則排隊 prompt", n = n);
             Ok(())
         }
         text => queue_prompt(app, writer, text),
@@ -186,10 +191,10 @@ fn unqueue(app: &mut App, writer: &mut ConnStream) -> Result<()> {
             app.input_cursor = text.chars().count();
             app.input = text;
             app.mode = Mode::Prompt;
-            app.status = "已取消最後一則排隊，內容放回輸入框".into();
+            app.status = tr!("已取消最後一則排隊，內容放回輸入框");
         }
         None => {
-            app.status = "沒有排隊中的 prompt".into();
+            app.status = tr!("沒有排隊中的 prompt");
         }
     }
     Ok(())
@@ -199,82 +204,82 @@ fn unqueue(app: &mut App, writer: &mut ConnStream) -> Result<()> {
 pub(crate) const COMMANDS: &[(&str, &str)] = &[
     (
         "spawn",
-        "[agent[:model] prompt]  新增 agent；不帶參數開選擇器",
+        termade_core::tr_noop!("[agent[:model] prompt]  新增 agent；不帶參數開選擇器"),
     ),
-    ("new", "開選擇器：agent → model → prompt"),
-    ("help", "說明面板：所有按鍵與命令"),
-    ("quota", "顯示各 agent 帳號的額度與重置時間"),
+    ("new", termade_core::tr_noop!("開選擇器：agent → model → prompt")),
+    ("help", termade_core::tr_noop!("說明面板：所有按鍵與命令")),
+    ("quota", termade_core::tr_noop!("顯示各 agent 帳號的額度與重置時間")),
     (
         "budget",
-        "<金額>  設定或調高選取 session 的成本上限（美元）",
+        termade_core::tr_noop!("<金額>  設定或調高選取 session 的成本上限（美元）"),
     ),
     (
         "handoff",
-        "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 agent",
+        termade_core::tr_noop!("[agent[:model]] [說明]  把選取 session 的工作交接給另一個 agent"),
     ),
     (
         "resume",
-        "[prompt]  接續選取的已結束 session（接回原對話，session 不變）",
+        termade_core::tr_noop!("[prompt]  接續選取的已結束 session（接回原對話，session 不變）"),
     ),
     (
         "model",
-        "[名稱]  切換選取 session 的 model（下一回合起生效）；不帶參數列出目前與可選項",
+        termade_core::tr_noop!("[名稱]  切換選取 session 的 model（下一回合起生效）；不帶參數列出目前與可選項"),
     ),
     (
         "effort",
-        "[low|medium|high|xhigh|max]  切換選取 session 的推理強度；不帶參數顯示目前值",
+        termade_core::tr_noop!("[low|medium|high|xhigh|max]  切換選取 session 的推理強度；不帶參數顯示目前值"),
     ),
-    ("settings", "開啟設定面板：用清單切換預設 model、effort、權限、agent 建立 session 的防呆"),
+    ("settings", termade_core::tr_noop!("開啟設定面板：用清單切換預設 model、effort、權限、agent 建立 session 的防呆")),
     (
         "set",
-        "不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml（空值＝刪除）",
+        termade_core::tr_noop!("不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml（空值＝刪除）"),
     ),
-    ("kill", "結束選取的 session"),
-    ("cancel", "中斷選取 session 的目前回合"),
-    ("sleep", "休眠選取的 session"),
-    ("wake", "喚醒選取的 session"),
-    ("rm", "[session] [--force]  移除已結束的 session"),
-    ("clean", "清除所有已結束（且沒有分支）的 session"),
-    ("merge", "[session] [--dry-run]  合併 worktree 回主工作區"),
-    ("diff", "顯示選取 session 的 diff"),
-    ("gc", "[session]  清理已合併的 worktree"),
-    ("worktrees", "顯示 worktree 清單"),
-    ("overview", "回到 transcript 視圖"),
+    ("kill", termade_core::tr_noop!("結束選取的 session")),
+    ("cancel", termade_core::tr_noop!("中斷選取 session 的目前回合")),
+    ("sleep", termade_core::tr_noop!("休眠選取的 session")),
+    ("wake", termade_core::tr_noop!("喚醒選取的 session")),
+    ("rm", termade_core::tr_noop!("[session] [--force]  移除已結束的 session")),
+    ("clean", termade_core::tr_noop!("清除所有已結束（且沒有分支）的 session")),
+    ("merge", termade_core::tr_noop!("[session] [--dry-run]  合併 worktree 回主工作區")),
+    ("diff", termade_core::tr_noop!("顯示選取 session 的 diff")),
+    ("gc", termade_core::tr_noop!("[session]  清理已合併的 worktree")),
+    ("worktrees", termade_core::tr_noop!("顯示 worktree 清單")),
+    ("overview", termade_core::tr_noop!("回到 transcript 視圖")),
     (
         "find",
-        "[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容（同 f）",
+        termade_core::tr_noop!("[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容（同 f）"),
     ),
-    ("layout", "[three|two|tabs]  切換版面"),
-    ("raw", "原始文字／Markdown 切換"),
-    ("thoughts", "顯示／隱藏思考"),
-    ("tools", "展開／摺疊工具呼叫"),
-    ("scope", "[here|all]  只看本專案／顯示全部專案的 session"),
+    ("layout", termade_core::tr_noop!("[three|two|tabs]  切換版面")),
+    ("raw", termade_core::tr_noop!("原始文字／Markdown 切換")),
+    ("thoughts", termade_core::tr_noop!("顯示／隱藏思考")),
+    ("tools", termade_core::tr_noop!("展開／摺疊工具呼叫")),
+    ("scope", termade_core::tr_noop!("[here|all]  只看本專案／顯示全部專案的 session")),
     (
         "notify",
-        "[on|off|test]  開關通知（回合結束／等待核准／失敗／額度用完）；不帶參數顯示狀態",
+        termade_core::tr_noop!("[on|off|test]  開關通知（回合結束／等待核准／失敗／額度用完）；不帶參數顯示狀態"),
     ),
     (
         "queue",
-        "[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出",
+        termade_core::tr_noop!("[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出"),
     ),
-    ("unqueue", "取消最後一則排隊並放回輸入框"),
-    ("bus", "顯示／隱藏 Bus 浮層"),
-    ("task", "<標題>  新增任務"),
-    ("tasks", "任務視圖：依狀態分組，Enter 跳到負責人"),
+    ("unqueue", termade_core::tr_noop!("取消最後一則排隊並放回輸入框")),
+    ("bus", termade_core::tr_noop!("顯示／隱藏 Bus 浮層")),
+    ("task", termade_core::tr_noop!("<標題>  新增任務")),
+    ("tasks", termade_core::tr_noop!("任務視圖：依狀態分組，Enter 跳到負責人")),
     (
         "task-status",
-        "<todo|doing|blocked|review|done>  改任務視圖選取任務的狀態",
+        termade_core::tr_noop!("<todo|doing|blocked|review|done>  改任務視圖選取任務的狀態"),
     ),
-    ("broadcast", "<訊息>  廣播給所有 session"),
-    ("copy", "複製目前畫面內容"),
-    ("quit", "離開（保留 daemon）"),
+    ("broadcast", termade_core::tr_noop!("<訊息>  廣播給所有 session")),
+    ("copy", termade_core::tr_noop!("複製目前畫面內容")),
+    ("quit", termade_core::tr_noop!("離開（保留 daemon）")),
     (
         "stop",
-        "結束本專案所有執行中的 session（不動 daemon 與其他專案）",
+        termade_core::tr_noop!("結束本專案所有執行中的 session（不動 daemon 與其他專案）"),
     ),
     (
         "shutdown",
-        "關閉共用 daemon（結束所有專案的 session）並離開；有 session 在跑時需 :shutdown! 確認",
+        termade_core::tr_noop!("關閉共用 daemon（結束所有專案的 session）並離開；有 session 在跑時需 :shutdown! 確認"),
     ),
 ];
 
@@ -316,7 +321,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
         "quota" => {
             let now = termade_core::now_millis();
             app.status = if app.state.quotas.is_empty() {
-                "尚無額度資料（agent 執行過一個回合後才會有）".into()
+                tr!("尚無額度資料（agent 執行過一個回合後才會有）")
             } else {
                 app.state
                     .quotas
@@ -336,17 +341,17 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                 [amt] => (app.selected_id(), *amt),
                 [ses, amt] => (Some((*ses).to_string()), *amt),
                 _ => {
-                    app.status = "用法：:budget <金額>（或 :budget <session> <金額>）".into();
+                    app.status = tr!("用法：:budget <金額>（或 :budget <session> <金額>）");
                     return Ok(());
                 }
             };
             let Some(session) = target else {
-                app.status = "沒有選取的 session".into();
+                app.status = tr!("沒有選取的 session");
                 return Ok(());
             };
             let clean = amount_str.trim_start_matches('$');
             let Ok(budget_usd) = clean.parse::<f64>() else {
-                app.status = format!("無效的金額：{amount_str}");
+                app.status = tr!("無效的金額：{amount_str}", amount_str = amount_str);
                 return Ok(());
             };
             send(
@@ -356,14 +361,14 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                     budget_usd,
                 },
             )?;
-            app.status = format!(
-                "已設定成本上限為 {}",
-                termade_core::format_usd_limit(budget_usd)
+            app.status = tr!(
+                "已設定成本上限為 {limit}",
+                limit = termade_core::format_usd_limit(budget_usd)
             );
         }
         "handoff" => {
             let Some(src) = app.selected_id() else {
-                app.status = "沒有選取的 session".into();
+                app.status = tr!("沒有選取的 session");
                 return Ok(());
             };
             if rest.is_empty() {
@@ -381,7 +386,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                 _ => (head, None),
             };
             let Some(kind) = AgentKind::parse(kind_str) else {
-                app.status = format!("未知的 agent：{kind_str}");
+                app.status = tr!("未知的 agent：{kind_str}", kind_str = kind_str);
                 return Ok(());
             };
             send(
@@ -394,7 +399,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                     note,
                 },
             )?;
-            app.status = format!("已要求交接給 {kind}");
+            app.status = tr!("已要求交接給 {kind}", kind = kind);
         }
         "spawn" if rest.is_empty() => crate::menu::start_spawn_picker(app),
         "new" => crate::menu::start_spawn_picker(app),
@@ -402,7 +407,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
         "kill" => {
             if let Some(id) = app.selected_id() {
                 send(writer, &Request::Kill { session: id })?;
-                app.status = "已送出結束".into();
+                app.status = tr!("已送出結束");
             }
         }
         "resume" => {
@@ -415,13 +420,13 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                         prompt,
                     },
                 )?;
-                app.status = "已要求接續".into();
+                app.status = tr!("已要求接續");
             }
         }
         "cancel" => {
             if let Some(id) = app.selected_id() {
                 send(writer, &Request::Cancel { session: id })?;
-                app.status = "已送出中斷".into();
+                app.status = tr!("已送出中斷");
             }
         }
         "rm" | "remove" => {
@@ -434,7 +439,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             if let Some(session) = target {
                 send(writer, &Request::SessionRemove { session, force })?;
             } else {
-                app.status = "沒有選取的 session".into();
+                app.status = tr!("沒有選取的 session");
             }
         }
         "clean" => {
@@ -456,27 +461,24 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                     },
                 )?;
             }
-            app.status = format!("已要求清除 {n} 個已結束的 session");
+            app.status = tr!("已要求清除 {n} 個已結束的 session", n = n);
         }
         "raw" => {
             app.raw_md = !app.raw_md;
             app.md_cache = None;
             app.selection = None;
-            app.status = format!(
-                "逐字稿顯示：{}",
-                if app.raw_md {
-                    "原始文字"
-                } else {
-                    "Markdown 渲染"
-                }
-            );
+            app.status = if app.raw_md {
+                tr!("逐字稿顯示：原始文字")
+            } else {
+                tr!("逐字稿顯示：Markdown 渲染")
+            };
         }
         "bus" => {
             app.bus_overlay = !app.bus_overlay;
             app.status = if app.bus_overlay {
-                "Bus：顯示".into()
+                tr!("Bus：顯示")
             } else {
-                "Bus：隱藏".into()
+                tr!("Bus：隱藏")
             };
         }
         "merge" => {
@@ -526,7 +528,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             "here" | "this" => toggle_scope(app, Some(true)),
             "all" => toggle_scope(app, Some(false)),
             "" => toggle_scope(app, None),
-            _ => app.status = "用法：:scope [here|all]".into(),
+            _ => app.status = tr!("用法：:scope [here|all]"),
         },
         "notify" => match rest {
             "on" | "off" => {
@@ -539,11 +541,11 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                     kind: crate::notify::NoticeKind::Done,
                     session: app.selected_id().unwrap_or_default(),
                     label: "termade".into(),
-                    text: "termade：測試通知".into(),
+                    text: tr!("termade：測試通知"),
                 });
-                app.status = format!("已送出測試通知；{}", app.notify.describe());
+                app.status = tr!("已送出測試通知；{state}", state = app.notify.describe());
             }
-            _ => app.status = "用法：:notify [on|off|test]".into(),
+            _ => app.status = tr!("用法：:notify [on|off|test]"),
         },
         "queue" => queue_command(app, writer, rest)?,
         "unqueue" => unqueue(app, writer)?,
@@ -553,7 +555,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
             } else if let Some(mode) = LayoutMode::parse(rest) {
                 app.set_layout(mode);
             } else {
-                app.status = "用法：/layout three|two|tabs".into();
+                app.status = tr!("用法：/layout three|two|tabs");
             }
         }
         "gc" => {
@@ -613,10 +615,10 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                 .filter(|s| s.project_root() != app.home_project)
                 .count();
             if verb == "shutdown" && !live.is_empty() {
-                app.status = format!(
-                    "shutdown 會關掉共用的 daemon，結束 {} 個執行中的 session（其他專案 {} 個）。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit",
-                    live.len(),
-                    others
+                app.status = tr!(
+                    "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session（其他專案 {others} 個）。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit",
+                    n = live.len(),
+                    others = others
                 );
             } else {
                 send(writer, &Request::Shutdown)?;
@@ -639,7 +641,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
                     },
                 )?;
             }
-            app.status = format!("已要求結束本專案 {} 個執行中的 session", ids.len());
+            app.status = tr!("已要求結束本專案 {n} 個執行中的 session", n = ids.len());
         }
         "q" | "quit" => {
             app.should_quit = true;
@@ -653,7 +655,10 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
 /// `/` 開頭的名稱若跟 TUI 命令同名（如 `/model`），TUI 的優先；要送給 agent 就打 `//名稱`。
 fn forward_native(app: &mut App, writer: &mut ConnStream, verb: &str, rest: &str) -> Result<()> {
     let Some(id) = app.selected_id() else {
-        app.status = format!("未知的命令：/{verb}（沒有選取的 session 可轉發）");
+        app.status = tr!(
+            "未知的命令：/{verb}（沒有選取的 session 可轉發）",
+            verb = verb
+        );
         return Ok(());
     };
     let known = app
@@ -676,8 +681,11 @@ fn forward_native(app: &mut App, writer: &mut ConnStream, verb: &str, rest: &str
         },
     )?;
     app.status = match known {
-        Some(false) => format!("已轉發 /{verb} 給 agent（它沒有回報這個指令，可能被當成一般文字）"),
-        _ => format!("已轉發原生指令 /{verb} 給 agent"),
+        Some(false) => tr!(
+            "已轉發 /{verb} 給 agent（它沒有回報這個指令，可能被當成一般文字）",
+            verb = verb
+        ),
+        _ => tr!("已轉發原生指令 /{verb} 給 agent", verb = verb),
     };
     Ok(())
 }
@@ -686,7 +694,7 @@ fn forward_native(app: &mut App, writer: &mut ConnStream, verb: &str, rest: &str
 pub(crate) fn hints_with_native(app: &App) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = command_hints(&app.input)
         .into_iter()
-        .map(|(n, d)| (n.to_string(), d.to_string()))
+        .map(|(n, d)| (n.to_string(), termade_core::tr_dyn!(d)))
         .collect();
     // 已打完命令名稱：用參數候選取代用法行（用法留在 `:help`）。
     if let Some((_, cands)) = arg_candidates(app, &app.input) {
@@ -705,7 +713,7 @@ pub(crate) fn hints_with_native(app: &App) -> Vec<(String, String)> {
         .unwrap_or(&[]);
     for c in native {
         if c.starts_with(input) && !out.iter().any(|(n, _)| n == c) {
-            out.push((c.clone(), "（agent 原生指令，原樣轉發）".to_string()));
+            out.push((c.clone(), tr!("（agent 原生指令，原樣轉發）")));
         }
     }
     out
@@ -728,12 +736,12 @@ pub(crate) fn execute_jump(app: &mut App, writer: &mut ConnStream, query: &str) 
                 .contains(&q)
     }) {
         app.selected = idx;
-        app.status = format!("已跳轉至 {} ({})", s.label, s.id);
+        app.status = tr!("已跳轉至 {label} ({id})", label = s.label, id = s.id);
         if app.view == CenterView::Diff {
             request_selected_diff(app, writer)?;
         }
     } else {
-        app.status = format!("找不到符合 `{query}` 的 session");
+        app.status = tr!("找不到符合 `{query}` 的 session", query = query);
     }
     Ok(())
 }
@@ -752,7 +760,10 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         };
         let prompt = parts.next().map(|s| s.trim().to_string());
         let Some(kind) = AgentKind::parse(kind_str) else {
-            app.status = format!("未知的 agent：{kind_str}（opencode/claude/codex/antigravity）");
+            app.status = tr!(
+                "未知的 agent：{kind_str}（opencode/claude/codex/antigravity）",
+                kind_str = kind_str
+            );
             return Ok(());
         };
         (kind, model, prompt)
@@ -765,7 +776,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
     {
         Some(Ok((body, atts))) => (Some(body), atts),
         Some(Err(e)) => {
-            app.status = format!("附件錯誤：{e}");
+            app.status = tr!("附件錯誤：{e}", e = e);
             app.mode = Mode::Spawn;
             app.input = text.to_string();
             app.input_cursor = app.input.chars().count();
@@ -779,7 +790,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
         app.mode = Mode::Spawn;
         app.input = text.to_string();
         app.input_cursor = app.input.chars().count();
-        app.status = "⚠ bypass 會跳過所有權限檢查；再按一次 Enter 確認".into();
+        app.status = tr!("⚠ bypass 會跳過所有權限檢查；再按一次 Enter 確認");
         return Ok(());
     }
     app.spawn_target = None;
@@ -807,7 +818,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
             budget_usd: None,
         }),
     )?;
-    app.status = format!("已要求啟動 {kind}");
+    app.status = tr!("已要求啟動 {kind}", kind = kind);
     Ok(())
 }
 
@@ -820,7 +831,7 @@ pub(crate) fn respond_permission(
         return Ok(());
     };
     let Some(req) = app.selected_permission() else {
-        app.status = "此 session 沒有待核准請求".into();
+        app.status = tr!("此 session 沒有待核准請求");
         return Ok(());
     };
     send(
@@ -832,9 +843,9 @@ pub(crate) fn respond_permission(
         },
     )?;
     app.status = match decision {
-        Decision::Allow => "已允許".into(),
-        Decision::AllowAlways => "已一律允許".into(),
-        Decision::Deny => "已拒絕".into(),
+        Decision::Allow => tr!("已允許"),
+        Decision::AllowAlways => tr!("已一律允許"),
+        Decision::Deny => tr!("已拒絕"),
     };
     Ok(())
 }
@@ -847,7 +858,7 @@ fn session_config_command(
     rest: &str,
 ) -> Result<()> {
     let Some(id) = app.selected_id() else {
-        app.status = "沒有選取的 session".into();
+        app.status = tr!("沒有選取的 session");
         return Ok(());
     };
     let Some(sess) = app.state.sessions.get(&id).cloned() else {
@@ -860,20 +871,20 @@ fn session_config_command(
                 .filter(|(_, v)| !v.is_empty())
                 .map(|(_, v)| v)
                 .collect();
-            format!(
-                "model：{}　可選：{}",
-                sess.model.as_deref().unwrap_or("（未回報）"),
-                if choices.is_empty() {
-                    "（用 :model <名稱> 直接指定）".to_string()
+            tr!(
+                "model：{current}　可選：{choices}",
+                current = sess.model.clone().unwrap_or_else(|| tr!("（未回報）")),
+                choices = if choices.is_empty() {
+                    tr!("（用 :model <名稱> 直接指定）")
                 } else {
                     choices.join(", ")
                 }
             )
         } else {
-            format!(
-                "effort：{}　可選：{}",
-                sess.effort.as_deref().unwrap_or("（預設）"),
-                termade_adapter::EFFORT_LEVELS.join(", ")
+            tr!(
+                "effort：{current}　可選：{choices}",
+                current = sess.effort.clone().unwrap_or_else(|| tr!("（預設）")),
+                choices = termade_adapter::EFFORT_LEVELS.join(", ")
             )
         };
         return Ok(());
@@ -892,7 +903,11 @@ fn session_config_command(
             effort,
         },
     )?;
-    app.status = format!("切換 {verb} → {value}（下一回合起生效）");
+    app.status = tr!(
+        "切換 {verb} → {value}（下一回合起生效）",
+        verb = verb,
+        value = value
+    );
     Ok(())
 }
 
@@ -920,15 +935,15 @@ fn set_default_command(app: &mut App, rest: &str) {
         let cfg = termade_daemon::config::Config::load(&termade_daemon::config_dir(), &cwd);
         let agent = app.selected_kind_id();
         let a = agent.as_deref().and_then(|k| cfg.agents.get(k));
-        app.status = format!(
-            "預設：agent={} permission={} model={} effort={}（{}）",
-            cfg.defaults.agent.as_deref().unwrap_or("-"),
-            cfg.defaults.permission.as_deref().unwrap_or("-"),
-            a.and_then(|a| a.model.as_deref()).unwrap_or("-"),
-            a.and_then(|a| a.effort.as_deref()).unwrap_or("-"),
-            agent
-                .as_deref()
-                .unwrap_or("未選 session，model／effort 不顯示"),
+        app.status = tr!(
+            "預設：agent={agent} permission={permission} model={model} effort={effort}（{target}）",
+            agent = cfg.defaults.agent.as_deref().unwrap_or("-"),
+            permission = cfg.defaults.permission.as_deref().unwrap_or("-"),
+            model = a.and_then(|a| a.model.as_deref()).unwrap_or("-"),
+            effort = a.and_then(|a| a.effort.as_deref()).unwrap_or("-"),
+            target = agent
+                .clone()
+                .unwrap_or_else(|| tr!("未選 session，model／effort 不顯示")),
         );
         return;
     };
@@ -939,14 +954,14 @@ fn set_default_command(app: &mut App, rest: &str) {
                 && key == "permission"
                 && !["ask", "auto", "bypass"].contains(&value.as_str())
             {
-                app.status = "permission 只能是 ask、auto、bypass".into();
+                app.status = tr!("permission 只能是 ask、auto、bypass");
                 return;
             }
             termade_daemon::config::Config::set_value(&path, &["defaults"], key, &value)
         }
         "model" | "effort" => {
             let Some(agent) = app.selected_kind_id() else {
-                app.status = "model／effort 預設是針對某個 agent；先選取一個 session".into();
+                app.status = tr!("model／effort 預設是針對某個 agent；先選取一個 session");
                 return;
             };
             if key == "effort" && !value.is_empty() {
@@ -958,17 +973,23 @@ fn set_default_command(app: &mut App, rest: &str) {
             termade_daemon::config::Config::set_value(&path, &["agents", &agent], key, &value)
         }
         _ => {
-            app.status = "可設定：agent、permission、model、effort".into();
+            app.status = tr!("可設定：agent、permission、model、effort");
             return;
         }
     };
     app.status = match result {
-        Ok(()) if value.is_empty() => format!("已移除 {key} 預設（{}）", path.display()),
-        Ok(()) => format!(
-            "已將預設 {key} 設為 {value}（{}），新建立的 session 起生效",
-            path.display()
+        Ok(()) if value.is_empty() => tr!(
+            "已移除 {key} 預設（{path}）",
+            key = key,
+            path = path.display()
         ),
-        Err(e) => format!("寫入設定失敗：{e}"),
+        Ok(()) => tr!(
+            "已將預設 {key} 設為 {value}（{path}），新建立的 session 起生效",
+            key = key,
+            value = value,
+            path = path.display()
+        ),
+        Err(e) => tr!("寫入設定失敗：{e}", e = e),
     };
 }
 
@@ -1003,7 +1024,7 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
     let efforts = || -> Vec<(String, String)> {
         termade_adapter::EFFORT_LEVELS
             .iter()
-            .map(|l| (l.to_string(), "推理強度".to_string()))
+            .map(|l| (l.to_string(), tr!("推理強度")))
             .collect()
     };
     let list: Vec<(String, String)> = match verb {
@@ -1014,16 +1035,13 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
             match words.first().copied() {
                 None => {
                     let mut v: Vec<(String, String)> = vec![
-                        ("agent".into(), "預設的 agent".into()),
-                        ("permission".into(), "預設權限（ask／auto／bypass）".into()),
-                        ("model".into(), "選取 session 的 agent 的預設 model".into()),
-                        (
-                            "effort".into(),
-                            "選取 session 的 agent 的預設 effort".into(),
-                        ),
+                        ("agent".into(), tr!("預設的 agent")),
+                        ("permission".into(), tr!("預設權限（ask／auto／bypass）")),
+                        ("model".into(), tr!("選取 session 的 agent 的預設 model")),
+                        ("effort".into(), tr!("選取 session 的 agent 的預設 effort")),
                     ];
                     if !input.contains("--repo") {
-                        v.push(("--repo".into(), "寫到 .termade/config.toml".into()));
+                        v.push(("--repo".into(), tr!("寫到 .termade/config.toml")));
                     }
                     v
                 }
@@ -1032,12 +1050,12 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                     .map(|a| (a.to_string(), "agent".to_string()))
                     .collect(),
                 Some("permission") if words.len() == 1 => [
-                    ("ask", "每個動作都要人同意"),
-                    ("auto", "自動核准一般動作"),
-                    ("bypass", "完全不問"),
+                    ("ask", tr!("每個動作都要人同意")),
+                    ("auto", tr!("自動核准一般動作")),
+                    ("bypass", tr!("完全不問")),
                 ]
-                .iter()
-                .map(|(a, d)| (a.to_string(), d.to_string()))
+                .into_iter()
+                .map(|(a, d)| (a.to_string(), d))
                 .collect(),
                 Some("model") if words.len() == 1 => models(&kind),
                 Some("effort") if words.len() == 1 => efforts(),

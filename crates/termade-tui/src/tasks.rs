@@ -9,6 +9,7 @@ use ratatui::Frame as TuiFrame;
 use termade_core::{Task, TaskId, TaskStatus};
 use termade_daemon::ConnStream;
 use termade_protocol::Request;
+use tr::tr;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::app::{short, App, CenterView};
@@ -94,15 +95,15 @@ pub(crate) fn move_task_cursor(app: &mut App, delta: i32) {
 /// `Enter`：選取任務負責人的 session 並切回逐字稿。
 pub(crate) fn jump_to_assignee(app: &mut App) {
     let Some(task) = selected_task(app).and_then(|id| app.state.tasks.get(&id)) else {
-        app.status = "沒有選取的任務".into();
+        app.status = tr!("沒有選取的任務");
         return;
     };
     let Some(assignee) = task.assignee.clone() else {
-        app.status = "這個任務還沒有負責人".into();
+        app.status = tr!("這個任務還沒有負責人");
         return;
     };
     if !app.state.sessions.contains_key(&assignee) {
-        app.status = format!("負責人的 session（{}）已不存在", short(&assignee));
+        app.status = tr!("負責人的 session（{id}）已不存在", id = short(&assignee));
         return;
     }
     // 負責人在別的專案時，先改成顯示全部專案才選得到。
@@ -115,22 +116,25 @@ pub(crate) fn jump_to_assignee(app: &mut App) {
         app.selection = None;
         app.md_cache = None;
         app.transcript_scroll = None;
-        app.status = format!("已跳到負責人 {}", session_label(app, &assignee));
+        app.status = tr!(
+            "已跳到負責人 {label}",
+            label = session_label(app, &assignee)
+        );
     }
 }
 
 /// `:task-status <狀態>`：更新任務視圖裡選取的任務。
 pub(crate) fn set_selected_status(app: &mut App, writer: &mut ConnStream, arg: &str) -> Result<()> {
     if app.view != CenterView::Tasks {
-        app.status = "task-status 作用在任務視圖選取的任務：先用 :tasks 或 Tab 切過去".into();
+        app.status = tr!("task-status 作用在任務視圖選取的任務：先用 :tasks 或 Tab 切過去");
         return Ok(());
     }
     let Some(status) = TaskStatus::parse(arg) else {
-        app.status = "用法：task-status <todo|doing|blocked|review|done>".into();
+        app.status = tr!("用法：task-status <todo|doing|blocked|review|done>");
         return Ok(());
     };
     let Some(id) = selected_task(app) else {
-        app.status = "沒有選取的任務".into();
+        app.status = tr!("沒有選取的任務");
         return Ok(());
     };
     crate::send(
@@ -142,7 +146,11 @@ pub(crate) fn set_selected_status(app: &mut App, writer: &mut ConnStream, arg: &
             detail: None,
         },
     )?;
-    app.status = format!("任務 {} → {}", short(&id), status.id());
+    app.status = tr!(
+        "任務 {id} → {status}",
+        id = short(&id),
+        status = status.id()
+    );
     Ok(())
 }
 
@@ -219,13 +227,17 @@ pub(crate) fn draw_tasks(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let title = if ids.len() == total {
         format!(" Tasks ({total}) ")
     } else {
-        format!(" Tasks ({}/{total} · 本專案，P 顯示全部) ", ids.len())
+        tr!(
+            " Tasks ({n}/{total} · 本專案，P 顯示全部) ",
+            n = ids.len(),
+            total = total
+        )
     };
     if ids.is_empty() {
         app.tasks_area = Rect::default();
         app.task_rows.clear();
         let para = Paragraph::new(Line::styled(
-            "還沒有任務。用 :task <標題> 建立，或讓 agent 呼叫 termade_task_create。",
+            tr!("還沒有任務。用 :task <標題> 建立，或讓 agent 呼叫 termade_task_create。"),
             Style::default().fg(Color::DarkGray),
         ))
         .block(Block::default().borders(Borders::ALL).title(title))
@@ -348,11 +360,11 @@ fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
             ),
         ]),
         Line::styled(
-            format!(
-                "{} · 負責人 {} · 建立者 {}",
-                t.id,
-                who(&t.assignee),
-                who(&t.created_by)
+            tr!(
+                "{id} · 負責人 {assignee} · 建立者 {creator}",
+                id = t.id,
+                assignee = who(&t.assignee),
+                creator = who(&t.created_by)
             ),
             Style::default().fg(Color::DarkGray),
         ),
@@ -374,7 +386,7 @@ fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
                 Style::default().fg(Color::Yellow),
             ),
             None => (
-                format!("  ? {}（已不存在）", short(dep)),
+                tr!("  ? {id}（已不存在）", id = short(dep)),
                 Style::default().fg(Color::DarkGray),
             ),
         };
@@ -382,7 +394,7 @@ fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
     }
     if t.detail.trim().is_empty() {
         lines.push(Line::styled(
-            "（沒有說明）",
+            tr!("（沒有說明）"),
             Style::default().fg(Color::DarkGray),
         ));
     } else {
@@ -392,7 +404,7 @@ fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" 任務說明（Enter 跳到負責人 · :task-status <狀態>） "),
+                .title(tr!(" 任務說明（Enter 跳到負責人 · :task-status <狀態>） ")),
         )
         .wrap(Wrap { trim: false });
     f.render_widget(para, area);

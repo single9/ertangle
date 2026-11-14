@@ -5,6 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use termade_core::{Decision, MsgKind, PermissionPolicy, SessionStatus, Target};
 use termade_daemon::ConnStream;
 use termade_protocol::Request;
+use tr::tr;
 
 use crate::app::{
     scroll_transcript, scroll_transcript_lines, toggle_thoughts, toggle_tools, App, CenterView,
@@ -55,15 +56,14 @@ fn handle_ctrl_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             app.input.clear();
             app.input_cursor = 0;
             app.status =
-                "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown"
-                    .into();
+                tr!("命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown");
             Ok(true)
         }
         KeyCode::Char('k') => {
             app.mode = Mode::Jump;
             app.input.clear();
             app.input_cursor = 0;
-            app.status = "輸入關鍵字跳轉至匹配的 session（label / id / branch）".into();
+            app.status = tr!("輸入關鍵字跳轉至匹配的 session（label / id / branch）");
             Ok(true)
         }
         KeyCode::Char('d') => {
@@ -161,7 +161,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.input.clear();
             app.input_cursor = 0;
             let loc = app.current_diff_location();
-            app.status = format!("對 `{loc}` 留下審查註解（Enter 送回 agent）");
+            app.status = tr!("對 `{loc}` 留下審查註解（Enter 送回 agent）", loc = loc);
         }
         KeyCode::Char('M') => {
             if let Some(id) = app.selected_id() {
@@ -203,7 +203,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.mode = Mode::Command;
             app.input.clear();
             app.input_cursor = 0;
-            app.status = "命令（Tab 補全）：spawn rm clean kill merge diff gc task …".into();
+            app.status = tr!("命令（Tab 補全）：spawn rm clean kill merge diff gc task …");
         }
         KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
         KeyCode::Enter | KeyCode::Char('i') => {
@@ -217,7 +217,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             app.mode = Mode::Message;
             app.input.clear();
             app.input_cursor = 0;
-            app.status = "輸入要送給選取 session 的訊息".into();
+            app.status = tr!("輸入要送給選取 session 的訊息");
         }
         KeyCode::Char('a') => respond_permission(app, writer, Decision::Allow)?,
         KeyCode::Char('A') => respond_permission(app, writer, Decision::AllowAlways)?,
@@ -225,13 +225,13 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         KeyCode::Char('x') => {
             if let Some(id) = app.selected_id() {
                 send(writer, &Request::Cancel { session: id })?;
-                app.status = "已送出中斷".into();
+                app.status = tr!("已送出中斷");
             }
         }
         KeyCode::Char('K') => {
             if let Some(id) = app.selected_id() {
                 send(writer, &Request::Kill { session: id })?;
-                app.status = "已送出結束".into();
+                app.status = tr!("已送出結束");
             }
         }
         KeyCode::Char('r') => {
@@ -241,28 +241,25 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
             } else if app.view == CenterView::Worktrees {
                 send(writer, &Request::WorktreeList)?;
             }
-            app.status = "已要求重整".into();
+            app.status = tr!("已要求重整");
         }
         KeyCode::Char('t') => {
             app.raw_md = !app.raw_md;
             app.md_cache = None;
             app.selection = None;
-            app.status = format!(
-                "逐字稿顯示：{}",
-                if app.raw_md {
-                    "原始文字"
-                } else {
-                    "Markdown 渲染"
-                }
-            );
+            app.status = if app.raw_md {
+                tr!("逐字稿顯示：原始文字")
+            } else {
+                tr!("逐字稿顯示：Markdown 渲染")
+            };
         }
         KeyCode::F(2) => {
             app.mouse_capture = !app.mouse_capture;
             set_mouse_capture(app.mouse_capture)?;
             app.status = if app.mouse_capture {
-                "滑鼠擷取：開（可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取）".into()
+                tr!("滑鼠擷取：開（可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取）")
             } else {
-                "滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端機 alternate scroll）".into()
+                tr!("滑鼠擷取：關（可直接拖曳選取複製；滾輪用終端機 alternate scroll）")
             };
         }
         KeyCode::Char('T') => toggle_thoughts(app),
@@ -272,15 +269,15 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         KeyCode::Char('b') => {
             app.bus_overlay = !app.bus_overlay;
             app.status = if app.bus_overlay {
-                "Bus：顯示（b 或 Esc 關閉；僅在兩欄／分頁模式有浮層）".into()
+                tr!("Bus：顯示（b 或 Esc 關閉；僅在兩欄／分頁模式有浮層）")
             } else {
-                "Bus：隱藏".into()
+                tr!("Bus：隱藏")
             };
         }
         KeyCode::Esc => {
             app.selection = None;
             app.bus_overlay = false;
-            app.status = "已清除選取".into();
+            app.status = tr!("已清除選取");
         }
         KeyCode::Char('Y') => copy_main_pane(app),
         KeyCode::PageUp => scroll_transcript(app, -1),
@@ -292,7 +289,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 app.task_cursor = 0;
             } else {
                 app.transcript_scroll = Some(0);
-                app.status = "逐字稿：已到最前".into();
+                app.status = tr!("逐字稿：已到最前");
             }
         }
         KeyCode::End => {
@@ -302,7 +299,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 crate::tasks::move_task_cursor(app, i32::MAX);
             } else {
                 app.transcript_scroll = None;
-                app.status = "逐字稿：跟隨最新".into();
+                app.status = tr!("逐字稿：跟隨最新");
             }
         }
         KeyCode::Char('{') => jump_hunk(app, false),
@@ -375,9 +372,11 @@ pub(crate) fn handle_input_mode(
                 Some(PermissionPolicy::Bypass) => None,
             };
             app.spawn_bypass_armed = false;
-            app.status = format!(
-                "權限 = {}",
-                app.spawn_permission.map_or("預設(config)", |p| p.id())
+            app.status = tr!(
+                "權限 = {permission}",
+                permission = app
+                    .spawn_permission
+                    .map_or_else(|| tr!("預設(config)"), |p| p.id().to_string())
             );
         }
         KeyCode::Char('f')
@@ -403,7 +402,10 @@ pub(crate) fn handle_input_mode(
                     .position(|l| l == cur)
                     .and_then(|i| levels.get(i + 1).cloned()),
             };
-            app.status = format!("effort = {}", app.spawn_effort.as_deref().unwrap_or("預設"));
+            app.status = tr!(
+                "effort = {effort}",
+                effort = app.spawn_effort.clone().unwrap_or_else(|| tr!("預設"))
+            );
         }
         KeyCode::Tab if app.mode == Mode::Command => complete_command(app),
         KeyCode::Tab if matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) => {
@@ -416,7 +418,7 @@ pub(crate) fn handle_input_mode(
             match crate::attach::clipboard_image() {
                 Ok(path) => {
                     insert_str_input(app, &format!("@{} ", path.display()));
-                    app.status = "已貼上剪貼簿圖片".into();
+                    app.status = tr!("已貼上剪貼簿圖片");
                 }
                 Err(e) => app.status = e,
             }
@@ -498,7 +500,7 @@ pub(crate) fn handle_input_mode(
                                 reply_to: None,
                             },
                         )?;
-                        app.status = "已送出訊息".into();
+                        app.status = tr!("已送出訊息");
                     }
                 }
                 Mode::Review => {
@@ -563,7 +565,7 @@ fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
     let e = byte_index(&app.input, app.input_cursor);
     app.input.replace_range(s..e, &rep);
     app.input_cursor = start + rep.chars().count();
-    app.status = format!("已選 {path}");
+    app.status = tr!("已選 {path}", path = path);
 }
 
 /// 游標前的 `@路徑` 做 Tab 補全：唯一符合就補完，多個則補到共同前綴並列出候選。
@@ -581,7 +583,7 @@ fn complete_attachment_path(app: &mut App) {
     }
     let cands = crate::attach::complete_path(prefix);
     if cands.is_empty() {
-        app.status = "沒有符合的路徑".into();
+        app.status = tr!("沒有符合的路徑");
         return;
     }
     let common = crate::attach::common_prefix(&cands);
@@ -598,10 +600,13 @@ fn complete_attachment_path(app: &mut App) {
     }
     if cands.len() > 1 {
         let shown: Vec<&str> = cands.iter().take(8).map(String::as_str).collect();
-        app.status = format!(
-            "候選：{}{}",
-            shown.join("  "),
-            if cands.len() > 8 { " …" } else { "" }
+        app.status = tr!(
+            "候選：{list}",
+            list = format!(
+                "{}{}",
+                shown.join("  "),
+                if cands.len() > 8 { " …" } else { "" }
+            )
         );
     }
 }

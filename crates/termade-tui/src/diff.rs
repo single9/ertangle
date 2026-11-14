@@ -1,6 +1,7 @@
 //! Diff 視圖輔助：hunk 解析、行號邊欄、統計與 hunk 跳轉。
 
 use crate::app::{App, CenterView};
+use tr::tr;
 
 /// 在 Diff 視圖跳到上一個／下一個 hunk（`@@` 行）。
 pub(crate) fn jump_hunk(app: &mut App, forward: bool) {
@@ -19,7 +20,7 @@ pub(crate) fn jump_hunk(app: &mut App, forward: bool) {
         app.diff_cursor = i;
         return;
     }
-    app.status = "沒有更多 hunk".into();
+    app.status = tr!("沒有更多 hunk");
 }
 
 /// 從 `@@ -a,b +c,d @@` 解析新舊檔起始行號。

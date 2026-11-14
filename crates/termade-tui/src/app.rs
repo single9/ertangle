@@ -1,6 +1,7 @@
 //! TUI 狀態模型、版面模式與畫面快取。
 
 use std::time::Duration;
+use tr::tr;
 
 use ratatui::layout::Rect;
 use ratatui::text::Line;
@@ -219,7 +220,7 @@ impl App {
             mode: Mode::Normal,
             input: String::new(),
             input_cursor: 0,
-            status: "已連線 daemon".into(),
+            status: tr!("已連線 daemon"),
             spawn_worktree: false,
             spawn_permission: None,
             spawn_bypass_armed: false,
@@ -352,7 +353,7 @@ impl App {
     pub(crate) fn set_layout(&mut self, mode: LayoutMode) {
         self.layout = mode;
         self.selection = None;
-        self.status = format!("版面：{}", mode.id());
+        self.status = tr!("版面：{layout}", layout = mode.id());
     }
 
     pub(crate) fn clamp_selection(&mut self) {
@@ -426,7 +427,12 @@ pub(crate) fn visible_transcript<'a>(
                 out.push(last);
             } else {
                 let last = last.trim_start_matches("▸ ");
-                out.push(format!("▸ 工具 ×{calls}（✓{ok}）· 最後：{last}"));
+                out.push(tr!(
+                    "▸ 工具 ×{calls}（✓{ok}）· 最後：{last}",
+                    calls = calls,
+                    ok = ok,
+                    last = last
+                ));
             }
         }
     }
@@ -458,9 +464,9 @@ pub(crate) fn toggle_tools(app: &mut App) {
     app.md_cache = None;
     app.selection = None;
     app.status = if app.show_tools {
-        "工具：展開（每筆呼叫都顯示，按 O 摺疊）".into()
+        tr!("工具：展開（每筆呼叫都顯示，按 O 摺疊）")
     } else {
-        "工具：摺疊（連續呼叫合成一行，按 O 展開）".into()
+        tr!("工具：摺疊（連續呼叫合成一行，按 O 展開）")
     };
 }
 
@@ -470,9 +476,9 @@ pub(crate) fn toggle_thoughts(app: &mut App) {
     app.md_cache = None;
     app.selection = None;
     app.status = if app.show_thoughts {
-        "思考顯示：開（顯示 💭 行）".into()
+        tr!("思考顯示：開（顯示 💭 行）")
     } else {
-        "思考顯示：關（已隱藏 💭 行，按 T 顯示）".into()
+        tr!("思考顯示：關（已隱藏 💭 行，按 T 顯示）")
     };
 }
 
@@ -491,10 +497,10 @@ pub(crate) fn scroll_transcript(app: &mut App, dir: i32) {
     };
     if next >= max_off {
         app.transcript_scroll = None;
-        app.status = "逐字稿：跟隨最新".into();
+        app.status = tr!("逐字稿：跟隨最新");
     } else {
         app.transcript_scroll = Some(next);
-        app.status = format!("逐字稿：第 {next} 行（End 回到最新）");
+        app.status = tr!("逐字稿：第 {next} 行（End 回到最新）", next = next);
     }
 }
 
@@ -592,11 +598,11 @@ pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
     app.md_cache = None;
     app.selection = None;
     app.status = if app.scope_here {
-        format!(
-            "只顯示本專案的 session（{}），P 顯示全部",
-            project_name(&app.home_project, &[])
+        tr!(
+            "只顯示本專案的 session（{project}），P 顯示全部",
+            project = project_name(&app.home_project, &[])
         )
     } else {
-        "顯示全部專案的 session，P 只看本專案".into()
+        tr!("顯示全部專案的 session，P 只看本專案")
     };
 }
