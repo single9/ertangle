@@ -4,14 +4,17 @@
 set -eu
 cd "$(dirname "$0")/.."
 
+# clap 的說明文字 (doc comment) xtr 抽不到：先由執行檔印成 tr_noop! 清單，再一起抽。
+cargo run --quiet -- __help-strings > src/cmd/helptext/help_strings.rs
+
 pot=locales/termade.pot
 # 只記檔名不記行號，避免改一行程式碼就讓 .pot 整份變動。
 xtr --package-name termade -k tr -k tr_noop -n file -o "$pot.tmp" \
-    src/main.rs crates/*/src/lib.rs
+    src/main.rs src/cmd/helptext/help_strings.rs crates/*/src/lib.rs
 # POT-Creation-Date 每次都不同，拿掉才能比對 .pot 是否過期。
 grep -v '^"POT-Creation-Date:' "$pot.tmp" > "$pot"
 rm -f "$pot.tmp"
 
 for po in locales/*.po; do
-    msgmerge --quiet --update --backup=none --no-wrap --add-location=file "$po" "$pot"
+    msgmerge --quiet --no-fuzzy-matching --update --backup=none --no-wrap --add-location=file "$po" "$pot"
 done

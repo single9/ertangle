@@ -82,6 +82,370 @@ msgstr "Replay {path}: {count} event(s) (latest seq={seq}, sessions={sessions}, 
 msgid "已要求 daemon 關閉"
 msgstr "Asked daemon to shut down"
 
+#: src/cmd/helptext/help_strings.rs
+msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model`（例如 claude:opus）"
+msgstr "Agent kind: opencode / claude / codex / antigravity; may include `:model` (e.g. claude:opus)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "stdio MCP server 模式（供 agent 子處理程序設定為 MCP 工具）"
+msgstr "Run as a stdio MCP server (for agent child processes to use as an MCP tool)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "termade — 終端機原生的多 agent 開發環境"
+msgstr "termade — a terminal-native multi-agent development environment"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "中斷正在執行的 turn"
+msgstr "Interrupt the turn that is running"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "以前景方式執行 daemon"
+msgstr "Run the daemon in the foreground"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "傳輸通道：auto（預設）/ structured / pty"
+msgstr "Transport: auto (default) / structured / pty"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "僅乾跑：不改動 repo，回報會 commit 的檔案與是否可快轉"
+msgstr "Dry run only: leave the repo untouched and report the files that would be committed and whether it can fast-forward"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "允許在未走 SSH 轉發下綁定非 loopback 位址（危險：傳輸為明文，僅供專用私有網路）"
+msgstr "Allow binding a non-loopback address without SSH forwarding (dangerous: traffic is plaintext; only for dedicated private networks)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "分享重要產出物（檔案、PR 連結、測試報告等）"
+msgstr "Share an important artifact (a file, PR link, test report, etc.)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "列出所有 session"
+msgstr "List all sessions"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "列出所有協作任務"
+msgstr "List all collaboration tasks"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "列出所有由 termade 管理的 git worktree（M3）"
+msgstr "List all git worktrees managed by termade (M3)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "包含已讀訊息（預設只顯示新進未讀）"
+msgstr "Include messages already read (by default only new unread ones are shown)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "包含已輪替的舊紀錄檔（events.jsonl.1 等；預設只讀目前活躍檔）"
+msgstr "Include rotated old log files (events.jsonl.1 etc.; by default only the active file is read)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "印出所有說明文字（供翻譯抽取用，不會啟動 daemon）"
+msgstr "Print all help text (for translation extraction; does not start the daemon)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "只清理特定 session 的 worktree；未指定則清理所有已結束者"
+msgstr "Clean up only this session's worktree; if omitted, clean up all finished ones"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "只等待來自特定寄件者的訊息"
+msgstr "Wait only for messages from a specific sender"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "只重播序號大於此值的事件"
+msgstr "Replay only events with a sequence number greater than this value"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "同時綁定 TCP 位址供遠端連線（例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token）"
+msgstr "Also bind a TCP address for remote connections (e.g. 127.0.0.1:7420; SSH forwarding is recommended; requires a token)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "同步問答：送出 question 訊息並阻塞等待對方回覆 answer"
+msgstr "Synchronous Q&A: send a question message and block until the other side replies with an answer"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "啟動 TUI（預設行為）"
+msgstr "Start the TUI (default behavior)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "啟動後立刻送出的 prompt"
+msgstr "Prompt to send right after startup"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "喚醒已休眠的 session"
+msgstr "Wake a sleeping session"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "回覆的訊息 id（形成對話串）"
+msgstr "ID of the message being replied to (forms a conversation thread)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "在獨立的 git worktree 中執行（M3）"
+msgstr "Run in a separate git worktree (M3)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "執行期切換 session 的 model 與／或 effort（下一個回合起生效）"
+msgstr "Switch a session's model and/or effort at runtime (takes effect from the next turn)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "寄件者 session id（預設讀 TERMADE_SESSION 環境變數）"
+msgstr "Sender session id (defaults to the TERMADE_SESSION environment variable)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "將指定 session 的 worktree 合併回主分支（M3）"
+msgstr "Merge the given session's worktree back into the main branch (M3)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "對指定 session 的程式碼留下審查註解並送回該 agent（M3）"
+msgstr "Leave a review comment on the given session's code and send it back to that agent (M3)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "對象 session id 或標籤"
+msgstr "Target session id or label"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "工作目錄（預設為目前目錄）"
+msgstr "Working directory (defaults to the current directory)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "廣播給所有 session"
+msgstr "Broadcast to all sessions"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "廣播自己的最新狀態摘要"
+msgstr "Broadcast your latest status summary"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "建立新任務（M2 看板）"
+msgstr "Create a new task (M2 board)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "建立新的 agent session"
+msgstr "Create a new agent session"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "強制刪除（即使有未 commit 變更或未合併分支）"
+msgstr "Force removal (even with uncommitted changes or an unmerged branch)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "強制結束 agent 子處理程序"
+msgstr "Forcibly end the agent child process"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "從檔案讀取 token（權限需為 0600 或 0400；避免 token 出現在 process list）"
+msgstr "Read the token from a file (permissions must be 0600 or 0400; keeps the token out of the process list)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "從清單移除已結束的 session（有 worktree 分支時需已合併，或加 --force）"
+msgstr "Remove a finished session from the list (a worktree branch must be merged first, or add --force)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "把 session 的工作交接給另一個 agent（額度用完時）：沿用同一個工作目錄，附上交接簡報與 diff"
+msgstr "Hand a session's work off to another agent (when quota runs out): reuses the same working directory and attaches a handoff brief and diff"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "指定 events.jsonl 路徑（預設為 termade 自己的 log）"
+msgstr "Path to events.jsonl (defaults to termade's own log)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "接手的 agent，可加 `:model`，例如 codex、claude:sonnet"
+msgstr "The agent taking over; may include `:model`, e.g. codex, claude:sonnet"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續（session id 不變）"
+msgstr "Resume a finished session: after the agent process died or the daemon restarted, continue the original conversation (the session id stays the same)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "接續後立刻送出的 prompt（可省略）"
+msgstr "Prompt to send right after resuming (optional)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "推理強度：low / medium / high / xhigh / max（省略則依 config.toml）"
+msgstr "Reasoning effort: low / medium / high / xhigh / max (defaults to config.toml if omitted)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "收件者：session id、標籤（例如 worker/b）、或 @id / @label"
+msgstr "Recipient: a session id, a label (e.g. worker/b), or @id / @label"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "新狀態：todo / doing / done / blocked"
+msgstr "New status: todo / doing / done / blocked"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "新的 model；省略則不變"
+msgstr "New model; unchanged if omitted"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "新的成本上限（美元，例如 10）"
+msgstr "New cost limit (USD, e.g. 10)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "新的推理強度（low|medium|high|xhigh|max）"
+msgstr "New reasoning effort (low|medium|high|xhigh|max)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "明確指定 model（優先於 kind 的 `:model` 與設定檔）"
+msgstr "Explicitly set the model (takes precedence over the kind's `:model` and the config file)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "易讀標籤（例如 worker/backend；未指定時自動產生）"
+msgstr "Human-readable label (e.g. worker/backend; generated automatically if omitted)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "更新任務狀態或指派對象"
+msgstr "Update a task's status or assignee"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "查看各 session 與整體 token / USD 成本統計"
+msgstr "Show token / USD cost statistics per session and in total"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "查看或清空指定 session 的待送 prompt 佇列"
+msgstr "Show or clear the queue of pending prompts for a session"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "查看目前 session 的收件匣"
+msgstr "Show the current session's inbox"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "檔案與行號位置（例如 `src/lib.rs:42`）"
+msgstr "File and line location (e.g. `src/lib.rs:42`)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "檢視指定 session 的 worktree git diff（M3）"
+msgstr "Show the git diff of the given session's worktree (M3)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "權限政策：ask / auto / bypass（省略則依 config.toml，預設 auto）"
+msgstr "Permission policy: ask / auto / bypass (defaults to config.toml, otherwise auto)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "此 MCP server 代表的 session id（預設讀 TERMADE_SESSION 環境變數）"
+msgstr "Session id this MCP server acts for (defaults to the TERMADE_SESSION environment variable)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "此 session 的成本上限（美元，例如 2.50）"
+msgstr "Cost limit for this session (USD, e.g. 2.50)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "清理已結束或指定的 worktree（M3）"
+msgstr "Clean up finished or specified worktrees (M3)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "清空待送佇列"
+msgstr "Clear the pending queue"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "為指定 session 的 worktree 建立 GitHub PR（M3）"
+msgstr "Create a GitHub PR for the given session's worktree (M3)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "父 session id 或標籤（未指定時若有 TERMADE_SESSION 則自動繼承）"
+msgstr "Parent session id or label (inherits TERMADE_SESSION automatically if not given)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "產生 shell 補全腳本並印到 stdout（bash / zsh / fish）"
+msgstr "Generate a shell completion script and print it to stdout (bash / zsh / fish)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "種類：code / pr / doc / test / run（預設 code）"
+msgstr "Kind: code / pr / doc / test / run (default code)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "若 session 忙碌，先排入待送佇列，等閒下來再自動送出"
+msgstr "If the session is busy, queue the prompt and send it automatically once it is idle"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "補充給接手者的說明"
+msgstr "Extra notes for the agent taking over"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "補全腳本用的查詢（不會啟動 daemon）"
+msgstr "Query used by completion scripts (does not start the daemon)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "角色：coordinator / worker / reviewer / tester（預設 worker）"
+msgstr "Role: coordinator / worker / reviewer / tester (default worker)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "訊息種類：chat（預設）/ handoff / question / answer / status / artifact"
+msgstr "Message kind: chat (default) / handoff / question / answer / status / artifact"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "設定或調高指定 session 的成本上限（美元）"
+msgstr "Set or raise the given session's cost limit (USD)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "說明備註"
+msgstr "Description or notes"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "讓 session 休眠（停止處理程序但保留對話紀錄，可隨時喚醒）"
+msgstr "Put a session to sleep (stops the process but keeps the transcript; can be woken at any time)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "送出 prompt 給指定 session"
+msgstr "Send a prompt to the given session"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "透過匯流排傳送訊息給其他 session"
+msgstr "Send a message to other sessions over the bus"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "連線遠端 daemon 位址（例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定）"
+msgstr "Address of a remote daemon to connect to (e.g. 127.0.0.1:7420; can also be set with the TERMADE_REMOTE environment variable)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "逾時毫秒數（預設 120000 = 2 分鐘）"
+msgstr "Timeout in milliseconds (default 120000 = 2 minutes)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "逾時毫秒數（預設 60000 = 60 秒）"
+msgstr "Timeout in milliseconds (default 60000 = 60 seconds)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "遠端認證 token（亦可透過環境變數 TERMADE_TOKEN 設定）"
+msgstr "Remote authentication token (can also be set with the TERMADE_TOKEN environment variable)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "遠端連線認證用的 token（未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發）"
+msgstr "Token for remote authentication (falls back to the TERMADE_TOKEN environment variable; use together with SSH forwarding for safety)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "重播 event log 並印出歷史事件"
+msgstr "Replay the event log and print past events"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "關閉常駐的 daemon 與所有受管 agent 子處理程序"
+msgstr "Shut down the resident daemon and all managed agent child processes"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "阻塞等待下一則發給自己的訊息"
+msgstr "Block until the next message addressed to you arrives"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "附加檔案或圖片到初始 prompt（可重複）"
+msgstr "Attach files or images to the initial prompt (repeatable)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "附加檔案或圖片（可重複）"
+msgstr "Attach files or images (repeatable)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "附加給底層 agent 的命令列參數"
+msgstr "Extra command-line arguments for the underlying agent"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "頻道名稱（例如 backend；會廣播給所有同角色或訂閱者）"
+msgstr "Channel name (e.g. backend; broadcast to everyone with the same role or subscribed)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "顯示各 agent 帳號的額度（5 小時／7 天視窗與重置時間）"
+msgstr "Show each agent account's quota (5-hour / 7-day windows and reset times)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "顯示目前環境變數指定的 session 資訊"
+msgstr "Show information about the session named by the environment variable"
+
 #: src/cmd/session.rs
 msgid "{sid}  (非受管 session)"
 msgstr "{sid}  (unmanaged session)"
@@ -345,7 +709,9 @@ msgstr "Failed to take writer"
 msgid ""
 "⚠ 處理程序以結束碼 {code} 結束，stderr 最後 {count} 行：\n"
 "{lines}\n"
-msgstr "⚠ Process exited with code {code}; last {count} line(s) of stderr:\n{lines}\n"
+msgstr ""
+"⚠ Process exited with code {code}; last {count} line(s) of stderr:\n"
+"{lines}\n"
 
 #: crates/termade-adapter/src/lib.rs
 msgid "{transport} 不支援執行期切換 model／effort"
@@ -641,7 +1007,10 @@ msgid ""
 "agent {pid} 要建立 {kind} session：model={model} effort={effort}\n"
 "原因：{reasons}\n"
 "任務：{task}"
-msgstr "agent {pid} wants to create a {kind} session: model={model} effort={effort}\nReason: {reasons}\nTask: {task}"
+msgstr ""
+"agent {pid} wants to create a {kind} session: model={model} effort={effort}\n"
+"Reason: {reasons}\n"
+"Task: {task}"
 
 #: crates/termade-daemon/src/handlers/session.rs crates/termade-tui/src/draw.rs
 #: crates/termade-tui/src/input.rs

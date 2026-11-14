@@ -89,6 +89,370 @@ msgstr ""
 msgid "已要求 daemon 關閉"
 msgstr ""
 
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model`（例如 claude:opus）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "stdio MCP server 模式（供 agent 子處理程序設定為 MCP 工具）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "termade — 終端機原生的多 agent 開發環境"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "中斷正在執行的 turn"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "以前景方式執行 daemon"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "傳輸通道：auto（預設）/ structured / pty"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "僅乾跑：不改動 repo，回報會 commit 的檔案與是否可快轉"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "允許在未走 SSH 轉發下綁定非 loopback 位址（危險：傳輸為明文，僅供專用私有網路）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "分享重要產出物（檔案、PR 連結、測試報告等）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "列出所有 session"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "列出所有協作任務"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "列出所有由 termade 管理的 git worktree（M3）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "包含已讀訊息（預設只顯示新進未讀）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "包含已輪替的舊紀錄檔（events.jsonl.1 等；預設只讀目前活躍檔）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "印出所有說明文字（供翻譯抽取用，不會啟動 daemon）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "只清理特定 session 的 worktree；未指定則清理所有已結束者"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "只等待來自特定寄件者的訊息"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "只重播序號大於此值的事件"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "同時綁定 TCP 位址供遠端連線（例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "同步問答：送出 question 訊息並阻塞等待對方回覆 answer"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "啟動 TUI（預設行為）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "啟動後立刻送出的 prompt"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "喚醒已休眠的 session"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "回覆的訊息 id（形成對話串）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "在獨立的 git worktree 中執行（M3）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "執行期切換 session 的 model 與／或 effort（下一個回合起生效）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "寄件者 session id（預設讀 TERMADE_SESSION 環境變數）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "將指定 session 的 worktree 合併回主分支（M3）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "對指定 session 的程式碼留下審查註解並送回該 agent（M3）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "對象 session id 或標籤"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "工作目錄（預設為目前目錄）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "廣播給所有 session"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "廣播自己的最新狀態摘要"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "建立新任務（M2 看板）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "建立新的 agent session"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "強制刪除（即使有未 commit 變更或未合併分支）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "強制結束 agent 子處理程序"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "從檔案讀取 token（權限需為 0600 或 0400；避免 token 出現在 process list）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "從清單移除已結束的 session（有 worktree 分支時需已合併，或加 --force）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "把 session 的工作交接給另一個 agent（額度用完時）：沿用同一個工作目錄，附上交接簡報與 diff"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "指定 events.jsonl 路徑（預設為 termade 自己的 log）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "接手的 agent，可加 `:model`，例如 codex、claude:sonnet"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續（session id 不變）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "接續後立刻送出的 prompt（可省略）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "推理強度：low / medium / high / xhigh / max（省略則依 config.toml）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "收件者：session id、標籤（例如 worker/b）、或 @id / @label"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "新狀態：todo / doing / done / blocked"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "新的 model；省略則不變"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "新的成本上限（美元，例如 10）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "新的推理強度（low|medium|high|xhigh|max）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "明確指定 model（優先於 kind 的 `:model` 與設定檔）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "易讀標籤（例如 worker/backend；未指定時自動產生）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "更新任務狀態或指派對象"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "查看各 session 與整體 token / USD 成本統計"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "查看或清空指定 session 的待送 prompt 佇列"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "查看目前 session 的收件匣"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "檔案與行號位置（例如 `src/lib.rs:42`）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "檢視指定 session 的 worktree git diff（M3）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "權限政策：ask / auto / bypass（省略則依 config.toml，預設 auto）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "此 MCP server 代表的 session id（預設讀 TERMADE_SESSION 環境變數）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "此 session 的成本上限（美元，例如 2.50）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "清理已結束或指定的 worktree（M3）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "清空待送佇列"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "為指定 session 的 worktree 建立 GitHub PR（M3）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "父 session id 或標籤（未指定時若有 TERMADE_SESSION 則自動繼承）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "產生 shell 補全腳本並印到 stdout（bash / zsh / fish）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "種類：code / pr / doc / test / run（預設 code）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "若 session 忙碌，先排入待送佇列，等閒下來再自動送出"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "補充給接手者的說明"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "補全腳本用的查詢（不會啟動 daemon）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "角色：coordinator / worker / reviewer / tester（預設 worker）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "訊息種類：chat（預設）/ handoff / question / answer / status / artifact"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "設定或調高指定 session 的成本上限（美元）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "說明備註"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "讓 session 休眠（停止處理程序但保留對話紀錄，可隨時喚醒）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "送出 prompt 給指定 session"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "透過匯流排傳送訊息給其他 session"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "連線遠端 daemon 位址（例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "逾時毫秒數（預設 120000 = 2 分鐘）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "逾時毫秒數（預設 60000 = 60 秒）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "遠端認證 token（亦可透過環境變數 TERMADE_TOKEN 設定）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "遠端連線認證用的 token（未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "重播 event log 並印出歷史事件"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "關閉常駐的 daemon 與所有受管 agent 子處理程序"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "阻塞等待下一則發給自己的訊息"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "附加檔案或圖片到初始 prompt（可重複）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "附加檔案或圖片（可重複）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "附加給底層 agent 的命令列參數"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "頻道名稱（例如 backend；會廣播給所有同角色或訂閱者）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "顯示各 agent 帳號的額度（5 小時／7 天視窗與重置時間）"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "顯示目前環境變數指定的 session 資訊"
+msgstr ""
+
 #: src/cmd/session.rs
 msgid "{sid}  (非受管 session)"
 msgstr ""

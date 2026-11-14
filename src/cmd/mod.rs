@@ -4,6 +4,7 @@ pub(crate) mod bus;
 pub(crate) mod completions;
 pub(crate) mod cost;
 pub(crate) mod daemon;
+pub(crate) mod helptext;
 pub(crate) mod session;
 pub(crate) mod task;
 pub(crate) mod worktree;

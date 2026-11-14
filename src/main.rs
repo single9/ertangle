@@ -354,6 +354,9 @@ enum Cmd {
     Shutdown,
     /// 產生 shell 補全腳本並印到 stdout（bash / zsh / fish）
     Completions { shell: clap_complete::Shell },
+    /// 印出所有說明文字（供翻譯抽取用，不會啟動 daemon）
+    #[command(name = "__help-strings", hide = true)]
+    HelpStrings,
     /// 補全腳本用的查詢（不會啟動 daemon）
     #[command(name = "__complete", hide = true)]
     Complete {
@@ -376,7 +379,15 @@ fn init_language() {
 fn main() -> Result<()> {
     init_tracing();
     init_language();
-    let cli = Cli::parse();
+    let cli = {
+        use clap::{CommandFactory, FromArgMatches};
+        let cmd = if termade_core::i18n::current() == termade_core::i18n::Language::ZhTw {
+            Cli::command()
+        } else {
+            cmd::helptext::localize(Cli::command())
+        };
+        Cli::from_arg_matches(&cmd.get_matches()).unwrap_or_else(|e| e.exit())
+    };
     if let Some(r) = &cli.remote {
         std::env::set_var("TERMADE_REMOTE", r);
     }
@@ -510,6 +521,11 @@ fn main() -> Result<()> {
         Cmd::Shutdown => cmd_shutdown(),
         Cmd::Completions { shell } => cmd_completions(shell),
         Cmd::Complete { .. } => cmd_complete_sessions(),
+        Cmd::HelpStrings => {
+            use clap::CommandFactory;
+            cmd::helptext::dump(&Cli::command());
+            Ok(())
+        }
     }
 }
 

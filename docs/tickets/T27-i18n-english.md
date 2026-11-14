@@ -73,9 +73,13 @@ daemon 是共用的常駐行程。這張票先讓 daemon 回傳的訊息跟「da
 - 共約 610 條字串。TUI 由 Claude 改寫，daemon、adapter、core、CLI 由 agy 協作改寫，英文翻譯全部完成。
 - 已在 tmux 以 140×40 實際檢視英文介面：主畫面、說明面板、選單、設定面板、命令提示、spawn 選擇器。設定面板底部提示原本被截斷，已縮短英文。
 
+### CLI `--help`
+
+clap 的說明文字來自 doc comment，xtr 抽不到。做法：`termade __help-strings` (隱藏子命令) 走一遍命令樹，把所有 about／help 印成 `src/cmd/helptext/help_strings.rs` 的 `tr_noop!` 清單 (`make i18n-extract` 會先重新產生它，再交給 xtr)；執行時期 `helptext::localize` 把命令樹的說明逐條換成翻譯，沒有翻譯就保持原文。語言是繁體中文時不走這段。`msgmerge` 加 `--no-fuzzy-matching`，避免新字串被模糊比對到不相干的舊翻譯 (實際發生過：「列出所有 session」被比成「(no sessions)」)。
+
 ### 未完成、建議另開票
 
-- CLI 的 `--help` (clap 的 doc comment) 仍是中文。xtr 抽不到 doc comment，需要另外設計執行時期替換 `Command` 的 about／help。
+- clap 內建的文字 (自動產生的 `help` 子命令、`-h`／`-V` 說明、`Usage:`／`Options:` 標題) 仍是英文原樣，不經過 `.po`。
 - 刻意不翻的給 agent 看的文字：協作說明、交接簡報、審查註解 prompt、任務指派內文、附件內嵌文字。
 
 ## 驗收條件
