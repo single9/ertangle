@@ -20,6 +20,13 @@ fn test_multi_host_aggregation_and_routing() {
     std::env::set_var("TERMADE_SOCKET", &sock);
     std::env::set_var("XDG_STATE_HOME", root.join("state"));
     std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+    std::env::set_var(
+        "TERMADE_CLAUDE_BIN",
+        format!(
+            "{}/../termade-adapter/tests/fake_claude.sh",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+    );
     std::env::remove_var("TERMADE_TOKEN");
     std::env::remove_var("TERMADE_REMOTE");
 
@@ -113,9 +120,10 @@ fn test_multi_host_aggregation_and_routing() {
         .unwrap();
 
     let prompt_resp = loop {
-        let f = remote_client.recv().unwrap();
-        if matches!(f, Frame::Ok { .. }) {
-            break f;
+        match remote_client.recv().unwrap() {
+            f @ Frame::Ok { .. } => break f,
+            Frame::Error { message } => panic!("Prompt 被拒絕：{message}"),
+            _ => {}
         }
     };
     assert!(

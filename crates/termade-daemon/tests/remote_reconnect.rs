@@ -21,6 +21,13 @@ fn test_remote_auto_token_and_incremental_reconnect() {
     std::env::set_var("TERMADE_SOCKET", &sock);
     std::env::set_var("XDG_STATE_HOME", root.join("state"));
     std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+    std::env::set_var(
+        "TERMADE_CLAUDE_BIN",
+        format!(
+            "{}/../termade-adapter/tests/fake_claude.sh",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+    );
     std::env::remove_var("TERMADE_TOKEN");
     std::env::remove_var("TERMADE_REMOTE");
 

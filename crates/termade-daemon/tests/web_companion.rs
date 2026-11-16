@@ -75,6 +75,13 @@ fn test_web_companion_http_and_websocket() {
     std::env::set_var("TERMADE_SOCKET", &sock);
     std::env::set_var("XDG_STATE_HOME", root.join("state"));
     std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+    std::env::set_var(
+        "TERMADE_CLAUDE_BIN",
+        format!(
+            "{}/../termade-adapter/tests/fake_claude.sh",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+    );
     std::env::remove_var("TERMADE_TOKEN");
     std::env::remove_var("TERMADE_REMOTE");
 
@@ -344,6 +351,13 @@ fn test_web_companion_dynamic_control_and_config() {
     std::env::set_var("TERMADE_SOCKET", &sock);
     std::env::set_var("XDG_STATE_HOME", root.join("state"));
     std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+    std::env::set_var(
+        "TERMADE_CLAUDE_BIN",
+        format!(
+            "{}/../termade-adapter/tests/fake_claude.sh",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+    );
     std::env::remove_var("TERMADE_TOKEN");
     std::env::remove_var("TERMADE_REMOTE");
 
@@ -457,6 +471,13 @@ fn test_web_companion_custom_port() {
     std::env::set_var("TERMADE_SOCKET", &sock);
     std::env::set_var("XDG_STATE_HOME", root.join("state"));
     std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+    std::env::set_var(
+        "TERMADE_CLAUDE_BIN",
+        format!(
+            "{}/../termade-adapter/tests/fake_claude.sh",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+    );
     std::env::remove_var("TERMADE_TOKEN");
     std::env::remove_var("TERMADE_REMOTE");
 
