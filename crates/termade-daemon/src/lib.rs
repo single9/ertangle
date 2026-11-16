@@ -291,18 +291,24 @@ pub(crate) struct Inner {
     pub(crate) queues: HashMap<SessionId, VecDeque<QueuedPrompt>>,
 }
 
+pub(crate) struct WebServerState {
+    pub(crate) running: Arc<AtomicBool>,
+    pub(crate) addr: String,
+}
+
 pub(crate) struct Shared {
     pub(crate) inner: Mutex<Inner>,
     pub(crate) log_tx: Mutex<Sender<LogMsg>>,
     /// log 目前是否能正常寫入 (false 表示寫入失敗中)。
     pub(crate) log_ok: Arc<AtomicBool>,
-    pub(crate) auth_token: Option<String>,
+    pub(crate) auth_token: Mutex<Option<String>>,
     /// 本次 daemon 啟動的世代 id。
     pub(crate) epoch: String,
     /// 已經提醒過額度快滿的 agent (用量降回門檻以下才會重新提醒)。
     pub(crate) quota_warned: Mutex<std::collections::HashSet<String>>,
     /// 已經提醒過成本接近上限的 session (降回門檻以下或調高上限後才會重新提醒)。
     pub(crate) budget_warned: Mutex<std::collections::HashSet<SessionId>>,
+    pub(crate) web_server: Mutex<Option<WebServerState>>,
 }
 
 impl Shared {
@@ -362,10 +368,11 @@ impl Shared {
             }),
             log_tx: Mutex::new(log_tx),
             log_ok,
-            auth_token,
+            auth_token: Mutex::new(auth_token),
             epoch: new_id("ep"),
             quota_warned: Default::default(),
             budget_warned: Default::default(),
+            web_server: Mutex::new(None),
         });
 
         let weak_shared = Arc::downgrade(&shared);
@@ -762,8 +769,74 @@ impl Shared {
         lock(&self.inner).default_cwd.clone()
     }
 
+    pub(crate) fn auth_token(&self) -> Option<String> {
+        lock(&self.auth_token).clone()
+    }
+
+    pub(crate) fn ensure_auth_token(&self) -> Result<String> {
+        let mut tok_guard = lock(&self.auth_token);
+        if let Some(t) = tok_guard.as_ref() {
+            return Ok(t.clone());
+        }
+        let tok = crate::server::get_or_create_default_token()?;
+        *tok_guard = Some(tok.clone());
+        Ok(tok)
+    }
+
+    pub(crate) fn web_info(&self) -> String {
+        let web_lock = lock(&self.web_server);
+        if let Some(state) = web_lock.as_ref() {
+            if state.running.load(Ordering::Relaxed) {
+                let token = self.auth_token();
+                let token_hint = token.as_deref().unwrap_or("");
+                return format!("http://{}/#token={token_hint}", state.addr);
+            }
+        }
+        "off".to_string()
+    }
+
+    pub(crate) fn stop_web(&self) -> bool {
+        let mut web_lock = lock(&self.web_server);
+        if let Some(state) = web_lock.take() {
+            state.running.store(false, Ordering::Relaxed);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn start_web(
+        self: &Arc<Self>,
+        addr_spec: &str,
+        insecure_public: bool,
+    ) -> Result<String> {
+        let (resolved, _) = crate::server::resolve_web_addr(addr_spec)?;
+        let token = self.ensure_auth_token().ok();
+        crate::server::validate_listen(&resolved, token.is_some(), insecure_public)?;
+
+        let mut web_lock = lock(&self.web_server);
+        if let Some(state) = web_lock.as_ref() {
+            if state.running.load(Ordering::Relaxed) && state.addr == resolved {
+                let token_hint = token.as_deref().unwrap_or("");
+                return Ok(format!("http://{resolved}/#token={token_hint}"));
+            }
+            state.running.store(false, Ordering::Relaxed);
+        }
+
+        let running = Arc::new(AtomicBool::new(true));
+        crate::web::start_web_server(self.clone(), &resolved, running.clone())?;
+        *web_lock = Some(WebServerState {
+            running,
+            addr: resolved.clone(),
+        });
+        tracing::info!("termade 行動端隨身審核器已啟動：http://{resolved}");
+        let token_hint = token.as_deref().unwrap_or("");
+        Ok(format!("http://{resolved}/#token={token_hint}"))
+    }
+
     /// 關閉：先結束所有 agent 子處理程序，再移除 socket，最後離開。
     pub(crate) fn shutdown(self: &Arc<Self>) {
+        self.stop_web();
         let ctls: Vec<Arc<dyn AgentControl>> = {
             let mut inner = lock(&self.inner);
             inner.sessions.drain().map(|(_, e)| e.ctl).collect()

@@ -67,7 +67,9 @@ fn run_remote_auto_creates_token_and_persists() {
         listen: Some("127.0.0.1:0".into()),
         ..Default::default()
     };
-    let token = resolve_token(&opts).unwrap().expect("應自動產生 token");
+    let token = resolve_token(&opts, &crate::config::Config::default())
+        .unwrap()
+        .expect("應自動產生 token");
     let token_path = dir.join("termade").join("remote.token");
     assert!(token_path.exists(), "應建立 remote.token 檔案");
     let meta = fs::metadata(&token_path).unwrap();

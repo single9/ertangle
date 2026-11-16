@@ -276,6 +276,13 @@ pub enum Request {
         location: String,
         comment: String,
     },
+    /// 控制或查詢行動端 Web 隨身審核器。
+    WebControl {
+        #[serde(default)]
+        enabled: Option<bool>,
+        #[serde(default)]
+        addr: Option<String>,
+    },
     /// 要 daemon 關閉。
     Shutdown,
 }

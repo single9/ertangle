@@ -48,6 +48,11 @@ Status: done
 3. **終端機 QR Code 與連線資訊 (`src/cmd/daemon.rs`、TUI `:remote`)**：
    - 實作輕量 QR Code 矩陣編碼並以 Unicode 半格字元 (`▀`、`▄`、`█`、` `) 渲染至終端機 (或在 TUI 彈出 QR 視窗)。
    - 執行 `termade remote` (或在 TUI 輸入 `:remote`) 時，顯示 `http://<ip>:<port>/#token=<secret>` 並印出 QR Code，手機相機一掃即連。
+4. **TUI 設定與動態啟動控制 (`:settings`、`:web`、`Request::WebControl`)**：
+   - 在 `crates/termade-daemon/src/config.rs` 加入 `[web]` 設定結構 (`enabled`、`addr`)，只認全域設定以維護安全性。
+   - `crates/termade-tui/src/settings.rs` 新增 `Item::WebCompanion`，使用者可直接在 TUI 選單切換關閉、Tailscale、本機或公開位址，即時寫入 `config.toml`。
+   - 透過 `Request::WebControl` IPC 操作，執行中的 daemon 可動態啟動或停止 Web 伴侶服務，無需手動從 CLI 重啟 daemon。
+   - TUI 新增 `:web` 命令 (`:web on`、`:web off`、`:web qr`) 與 `Space w` 快速鍵，支援終端機 Unicode QR Code 彈窗。
 
 ## 驗收條件
 

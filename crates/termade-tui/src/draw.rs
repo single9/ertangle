@@ -110,6 +110,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         Mode::Pick => draw_picker(f, app),
         Mode::Help => draw_help(f, app),
         Mode::Settings => draw_settings(f, app),
+        Mode::Qr => draw_qr_modal(f, app),
         _ => {}
     }
 }
@@ -435,6 +436,70 @@ fn draw_settings_sub(
         ),
         area,
     );
+}
+
+/// 繪製行動端隨身審核器 QR Code 彈窗。
+pub(crate) fn draw_qr_modal(f: &mut TuiFrame, app: &App) {
+    let Some(modal) = app.qr_modal.as_ref() else {
+        return;
+    };
+    let full = f.area();
+    let qr_w = modal
+        .qr_lines
+        .first()
+        .map_or(30, |l| UnicodeWidthStr::width(l.as_str())) as u16;
+    let url_w = UnicodeWidthStr::width(modal.url.as_str()) as u16;
+    let w = qr_w
+        .max(url_w)
+        .saturating_add(6)
+        .clamp(36, 90)
+        .min(full.width);
+    let h = (modal.qr_lines.len() as u16 + 6).min(full.height);
+    let area = Rect::new(
+        full.x + full.width.saturating_sub(w) / 2,
+        full.y + full.height.saturating_sub(h) / 2,
+        w,
+        h,
+    );
+
+    f.render_widget(ratatui::widgets::Clear, area);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(Span::styled(
+            format!(" {} ", modal.title),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let mut lines = Vec::new();
+    lines.push(Line::from(vec![
+        Span::styled(tr!("連線網址："), Style::default().fg(Color::Gray)),
+        Span::styled(
+            modal.url.clone(),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::UNDERLINED),
+        ),
+    ]));
+    lines.push(Line::from(""));
+    for line in &modal.qr_lines {
+        lines.push(Line::from(Span::styled(
+            line.clone(),
+            Style::default().fg(Color::White),
+        )));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        tr!("按 Esc、Enter、Space 或 q 關閉"),
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let para = Paragraph::new(lines).alignment(ratatui::layout::Alignment::Center);
+    f.render_widget(para, inner);
 }
 
 /// 置中的清單選擇器 (agent／model)，第一列是過濾輸入。
@@ -1397,6 +1462,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         Mode::Normal => tr!(" 輸入 (i 輸入 · ? 說明) "),
         Mode::Help => tr!(" 說明 "),
         Mode::Settings => tr!(" 設定 "),
+        Mode::Qr => tr!(" QR Code "),
         Mode::Prompt => match app
             .selected_id()
             .and_then(|id| app.state.queues.get(&id).map(Vec::len))

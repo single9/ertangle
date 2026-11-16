@@ -1,6 +1,7 @@
 //! 伺服器：連線處理、遠端模式驗證與 daemon 主迴圈。
 
 use super::*;
+use crate::config::Config;
 use tr::tr;
 
 // ---------------------------------------------------------------------------
@@ -43,8 +44,7 @@ pub(crate) fn handle_conn(
             Ok(req) => {
                 if !authenticated {
                     if let Request::Hello { ref token, .. } = req {
-                        let ok = shared
-                            .auth_token
+                        let ok = crate::lock(&shared.auth_token)
                             .as_deref()
                             .is_some_and(|expected| token_matches(token.as_deref(), expected));
                         if ok {
@@ -309,8 +309,8 @@ pub fn get_client_token() -> Option<String> {
 }
 
 /// 決定 token 來源：`--token-file` > `--token` (棄用)> `TERMADE_TOKEN`。
-/// 若開啟遠端監聽 (`opts.listen.is_some()`) 且以上皆無，自動從 `remote.token` 讀取或建立。
-pub(crate) fn resolve_token(opts: &RemoteOptions) -> Result<Option<String>> {
+/// 若開啟遠端監聽 (`opts.listen.is_some()`) 或 Web 伴侶，且以上皆無，自動從 `remote.token` 讀取或建立。
+pub(crate) fn resolve_token(opts: &RemoteOptions, cfg: &Config) -> Result<Option<String>> {
     if let Some(p) = &opts.token_file {
         return read_token_file(p).map(Some);
     }
@@ -327,7 +327,7 @@ pub(crate) fn resolve_token(opts: &RemoteOptions) -> Result<Option<String>> {
             return Ok(Some(t));
         }
     }
-    if opts.listen.is_some() || opts.web.is_some() {
+    if opts.listen.is_some() || opts.web.is_some() || cfg.web.is_enabled() {
         let token = get_or_create_default_token()?;
         return Ok(Some(token));
     }
@@ -440,6 +440,10 @@ pub fn run_with_options(listen_tcp: Option<String>, token: Option<String>) -> Re
 
 /// 以前景方式跑 daemon，可選同時開放 TCP 遠端監聽 (M5，含安全檢查)。
 pub fn run_remote(opts: RemoteOptions) -> Result<()> {
+    let default_cwd = std::env::current_dir()?;
+    let policy = load_policy(&default_cwd);
+    let cfg = Config::load(&config_dir(), &default_cwd);
+
     let resolved_listen = if let Some(addr_spec) = &opts.listen {
         let (resolved, _) = resolve_listen_addr(addr_spec)?;
         Some(resolved)
@@ -447,14 +451,22 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
         None
     };
 
-    let resolved_web = if let Some(addr_spec) = &opts.web {
+    let web_spec = opts.web.as_deref().or_else(|| {
+        if cfg.web.is_enabled() {
+            Some(cfg.web.resolved_addr())
+        } else {
+            None
+        }
+    });
+
+    let resolved_web = if let Some(addr_spec) = web_spec {
         let (resolved, _) = resolve_web_addr(addr_spec)?;
         Some(resolved)
     } else {
         None
     };
 
-    let auth_token = resolve_token(&opts)?;
+    let auth_token = resolve_token(&opts, &cfg)?;
     if let Some(addr) = &resolved_listen {
         validate_listen(addr, auth_token.is_some(), opts.insecure_listen_public)?;
     }
@@ -488,8 +500,6 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
 
     fs::create_dir_all(state_dir())?;
 
-    let default_cwd = std::env::current_dir()?;
-    let policy = load_policy(&default_cwd);
     let shared = Shared::restore(&log_path(), policy, default_cwd, auth_token)?;
 
     // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽 (M5 遠端模式)。
@@ -527,18 +537,13 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
         });
     }
 
-    let running = Arc::new(AtomicBool::new(true));
-
-    // 若指定了 `--web <host:port>`，啟動行動端隨身審核器 HTTP/WebSocket。
+    // 若指定了 `--web <host:port>` 或設定檔啟用了 [web]，啟動行動端隨身審核器 HTTP/WebSocket。
     if let Some(web_addr) = resolved_web {
-        crate::web::start_web_server(shared.clone(), &web_addr, running.clone())?;
-        tracing::info!("termade 行動端隨身審核器已啟動：http://{web_addr}");
+        let url = shared.start_web(&web_addr, opts.insecure_listen_public)?;
+        tracing::info!("termade 行動端隨身審核器已啟動：{url}");
         eprintln!(
             "{}",
-            tr!(
-                "termade 行動端隨身審核器已啟動：http://{web_addr}",
-                web_addr = web_addr
-            )
+            tr!("termade 行動端隨身審核器已啟動：{url}", url = url)
         );
     }
 

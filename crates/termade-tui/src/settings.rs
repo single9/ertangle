@@ -9,6 +9,7 @@ use termade_daemon::config::Config;
 use tr::tr;
 
 use crate::app::{App, Mode};
+use crate::hosts::HostRouter;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Item {
@@ -21,10 +22,11 @@ pub(crate) enum Item {
     SpawnConfirm,
     SpawnMaxEffort,
     CollabInstructions,
+    WebCompanion,
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 10] = [
+pub(crate) const ITEMS: [Item; 11] = [
     Item::DefaultAgent,
     Item::DefaultPermission,
     Item::TargetAgent,
@@ -34,6 +36,7 @@ pub(crate) const ITEMS: [Item; 10] = [
     Item::SpawnConfirm,
     Item::SpawnMaxEffort,
     Item::CollabInstructions,
+    Item::WebCompanion,
     Item::Language,
 ];
 
@@ -130,6 +133,7 @@ impl Item {
             Item::SpawnConfirm => tr!("agent 建立高消耗 session 時"),
             Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
+            Item::WebCompanion => tr!("行動端 Web 隨身審核器 (Web Companion)"),
             Item::Language => tr!("介面語言"),
         }
     }
@@ -148,6 +152,19 @@ impl Item {
             Item::SpawnConfirm => c.agent_spawn.confirm().to_string(),
             Item::SpawnMaxEffort => c.agent_spawn.max_effort().to_string(),
             Item::CollabInstructions => on_off(c.collab.instructions != Some(false)),
+            Item::WebCompanion => {
+                if c.web.enabled == Some(false) {
+                    "".into()
+                } else {
+                    c.web.addr.clone().unwrap_or_else(|| {
+                        if c.web.enabled == Some(true) {
+                            "tailscale".into()
+                        } else {
+                            "".into()
+                        }
+                    })
+                }
+            }
             Item::Language => c.tui.language.clone().unwrap_or_default(),
         }
     }
@@ -209,6 +226,12 @@ impl Item {
                 .iter()
                 .map(|l| pair(l, l))
                 .collect(),
+            Item::WebCompanion => vec![
+                pair("", &tr!("關閉")),
+                pair("tailscale", &tr!("Tailscale (自動 IP:7421)")),
+                pair("127.0.0.1:7421", &tr!("本機 (127.0.0.1:7421)")),
+                pair("0.0.0.0:7421", &tr!("全網 (0.0.0.0:7421)")),
+            ],
             Item::Language => {
                 let mut v = vec![pair("", &tr!("自動 (依 LANG 環境變數)"))];
                 v.extend(
@@ -247,7 +270,7 @@ fn on_off(b: bool) -> String {
 }
 
 /// 把目前列切到下一個 (`dir = 1`)或上一個 (`-1`)值並寫入設定檔。
-fn cycle(app: &mut App, dir: isize) {
+fn cycle(app: &mut App, writer: Option<&mut HostRouter>, dir: isize) {
     let Some(s) = app.settings.as_mut() else {
         return;
     };
@@ -257,11 +280,11 @@ fn cycle(app: &mut App, dir: isize) {
     let idx = choices.iter().position(|(v, _)| *v == cur).unwrap_or(0) as isize;
     let next = (idx + dir).rem_euclid(choices.len() as isize) as usize;
     let value = choices[next].0.clone();
-    apply_value(app, value);
+    apply_value(app, writer, value);
 }
 
 /// 把目前選取的項目設成 `value` 並寫入設定檔。
-fn apply_value(app: &mut App, value: String) {
+fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
     let Some(s) = app.settings.as_mut() else {
         return;
     };
@@ -272,6 +295,52 @@ fn apply_value(app: &mut App, value: String) {
         return;
     }
     let path = config_path();
+    if item == Item::WebCompanion {
+        let (enabled_val, addr_val) = if value.is_empty() {
+            (
+                Some(termade_daemon::config::TomlValue::Boolean(false)),
+                None,
+            )
+        } else {
+            (
+                Some(termade_daemon::config::TomlValue::Boolean(true)),
+                Some(termade_daemon::config::TomlValue::String(value.clone())),
+            )
+        };
+        let _ = Config::set_toml(&path, &["web"], "enabled", enabled_val);
+        let _ = Config::set_toml(&path, &["web"], "addr", addr_val);
+        s.cfg = Config::load_file(&path);
+        if let Some(w) = writer {
+            if value.is_empty() {
+                let _ = crate::send(
+                    w,
+                    &termade_protocol::Request::WebControl {
+                        enabled: Some(false),
+                        addr: None,
+                    },
+                );
+                app.status = tr!(
+                    "已關閉行動端隨身審核器並儲存至 {path}",
+                    path = path.display()
+                );
+            } else {
+                let _ = crate::send(
+                    w,
+                    &termade_protocol::Request::WebControl {
+                        enabled: Some(true),
+                        addr: Some(value.clone()),
+                    },
+                );
+                app.status = tr!(
+                    "已啟動行動端隨身審核器並儲存至 {path}",
+                    path = path.display()
+                );
+            }
+        } else {
+            app.status = tr!("已儲存到 {path}", path = path.display());
+        }
+        return;
+    }
     let (table, key): (&[&str], &str) = match item {
         Item::DefaultAgent => (&["defaults"], "agent"),
         Item::DefaultPermission => (&["defaults"], "permission"),
@@ -279,6 +348,7 @@ fn apply_value(app: &mut App, value: String) {
         Item::SpawnConfirm => (&["agent_spawn"], "confirm"),
         Item::SpawnMaxEffort => (&["agent_spawn"], "max_effort"),
         Item::CollabInstructions => (&["collab"], "instructions"),
+        Item::WebCompanion => return,
         Item::Language => (&["tui"], "language"),
         Item::Model => (&["agents", ""], "model"),
         Item::Effort => (&["agents", ""], "effort"),
@@ -334,7 +404,7 @@ impl Settings {
     }
 }
 
-fn handle_sub_key(app: &mut App, key: KeyEvent) {
+fn handle_sub_key(app: &mut App, writer: Option<&mut HostRouter>, key: KeyEvent) {
     let Some(s) = app.settings.as_mut() else {
         return;
     };
@@ -359,7 +429,7 @@ fn handle_sub_key(app: &mut App, key: KeyEvent) {
             let pick = s.sub_visible().get(cursor).map(|(v, _)| v.clone());
             s.sub = None;
             if let Some(v) = pick {
-                apply_value(app, v);
+                apply_value(app, writer, v);
             }
         }
         _ => {}
@@ -384,9 +454,9 @@ fn open_sub(app: &mut App) {
     });
 }
 
-pub(crate) fn handle_key(app: &mut App, key: KeyEvent) {
+pub(crate) fn handle_key(app: &mut App, writer: Option<&mut HostRouter>, key: KeyEvent) {
     if app.settings.as_ref().is_some_and(|s| s.sub.is_some()) {
-        return handle_sub_key(app, key);
+        return handle_sub_key(app, writer, key);
     }
     match key.code {
         KeyCode::Esc | KeyCode::Char('q') => {
@@ -410,13 +480,13 @@ pub(crate) fn handle_key(app: &mut App, key: KeyEvent) {
                 .as_ref()
                 .is_some_and(|s| ITEMS[s.cursor].is_toggle());
             if toggle {
-                cycle(app, 1)
+                cycle(app, writer, 1)
             } else {
                 open_sub(app)
             }
         }
-        KeyCode::Right | KeyCode::Char('l') => cycle(app, 1),
-        KeyCode::Left | KeyCode::Char('h') => cycle(app, -1),
+        KeyCode::Right | KeyCode::Char('l') => cycle(app, writer, 1),
+        KeyCode::Left | KeyCode::Char('h') => cycle(app, writer, -1),
         _ => {}
     }
 }

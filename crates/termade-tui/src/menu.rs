@@ -51,6 +51,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     Act::Cmd("settings"),
                 ),
                 it(
+                    'w',
+                    termade_core::tr_noop!("行動端隨身審核器 (網址與 QR Code)"),
+                    Act::Cmd("web qr"),
+                ),
+                it(
                     'y',
                     termade_core::tr_noop!("複製目前畫面"),
                     Act::Cmd("copy"),

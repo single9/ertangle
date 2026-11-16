@@ -1326,6 +1326,22 @@ msgstr ""
 msgid "daemon 關閉中"
 msgstr ""
 
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "行動端隨身審核器已啟動：{url}"
+msgstr ""
+
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "啟動 Web 隨身審核器失敗：{e}"
+msgstr ""
+
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "已停止行動端隨身審核器"
+msgstr ""
+
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "行動端隨身審核器未在執行"
+msgstr ""
+
 #: crates/termade-daemon/src/quota_watch.rs
 msgid "token 用量已達 {used}/{limit} ({pct}%)，接近上限"
 msgstr ""
@@ -1467,7 +1483,7 @@ msgid "遠端認證 Token 檔案：{path}"
 msgstr ""
 
 #: crates/termade-daemon/src/server.rs
-msgid "termade 行動端隨身審核器已啟動：http://{web_addr}"
+msgid "termade 行動端隨身審核器已啟動：{url}"
 msgstr ""
 
 #: crates/termade-daemon/src/web.rs
@@ -1755,6 +1771,10 @@ msgid "取消最後一則排隊並放回輸入框"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
+msgid "[on|off|status|qr|<addr>]  設定與啟動行動端 Web 隨身審核器"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
 msgid "顯示行動端隨身審核器網址與連線資訊"
 msgstr ""
 
@@ -1867,7 +1887,19 @@ msgid "用法：:notify [on|off|test]"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "行動端隨身審核器網址：{url}"
+msgid "已關閉行動端隨身審核器並儲存至設定檔"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "正在啟動行動端隨身審核器…"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "行動端隨身審核器 QR Code"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "行動端隨身審核器網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -1979,7 +2011,7 @@ msgid "model／effort 預設是針對某個 agent；先選取一個 session"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "可設定：agent、permission、model、effort"
+msgid "可設定：agent、permission、model、effort、web"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2015,6 +2047,10 @@ msgid "選取 session 的 agent 的預設 effort"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
+msgid "行動端 Web 隨身審核器 (off／tailscale／位址)"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
 msgid "寫到 .termade/config.toml"
 msgstr ""
 
@@ -2028,6 +2064,22 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "完全不問"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/settings.rs
+msgid "關閉"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "Tailscale 自動偵測"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "本機位址"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "全網位址"
 msgstr ""
 
 #: crates/termade-tui/src/diff.rs
@@ -2068,6 +2120,14 @@ msgstr ""
 
 #: crates/termade-tui/src/draw.rs
 msgid "(載入中…)"
+msgstr ""
+
+#: crates/termade-tui/src/draw.rs
+msgid "連線網址："
+msgstr ""
+
+#: crates/termade-tui/src/draw.rs
+msgid "按 Esc、Enter、Space 或 q 關閉"
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2179,6 +2239,10 @@ msgid " 設定 "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
+msgid " QR Code "
+msgstr ""
+
+#: crates/termade-tui/src/draw.rs
 msgid " prompt (@ 附檔 · Enter 送出 · Alt-Enter 排隊) "
 msgstr ""
 
@@ -2264,6 +2328,14 @@ msgstr ""
 
 #: crates/termade-tui/src/help.rs
 msgid "這個說明面板"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "開啟設定面板 (含 Web 隨身審核器)"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "顯示行動端隨身審核器網址與 QR Code"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
@@ -2583,6 +2655,10 @@ msgid "設定 (預設 model／effort／權限…)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
+msgid "行動端隨身審核器 (網址與 QR Code)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
 msgid "複製目前畫面"
 msgstr ""
 
@@ -2872,6 +2948,10 @@ msgid "把協作說明注入每個 agent"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "行動端 Web 隨身審核器 (Web Companion)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
 msgid "介面語言"
 msgstr ""
 
@@ -2920,10 +3000,30 @@ msgid "不問 (effort 調降、model 拒絕)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "Tailscale (自動 IP:7421)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "本機 (127.0.0.1:7421)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "全網 (0.0.0.0:7421)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
 msgid "自動 (依 LANG 環境變數)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "已關閉行動端隨身審核器並儲存至 {path}"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "已啟動行動端隨身審核器並儲存至 {path}"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
 msgid "已儲存到 {path}"
 msgstr ""
 

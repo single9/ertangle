@@ -263,6 +263,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         termade_core::tr_noop!("[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出"),
     ),
     ("unqueue", termade_core::tr_noop!("取消最後一則排隊並放回輸入框")),
+    ("web", termade_core::tr_noop!("[on|off|status|qr|<addr>]  設定與啟動行動端 Web 隨身審核器")),
     ("remote", termade_core::tr_noop!("顯示行動端隨身審核器網址與連線資訊")),
     ("bus", termade_core::tr_noop!("顯示／隱藏 Bus 浮層")),
     ("task", termade_core::tr_noop!("<標題>  新增任務")),
@@ -550,7 +551,58 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         },
         "queue" => queue_command(app, writer, rest)?,
         "unqueue" => unqueue(app, writer)?,
-        "remote" => {
+        "remote" | "web" => {
+            let cmd_arg = rest.trim();
+            let config_p = termade_daemon::config_dir().join("config.toml");
+            if cmd_arg == "off" {
+                send(
+                    writer,
+                    &Request::WebControl {
+                        enabled: Some(false),
+                        addr: None,
+                    },
+                )?;
+                let _ = termade_daemon::config::Config::set_toml(
+                    &config_p,
+                    &["web"],
+                    "enabled",
+                    Some(termade_daemon::config::TomlValue::Boolean(false)),
+                );
+                let _ = termade_daemon::config::Config::set_toml(&config_p, &["web"], "addr", None);
+                app.status = tr!("已關閉行動端隨身審核器並儲存至設定檔");
+                return Ok(());
+            }
+
+            if cmd_arg == "on" || cmd_arg.starts_with("on ") {
+                let spec = cmd_arg.strip_prefix("on").unwrap().trim();
+                let addr = if spec.is_empty() {
+                    "tailscale".to_string()
+                } else {
+                    spec.to_string()
+                };
+                send(
+                    writer,
+                    &Request::WebControl {
+                        enabled: Some(true),
+                        addr: Some(addr.clone()),
+                    },
+                )?;
+                let _ = termade_daemon::config::Config::set_toml(
+                    &config_p,
+                    &["web"],
+                    "enabled",
+                    Some(termade_daemon::config::TomlValue::Boolean(true)),
+                );
+                let _ = termade_daemon::config::Config::set_toml(
+                    &config_p,
+                    &["web"],
+                    "addr",
+                    Some(termade_daemon::config::TomlValue::String(addr)),
+                );
+                app.status = tr!("正在啟動行動端隨身審核器…");
+                return Ok(());
+            }
+
             let token_path = termade_daemon::default_token_path();
             let token = if token_path.exists() {
                 termade_daemon::read_token_file(&token_path).ok()
@@ -566,7 +618,25 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             } else {
                 format!("http://127.0.0.1:7421/#token={token_hint}")
             };
-            app.status = tr!("行動端隨身審核器網址：{url}", url = url);
+
+            if cmd_arg == "qr" || cmd_arg == "show" {
+                if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&url) {
+                    let rendered = qr.render_terminal();
+                    let lines: Vec<String> = rendered.lines().map(|s| s.to_string()).collect();
+                    app.qr_modal = Some(crate::app::QrModal {
+                        title: tr!("行動端隨身審核器 QR Code"),
+                        url: url.clone(),
+                        qr_lines: lines,
+                    });
+                    app.mode = crate::app::Mode::Qr;
+                    return Ok(());
+                }
+            }
+
+            app.status = tr!(
+                "行動端隨身審核器網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)",
+                url = url
+            );
         }
         "host" => {
             let target = rest.trim();
@@ -1034,8 +1104,32 @@ fn set_default_command(app: &mut App, rest: &str) {
             }
             termade_daemon::config::Config::set_value(&path, &["agents", &agent], key, &value)
         }
+        "web" => {
+            if value.is_empty() || value == "off" {
+                let _ = termade_daemon::config::Config::set_toml(
+                    &path,
+                    &["web"],
+                    "enabled",
+                    Some(termade_daemon::config::TomlValue::Boolean(false)),
+                );
+                termade_daemon::config::Config::set_toml(&path, &["web"], "addr", None)
+            } else {
+                let _ = termade_daemon::config::Config::set_toml(
+                    &path,
+                    &["web"],
+                    "enabled",
+                    Some(termade_daemon::config::TomlValue::Boolean(true)),
+                );
+                termade_daemon::config::Config::set_toml(
+                    &path,
+                    &["web"],
+                    "addr",
+                    Some(termade_daemon::config::TomlValue::String(value.clone())),
+                )
+            }
+        }
         _ => {
-            app.status = tr!("可設定：agent、permission、model、effort");
+            app.status = tr!("可設定：agent、permission、model、effort、web");
             return;
         }
     };
@@ -1101,6 +1195,10 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                         ("permission".into(), tr!("預設權限 (ask／auto／bypass)")),
                         ("model".into(), tr!("選取 session 的 agent 的預設 model")),
                         ("effort".into(), tr!("選取 session 的 agent 的預設 effort")),
+                        (
+                            "web".into(),
+                            tr!("行動端 Web 隨身審核器 (off／tailscale／位址)"),
+                        ),
                     ];
                     if !input.contains("--repo") {
                         v.push(("--repo".into(), tr!("寫到 .termade/config.toml")));
@@ -1121,6 +1219,15 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                 .collect(),
                 Some("model") if words.len() == 1 => models(&kind),
                 Some("effort") if words.len() == 1 => efforts(),
+                Some("web") if words.len() == 1 => [
+                    ("off", tr!("關閉")),
+                    ("tailscale", tr!("Tailscale 自動偵測")),
+                    ("127.0.0.1:7421", tr!("本機位址")),
+                    ("0.0.0.0:7421", tr!("全網位址")),
+                ]
+                .into_iter()
+                .map(|(a, d)| (a.to_string(), d))
+                .collect(),
                 _ => Vec::new(),
             }
         }

@@ -232,6 +232,33 @@ impl RemoteHostCfg {
     }
 }
 
+/// 行動端 Web 隨身審核器設定 ([web])。
+/// 為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct WebCfg {
+    pub enabled: Option<bool>,
+    pub addr: Option<String>,
+}
+
+impl WebCfg {
+    pub fn is_enabled(&self) -> bool {
+        match (self.enabled, self.addr.as_deref()) {
+            (Some(false), _) => false,
+            (Some(true), _) => true,
+            (None, Some(a)) => !a.is_empty() && a != "off",
+            (None, None) => false,
+        }
+    }
+
+    pub fn resolved_addr(&self) -> &str {
+        match self.addr.as_deref() {
+            Some(a) if !a.is_empty() && a != "off" => a,
+            _ => "tailscale",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
@@ -243,6 +270,8 @@ pub struct Config {
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
     pub tui: TuiCfg,
+    /// 行動端 Web 隨身審核器設定；為安全起見僅讀取全域設定檔。
+    pub web: WebCfg,
     /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
     pub remotes: BTreeMap<String, RemoteHostCfg>,
 }
@@ -567,6 +596,38 @@ model = "haiku"
         assert_eq!(r.env, vec![("A".to_string(), "1".to_string())]);
         let r = c.resolve(&AgentKind::Codex, &Role::Coordinator, None, None, &[], None);
         assert_eq!(r.model, None);
+    }
+
+    #[test]
+    fn web_cfg_parsing_and_defaults() {
+        let toml_src = r#"
+[web]
+enabled = true
+addr = "127.0.0.1:7421"
+"#;
+        let c = Config::parse(toml_src).unwrap();
+        assert!(c.web.is_enabled());
+        assert_eq!(c.web.resolved_addr(), "127.0.0.1:7421");
+
+        let toml_off = r#"
+[web]
+enabled = false
+addr = "tailscale"
+"#;
+        let c2 = Config::parse(toml_off).unwrap();
+        assert!(!c2.web.is_enabled());
+
+        let toml_default = "";
+        let c3 = Config::parse(toml_default).unwrap();
+        assert!(!c3.web.is_enabled());
+        assert_eq!(c3.web.resolved_addr(), "tailscale");
+
+        let toml_implicit = r#"
+[web]
+addr = "tailscale"
+"#;
+        let c4 = Config::parse(toml_implicit).unwrap();
+        assert!(c4.web.is_enabled());
     }
 
     #[test]

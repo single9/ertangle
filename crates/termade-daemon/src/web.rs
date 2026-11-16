@@ -346,7 +346,8 @@ fn serve_file(
         }
     }
 
-    if let Some(expected) = shared.auth_token.as_deref() {
+    let expected_token = shared.auth_token();
+    if let Some(expected) = expected_token.as_deref() {
         if !token_matches(auth_token.as_deref(), expected) {
             let resp = "HTTP/1.1 401 Unauthorized\r\n\
                         Content-Type: text/plain; charset=utf-8\r\n\
@@ -528,7 +529,7 @@ fn handle_ws_session(
 
     // 接收迴圈 (WebSocket Client -> Server)
     // 遠端連線必須經過 Token 認證
-    let require_auth = shared.auth_token.is_some();
+    let require_auth = shared.auth_token().is_some();
     let mut authenticated = !require_auth;
 
     loop {
@@ -549,7 +550,7 @@ fn handle_ws_session(
                         if !authenticated {
                             if let Request::Hello { ref token, .. } = req {
                                 let ok = shared
-                                    .auth_token
+                                    .auth_token()
                                     .as_deref()
                                     .is_some_and(|exp| token_matches(token.as_deref(), exp));
                                 if ok {

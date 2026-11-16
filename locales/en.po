@@ -1331,6 +1331,22 @@ msgstr "Remote authentication failed: token mismatch"
 msgid "daemon 關閉中"
 msgstr "daemon shutting down"
 
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "行動端隨身審核器已啟動：{url}"
+msgstr "Mobile companion started: {url}"
+
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "啟動 Web 隨身審核器失敗：{e}"
+msgstr "Failed to start mobile companion: {e}"
+
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "已停止行動端隨身審核器"
+msgstr "Mobile companion stopped"
+
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "行動端隨身審核器未在執行"
+msgstr "Mobile companion is not running"
+
 #: crates/termade-daemon/src/quota_watch.rs
 msgid "token 用量已達 {used}/{limit} ({pct}%)，接近上限"
 msgstr "token usage reached {used}/{limit} ({pct}%), nearing the limit"
@@ -1472,8 +1488,8 @@ msgid "遠端認證 Token 檔案：{path}"
 msgstr "Remote auth token file: {path}"
 
 #: crates/termade-daemon/src/server.rs
-msgid "termade 行動端隨身審核器已啟動：http://{web_addr}"
-msgstr "termade mobile companion started: http://{web_addr}"
+msgid "termade 行動端隨身審核器已啟動：{url}"
+msgstr "termade mobile companion started: {url}"
 
 #: crates/termade-daemon/src/web.rs
 msgid "綁定 Web 伴侶服務位址 {addr} 失敗"
@@ -1760,6 +1776,10 @@ msgid "取消最後一則排隊並放回輸入框"
 msgstr "Remove the last queued prompt and put it back in the input box"
 
 #: crates/termade-tui/src/commands.rs
+msgid "[on|off|status|qr|<addr>]  設定與啟動行動端 Web 隨身審核器"
+msgstr "[on|off|status|qr|<addr>]  Configure and start the mobile web companion"
+
+#: crates/termade-tui/src/commands.rs
 msgid "顯示行動端隨身審核器網址與連線資訊"
 msgstr "Show mobile companion URL and connection info"
 
@@ -1872,8 +1892,20 @@ msgid "用法：:notify [on|off|test]"
 msgstr "Usage: :notify [on|off|test]"
 
 #: crates/termade-tui/src/commands.rs
-msgid "行動端隨身審核器網址：{url}"
-msgstr "Mobile companion URL: {url}"
+msgid "已關閉行動端隨身審核器並儲存至設定檔"
+msgstr "Disabled mobile companion and saved to config file"
+
+#: crates/termade-tui/src/commands.rs
+msgid "正在啟動行動端隨身審核器…"
+msgstr "Starting mobile companion…"
+
+#: crates/termade-tui/src/commands.rs
+msgid "行動端隨身審核器 QR Code"
+msgstr "Mobile Companion QR Code"
+
+#: crates/termade-tui/src/commands.rs
+msgid "行動端隨身審核器網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)"
+msgstr "Mobile companion URL: {url} (type :web qr to open QR Code, or :web on|off to control)"
 
 #: crates/termade-tui/src/commands.rs
 msgid "主機篩選：{target}"
@@ -1984,8 +2016,8 @@ msgid "model／effort 預設是針對某個 agent；先選取一個 session"
 msgstr "model/effort defaults are per agent; select a session first"
 
 #: crates/termade-tui/src/commands.rs
-msgid "可設定：agent、permission、model、effort"
-msgstr "Settable keys: agent, permission, model, effort"
+msgid "可設定：agent、permission、model、effort、web"
+msgstr "Settable keys: agent, permission, model, effort, web"
 
 #: crates/termade-tui/src/commands.rs
 msgid "已移除 {key} 預設 ({path})"
@@ -2020,6 +2052,10 @@ msgid "選取 session 的 agent 的預設 effort"
 msgstr "Default effort for the selected session's agent"
 
 #: crates/termade-tui/src/commands.rs
+msgid "行動端 Web 隨身審核器 (off／tailscale／位址)"
+msgstr "Mobile web companion (off/tailscale/address)"
+
+#: crates/termade-tui/src/commands.rs
 msgid "寫到 .termade/config.toml"
 msgstr "Write to .termade/config.toml"
 
@@ -2034,6 +2070,22 @@ msgstr "Approve routine actions automatically"
 #: crates/termade-tui/src/commands.rs
 msgid "完全不問"
 msgstr "Never ask"
+
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/settings.rs
+msgid "關閉"
+msgstr "Off"
+
+#: crates/termade-tui/src/commands.rs
+msgid "Tailscale 自動偵測"
+msgstr "Tailscale (auto-detect)"
+
+#: crates/termade-tui/src/commands.rs
+msgid "本機位址"
+msgstr "Local address"
+
+#: crates/termade-tui/src/commands.rs
+msgid "全網位址"
+msgstr "Public address"
 
 #: crates/termade-tui/src/diff.rs
 msgid "沒有更多 hunk"
@@ -2074,6 +2126,14 @@ msgstr " {item}{loading} · Enter select · Esc back "
 #: crates/termade-tui/src/draw.rs
 msgid "(載入中…)"
 msgstr " (loading…)"
+
+#: crates/termade-tui/src/draw.rs
+msgid "連線網址："
+msgstr "URL: "
+
+#: crates/termade-tui/src/draw.rs
+msgid "按 Esc、Enter、Space 或 q 關閉"
+msgstr "Press Esc, Enter, Space or q to close"
 
 #: crates/termade-tui/src/draw.rs
 msgid "  載入可用 model 中…"
@@ -2184,6 +2244,10 @@ msgid " 設定 "
 msgstr " Settings "
 
 #: crates/termade-tui/src/draw.rs
+msgid " QR Code "
+msgstr " QR Code "
+
+#: crates/termade-tui/src/draw.rs
 msgid " prompt (@ 附檔 · Enter 送出 · Alt-Enter 排隊) "
 msgstr " prompt (@ attach · Enter send · Alt-Enter queue) "
 
@@ -2270,6 +2334,14 @@ msgstr "Jump to a session by keyword"
 #: crates/termade-tui/src/help.rs
 msgid "這個說明面板"
 msgstr "This help panel"
+
+#: crates/termade-tui/src/help.rs
+msgid "開啟設定面板 (含 Web 隨身審核器)"
+msgstr "Open settings panel (including web companion)"
+
+#: crates/termade-tui/src/help.rs
+msgid "顯示行動端隨身審核器網址與 QR Code"
+msgstr "Show mobile companion URL and QR Code"
 
 #: crates/termade-tui/src/help.rs
 msgid "離開 (保留 daemon)／關閉 daemon 並離開"
@@ -2588,6 +2660,10 @@ msgid "設定 (預設 model／effort／權限…)"
 msgstr "Settings (default model / effort / permission…)"
 
 #: crates/termade-tui/src/menu.rs
+msgid "行動端隨身審核器 (網址與 QR Code)"
+msgstr "Mobile companion (URL and QR Code)"
+
+#: crates/termade-tui/src/menu.rs
 msgid "複製目前畫面"
 msgstr "Copy current screen"
 
@@ -2877,6 +2953,10 @@ msgid "把協作說明注入每個 agent"
 msgstr "Inject collaboration instructions into every agent"
 
 #: crates/termade-tui/src/settings.rs
+msgid "行動端 Web 隨身審核器 (Web Companion)"
+msgstr "Mobile web companion (Web Companion)"
+
+#: crates/termade-tui/src/settings.rs
 msgid "介面語言"
 msgstr "Interface language"
 
@@ -2925,8 +3005,28 @@ msgid "不問 (effort 調降、model 拒絕)"
 msgstr "Never ask (lower effort, reject model)"
 
 #: crates/termade-tui/src/settings.rs
+msgid "Tailscale (自動 IP:7421)"
+msgstr "Tailscale (auto IP:7421)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "本機 (127.0.0.1:7421)"
+msgstr "Local (127.0.0.1:7421)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "全網 (0.0.0.0:7421)"
+msgstr "Public (0.0.0.0:7421)"
+
+#: crates/termade-tui/src/settings.rs
 msgid "自動 (依 LANG 環境變數)"
 msgstr "Auto (from LANG environment variable)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "已關閉行動端隨身審核器並儲存至 {path}"
+msgstr "Disabled mobile companion and saved to {path}"
+
+#: crates/termade-tui/src/settings.rs
+msgid "已啟動行動端隨身審核器並儲存至 {path}"
+msgstr "Started mobile companion and saved to {path}"
 
 #: crates/termade-tui/src/settings.rs
 msgid "已儲存到 {path}"
@@ -3015,6 +3115,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "termade 行動端隨身審核器已啟動：http://{web_addr}"
+#~ msgstr "termade mobile companion started: http://{web_addr}"
+
+#~ msgid "行動端隨身審核器網址：{url}"
+#~ msgstr "Mobile companion URL: {url}"
+
+#~ msgid "可設定：agent、permission、model、effort"
+#~ msgstr "Settable keys: agent, permission, model, effort"
 
 #~ msgid "--listen {addr} 不是 loopback 位址；TCP 為明文傳輸。建議綁 127.0.0.1 並用 SSH 轉發；若確定要公開，加上 --insecure-listen-public"
 #~ msgstr "--listen {addr} is not a loopback address; TCP is plaintext. Bind to 127.0.0.1 and forward over SSH, or add --insecure-listen-public if you really want to expose it"

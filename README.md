@@ -182,8 +182,8 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 ### 8. 行動端隨身審核器與 Web 介面 (Mobile Companion PWA, T30)
 
 - **隨身審核、買咖啡不中斷**：
-  - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。啟動 `termade daemon --web tailscale` 或 `--web 0.0.0.0:7421`。
-  - 終端機內建 **Unicode QR Code**，手機打開相機一掃即可在瀏覽器開啟專屬 PWA 介面。
+  - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。可在 TUI 設定面板 (`:settings` 或 `Space ,`) 中直接切換啟用，或輸入 `:web on [位址]` (亦可從 CLI 啟動 `termade daemon --web tailscale`)。
+  - 終端機內建 **Unicode QR Code**，在 TUI 輸入 `:web qr` 或按 `Space w`，手機打開相機一掃即可在瀏覽器開啟專屬 PWA 介面。
 - **零相依原生 HTTP / WebSocket**：
   - Daemon 內部以純 Rust 同步網路實作，不引入 Node.js 或額外 async 框架，維持單一執行檔與極低記憶體開銷。
 - **App 級大拇指原生設計**：
@@ -219,6 +219,8 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | `j` / `k` 或 `↑` / `↓` | 移動選取 Session；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
 | `[` / `]` | 快速跳至上一個 / 下一個 Session |
 | `Ctrl-K` | **Jump-Anywhere**：依關鍵字模糊搜尋並跳轉 Session |
+| `Space ,` (或 `:settings`) | 開啟**設定面板** (即時切換預設 Agent、Model、Effort、Worktree、Web 伴侶服務等) |
+| `Space w` (或 `:web qr`) | 彈出**行動端隨身審核器網址與 QR Code** 彈窗 (手機掃描即開即用) |
 | `q` / `Q` | `q` 關閉 TUI (Daemon 與 Agent 續跑)；`Q` 關閉 Daemon (等同 `:shutdown`) |
 
 #### 逐字稿、搜尋與複製
@@ -344,6 +346,11 @@ layout = "two"                    # 預設版面："two" | "three" | "tabs"
 notify = ["bell", "command"]      # 通知方式："bell" | "osc9" | "command" (可複選)
 notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # 短於此秒數的回合完成不觸發通知
+
+[web]
+# 行動端隨身審核器設定 (只認全域設定；亦可在 TUI :settings 中隨時切換)
+enabled = true                    # 是否啟用
+addr = "tailscale"                # 監聽位址："tailscale" (自動偵測 IP:7421) | "127.0.0.1:7421" | "0.0.0.0:7421"
 
 [remotes]
 # 跨主機聚合設定 (T29)

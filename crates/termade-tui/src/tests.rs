@@ -1825,32 +1825,49 @@ fn settings_panel_cycles_values_and_writes_config() {
     assert!(text.contains("預設權限") && text.contains("獨立worktree"));
 
     // 第 2 列「預設權限」：未設定 → ask
-    crate::settings::handle_key(&mut app, key(KeyCode::Down));
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Down));
     // Enter 開清單，打字過濾後 Enter 選定
-    crate::settings::handle_key(&mut app, key(KeyCode::Enter));
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
     assert!(app.settings.as_ref().unwrap().sub.is_some());
     let t: String = render(&mut app).split_whitespace().collect();
     assert!(t.contains("過濾"), "{t}");
     for c in "ask".chars() {
-        crate::settings::handle_key(&mut app, key(KeyCode::Char(c)));
+        crate::settings::handle_key(&mut app, None, key(KeyCode::Char(c)));
     }
-    crate::settings::handle_key(&mut app, key(KeyCode::Enter));
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
     assert!(app.settings.as_ref().unwrap().sub.is_none());
     // 第 6 列「worktree」：預設 on → off (寫成布林)
     for _ in 0..4 {
-        crate::settings::handle_key(&mut app, key(KeyCode::Down));
+        crate::settings::handle_key(&mut app, None, key(KeyCode::Down));
     }
-    crate::settings::handle_key(&mut app, key(KeyCode::Char(' ')));
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Char(' ')));
 
     let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
     assert_eq!(cfg.defaults.permission.as_deref(), Some("ask"));
     assert!(!cfg.agent_spawn.worktree());
 
     // 再切一次回 on；Esc 關閉
-    crate::settings::handle_key(&mut app, key(KeyCode::Left));
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Left));
     let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
     assert!(cfg.agent_spawn.worktree());
-    crate::settings::handle_key(&mut app, key(KeyCode::Esc));
+    // 測試 WebCompanion 項目：改為 127.0.0.1:7421
+    let web_idx = crate::settings::ITEMS
+        .iter()
+        .position(|i| *i == crate::settings::Item::WebCompanion)
+        .unwrap();
+    app.settings.as_mut().unwrap().cursor = web_idx;
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
+    assert!(app.settings.as_ref().unwrap().sub.is_some());
+    for c in "127".chars() {
+        crate::settings::handle_key(&mut app, None, key(KeyCode::Char(c)));
+    }
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
+
+    let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
+    assert_eq!(cfg.web.enabled, Some(true));
+    assert_eq!(cfg.web.addr.as_deref(), Some("127.0.0.1:7421"));
+
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Esc));
     assert_eq!(app.mode, Mode::Normal);
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -62,8 +62,11 @@ fn read_ws_server_text_frame<R: Read>(reader: &mut R) -> std::io::Result<String>
     Ok(String::from_utf8(payload).unwrap())
 }
 
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn test_web_companion_http_and_websocket() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let root = std::env::temp_dir().join(format!("termade-webtest-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
@@ -325,6 +328,118 @@ fn test_web_companion_http_and_websocket() {
             }
         }
         assert!(got_snap, "WebSocket 應收到 Snapshot 回應");
+    }
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_web_companion_dynamic_control_and_config() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let root = std::env::temp_dir().join(format!("termade-webdyn-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+
+    let sock = root.join("daemon.sock");
+    std::env::set_var("TERMADE_SOCKET", &sock);
+    std::env::set_var("XDG_STATE_HOME", root.join("state"));
+    std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+    std::env::remove_var("TERMADE_TOKEN");
+    std::env::remove_var("TERMADE_REMOTE");
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let web_port = listener.local_addr().unwrap().port();
+    drop(listener);
+
+    // 啟動 daemon (未傳入 --web)
+    let d_sock = sock.clone();
+    let _daemon_handle = std::thread::spawn(move || {
+        let _ = termade_daemon::run_remote(RemoteOptions {
+            listen: None,
+            web: None,
+            token: None,
+            token_file: None,
+            insecure_listen_public: false,
+        });
+    });
+
+    let start = Instant::now();
+    while !d_sock.exists() {
+        if start.elapsed() > Duration::from_secs(3) {
+            panic!("daemon 啟動逾時");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    {
+        let mut client = Client::connect().unwrap();
+        client
+            .send(&Request::Hello {
+                epoch: None,
+                client: "test".into(),
+                since: None,
+                token: None,
+            })
+            .unwrap();
+        let ready = client.recv().unwrap();
+        assert!(matches!(ready, Frame::Ready { .. }));
+        let snap = client.recv().unwrap();
+        assert!(matches!(snap, Frame::Snapshot { .. }));
+
+        // 1. 查詢 Web 狀態，目前應為 off
+        client
+            .send(&Request::WebControl {
+                enabled: None,
+                addr: None,
+            })
+            .unwrap();
+        let frame = client.recv().unwrap();
+        if let Frame::Ok { note } = frame {
+            assert_eq!(note.as_deref(), Some("off"));
+        } else {
+            panic!("預期 Frame::Ok，實際為 {:?}", frame);
+        }
+
+        // 2. 動態啟動 Web 隨身審核器
+        let addr = format!("127.0.0.1:{web_port}");
+        client
+            .send(&Request::WebControl {
+                enabled: Some(true),
+                addr: Some(addr.clone()),
+            })
+            .unwrap();
+        let frame = client.recv().unwrap();
+        if let Frame::Ok { note } = frame {
+            let note_str = note.unwrap();
+            assert!(
+                note_str.contains(&format!("http://{addr}/#token=")),
+                "note 應包含正確的 URL，實際為: {note_str}"
+            );
+        } else {
+            panic!("預期 Frame::Ok，實際為 {:?}", frame);
+        }
+
+        // 3. 測試 HTTP GET 是否可正常取得首頁
+        std::thread::sleep(Duration::from_millis(50));
+        let mut http_stream = TcpStream::connect(&addr).unwrap();
+        http_stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .unwrap();
+        http_stream.flush().unwrap();
+        let mut reader = BufReader::new(http_stream);
+        let mut status_line = String::new();
+        reader.read_line(&mut status_line).unwrap();
+        assert!(status_line.contains("200 OK"));
+
+        // 4. 動態停止 Web 隨身審核器
+        client
+            .send(&Request::WebControl {
+                enabled: Some(false),
+                addr: None,
+            })
+            .unwrap();
+        let frame = client.recv().unwrap();
+        assert!(matches!(frame, Frame::Ok { .. }));
     }
 
     let _ = fs::remove_dir_all(&root);

@@ -33,6 +33,15 @@ pub(crate) enum Mode {
     Search,
     /// 設定面板 (`:settings`)。
     Settings,
+    /// 行動端隨身審核器 QR Code 彈窗。
+    Qr,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct QrModal {
+    pub(crate) title: String,
+    pub(crate) url: String,
+    pub(crate) qr_lines: Vec<String>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -247,6 +256,7 @@ pub(crate) struct App {
     /// 進行中的搜尋 (只在 `Mode::Search` 期間存在)與上一次的查詢 (供預填)。
     pub(crate) search: Option<crate::search::Search>,
     pub(crate) last_search: String,
+    pub(crate) qr_modal: Option<QrModal>,
     pub(crate) should_quit: bool,
 }
 
@@ -333,6 +343,7 @@ impl App {
             task_rows: Vec::new(),
             search: None,
             last_search: String::new(),
+            qr_modal: None,
             should_quit: false,
         }
     }

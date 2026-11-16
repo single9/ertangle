@@ -182,8 +182,8 @@ Every structured agent session is automatically injected with a stdio MCP server
 ### 8. Mobile Companion Web Interface & Terminal QR Code (PWA, T30)
 
 - **Mobile Review On The Go**:
-  - Step away from your desk without losing review flow. Start with `termade daemon --web tailscale` or `--web 0.0.0.0:7421`.
-  - A clean **Unicode QR Code** is displayed in your terminal for instant camera scanning on mobile phones.
+  - Step away from your desk without losing review flow. Enable it directly from the TUI settings panel (`:settings` or `Space ,`) or by typing `:web on [addr]` (or via CLI `termade daemon --web tailscale`).
+  - A clean **Unicode QR Code** can be displayed in your terminal with `:web qr` or `Space w` for instant camera scanning on mobile phones.
 - **Zero-Dependency Native HTTP / WebSocket**:
   - Built directly into the single binary with pure Rust standard networking—no Node.js, npm, or heavy async dependencies required.
 - **Thumb-Friendly Native Mobile PWA**:
@@ -219,6 +219,8 @@ Every structured agent session is automatically injected with a stdio MCP server
 | `j` / `k` or `↑` / `↓` | Select previous/next session; move line cursor in Diff; select task in Tasks view |
 | `[` / `]` | Jump to previous / next session |
 | `Ctrl-K` | **Jump-Anywhere**: Fuzzy search and jump to any session |
+| `Space ,` (or `:settings`) | Open **Settings panel** (toggle default Agent, Model, Effort, Worktree, Web Companion, etc.) |
+| `Space w` (or `:web qr`) | Display **Mobile Companion URL & QR Code** popup (scan and connect instantly) |
 | `q` / `Q` | `q` exit TUI (daemon and agents keep running); `Q` stop daemon (same as `:shutdown`) |
 
 #### Transcript, Search & Clipboard
@@ -343,6 +345,11 @@ layout = "two"                    # Default layout: "two" | "three" | "tabs"
 notify = ["bell", "command"]      # Notification methods: "bell" | "osc9" | "command"
 notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # Turns shorter than this threshold do not notify
+
+[web]
+# Mobile companion settings (global only; can also be toggled in TUI :settings)
+enabled = true                    # Enable mobile companion
+addr = "tailscale"                # Listen address: "tailscale" (auto-detect IP:7421) | "127.0.0.1:7421" | "0.0.0.0:7421"
 
 [remotes]
 # Multi-host aggregation (T29)

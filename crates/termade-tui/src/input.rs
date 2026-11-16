@@ -27,7 +27,17 @@ pub(crate) fn handle_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) 
             return Ok(());
         }
         Mode::Settings => {
-            crate::settings::handle_key(app, key);
+            crate::settings::handle_key(app, Some(writer), key);
+            return Ok(());
+        }
+        Mode::Qr => {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char(' ') => {
+                    app.mode = Mode::Normal;
+                    app.qr_modal = None;
+                }
+                _ => {}
+            }
             return Ok(());
         }
         Mode::Pick => return crate::menu::handle_pick_key(app, writer, key),
@@ -538,7 +548,8 @@ pub(crate) fn handle_input_mode(
                 | Mode::Pick
                 | Mode::Help
                 | Mode::Search
-                | Mode::Settings => {}
+                | Mode::Settings
+                | Mode::Qr => {}
             }
         }
         _ => {}
