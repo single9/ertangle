@@ -13,13 +13,13 @@
       --bg: #090a0f;
       --card-bg: #13151f;
       --card-hover: #1a1c29;
+      --card-selected: #182338;
       --border: #232636;
       --border-subtle: #191b26;
       --text: #f1f3f9;
       --text-dim: #82899d;
       --text-muted: #52576b;
       --primary: #3b82f6;
-      --primary-hover: #2563eb;
       --cyan: #06b6d4;
       --green: #10b981;
       --yellow: #f59e0b;
@@ -46,9 +46,9 @@
       position: relative;
     }
 
-    /* 頂部應用程式導覽列 */
+    /* 頂部導覽列 */
     header {
-      background: rgba(14, 16, 24, 0.92);
+      background: rgba(14, 16, 24, 0.94);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border);
@@ -91,6 +91,9 @@
       font-size: 11px;
       color: var(--text-dim);
       font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .header-actions {
       display: flex;
@@ -120,7 +123,7 @@
       color: var(--cyan);
     }
 
-    /* 搜尋列 */
+    /* 逐字稿即時搜尋列 */
     #search-bar-wrap {
       background: #11131c;
       border-bottom: 1px solid var(--border);
@@ -321,6 +324,16 @@
       color: var(--cyan);
       font-weight: 600;
     }
+    .queue-info-pill {
+      background: #2b1f05;
+      border: 1px solid var(--yellow);
+      color: var(--yellow);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+    }
     .composer-row {
       display: flex;
       align-items: flex-end;
@@ -517,6 +530,7 @@
       display: flex;
       flex-direction: column;
       gap: 2px;
+      flex: 1;
     }
     .session-name {
       font-weight: 600;
@@ -532,12 +546,12 @@
       font-family: var(--font-mono);
     }
     .session-actions-btn {
-      padding: 4px 8px;
-      background: transparent;
+      padding: 5px 10px;
+      background: var(--card-hover);
       border: 1px solid var(--border);
       border-radius: 6px;
       color: var(--text-dim);
-      font-size: 11px;
+      font-size: 12px;
       cursor: pointer;
     }
 
@@ -643,7 +657,7 @@
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
     }
     .form-label {
       font-size: 12px;
@@ -662,16 +676,82 @@
       outline: none;
     }
     .sheet-input:focus { border-color: var(--cyan); }
-    .sheet-select {
+
+    /* 自訂分段選取器 (取代原生下拉選單) */
+    .segmented-grid {
+      display: flex;
+      gap: 6px;
+      background: #0d0e14;
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .segmented-grid::-webkit-scrollbar { display: none; }
+    .seg-btn {
+      flex: 1;
+      min-width: 60px;
+      padding: 6px 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .seg-btn.active {
+      background: #1e2538;
+      color: var(--cyan);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    /* 自訂模型選擇清單 (點選即選取，無需手動輸入) */
+    .model-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 180px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .model-card {
       background: #0d0e14;
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 9px 12px;
-      font-family: var(--font-sans);
-      font-size: 13px;
-      color: var(--text);
-      outline: none;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
     }
+    .model-card.active {
+      border-color: var(--cyan);
+      background: #121c2b;
+    }
+    .model-id-text {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--text);
+    }
+    .model-desc-text {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .model-check {
+      color: var(--cyan);
+      font-size: 14px;
+      display: none;
+    }
+    .model-card.active .model-check { display: block; }
+
     .sheet-btn-row {
       display: flex;
       gap: 10px;
@@ -773,9 +853,9 @@
           </div>
           <div id="urgent-detail" class="urgent-desc"></div>
           <div class="btn-row">
-            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow</button>
-            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always</button>
-            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny</button>
+            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
+            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
+            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
           </div>
         </div>
 
@@ -793,8 +873,13 @@
         <!-- 底部輸入列 -->
         <div id="chat-composer">
           <div class="composer-toolbar">
-            <div id="queue-toggle" class="toggle-pill" onclick="toggleQueue()">
-              <span>佇列模式</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div id="queue-toggle" class="toggle-pill" onclick="toggleQueue()">
+                <span>佇列模式</span>
+              </div>
+              <div id="queue-count-pill" class="queue-info-pill" onclick="openQueueManageSheet()">
+                0 則排隊中
+              </div>
             </div>
             <span id="composer-status" style="color:var(--text-dim); font-size:11px; font-family:var(--font-mono);"></span>
           </div>
@@ -892,110 +977,112 @@
     <!-- 懸浮提示 Toast -->
     <div id="toast"></div>
 
-    <!-- 抽屜 1：建立新 Session (完整參數支援) -->
+    <!-- 抽屜 1：建立新 Session (全面採用自訂互動元件，無原生下拉選單) -->
     <div id="sheet-new-session" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
         <div class="sheet-title">建立新 Agent Session</div>
 
-        <div class="form-group">
-          <label class="form-label">自訂標籤 (Label，選填)</label>
-          <input id="new-label" class="sheet-input" placeholder="例如：worker/frontend、tester">
-        </div>
-
+        <!-- 1. 自訂 Agent 種類分段切換器 -->
         <div class="form-group">
           <label class="form-label">Agent 種類 (Kind)</label>
-          <select id="new-kind" class="sheet-select" onchange="onKindChanged(this.value)">
-            <option value="opencode">opencode</option>
-            <option value="claude">claude (Claude Code)</option>
-            <option value="antigravity">antigravity (Google Antigravity)</option>
-            <option value="codex">codex (OpenAI Codex)</option>
-          </select>
+          <div class="segmented-grid" id="new-kind-segments">
+            <button class="seg-btn active" onclick="setNewKind('opencode', this)">opencode</button>
+            <button class="seg-btn" onclick="setNewKind('claude', this)">claude</button>
+            <button class="seg-btn" onclick="setNewKind('antigravity', this)">antigravity</button>
+            <button class="seg-btn" onclick="setNewKind('codex', this)">codex</button>
+          </div>
         </div>
 
+        <!-- 2. 自訂模型選擇清單 (點選即套用，完全無需手動打字) -->
         <div class="form-group">
-          <label class="form-label">模型 (Model)</label>
-          <input id="new-model" class="sheet-input" placeholder="可手動輸入或點選下方推薦" list="model-suggestions">
-          <datalist id="model-suggestions">
-            <option value="claude-3-7-sonnet"></option>
-            <option value="claude-3-5-sonnet"></option>
-            <option value="gemini-2.5-pro"></option>
-            <option value="gemini-2.5-flash"></option>
-            <option value="o3-mini"></option>
-            <option value="gpt-4o"></option>
-          </datalist>
-          <div id="model-chips" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label class="form-label">選擇模型 (點擊直接選取)</label>
+            <span style="font-size:11px; color:var(--cyan); cursor:pointer;" onclick="toggleCustomModelInput()">自訂模型名稱…</span>
+          </div>
+          <div id="new-model-list" class="model-card-list"></div>
+          <input id="new-model-custom" class="sheet-input" style="display:none; margin-top:4px;" placeholder="手動輸入模型 ID (例如 ollama/qwen:7b)">
         </div>
 
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">推理強度 (Effort)</label>
-            <select id="new-effort" class="sheet-select">
-              <option value="">預設 (依設定檔)</option>
-              <option value="low">low (低)</option>
-              <option value="medium">medium (中)</option>
-              <option value="high">high (高)</option>
-              <option value="max">max (最高)</option>
-            </select>
-          </div>
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">權限政策 (Permission)</label>
-            <select id="new-permission" class="sheet-select">
-              <option value="auto">auto (自動核准安全操作)</option>
-              <option value="ask">ask (逐項問人)</option>
-              <option value="bypass">bypass (完全跳過)</option>
-            </select>
+        <!-- 3. 自訂推理強度 (Effort) 分段按鈕 -->
+        <div class="form-group">
+          <label class="form-label">推理強度 (Effort)</label>
+          <div class="segmented-grid" id="new-effort-segments">
+            <button class="seg-btn active" onclick="setNewEffort('', this)">預設</button>
+            <button class="seg-btn" onclick="setNewEffort('low', this)">low</button>
+            <button class="seg-btn" onclick="setNewEffort('medium', this)">medium</button>
+            <button class="seg-btn" onclick="setNewEffort('high', this)">high</button>
+            <button class="seg-btn" onclick="setNewEffort('max', this)">max</button>
           </div>
         </div>
 
+        <!-- 4. 自訂權限政策 (Permission) 分段按鈕 -->
+        <div class="form-group">
+          <label class="form-label">權限政策 (Permission)</label>
+          <div class="segmented-grid" id="new-permission-segments">
+            <button class="seg-btn active" onclick="setNewPermission('auto', this)">auto (自動核准)</button>
+            <button class="seg-btn" onclick="setNewPermission('ask', this)">ask (逐項問人)</button>
+            <button class="seg-btn" onclick="setNewPermission('bypass', this)">bypass (略過)</button>
+          </div>
+        </div>
+
+        <!-- 5. 標籤、預算與 Worktree -->
         <div style="display:flex; gap:10px;">
           <div class="form-group" style="flex:1;">
-            <label class="form-label">成本預算上限 (USD)</label>
-            <input id="new-budget" class="sheet-input" type="number" step="0.5" placeholder="無上限 (例如 3.00)">
+            <label class="form-label">自訂標籤 (選填)</label>
+            <input id="new-label" class="sheet-input" placeholder="例如：worker/ui">
           </div>
-          <div class="form-group" style="flex:1; justify-content:center;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer; margin-top:16px;">
-              <input id="new-worktree" type="checkbox"> 獨立 Git Worktree 分支
-            </label>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">預算上限 (USD)</label>
+            <input id="new-budget" class="sheet-input" type="number" step="0.5" placeholder="無上限 (例 3.00)">
           </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; margin:4px 0;">
+          <input id="new-worktree" type="checkbox" style="width:16px; height:16px; cursor:pointer;">
+          <label for="new-worktree" style="font-size:13px; color:var(--text); cursor:pointer;">在獨立的 Git Worktree 分支執行</label>
         </div>
 
         <div class="form-group">
           <label class="form-label">初始 Prompt</label>
-          <textarea id="new-prompt" class="sheet-input" rows="3" placeholder="描述指派給此 Agent 的初始工作…"></textarea>
+          <textarea id="new-prompt" class="sheet-input" rows="3" placeholder="請描述想要指派給此 Agent 的工作任務…"></textarea>
         </div>
 
         <div class="sheet-btn-row">
           <button class="btn-action btn-secondary" onclick="closeSheet('sheet-new-session')">取消</button>
-          <button class="btn-action" onclick="submitDetailedSession()">立即啟動</button>
+          <button class="btn-action" onclick="submitDetailedSession()">立即啟動 Session</button>
         </div>
       </div>
     </div>
 
-    <!-- 抽屜 2：Session 控制與設定 (管理面板) -->
+    <!-- 抽屜 2：Session 控制與管理面板 (鏡像 TUI Space Menu) -->
     <div id="sheet-session-manage" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
-        <div class="sheet-title" id="manage-session-title">Session 設定與操作</div>
+        <div class="sheet-title" id="manage-session-title">Session 控制面板</div>
 
+        <!-- 執行期切換模型 -->
         <div class="form-group">
-          <label class="form-label">切換 Model (執行期動態切換)</label>
-          <input id="manage-model" class="sheet-input" placeholder="輸入新模型名稱">
+          <label class="form-label">執行期切換模型 (點擊直接切換)</label>
+          <div id="manage-model-list" class="model-card-list"></div>
+          <input id="manage-model-custom" class="sheet-input" style="display:none; margin-top:4px;" placeholder="手動輸入自訂模型">
         </div>
+
+        <!-- 執行期切換 Effort -->
         <div class="form-group">
-          <label class="form-label">切換推理強度 (Effort)</label>
-          <select id="manage-effort" class="sheet-select">
-            <option value="">維持現狀</option>
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-            <option value="max">max</option>
-          </select>
+          <label class="form-label">推理強度 (Effort)</label>
+          <div class="segmented-grid" id="manage-effort-segments">
+            <button class="seg-btn" onclick="setManageEffort('low', this)">low</button>
+            <button class="seg-btn" onclick="setManageEffort('medium', this)">medium</button>
+            <button class="seg-btn" onclick="setManageEffort('high', this)">high</button>
+            <button class="seg-btn" onclick="setManageEffort('max', this)">max</button>
+          </div>
         </div>
-        <button class="btn-pill btn-secondary" style="padding:8px 0;" onclick="submitSwitchModel()">套用模型與推理變更</button>
+        <button class="btn-pill btn-secondary" style="padding:9px 0;" onclick="submitSwitchModel()">套用模型與推理強度變更</button>
 
         <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
 
+        <!-- 調高成本預算 -->
         <div class="form-group">
           <label class="form-label">調高成本預算上限 (USD)</label>
           <div style="display:flex; gap:8px;">
@@ -1006,31 +1093,46 @@
 
         <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
 
+        <!-- 工作交接 (Handoff) -->
         <div class="form-group">
-          <label class="form-label">工作交接 (Handoff 轉交給另一 Agent)</label>
-          <div style="display:flex; gap:8px; margin-bottom:6px;">
-            <select id="handoff-kind" class="sheet-select" style="flex:1;">
-              <option value="claude">轉給 claude</option>
-              <option value="antigravity">轉給 antigravity</option>
-              <option value="codex">轉給 codex</option>
-              <option value="opencode">轉給 opencode</option>
-            </select>
+          <label class="form-label">工作交接 (Handoff 轉交給其他 Agent)</label>
+          <div class="segmented-grid" id="handoff-kind-segments" style="margin-bottom:6px;">
+            <button class="seg-btn active" onclick="setHandoffKind('claude', this)">claude</button>
+            <button class="seg-btn" onclick="setHandoffKind('antigravity', this)">antigravity</button>
+            <button class="seg-btn" onclick="setHandoffKind('codex', this)">codex</button>
+            <button class="seg-btn" onclick="setHandoffKind('opencode', this)">opencode</button>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input id="handoff-note" class="sheet-input" placeholder="交接補充說明 (選填)">
             <button class="btn-pill btn-secondary" style="flex:none; padding:0 12px;" onclick="submitHandoff()">執行交接</button>
           </div>
-          <input id="handoff-note" class="sheet-input" placeholder="交接說明給接手者 (選填)">
         </div>
 
         <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
 
+        <!-- 休眠、喚醒、Kill、Remove -->
         <div style="display:flex; gap:8px;">
           <button class="btn-pill btn-secondary" style="flex:1;" onclick="toggleSleepCurrent()">休眠 (Sleep) / 喚醒 (Wake)</button>
-          <button class="btn-pill btn-danger-outline" style="flex:1;" onclick="killCurrentSession()">結束處理程序 (Kill)</button>
+          <button class="btn-pill btn-danger-outline" style="flex:1;" onclick="killCurrentSession()">強制結束 (Kill)</button>
         </div>
-        <button class="btn-pill btn-danger-outline" style="padding:8px 0;" onclick="removeCurrentSession()">從清單中移除 (Remove)</button>
+        <button class="btn-pill btn-danger-outline" style="padding:8px 0;" onclick="removeCurrentSession()">從清單中移除此 Session</button>
       </div>
     </div>
 
-    <!-- 抽屜 3：新增任務 -->
+    <!-- 抽屜 3：排隊佇列檢視與清空 -->
+    <div id="sheet-queue-manage" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">待送 Prompt 佇列</div>
+        <div id="queue-items-container" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto;"></div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-queue-manage')">關閉</button>
+          <button class="btn-action btn-danger-outline" onclick="submitClearQueue()">清空待送佇列</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜 4：新增任務 -->
     <div id="sheet-new-task" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
@@ -1050,7 +1152,7 @@
       </div>
     </div>
 
-    <!-- 抽屜 4：行內審查註解 -->
+    <!-- 抽屜 5：行內審查註解 -->
     <div id="sheet-review-comment" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
@@ -1067,7 +1169,7 @@
       </div>
     </div>
 
-    <!-- 抽屜 5：建立 GitHub PR -->
+    <!-- 抽屜 6：建立 GitHub PR -->
     <div id="sheet-create-pr" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
@@ -1108,6 +1210,7 @@
       pending_permissions: {},
       transcripts: {},
       quotas: {},
+      queues: {},
       seq: 0
     };
     let activeSession = null;
@@ -1117,6 +1220,54 @@
     let queueMode = false;
     let taskFilter = "all";
     let pendingReviewLine = null;
+
+    // 建立新 Session 的狀態快照
+    let newSessionState = {
+      kind: "opencode",
+      model: "",
+      effort: "",
+      permission: "auto"
+    };
+
+    // Session 管理面板的暫存狀態
+    let manageSessionState = {
+      model: "",
+      effort: "",
+      handoffKind: "claude"
+    };
+
+    // 完整模型型錄 (依照 TUI menu.rs 定義，點選即選取，無需手動輸入)
+    const MODEL_CATALOG = {
+      claude: [
+        { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 或環境變數預設" },
+        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet", desc: "最新頂級推理與複雜程式碼生成" },
+        { id: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet", desc: "穩定高水準軟體工程模型" },
+        { id: "claude-3-5-haiku", label: "Claude 3.5 Haiku", desc: "極速輕量、低延遲快速回應" },
+        { id: "claude-3-opus", label: "Claude 3 Opus", desc: "深度文字與脈絡理解" },
+        { id: "fable", label: "最新 Fable", desc: "指向最新 Fable 系列別名" }
+      ],
+      antigravity: [
+        { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 預設模型" },
+        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "超大百萬 Context 視窗與深層推理" },
+        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", desc: "極速回應兼顧多視窗分析" },
+        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet (AGY)", desc: "透過 Antigravity 代理呼叫" },
+        { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", desc: "次世代輕量多模態模型" }
+      ],
+      codex: [
+        { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 預設" },
+        { id: "o3-mini", label: "o3-mini", desc: "針對數學與編程專用推理模型" },
+        { id: "o1", label: "o1", desc: "通用高智慧複雜問題拆解模型" },
+        { id: "gpt-4o", label: "GPT-4o", desc: "全能多模態旗艦模型" },
+        { id: "gpt-4o-mini", label: "GPT-4o mini", desc: "經濟型快速輕量模型" }
+      ],
+      opencode: [
+        { id: "", label: "預設 (依設定檔)", desc: "使用系統或環境變數預設" },
+        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet", desc: "頂級 Anthropic 模型" },
+        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "Google 旗艦長上下文模型" },
+        { id: "deepseek-chat", label: "DeepSeek V3", desc: "高性價比通用開源模型" },
+        { id: "deepseek-reasoner", label: "DeepSeek R1", desc: "深度長鏈條思維推理模型" }
+      ]
+    };
 
     // Toast 浮層
     function showToast(msg, isError = false) {
@@ -1173,6 +1324,7 @@
       } else if (op === "snapshot") {
         state = frame.state;
         if (!state.transcripts) state.transcripts = {};
+        if (!state.queues) state.queues = {};
         updateAllViews();
       } else if (op === "record") {
         applyRecord(frame.record);
@@ -1213,6 +1365,7 @@
       } else if (kind === "session_removed") {
         delete state.sessions[event.session];
         delete state.transcripts[event.session];
+        delete state.queues[event.session];
         if (activeSession === event.session) {
           activeSession = Object.keys(state.sessions)[0] || null;
         }
@@ -1321,9 +1474,9 @@
             <div style="color:var(--yellow); font-weight:600; margin-bottom:4px;">${escapeHtml(req.title)}</div>
             <div style="font-family:var(--font-mono); font-size:12px; margin-bottom:8px;">${escapeHtml(req.detail)}</div>
             <div class="btn-row">
-              <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow</button>
-              <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always</button>
-              <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny</button>
+              <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
+              <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
+              <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
             </div>
           </div>
         `;
@@ -1342,6 +1495,8 @@
       // 4. Session 狀態與接續提示
       const resumeStrip = document.getElementById("resume-strip");
       const cancelBtn = document.getElementById("btn-cancel");
+      const queuePill = document.getElementById("queue-count-pill");
+
       if (current) {
         const st = (current.status || "").toLowerCase();
         if (st === "failed" || st === "exited") {
@@ -1351,9 +1506,19 @@
           resumeStrip.style.display = "none";
           cancelBtn.style.display = (st === "busy") ? "flex" : "none";
         }
+
+        // 佇列排隊數量提示
+        const qItems = (state.queues && state.queues[activeSession]) ? state.queues[activeSession] : [];
+        if (qItems.length > 0) {
+          queuePill.style.display = "block";
+          queuePill.innerText = `${qItems.length} 則排隊中`;
+        } else {
+          queuePill.style.display = "none";
+        }
       } else {
         resumeStrip.style.display = "none";
         cancelBtn.style.display = "none";
+        queuePill.style.display = "none";
       }
 
       // 5. 任務板渲染
@@ -1639,39 +1804,85 @@
       showToast("已送出建立 PR 請求…");
     }
 
-    // 抽屜控制
+    // 抽屜控制輔助
     function openSheet(id) { document.getElementById(id).classList.add("open"); }
     function closeSheet(id) { document.getElementById(id).classList.remove("open"); }
     function closeSheetOnBackdrop(e, el) { if (e.target === el) el.classList.remove("open"); }
 
-    // 建立新 Session 抽屜控制與模型晶片推薦
-    const modelPresets = {
-      claude: ["claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus"],
-      antigravity: ["gemini-2.5-pro", "gemini-2.5-flash", "claude-3-7-sonnet"],
-      codex: ["o3-mini", "o1", "gpt-4o"],
-      opencode: ["default", "claude-3-7-sonnet", "gemini-2.5-pro"]
-    };
-
-    function onKindChanged(kind) {
-      const chipsContainer = document.getElementById("model-chips");
-      chipsContainer.innerHTML = "";
-      const models = modelPresets[kind] || [];
-      models.forEach(m => {
-        const chip = document.createElement("span");
-        chip.style.cssText = "font-size:11px; font-family:var(--font-mono); background:var(--card-bg); border:1px solid var(--border); padding:2px 8px; border-radius:10px; cursor:pointer;";
-        chip.innerText = m;
-        chip.onclick = () => { document.getElementById("new-model").value = m; };
-        chipsContainer.appendChild(chip);
+    // 建立新 Session 抽屜自訂控制元件
+    function setNewKind(kind, btnEl) {
+      newSessionState.kind = kind;
+      document.querySelectorAll("#new-kind-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+      renderModelCardList("new-model-list", kind, newSessionState.model, (chosenModel) => {
+        newSessionState.model = chosenModel;
+        document.getElementById("new-model-custom").style.display = "none";
       });
+    }
+
+    function setNewEffort(effort, btnEl) {
+      newSessionState.effort = effort;
+      document.querySelectorAll("#new-effort-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    function setNewPermission(perm, btnEl) {
+      newSessionState.permission = perm;
+      document.querySelectorAll("#new-permission-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    function renderModelCardList(containerId, kind, currentVal, onSelect) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+      const list = MODEL_CATALOG[kind] || MODEL_CATALOG.opencode;
+
+      list.forEach(item => {
+        const card = document.createElement("div");
+        card.className = `model-card ${item.id === currentVal ? "active" : ""}`;
+        card.innerHTML = `
+          <div>
+            <div class="model-id-text">${escapeHtml(item.label)}</div>
+            <div class="model-desc-text">${escapeHtml(item.desc)}</div>
+          </div>
+          <div class="model-check">✓</div>
+        `;
+        card.onclick = () => {
+          container.querySelectorAll(".model-card").forEach(c => c.classList.remove("active"));
+          card.classList.add("active");
+          onSelect(item.id);
+        };
+        container.appendChild(card);
+      });
+    }
+
+    function toggleCustomModelInput() {
+      const input = document.getElementById("new-model-custom");
+      const isShown = input.style.display === "block";
+      input.style.display = isShown ? "none" : "block";
+      if (!isShown) {
+        input.focus();
+        input.oninput = () => { newSessionState.model = input.value.trim(); };
+      }
     }
 
     function openNewSessionSheet() {
       document.getElementById("new-label").value = "";
-      document.getElementById("new-model").value = "";
       document.getElementById("new-budget").value = "";
       document.getElementById("new-prompt").value = "";
       document.getElementById("new-worktree").checked = false;
-      onKindChanged(document.getElementById("new-kind").value);
+      document.getElementById("new-model-custom").style.display = "none";
+      newSessionState.kind = "opencode";
+      newSessionState.model = "";
+      newSessionState.effort = "";
+      newSessionState.permission = "auto";
+
+      // 預設選中 opencode
+      const segs = document.querySelectorAll("#new-kind-segments .seg-btn");
+      segs.forEach(b => b.classList.remove("active"));
+      if (segs[0]) segs[0].classList.add("active");
+
+      renderModelCardList("new-model-list", "opencode", "", (m) => { newSessionState.model = m; });
       openSheet("sheet-new-session");
     }
 
@@ -1679,22 +1890,18 @@
       const promptText = document.getElementById("new-prompt").value.trim();
       if (!promptText || !ws) return;
 
-      const kind = document.getElementById("new-kind").value;
       const label = document.getElementById("new-label").value.trim() || null;
-      const model = document.getElementById("new-model").value.trim() || null;
-      const effort = document.getElementById("new-effort").value || null;
-      const permission = document.getElementById("new-permission").value || null;
       const budgetVal = parseFloat(document.getElementById("new-budget").value);
       const budgetUsd = !isNaN(budgetVal) && budgetVal > 0 ? budgetVal : null;
       const worktree = document.getElementById("new-worktree").checked;
 
       ws.send(JSON.stringify({
         op: "spawn",
-        kind: kind,
+        kind: newSessionState.kind,
         label: label,
-        model: model,
-        effort: effort,
-        permission: permission,
+        model: newSessionState.model || null,
+        effort: newSessionState.effort || null,
+        permission: newSessionState.permission || null,
         budget_usd: budgetUsd,
         worktree: worktree,
         prompt: promptText,
@@ -1705,7 +1912,7 @@
       showToast("已建立新 Agent Session…");
     }
 
-    // Session 詳情面板操作
+    // Session 詳情面板自訂控制
     let targetManageSessionId = null;
     function openCurrentSessionSettings() {
       if (activeSession) openSessionSettings(activeSession);
@@ -1713,22 +1920,47 @@
     function openSessionSettings(sessionId) {
       targetManageSessionId = sessionId;
       const s = state.sessions[sessionId] || {};
-      document.getElementById("manage-session-title").innerText = `${s.label || sessionId} 管理面板`;
-      document.getElementById("manage-model").value = s.model || "";
-      document.getElementById("manage-effort").value = s.effort || "";
+      document.getElementById("manage-session-title").innerText = `${s.label || sessionId} 控制面板`;
       document.getElementById("manage-budget").value = s.budget_usd || "";
+      manageSessionState.model = s.model || "";
+      manageSessionState.effort = s.effort || "";
+      manageSessionState.handoffKind = "claude";
+
+      // 渲染模型清單
+      const kind = s.kind || "opencode";
+      renderModelCardList("manage-model-list", kind, manageSessionState.model, (m) => {
+        manageSessionState.model = m;
+      });
+
+      // 渲染 Effort 分段
+      const effortBtns = document.querySelectorAll("#manage-effort-segments .seg-btn");
+      effortBtns.forEach(b => {
+        if (b.innerText === manageSessionState.effort) b.classList.add("active");
+        else b.classList.remove("active");
+      });
+
       openSheet("sheet-session-manage");
+    }
+
+    function setManageEffort(effort, btnEl) {
+      manageSessionState.effort = effort;
+      document.querySelectorAll("#manage-effort-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    function setHandoffKind(kind, btnEl) {
+      manageSessionState.handoffKind = kind;
+      document.querySelectorAll("#handoff-kind-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
     }
 
     function submitSwitchModel() {
       if (!targetManageSessionId || !ws) return;
-      const model = document.getElementById("manage-model").value.trim() || null;
-      const effort = document.getElementById("manage-effort").value || null;
       ws.send(JSON.stringify({
         op: "session_config",
         session: targetManageSessionId,
-        model: model,
-        effort: effort
+        model: manageSessionState.model || null,
+        effort: manageSessionState.effort || null
       }));
       closeSheet("sheet-session-manage");
       showToast("已更新 Session 模型與推理設定");
@@ -1749,12 +1981,11 @@
 
     function submitHandoff() {
       if (!targetManageSessionId || !ws) return;
-      const kind = document.getElementById("handoff-kind").value;
       const note = document.getElementById("handoff-note").value.trim() || null;
       ws.send(JSON.stringify({
         op: "handoff",
         session: targetManageSessionId,
-        kind: kind,
+        kind: manageSessionState.handoffKind,
         note: note
       }));
       closeSheet("sheet-session-manage");
@@ -1791,6 +2022,31 @@
         closeSheet("sheet-session-manage");
         showToast("已送出移除請求");
       }
+    }
+
+    // 佇列清單檢視與清空
+    function openQueueManageSheet() {
+      const container = document.getElementById("queue-items-container");
+      container.innerHTML = "";
+      const qItems = (state.queues && state.queues[activeSession]) ? state.queues[activeSession] : [];
+      if (qItems.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:10px;">目前佇列為空</div>`;
+      } else {
+        qItems.forEach((text, idx) => {
+          const item = document.createElement("div");
+          item.style.cssText = "background:#0d0e14; border:1px solid var(--border); padding:8px 10px; border-radius:6px; font-size:12px; font-family:var(--font-mono); color:var(--text);";
+          item.innerText = `${idx + 1}. ${text}`;
+          container.appendChild(item);
+        });
+      }
+      openSheet("sheet-queue-manage");
+    }
+
+    function submitClearQueue() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({ op: "queue_clear", session: activeSession }));
+      closeSheet("sheet-queue-manage");
+      showToast("已清空待送佇列");
     }
 
     // 任務相關控制
