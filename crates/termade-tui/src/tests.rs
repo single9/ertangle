@@ -346,6 +346,37 @@ fn mouse_selection_copies_only_middle_pane() {
 }
 
 #[test]
+fn clean_candidates_include_ended_sessions_with_worktrees() {
+    let mut app = sample_app(&[]);
+    // 測試只看 app.state，不連任何遠端主機。
+    app.hosts.clear();
+    app.state.sessions.get_mut("ses_test").unwrap().status = SessionStatus::Exited;
+
+    add_session(&mut app, "ses_ended", "ended", 10);
+    {
+        let s = app.state.sessions.get_mut("ses_ended").unwrap();
+        s.status = SessionStatus::Exited;
+        s.branch = None;
+    }
+    add_session(&mut app, "ses_branch", "branch", 11);
+    app.state.sessions.get_mut("ses_branch").unwrap().status = SessionStatus::Exited;
+
+    let ids = clean_candidates(&app);
+    assert_eq!(
+        ids.len(),
+        3,
+        "ended sessions (含 worktree) 都要列入：{ids:?}"
+    );
+    assert!(ids.contains(&"ses_ended".to_string()));
+    assert!(ids.contains(&"ses_branch".to_string()));
+
+    app.state.sessions.get_mut("ses_ended").unwrap().status = SessionStatus::Busy;
+    let ids = clean_candidates(&app);
+    assert_eq!(ids.len(), 2);
+    assert!(!ids.contains(&"ses_ended".to_string()), "執行中的不能列入");
+}
+
+#[test]
 fn transcript_pos_maps_rows_and_columns() {
     let mut app = sample_app(&[]);
     app.transcript_area = Rect::new(0, 0, 40, 10);

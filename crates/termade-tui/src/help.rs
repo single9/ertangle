@@ -48,6 +48,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("Space s h", tr_noop!("交接給其他 agent (額度用完時)")),
             ("Space s r", tr_noop!("接續已結束的 session：同一個 agent 接回原對話")),
             ("Space s x", tr_noop!("移除已結束的 session；Space s X 全部清除")),
+            (
+                ":clean --force",
+                tr_noop!("強制清除未合併或有變更的 worktree (會失去內容)"),
+            ),
         ],
     ),
     (
@@ -106,7 +110,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 ":resume",
                 tr_noop!("接續已結束的 session (處理程序死掉或 daemon 重啟後)；可接 prompt"),
             ),
-            (":rm :clean", tr_noop!("移除已結束的 session／全部清除")),
+            (":rm :clean", tr_noop!("移除選取的 session／清除所有已結束的 session (含 worktree)")),
             (":copy [N]", tr_noop!("複製內容；Transcript 可指定第 N 則訊息 (預設最新)")),
             (":kill :cancel", tr_noop!("結束／中斷選取的 session")),
             (

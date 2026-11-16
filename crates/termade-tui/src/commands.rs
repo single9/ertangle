@@ -239,7 +239,12 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("sleep", termade_core::tr_noop!("休眠選取的 session")),
     ("wake", termade_core::tr_noop!("喚醒選取的 session")),
     ("rm", termade_core::tr_noop!("[session] [--force]  移除已結束的 session")),
-    ("clean", termade_core::tr_noop!("清除所有已結束 (且沒有分支)的 session")),
+    (
+        "clean",
+        termade_core::tr_noop!(
+            "[--force]  清除所有已結束的 session (預設保留未合併或有變更的 worktree)"
+        ),
+    ),
     ("merge", termade_core::tr_noop!("[session] [--dry-run]  合併 worktree 回主工作區")),
     ("diff", termade_core::tr_noop!("顯示選取 session 的 diff")),
     ("gc", termade_core::tr_noop!("[session]  清理已合併的 worktree")),
@@ -303,6 +308,21 @@ pub(crate) fn command_hints(input: &str) -> Vec<(&'static str, &'static str)> {
         .iter()
         .copied()
         .filter(|(n, _)| n.starts_with(verb))
+        .collect()
+}
+
+/// `:clean` 的候選 session：目前檢視範圍 (專案與主機篩選) 內所有已結束的 session。
+pub(crate) fn clean_candidates(app: &App) -> Vec<String> {
+    app.visible_sessions()
+        .into_iter()
+        .filter_map(|(host, id)| {
+            let state = app.hosts.get(&host).map_or(&app.state, |h| &h.state);
+            state
+                .sessions
+                .get(&id)
+                .filter(|s| !s.status.is_live())
+                .map(|_| id)
+        })
         .collect()
 }
 
@@ -448,27 +468,17 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             }
         }
         "clean" => {
-            // 清除所有已結束且沒有 worktree 分支的 session；scope_here 時只清目前專案。
-            let ids: Vec<String> = app
-                .state
-                .sessions
-                .values()
-                .filter(|s| {
-                    !s.status.is_live()
-                        && s.branch.is_none()
-                        && (!app.scope_here || s.project_root() == app.home_project)
-                })
-                .map(|s| s.id.clone())
-                .collect();
+            // 清除目前檢視範圍內所有已結束的 session (含 worktree)；預設安全模式，
+            // 未合併或還有未 commit 變更的 worktree 由 daemon 保留，--force 才會強制刪除。
+            let force = rest.split_whitespace().any(|w| w == "--force" || w == "-f");
+            let ids = clean_candidates(app);
+            if ids.is_empty() {
+                app.status = tr!("沒有可清除的已結束 session");
+                return Ok(());
+            }
             let n = ids.len();
             for session in ids {
-                send(
-                    writer,
-                    &Request::SessionRemove {
-                        session,
-                        force: false,
-                    },
-                )?;
+                send(writer, &Request::SessionRemove { session, force })?;
             }
             app.status = tr!("已要求清除 {n} 個已結束的 session", n = n);
         }
