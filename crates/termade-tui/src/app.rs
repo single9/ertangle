@@ -245,6 +245,8 @@ pub(crate) struct App {
     /// 最近一次繪製時 Bus 是否可見，以及當時已看過的訊息數 (供未讀計數)。
     pub(crate) bus_visible: bool,
     pub(crate) bus_seen: usize,
+    /// 首次收到快照時把既有歷史視為已讀，避免啟動就顯示大量未讀。
+    pub(crate) bus_baselined: bool,
     /// 分頁模式下每個分頁的區域與對應 session 索引 (供滑鼠點選)。
     pub(crate) tab_areas: Vec<(Rect, usize)>,
     /// 通知設定與狀態 (T15)。
@@ -337,6 +339,7 @@ impl App {
             bus_overlay: false,
             bus_visible: true,
             bus_seen: 0,
+            bus_baselined: false,
             tab_areas: Vec::new(),
             notify: crate::notify::Notifier::from_cfg(&cfg.tui),
             task_cursor: 0,
@@ -505,11 +508,9 @@ impl App {
             self.worktrees = entry.worktrees.clone();
             self.transcript_scroll = None;
             self.rebuild_pending = true;
-            self.bus_seen = if self.bus_visible {
-                self.state.messages.len()
-            } else {
-                self.bus_seen.min(self.state.messages.len())
-            };
+            // 切換主機等於換了一份 bus 歷史；把該主機目前的訊息視為已讀，
+            // 之後新進的才算未讀 (不論 Bus 欄當下是否可見)。
+            self.bus_seen = self.state.messages.len();
             crate::search::refresh(self);
         }
     }
@@ -574,6 +575,13 @@ impl App {
                 }
                 if is_active {
                     self.state = *state;
+                    if self.bus_baselined {
+                        self.bus_seen = self.bus_seen.min(self.state.messages.len());
+                    } else {
+                        // TUI 剛啟動：快照裡的歷史訊息不算未讀。
+                        self.bus_seen = self.state.messages.len();
+                        self.bus_baselined = true;
+                    }
                     self.clamp_selection();
                 }
             }
@@ -592,7 +600,14 @@ impl App {
                     entry.state.apply(&record);
                 }
                 if is_active {
+                    let before = self.state.messages.len();
                     self.state.apply(&record);
+                    // bus 訊息滿額時會從前端丟棄；已看過的索引要跟著前移，
+                    // 否則未讀數會少算 (甚至變成 0)。
+                    if matches!(record.event, termade_core::Event::BusMessage { .. }) {
+                        let dropped = (before + 1).saturating_sub(self.state.messages.len());
+                        self.bus_seen = self.bus_seen.saturating_sub(dropped);
+                    }
                     self.clamp_selection();
                 }
             }

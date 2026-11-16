@@ -683,6 +683,86 @@ fn bus_messages_follow_project_scope() {
 }
 
 #[test]
+fn initial_snapshot_does_not_count_bus_history_as_unread() {
+    let mut app = test_app();
+    app.bus_visible = false;
+    let msg = |id: u64| BusMessage {
+        id: format!("m{id}"),
+        from: "ses_a".into(),
+        to: Target::Broadcast,
+        kind: MsgKind::Chat,
+        body: "x".into(),
+        reply_to: None,
+        ts: id,
+    };
+    let mut state = State::new();
+    for i in 0..3 {
+        state.messages.push(msg(i));
+    }
+    app.apply_host_frame(
+        "local",
+        termade_protocol::Frame::Snapshot {
+            state: Box::new(state),
+        },
+    );
+    assert_eq!(app.unread_bus(), 0, "啟動前的歷史訊息不算未讀");
+
+    app.apply_host_frame(
+        "local",
+        termade_protocol::Frame::Record {
+            record: Box::new(termade_core::Record {
+                seq: 1,
+                ts: 1,
+                event: termade_core::Event::BusMessage { message: msg(9) },
+            }),
+        },
+    );
+    assert_eq!(app.unread_bus(), 1, "啟動後新進的才算未讀");
+}
+
+#[test]
+fn bus_unread_accounts_for_message_cap_trimming() {
+    let mut app = test_app();
+    app.bus_visible = false;
+    let msg = |id: u64| BusMessage {
+        id: format!("m{id}"),
+        from: "ses_a".into(),
+        to: Target::Broadcast,
+        kind: MsgKind::Chat,
+        body: "x".into(),
+        reply_to: None,
+        ts: id,
+    };
+    let mut state = State::new();
+    for i in 0..termade_core::MESSAGE_CAP {
+        state.messages.push(msg(i as u64));
+    }
+    app.apply_host_frame(
+        "local",
+        termade_protocol::Frame::Snapshot {
+            state: Box::new(state),
+        },
+    );
+    assert_eq!(app.unread_bus(), 0);
+
+    // 滿額後新增一則會從前端丟棄一則；已看過的索引要跟著前移。
+    app.apply_host_frame(
+        "local",
+        termade_protocol::Frame::Record {
+            record: Box::new(termade_core::Record {
+                seq: 1,
+                ts: 1,
+                event: termade_core::Event::BusMessage {
+                    message: msg(termade_core::MESSAGE_CAP as u64),
+                },
+            }),
+        },
+    );
+    assert_eq!(app.state.messages.len(), termade_core::MESSAGE_CAP);
+    assert_eq!(app.unread_bus(), 1);
+}
+
+#[test]
 fn header_shows_log_failure_indicator() {
     let mut app = sample_app(&["hi"]);
     let (_, text_ok) = render_size(&mut app, 120, 40);
