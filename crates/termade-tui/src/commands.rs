@@ -258,7 +258,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("raw", termade_core::tr_noop!("原始文字／Markdown 切換")),
     ("thoughts", termade_core::tr_noop!("顯示／隱藏思考")),
     ("tools", termade_core::tr_noop!("展開／摺疊工具呼叫")),
-    ("scope", termade_core::tr_noop!("[here|all]  只看本專案／顯示全部專案的 session")),
+    ("scope", termade_core::tr_noop!("[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)")),
     (
         "notify",
         termade_core::tr_noop!("[on|off|test]  開關通知 (回合結束／等待核准／失敗／額度用完)；不帶參數顯示狀態"),

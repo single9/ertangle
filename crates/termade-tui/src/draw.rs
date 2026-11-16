@@ -1474,8 +1474,12 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
         ));
     }
 
-    if !app.state.tasks.is_empty() {
-        for t in app.state.tasks.values() {
+    let task_ids = crate::tasks::visible_task_ids(app);
+    if !task_ids.is_empty() {
+        for id in &task_ids {
+            let Some(t) = app.state.tasks.get(id) else {
+                continue;
+            };
             let color = match t.status {
                 termade_core::TaskStatus::Done => Color::Green,
                 termade_core::TaskStatus::Doing | termade_core::TaskStatus::Review => Color::Cyan,
@@ -1494,7 +1498,9 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     }
 
     let h = area.height.saturating_sub(2 + lines.len() as u16) as usize;
-    let msgs = &app.state.messages;
+    let total_msgs = app.state.messages.len();
+    let msgs = app.visible_messages();
+    let hidden_msgs = total_msgs.saturating_sub(msgs.len());
     let start = msgs.len().saturating_sub(h);
     for m in msgs.iter().skip(start) {
         let to = match &m.to {
@@ -1517,12 +1523,16 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
         ));
     }
 
+    let title = if app.scope_here {
+        match hidden_msgs {
+            0 => tr!(" Bus / Tasks · 本專案 "),
+            n => tr!(" Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) ", n = n),
+        }
+    } else {
+        " Bus / Tasks ".to_string()
+    };
     let para = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Bus / Tasks "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(title))
         .wrap(Wrap { trim: false });
     f.render_widget(para, area);
 }

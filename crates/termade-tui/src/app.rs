@@ -6,7 +6,9 @@ use tr::tr;
 
 use ratatui::layout::Rect;
 use ratatui::text::Line;
-use termade_core::{now_millis, AgentKind, PermissionPolicy, SessionId, State, WorktreeInfo};
+use termade_core::{
+    now_millis, AgentKind, BusMessage, PermissionPolicy, SessionId, State, Target, WorktreeInfo,
+};
 use termade_protocol::Frame;
 
 use crate::diff::{build_gutter, diff_stat};
@@ -692,10 +694,62 @@ impl App {
 
     pub(crate) fn unread_bus(&self) -> usize {
         if self.bus_visible {
-            0
-        } else {
-            self.state.messages.len().saturating_sub(self.bus_seen)
+            return 0;
         }
+        if !self.scope_here {
+            return self.state.messages.len().saturating_sub(self.bus_seen);
+        }
+        // `bus_seen` 是未過濾清單的長度；只看本專案時，後面的訊息仍要再過濾一次。
+        self.state
+            .messages
+            .iter()
+            .enumerate()
+            .filter(|(i, m)| *i >= self.bus_seen && self.message_in_scope(m))
+            .count()
+    }
+
+    /// Bus 訊息是否屬於目前檢視的專案。`scope_here` 關閉時全部顯示。
+    ///
+    /// 判斷順序：
+    /// * 發送者屬於本專案 → 顯示。
+    /// * 直接訊息：收件者屬於本專案 → 顯示；對不到 session (已移除)時無法判斷，保留。
+    /// * 廣播／頻道沒有收件者清單，只能看發送者；發送者已不在清單時保留。
+    fn message_in_scope(&self, m: &BusMessage) -> bool {
+        if !self.scope_here {
+            return true;
+        }
+        let here = |sid: &str| {
+            self.state
+                .sessions
+                .get(sid)
+                .is_some_and(|s| s.project_root() == self.home_project)
+        };
+        if here(&m.from) {
+            return true;
+        }
+        match &m.to {
+            Target::Direct(t) => {
+                let sid = self
+                    .state
+                    .resolve_session_id(t)
+                    .unwrap_or_else(|| t.clone());
+                match self.state.sessions.get(&sid) {
+                    Some(s) => s.project_root() == self.home_project,
+                    // 對不到 session (已移除)：無法判斷，保留。
+                    None => true,
+                }
+            }
+            Target::Broadcast | Target::Channel(_) => !self.state.sessions.contains_key(&m.from),
+        }
+    }
+
+    /// Bus 面板要顯示的訊息 (依 `scope_here` 過濾)。
+    pub(crate) fn visible_messages(&self) -> Vec<&BusMessage> {
+        self.state
+            .messages
+            .iter()
+            .filter(|m| self.message_in_scope(m))
+            .collect()
     }
 
     pub(crate) fn cycle_layout(&mut self) {
@@ -952,10 +1006,10 @@ pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
     app.selection = None;
     app.status = if app.scope_here {
         tr!(
-            "只顯示本專案的 session ({project})，P 顯示全部",
+            "只顯示本專案的 session、Bus 訊息與任務 ({project})，P 顯示全部",
             project = project_name(&app.home_project, &[])
         )
     } else {
-        tr!("顯示全部專案的 session，P 只看本專案")
+        tr!("顯示全部專案的 session、Bus 訊息與任務，P 只看本專案")
     };
 }

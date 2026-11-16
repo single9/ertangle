@@ -628,6 +628,61 @@ fn layout_key_command_and_unread_counter() {
 }
 
 #[test]
+fn bus_messages_follow_project_scope() {
+    let mut app = sample_app(&[]);
+    app.home_project = "/work/alpha".into();
+    app.scope_here = true;
+    app.state.sessions.get_mut("ses_test").unwrap().cwd = "/work/alpha".into();
+    add_session(&mut app, "ses_beta", "beta", 5);
+    {
+        let s = app.state.sessions.get_mut("ses_beta").unwrap();
+        s.cwd = "/work/beta".into();
+        s.branch = None;
+    }
+    let msg = |id: &str, from: &str, to: Target| BusMessage {
+        id: id.into(),
+        from: from.into(),
+        to,
+        kind: MsgKind::Chat,
+        body: id.into(),
+        reply_to: None,
+        ts: 1,
+    };
+    let direct = |t: &str| Target::Direct(t.into());
+    for m in [
+        msg("m1", "ses_test", Target::Broadcast),
+        msg("m2", "ses_beta", Target::Broadcast),
+        msg("m3", "ses_beta", direct("ses_test")),
+        msg("m4", "ses_test", direct("ses_beta")),
+        msg("m5", "ses_beta", direct("beta")),
+        msg("m6", "ses_gone", Target::Broadcast),
+        msg("m7", "ses_beta", Target::Channel("review".into())),
+    ] {
+        app.state.messages.push(m);
+    }
+
+    let ids: Vec<&str> = app
+        .visible_messages()
+        .iter()
+        .map(|m| m.id.as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        ["m1", "m3", "m4", "m6"],
+        "本專案發送、寄給本專案、或無法判斷的訊息才顯示"
+    );
+
+    // 未讀只算畫面上看得到的訊息；前 3 則已看過。
+    app.bus_visible = false;
+    app.bus_seen = 3;
+    assert_eq!(app.unread_bus(), 2, "m4 與 m6 尚未看過");
+
+    app.scope_here = false;
+    assert_eq!(app.visible_messages().len(), 7);
+    assert_eq!(app.unread_bus(), 4);
+}
+
+#[test]
 fn header_shows_log_failure_indicator() {
     let mut app = sample_app(&["hi"]);
     let (_, text_ok) = render_size(&mut app, 120, 40);
