@@ -1696,6 +1696,7 @@ dependencies = [
  "toml",
  "tr",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

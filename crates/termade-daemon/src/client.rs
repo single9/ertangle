@@ -73,16 +73,14 @@ impl Client {
         };
         let reader = BufReader::new(stream.try_clone()?);
         let mut client = Client { stream, reader };
-        // 若設定了 `TERMADE_TOKEN`，在第一個請求前自動送出帶 token 的 Hello 驗證。
-        if let Ok(token) = std::env::var("TERMADE_TOKEN") {
-            if !token.is_empty() {
-                client.send(&Request::Hello {
-                    epoch: None,
-                    client: "auth".into(),
-                    since: None,
-                    token: Some(token),
-                })?;
-            }
+        // 若可取得遠端 token，在第一個請求前自動送出帶 token 的 Hello 驗證。
+        if let Some(token) = get_client_token() {
+            client.send(&Request::Hello {
+                epoch: None,
+                client: "auth".into(),
+                since: None,
+                token: Some(token),
+            })?;
         }
         Ok(client)
     }

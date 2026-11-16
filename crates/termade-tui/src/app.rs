@@ -153,6 +153,8 @@ pub(crate) struct App {
     pub(crate) show_tools: bool,
     /// 與 daemon 的連線已中斷 (例如別的 TUI 下了 shutdown)。
     pub(crate) disconnected: bool,
+    /// daemon 啟動世代 id (epoch)，斷線重連時比對用。
+    pub(crate) daemon_epoch: Option<String>,
     /// TUI 啟動所在的專案根目錄 (git 頂層，否則 cwd)。
     pub(crate) home_project: String,
     /// 只列出屬於 `home_project` 的 session。
@@ -247,6 +249,7 @@ impl App {
             show_thoughts: false,
             show_tools: false,
             disconnected: false,
+            daemon_epoch: None,
             home_project: home_project(&cwd),
             scope_here: true,
             input_inner_w: 80,

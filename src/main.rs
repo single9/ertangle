@@ -51,6 +51,11 @@ enum Cmd {
         #[arg(long)]
         insecure_listen_public: bool,
     },
+    /// 顯示遠端連線資訊 (Tailscale 位址、Token 路徑與連線指令)
+    RemoteInfo {
+        #[arg(long)]
+        json: bool,
+    },
     /// stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)
     Mcp {
         /// 此 MCP server 代表的 session id (預設讀 TERMADE_SESSION 環境變數)
@@ -406,6 +411,7 @@ fn main() -> Result<()> {
             token_file,
             insecure_listen_public,
         } => cmd_daemon(listen, token, token_file, insecure_listen_public),
+        Cmd::RemoteInfo { json } => cmd_remote_info(json),
         Cmd::Mcp { session } => termade_daemon::mcp::run(session),
         Cmd::Whoami { session, json } => cmd_whoami(session, json),
         Cmd::Sessions { json } => cmd_sessions(json),

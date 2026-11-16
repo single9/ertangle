@@ -77,38 +77,133 @@ use crossterm::terminal::{
 };
 use ratatui::backend::CrosstermBackend;
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use termade_daemon::{Client, ConnStream};
 use termade_protocol::{Frame, Request};
 use tr::tr;
+
+pub(crate) enum TuiMessage {
+    Frame(Frame),
+    Disconnected,
+    Reconnected { writer: ConnStream },
+}
 
 /// 啟動 TUI (會先確保 daemon 在跑)。
 pub fn run() -> Result<()> {
     termade_daemon::ensure_daemon()?;
 
     let mut client = Client::connect()?;
+    let client_token = termade_daemon::get_client_token();
     client.send(&Request::Hello {
         client: "tui".into(),
         since: None,
-        token: std::env::var("TERMADE_TOKEN").ok(),
+        token: client_token,
         epoch: None,
     })?;
     let mut writer = client.try_clone_stream()?;
 
-    let (tx, rx) = mpsc::channel::<Frame>();
+    let (tx, rx) = mpsc::channel::<TuiMessage>();
+    let shared_seq = Arc::new(AtomicU64::new(0));
+    let shared_epoch = Arc::new(Mutex::new(None));
+    let running = Arc::new(AtomicBool::new(true));
+
+    let t_tx = tx.clone();
+    let t_seq = shared_seq.clone();
+    let t_epoch = shared_epoch.clone();
+    let t_running = running.clone();
+
     std::thread::spawn(move || {
-        while let Ok(frame) = client.recv() {
-            if tx.send(frame).is_err() {
-                break;
-            }
-        }
+        run_reader_reconnect_loop(client, t_tx, t_seq, t_epoch, t_running);
     });
 
     let mut terminal = setup_terminal()?;
-    let result = event_loop(&mut terminal, &mut writer, rx);
+    let result = event_loop(&mut terminal, &mut writer, rx, shared_seq, shared_epoch);
+    running.store(false, Ordering::Relaxed);
     restore_terminal(&mut terminal)?;
     result
+}
+
+fn run_reader_reconnect_loop(
+    mut client: Client,
+    tx: mpsc::Sender<TuiMessage>,
+    shared_seq: Arc<AtomicU64>,
+    shared_epoch: Arc<Mutex<Option<String>>>,
+    running: Arc<AtomicBool>,
+) {
+    while running.load(Ordering::Relaxed) {
+        match client.recv() {
+            Ok(frame) => {
+                if tx.send(TuiMessage::Frame(frame)).is_err() {
+                    break;
+                }
+            }
+            Err(_) => {
+                if !running.load(Ordering::Relaxed) {
+                    break;
+                }
+                if tx.send(TuiMessage::Disconnected).is_err() {
+                    break;
+                }
+
+                // 指數退避重試連線 (200ms -> 500ms -> 1s -> 2s，上限 5s)
+                let mut backoff = Duration::from_millis(200);
+                let max_backoff = Duration::from_secs(5);
+                let mut reconnected = false;
+
+                while running.load(Ordering::Relaxed) {
+                    let start = std::time::Instant::now();
+                    while start.elapsed() < backoff {
+                        if !running.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    if !running.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    if let Ok(mut new_client) = Client::connect() {
+                        let seq = shared_seq.load(Ordering::Relaxed);
+                        let epoch = shared_epoch.lock().unwrap().clone();
+                        let token = termade_daemon::get_client_token();
+
+                        let hello = Request::Hello {
+                            client: "tui".into(),
+                            since: Some(seq),
+                            token,
+                            epoch,
+                        };
+                        if new_client.send(&hello).is_ok() {
+                            if let Ok(new_writer) = new_client.try_clone_stream() {
+                                client = new_client;
+                                if tx
+                                    .send(TuiMessage::Reconnected { writer: new_writer })
+                                    .is_ok()
+                                {
+                                    reconnected = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    backoff = match backoff.as_millis() {
+                        200 => Duration::from_millis(500),
+                        500 => Duration::from_millis(1000),
+                        1000 => Duration::from_millis(2000),
+                        _ => (backoff * 2).min(max_backoff),
+                    };
+                }
+
+                if !reconnected {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
@@ -164,7 +259,9 @@ pub(crate) fn send(writer: &mut ConnStream, req: &Request) -> Result<()> {
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     writer: &mut ConnStream,
-    rx: Receiver<Frame>,
+    rx: Receiver<TuiMessage>,
+    shared_seq: Arc<AtomicU64>,
+    shared_epoch: Arc<Mutex<Option<String>>>,
 ) -> Result<()> {
     let mut app = App::new();
     app.prompt_history = history::History::load(Some(history::history_path("prompt")));
@@ -175,10 +272,27 @@ fn event_loop(
     loop {
         loop {
             match rx.try_recv() {
-                Ok(frame) => {
-                    apply_frame(&mut app, frame);
-                    dirty = true;
-                }
+                Ok(msg) => match msg {
+                    TuiMessage::Frame(frame) => {
+                        apply_frame(&mut app, frame);
+                        shared_seq.store(app.state.seq, Ordering::Relaxed);
+                        *shared_epoch.lock().unwrap() = app.daemon_epoch.clone();
+                        dirty = true;
+                    }
+                    TuiMessage::Disconnected => {
+                        if !app.disconnected {
+                            app.disconnected = true;
+                            app.status = tr!("連線中斷，正在重連…");
+                            dirty = true;
+                        }
+                    }
+                    TuiMessage::Reconnected { writer: new_writer } => {
+                        *writer = new_writer;
+                        app.disconnected = false;
+                        app.status = tr!("已重新連線至 daemon");
+                        dirty = true;
+                    }
+                },
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     if !app.disconnected {
@@ -215,7 +329,7 @@ fn event_loop(
                     if let Err(e) = handle_key(&mut app, writer, key) {
                         // 連線已斷時，送出請求失敗不該讓整個 TUI 崩掉。
                         if app.disconnected {
-                            app.status = tr!("daemon 已斷線，無法送出；按 q 離開");
+                            app.status = tr!("連線中斷中，正在重連；請稍候");
                         } else {
                             return Err(e);
                         }
@@ -244,8 +358,13 @@ fn event_loop(
 
 fn apply_frame(app: &mut App, frame: Frame) {
     match frame {
-        Frame::Ready { pid, version, .. } => {
+        Frame::Ready {
+            pid,
+            version,
+            epoch,
+        } => {
             app.status = format!("daemon pid={pid} v{version}");
+            app.daemon_epoch = Some(epoch);
         }
         Frame::Snapshot { state } => {
             app.state = *state;

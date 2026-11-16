@@ -50,3 +50,8 @@ pub fn socket_path() -> PathBuf {
 pub fn log_path() -> PathBuf {
     state_dir().join("events.jsonl")
 }
+
+/// 預設遠端 Token 路徑 (~/.local/state/termade/remote.token)。
+pub fn default_token_path() -> PathBuf {
+    state_dir().join("remote.token")
+}

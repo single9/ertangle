@@ -2,7 +2,7 @@
 
 優先度：P1　範圍：`termade-daemon`、`termade-tui`、`src/`　相依：T05
 
-Status: ready-for-agent
+Status: ready-for-human
 
 ## 問題
 

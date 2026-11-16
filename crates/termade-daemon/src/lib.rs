@@ -24,11 +24,14 @@ mod server;
 use logwriter::*;
 pub use logwriter::{rotated_log_path, LogConfig};
 use server::*;
-pub use server::{run, run_remote, run_with_options, RemoteOptions};
+pub use server::{
+    detect_tailscale_ip, get_client_token, get_or_create_default_token, is_tailscale_ip,
+    read_token_file, resolve_listen_addr, run, run_remote, run_with_options, RemoteOptions,
+};
 mod paths;
 pub use client::{ensure_daemon, is_running, send_request, Client, ConnStream};
 pub use git::compute_worktree_diff;
-pub use paths::{config_dir, log_path, runtime_dir, socket_path, state_dir};
+pub use paths::{config_dir, default_token_path, log_path, runtime_dir, socket_path, state_dir};
 pub mod mcp;
 
 use anyhow::{bail, Context, Result};

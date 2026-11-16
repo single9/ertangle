@@ -16,22 +16,63 @@ fn token_compare_is_exact() {
 }
 
 #[test]
-fn listen_requires_token_and_loopback() {
+fn listen_requires_token_and_loopback_or_tailscale() {
+    // 必須有 token
     assert!(validate_listen("127.0.0.1:0", false, false).is_err());
     assert!(validate_listen("127.0.0.1:0", true, false).is_ok());
+
+    // Tailscale IPv4 CGNAT (100.64.0.0/10) 不需 --insecure-listen-public
+    assert!(validate_listen("100.64.0.1:7420", true, false).is_ok());
+    assert!(validate_listen("100.127.255.255:7420", true, false).is_ok());
+
+    // Tailscale IPv6 ULA (fd7a:115c:a1e0::/48) 不需 --insecure-listen-public
+    assert!(validate_listen("[fd7a:115c:a1e0::1]:7420", true, false).is_ok());
+
+    // 一般非 loopback / 非 Tailscale 位址需要 --insecure-listen-public
     assert!(validate_listen("0.0.0.0:7420", true, false).is_err());
     assert!(validate_listen("0.0.0.0:7420", true, true).is_ok());
+    assert!(validate_listen("192.168.1.10:7420", true, false).is_err());
+    assert!(validate_listen("192.168.1.10:7420", true, true).is_ok());
+    assert!(validate_listen("100.128.0.1:7420", true, false).is_err());
 }
 
 #[test]
-fn run_remote_refuses_listen_without_token() {
+fn resolve_listen_addr_tailscale_and_standard() {
+    std::env::set_var("TERMADE_TEST_TAILSCALE_IP", "100.88.99.100");
+    let (addr, is_ts) = resolve_listen_addr("tailscale").unwrap();
+    assert_eq!(addr, "100.88.99.100:7420");
+    assert!(is_ts);
+
+    let (addr, is_ts) = resolve_listen_addr("tailscale:8888").unwrap();
+    assert_eq!(addr, "100.88.99.100:8888");
+    assert!(is_ts);
+
+    let (addr, is_ts) = resolve_listen_addr("127.0.0.1:7420").unwrap();
+    assert_eq!(addr, "127.0.0.1:7420");
+    assert!(!is_ts);
+
+    let (addr, is_ts) = resolve_listen_addr("100.64.1.2:7420").unwrap();
+    assert_eq!(addr, "100.64.1.2:7420");
+    assert!(is_ts);
+}
+
+#[test]
+fn run_remote_auto_creates_token_and_persists() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp_cwd();
+    std::env::set_var("XDG_STATE_HOME", &dir);
     std::env::remove_var("TERMADE_TOKEN");
-    let err = run_remote(RemoteOptions {
+
+    let opts = RemoteOptions {
         listen: Some("127.0.0.1:0".into()),
         ..Default::default()
-    })
-    .unwrap_err();
-    assert!(err.to_string().contains("token"));
+    };
+    let token = resolve_token(&opts).unwrap().expect("應自動產生 token");
+    let token_path = dir.join("termade").join("remote.token");
+    assert!(token_path.exists(), "應建立 remote.token 檔案");
+    let meta = fs::metadata(&token_path).unwrap();
+    assert_eq!(meta.permissions().mode() & 0o077, 0, "權限須為 0600");
+    assert_eq!(read_token_file(&token_path).unwrap(), token);
 }
 
 #[test]

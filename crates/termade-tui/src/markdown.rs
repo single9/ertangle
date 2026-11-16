@@ -713,7 +713,10 @@ mod tests {
         assert_eq!(code.style.bg, Some(CODE_BG));
         let link = spans.iter().find(|s| s.content == "e").expect("link span");
         assert_eq!(link.style.fg, Some(LINK));
-        let url = spans.iter().find(|s| s.content == "http://x").expect("url span");
+        let url = spans
+            .iter()
+            .find(|s| s.content == "http://x")
+            .expect("url span");
         assert_eq!(url.style.fg, Some(LINK));
     }
 
