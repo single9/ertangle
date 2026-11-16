@@ -5,6 +5,7 @@ pub mod qr;
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -168,8 +169,25 @@ fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
         headers.push(line);
     }
 
-    // 1. WebSocket 升級請求
-    if method == "GET" && path == "/ws" && is_upgrade {
+    // 1. CORS 預檢請求
+    if method == "OPTIONS" {
+        let resp = "HTTP/1.1 204 No Content\r\n\
+                    Access-Control-Allow-Origin: *\r\n\
+                    Access-Control-Allow-Methods: GET, OPTIONS\r\n\
+                    Access-Control-Allow-Headers: Authorization, Content-Type\r\n\
+                    Access-Control-Max-Age: 86400\r\n\r\n";
+        stream.write_all(resp.as_bytes())?;
+        stream.flush()?;
+        return Ok(());
+    }
+
+    let (req_path, query_str) = match path.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (path, None),
+    };
+
+    // 2. WebSocket 升級請求
+    if method == "GET" && req_path == "/ws" && is_upgrade {
         let Some(key) = ws_key else {
             stream.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\nMissing Sec-WebSocket-Key")?;
             return Ok(());
@@ -187,8 +205,13 @@ fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
         return handle_ws_session(shared, stream, reader);
     }
 
-    // 2. 靜態資源處理
-    match (method, path) {
+    // 3. 檔案內容檢視端點 (文字與圖片等)
+    if method == "GET" && (req_path == "/file" || req_path == "/api/file") {
+        return serve_file(&shared, &mut stream, query_str, &headers);
+    }
+
+    // 4. 靜態資源處理
+    match (method, req_path) {
         ("GET", "/") | ("GET", "/index.html") => {
             let resp = format!(
                 "HTTP/1.1 200 OK\r\n\
@@ -217,6 +240,266 @@ fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
             stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found")?;
         }
     }
+    stream.flush()?;
+    Ok(())
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'+' {
+            out.push(b' ');
+            i += 1;
+            continue;
+        }
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
+fn mime_type_for_path(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        // 圖片
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "bmp" => "image/bmp",
+        "avif" => "image/avif",
+
+        // 程式碼與純文字
+        "txt" | "log" => "text/plain; charset=utf-8",
+        "md" | "markdown" => "text/markdown; charset=utf-8",
+        "rs" => "text/plain; charset=utf-8",
+        "toml" => "text/plain; charset=utf-8",
+        "json" => "application/json; charset=utf-8",
+        "yaml" | "yml" => "text/plain; charset=utf-8",
+        "html" | "htm" => "text/plain; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" | "cjs" | "ts" => "text/plain; charset=utf-8",
+        "py" => "text/plain; charset=utf-8",
+        "sh" | "bash" | "zsh" => "text/plain; charset=utf-8",
+        "c" | "cpp" | "cc" | "h" | "hpp" => "text/plain; charset=utf-8",
+        "go" => "text/plain; charset=utf-8",
+        "sql" => "text/plain; charset=utf-8",
+        "diff" | "patch" => "text/plain; charset=utf-8",
+
+        // 文件
+        "pdf" => "application/pdf",
+        _ => "application/octet-stream",
+    }
+}
+
+fn serve_file(
+    shared: &Shared,
+    stream: &mut TcpStream,
+    query_str: Option<&str>,
+    headers: &[String],
+) -> Result<()> {
+    let mut target_path = None;
+    let mut session_id = None;
+    let mut query_token = None;
+
+    if let Some(qs) = query_str {
+        for pair in qs.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                match k {
+                    "path" => target_path = Some(percent_decode(v)),
+                    "session" => session_id = Some(percent_decode(v)),
+                    "token" => query_token = Some(percent_decode(v)),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    let mut auth_token = query_token;
+    if auth_token.is_none() {
+        for h in headers {
+            let lower = h.to_ascii_lowercase();
+            if lower.starts_with("authorization:") {
+                if let Some(val) = h.split(':').nth(1) {
+                    let val = val.trim();
+                    if let Some(tok) = val.strip_prefix("Bearer ") {
+                        auth_token = Some(tok.trim().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(expected) = shared.auth_token.as_deref() {
+        if !token_matches(auth_token.as_deref(), expected) {
+            let resp = "HTTP/1.1 401 Unauthorized\r\n\
+                        Content-Type: text/plain; charset=utf-8\r\n\
+                        Access-Control-Allow-Origin: *\r\n\
+                        \r\n未認證或 Token 無效";
+            stream.write_all(resp.as_bytes())?;
+            stream.flush()?;
+            return Ok(());
+        }
+    }
+
+    let Some(mut raw_path) = target_path else {
+        let resp = "HTTP/1.1 400 Bad Request\r\n\
+                    Content-Type: text/plain; charset=utf-8\r\n\
+                    Access-Control-Allow-Origin: *\r\n\
+                    \r\n缺少 path 參數";
+        stream.write_all(resp.as_bytes())?;
+        stream.flush()?;
+        return Ok(());
+    };
+
+    if let Some(rest) = raw_path.strip_prefix("file://") {
+        raw_path = rest.to_string();
+    }
+    if let Some(rest) = raw_path.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            raw_path = format!("{home}/{rest}");
+        }
+    }
+    if let Some((clean, _)) = raw_path.split_once('#') {
+        raw_path = clean.to_string();
+    }
+
+    let mut resolved_path = PathBuf::from(&raw_path);
+    if resolved_path.is_relative() {
+        if let Ok(inner) = shared.inner.lock() {
+            let mut found = false;
+            if let Some(sid) = session_id.as_deref() {
+                if let Some(s) = inner.state.sessions.get(sid) {
+                    if !s.cwd.is_empty() {
+                        let candidate = Path::new(&s.cwd).join(&resolved_path);
+                        if candidate.is_file() {
+                            resolved_path = candidate;
+                            found = true;
+                        }
+                    }
+                    if !found {
+                        if let Some(repo) = &s.repo_root {
+                            let candidate = Path::new(repo).join(&resolved_path);
+                            if candidate.is_file() {
+                                resolved_path = candidate;
+                                found = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if !found {
+                let candidate = inner.default_cwd.join(&resolved_path);
+                if candidate.is_file() {
+                    resolved_path = candidate;
+                }
+            }
+        }
+    }
+
+    if let Ok(canon) = resolved_path.canonicalize() {
+        resolved_path = canon;
+    }
+
+    if !resolved_path.is_file() {
+        let body = format!("找不到檔案：{}", resolved_path.display());
+        let resp = format!(
+            "HTTP/1.1 404 Not Found\r\n\
+             Content-Type: text/plain; charset=utf-8\r\n\
+             Content-Length: {}\r\n\
+             Access-Control-Allow-Origin: *\r\n\
+             \r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(resp.as_bytes())?;
+        stream.flush()?;
+        return Ok(());
+    }
+
+    let meta = match std::fs::metadata(&resolved_path) {
+        Ok(m) => m,
+        Err(e) => {
+            let body = format!("讀取檔案屬性失敗：{e}");
+            let resp = format!(
+                "HTTP/1.1 500 Internal Server Error\r\n\
+                 Content-Type: text/plain; charset=utf-8\r\n\
+                 Content-Length: {}\r\n\
+                 Access-Control-Allow-Origin: *\r\n\
+                 \r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(resp.as_bytes())?;
+            stream.flush()?;
+            return Ok(());
+        }
+    };
+
+    if meta.len() > 30 * 1024 * 1024 {
+        let body = "檔案過大 (超過 30MB 限制)";
+        let resp = format!(
+            "HTTP/1.1 413 Payload Too Large\r\n\
+             Content-Type: text/plain; charset=utf-8\r\n\
+             Content-Length: {}\r\n\
+             Access-Control-Allow-Origin: *\r\n\
+             \r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(resp.as_bytes())?;
+        stream.flush()?;
+        return Ok(());
+    }
+
+    let bytes = match std::fs::read(&resolved_path) {
+        Ok(b) => b,
+        Err(e) => {
+            let body = format!("讀取檔案失敗：{e}");
+            let resp = format!(
+                "HTTP/1.1 500 Internal Server Error\r\n\
+                 Content-Type: text/plain; charset=utf-8\r\n\
+                 Content-Length: {}\r\n\
+                 Access-Control-Allow-Origin: *\r\n\
+                 \r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(resp.as_bytes())?;
+            stream.flush()?;
+            return Ok(());
+        }
+    };
+
+    let mime = mime_type_for_path(&resolved_path);
+    let header = format!(
+        "HTTP/1.1 200 OK\r\n\
+         Content-Type: {mime}\r\n\
+         Content-Length: {}\r\n\
+         Cache-Control: no-cache\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         X-Content-Type-Options: nosniff\r\n\
+         \r\n",
+        bytes.len()
+    );
+    stream.write_all(header.as_bytes())?;
+    stream.write_all(&bytes)?;
     stream.flush()?;
     Ok(())
 }
@@ -398,6 +681,23 @@ mod tests {
         let key = "dGhlIHNhbXBsZSBub25jZQ==";
         let accept = compute_ws_accept(key);
         assert_eq!(accept, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+    }
+
+    #[test]
+    fn test_percent_decode() {
+        assert_eq!(percent_decode("hello%20world"), "hello world");
+        assert_eq!(percent_decode("foo+bar%2Fbaz"), "foo bar/baz");
+        assert_eq!(percent_decode("%E6%B8%AC%E8%A9%A6"), "測試");
+    }
+
+    #[test]
+    fn test_mime_type_for_path() {
+        assert_eq!(mime_type_for_path(Path::new("photo.png")), "image/png");
+        assert_eq!(mime_type_for_path(Path::new("pic.jpg")), "image/jpeg");
+        assert_eq!(mime_type_for_path(Path::new("src/main.rs")), "text/plain; charset=utf-8");
+        assert_eq!(mime_type_for_path(Path::new("Cargo.toml")), "text/plain; charset=utf-8");
+        assert_eq!(mime_type_for_path(Path::new("data.json")), "application/json; charset=utf-8");
+        assert_eq!(mime_type_for_path(Path::new("bin/app")), "application/octet-stream");
     }
 
     mod hex {
