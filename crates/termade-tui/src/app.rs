@@ -372,28 +372,87 @@ impl App {
                     continue;
                 }
             }
-            for s in host.state.sessions_sorted() {
-                if self.scope_here && s.project_root() != self.home_project {
-                    continue;
-                }
-                out.push((host_name.clone(), s.id.clone()));
+            let ids = Self::tree_order_sessions(&host.state, self.scope_here, &self.home_project);
+            for id in ids {
+                out.push((host_name.clone(), id));
             }
         }
         out
     }
 
     fn session_ids_single(&self) -> Vec<SessionId> {
-        let mut v: Vec<&termade_core::Session> = self
-            .state
+        Self::tree_order_sessions(&self.state, self.scope_here, &self.home_project)
+    }
+
+    /// 依專案/建立順序做樹狀排序：子 session 緊跟在父 session 後，方便顯示階層。
+    fn tree_order_sessions(state: &State, scope_here: bool, home_project: &str) -> Vec<SessionId> {
+        use std::collections::{HashMap, HashSet};
+
+        let mut v: Vec<&termade_core::Session> = state
             .sessions_sorted()
             .into_iter()
-            .filter(|s| !self.scope_here || s.project_root() == self.home_project)
+            .filter(|s| !scope_here || s.project_root() == home_project)
             .collect();
-        // 顯示全部專案時依專案分組 (本專案排最前)，組內維持建立順序。
-        if !self.scope_here {
-            v.sort_by_key(|s| (s.project_root() != self.home_project, s.project_root()));
+        if !scope_here {
+            v.sort_by_key(|s| (s.project_root() != home_project, s.project_root()));
         }
-        v.into_iter().map(|s| s.id.clone()).collect()
+
+        let present: HashSet<&str> = v.iter().map(|s| s.id.as_str()).collect();
+        let mut children: HashMap<String, Vec<SessionId>> = HashMap::new();
+        let mut roots: Vec<SessionId> = Vec::new();
+        for s in &v {
+            if let Some(parent) = s.parent.as_deref() {
+                if present.contains(parent) {
+                    children
+                        .entry(parent.to_string())
+                        .or_default()
+                        .push(s.id.clone());
+                    continue;
+                }
+            }
+            roots.push(s.id.clone());
+        }
+
+        let mut out = Vec::with_capacity(v.len());
+        fn dfs(
+            id: &SessionId,
+            children: &HashMap<String, Vec<SessionId>>,
+            out: &mut Vec<SessionId>,
+        ) {
+            out.push(id.clone());
+            if let Some(ch) = children.get(id) {
+                for c in ch {
+                    dfs(c, children, out);
+                }
+            }
+        }
+        for r in &roots {
+            dfs(r, &children, &mut out);
+        }
+        out
+    }
+
+    /// 取得 session 在可見樹中的深度 (以同 state 內可見的父鏈計算)。
+    pub(crate) fn session_tree_depth(&self, host: &str, id: &str) -> usize {
+        let state = self
+            .hosts
+            .get(host)
+            .map(|h| &h.state)
+            .unwrap_or(&self.state);
+        let mut depth = 0usize;
+        let mut cur = id;
+        while let Some(parent) = state.sessions.get(cur).and_then(|s| s.parent.as_deref()) {
+            if state.sessions.contains_key(parent) {
+                depth += 1;
+                cur = parent;
+            } else {
+                break;
+            }
+            if depth > 20 {
+                break;
+            }
+        }
+        depth
     }
 
     pub(crate) fn session_ids(&self) -> Vec<SessionId> {

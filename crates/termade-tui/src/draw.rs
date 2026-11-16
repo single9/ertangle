@@ -912,93 +912,112 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 SessionStatus::Idle => Color::Gray,
                 _ => Color::DarkGray,
             };
+            let depth = app.session_tree_depth(host_name, &s.id);
+            let indent = "  ".repeat(depth.min(6));
+            let child_prefix = if depth > 0 { "↳ " } else { "" };
             let branch = s.branch.as_deref().unwrap_or("");
             let note = s.status_note.as_deref().unwrap_or("");
-            let mut spans: Vec<Span> = Vec::new();
-            // 顯示全部專案 (或有多個專案)時，列首放專案色塊，同專案同色。
-            if show_project {
-                spans.push(Span::styled(
-                    format!(
-                        " {} ",
-                        truncate(&project_name(s.project_root(), &roots), 12)
-                    ),
+
+            // 第一行：階層 + 狀態 + 標籤 (精簡)，子 session/agent 可一眼看出。
+            let mut line1: Vec<Span> = Vec::new();
+            if !indent.is_empty() {
+                line1.push(Span::styled(indent.clone(), Style::default().fg(Color::DarkGray)));
+            }
+            if show_project && depth == 0 {
+                line1.push(Span::styled(
+                    format!(" {} ", truncate(&project_name(s.project_root(), &roots), 10)),
                     Style::default()
                         .fg(Color::Black)
                         .bg(project_color(s.project_root())),
                 ));
-                spans.push(Span::raw(" "));
+                line1.push(Span::raw(" "));
             }
-            spans.push(Span::styled(
+            if depth > 0 {
+                line1.push(Span::styled(child_prefix, Style::default().fg(Color::DarkGray)));
+            }
+            line1.push(Span::styled(
                 format!("{} ", s.status.glyph()),
                 Style::default().fg(color),
             ));
             if multi_host {
-                spans.push(Span::styled(
+                line1.push(Span::styled(
                     format!("[{host_name}] "),
                     Style::default().fg(Color::Cyan),
                 ));
             }
-            spans.extend([
-                Span::raw(s.label.clone()),
-                Span::styled(
-                    format!(
-                        "  [{}{}]{}",
-                        s.kind.id(),
-                        s.model
-                            .as_deref()
-                            .map(|m| format!(":{m}"))
-                            .unwrap_or_default()
-                            + if s.permission == PermissionPolicy::Bypass {
-                                " !bypass"
-                            } else {
-                                ""
-                            },
-                        if branch.is_empty() {
-                            String::new()
-                        } else {
-                            format!(" @{branch}")
-                        }
-                    ),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]);
-            if let Some(c) = s.context {
-                // context 越滿越醒目：≥80% 黃、≥92% 紅。
-                let pct = c.percent();
-                let color = match pct {
-                    Some(p) if p >= 92.0 => Color::Red,
-                    Some(p) if p >= 80.0 => Color::Yellow,
-                    _ => Color::DarkGray,
-                };
-                spans.push(Span::styled(
-                    format!(
-                        " ctx {}",
-                        pct.map_or_else(
-                            || termade_core::human_tokens(c.used),
-                            |p| format!("{p:.0}%")
-                        )
-                    ),
-                    Style::default().fg(color),
+            line1.push(Span::raw(truncate(&s.label, 24)));
+            if s.role != termade_core::Role::Worker || s.parent.is_some() {
+                line1.push(Span::styled(
+                    format!(" [{}]", s.role.id()),
+                    Style::default().fg(Color::Magenta),
                 ));
             }
-            if let (Some(limit), Some(bstr)) = (s.budget_usd, s.format_budget()) {
-                let color = if s.over_budget || s.cost.usd >= limit {
-                    Color::Red
-                } else if limit > 0.0 && s.cost.usd * 100.0 / limit >= 80.0 {
-                    Color::Yellow
-                } else {
-                    Color::DarkGray
-                };
-                spans.push(Span::styled(format!(" {bstr}"), Style::default().fg(color)));
-            }
             if !note.is_empty() {
-                spans.push(Span::styled(
-                    format!(" · {}", truncate(note, 16)),
+                line1.push(Span::styled(
+                    format!(" · {}", truncate(note, 18)),
                     Style::default().fg(Color::Cyan),
                 ));
             }
-            let line = Line::from(spans);
-            ListItem::new(line)
+
+            // 第二行：次要資訊 (kind/model/branch/context/budget)，避免主列過擠。
+            let mut meta: Vec<String> = Vec::new();
+            let mut km = s.kind.id().to_string();
+            if let Some(m) = &s.model {
+                km.push(':');
+                km.push_str(&truncate(m, 16));
+            }
+            if s.permission == PermissionPolicy::Bypass {
+                km.push_str("!bypass");
+            }
+            meta.push(km);
+            if !branch.is_empty() {
+                meta.push(format!("@{}", truncate(branch, 18)));
+            }
+            if let Some(c) = s.context {
+                let pct = c.percent();
+                meta.push(format!(
+                    "ctx {}",
+                    pct.map_or_else(|| termade_core::human_tokens(c.used), |p| format!("{p:.0}%"))
+                ));
+            }
+            if let Some(bstr) = s.format_budget() {
+                meta.push(bstr);
+            }
+
+            let mut line2: Vec<Span> = Vec::new();
+            let detail_indent = if depth > 0 {
+                format!("{indent}  ")
+            } else {
+                "  ".to_string()
+            };
+            line2.push(Span::raw(detail_indent));
+            let meta_text = meta.join(" · ");
+            // context/budget 警示色以整段標示簡化，仍保留可讀性。
+            let meta_color = if s.over_budget
+                || s
+                    .budget_usd
+                    .zip(Some(s.cost.usd))
+                    .is_some_and(|(l, u)| u >= l)
+            {
+                Color::Red
+            } else if s
+                .context
+                .and_then(|c| c.percent())
+                .is_some_and(|p| p >= 92.0)
+            {
+                Color::Red
+            } else if s
+                .context
+                .and_then(|c| c.percent())
+                .is_some_and(|p| p >= 80.0)
+            {
+                Color::Yellow
+            } else {
+                Color::DarkGray
+            };
+            line2.push(Span::styled(meta_text, Style::default().fg(meta_color)));
+
+            ListItem::new(vec![Line::from(line1), Line::from(line2)])
         })
         .collect();
 
