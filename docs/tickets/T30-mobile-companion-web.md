@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-daemon`、`termade-tui`、`src/`　相依：T28
 
-Status: ready-for-human
+Status: done
 
 ## 問題
 

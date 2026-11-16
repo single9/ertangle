@@ -32,7 +32,7 @@
 | [T24](T24-handoff-message-forwarding.md) | 交接後，發給舊 session 的訊息轉給接手的 session (已完成) | P2 | — |
 | [T25](T25-unread-nudge-on-idle.md) | 收件者忙完後提醒未讀訊息；超限判斷看實際收件者 (已完成) | P2 | T24 |
 | [T26](T26-runtime-model-effort.md) | 執行期切換 model／effort，並可從 TUI 寫入預設值 (已完成) | P1 | T11 |
-| [T27](T27-i18n-english.md) | 多國語系：以 gettext `.po` 提供英文介面 (已實作，待審查) | P2 | — |
+| [T27](T27-i18n-english.md) | 多國語系：以 gettext `.po` 提供英文介面 (已完成) | P2 | — |
 | [T28](T28-remote-tailscale-and-reconnect.md) | 遠端連線韌性與 Tailscale 整合：自動偵測 Tailscale 位址、Token 持久化與 TUI 自動斷線重連 (已完成) | P1 | T05 |
 | [T29](T29-multi-host-tui.md) | TUI 多主機聚合視圖 (`[remotes]` 設定與跨機 Session 操控) (已完成) | P2 | T28 |
 | [T30](T30-mobile-companion-web.md) | 行動端隨身審核器 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code) (已完成) | P2 | T28 |

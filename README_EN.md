@@ -60,7 +60,7 @@ install -m 755 termade-linux-x86_64 ~/.local/bin/termade
 cargo install --git https://github.com/single9/termade
 
 # Pin a specific version
-cargo install --git https://github.com/single9/termade --tag v0.2.0
+cargo install --git https://github.com/single9/termade --tag v0.3.0
 ```
 
 **Option 3: Build from source**
@@ -158,6 +158,41 @@ Every structured agent session is automatically injected with a stdio MCP server
   - `bypass`: Skips permission confirmation.
 - **Policy Engine**: Configured via `~/.config/termade/policy.toml` and `.termade/policy.toml` using `deny` (blacklist) → `allow` (whitelist) → session policy order.
 
+### 6. Remote Connections, Tailscale Integration & Auto-Reconnect (T28)
+
+- **Automatic Tailscale Detection**:
+  - Start daemon with `termade daemon --listen tailscale` to auto-resolve your machine's peer-to-peer Tailscale IPv4 address via `tailscale ip -4`.
+  - Automatically generates and securely stores auth tokens at `~/.local/state/termade/remote.token` (file permission `0600`).
+- **Connection Info Quick Look**:
+  - Run `termade daemon info` to print local and Tailscale addresses, token path, and copy-paste connection commands.
+- **Resilient Auto-Reconnect**:
+  - When laptops wake from sleep, networks switch, or brief disconnects happen, the TUI automatically reconnects in the background with exponential backoff.
+  - Reconnects using `Request::Hello { since, epoch, token }` to seamlessly resume state and backfill missed events without interruption.
+
+### 7. Multi-Host Aggregation in TUI (T29)
+
+- **Unified Multi-Machine Dashboard**:
+  - Configure `[remotes]` in `config.toml` or launch with `termade --remote workstation:7420 --remote gpu-box:7420`.
+  - View, monitor, and interact with agent sessions running across multiple machines from a single unified TUI dashboard.
+- **Transparent Routing & Filtering**:
+  - Sessions are tagged with colored host badges (`[workstation]`, `[gpu-box]`).
+  - Sending prompts, reviewing diffs, and approving tool executions are automatically routed to the owning host.
+  - Switch host views anytime using `:host <target>` or `:host all`.
+
+### 8. Mobile Companion Web Interface & Terminal QR Code (PWA, T30)
+
+- **Mobile Review On The Go**:
+  - Step away from your desk without losing review flow. Start with `termade daemon --web tailscale` or `--web 0.0.0.0:7421`.
+  - A clean **Unicode QR Code** is displayed in your terminal for instant camera scanning on mobile phones.
+- **Zero-Dependency Native HTTP / WebSocket**:
+  - Built directly into the single binary with pure Rust standard networking—no Node.js, npm, or heavy async dependencies required.
+- **Thumb-Friendly Native Mobile PWA**:
+  - **Approval Banner**: Pops up immediately when agents request tool execution permissions, offering one-tap Allow / Always / Deny.
+  - **Conversational Turns**: Restructures raw transcripts into clean turns, grouping messages, thought folds (`💭`), and tool call results.
+  - **Full Markdown & Code Copy**: Clean typography for headers, quotes, lists, and formatted code blocks with a one-tap copy button.
+  - **Text & Image File Previews**: Tap interactive file pills to preview text/code files (with line jumping and highlights) or view images directly.
+  - **Git Diff Review & One-Tap Merge**: Review branch diffs and merge back to main directly from your phone.
+
 ---
 
 ## TUI User Guide
@@ -237,6 +272,8 @@ Press `:` to open the command line with `Tab` completion:
 - `:quota` — Display rate limit windows and reset countdowns for all agent accounts
 - `:task <title>` / `:tasks` — Create task / switch to Tasks board view
 - `:task-status <todo|doing|blocked|review|done>` — Update status of selected task
+- `:host <target|all>` — Filter sessions by host in multi-host mode (T29)
+- `:remote` — Display remote connection details, Tailscale IP, and Mobile Companion URL
 - `:notify on|off|test` — Toggle desktop notifications or send a test alert
 - `:shutdown` — Shut down daemon and all running agents (requires `:shutdown!` to confirm)
 
@@ -282,9 +319,13 @@ termade cost [--json]                             # Breakdown token and USD spen
 termade budget <session-or-label> <amount>        # Set or raise budget cap
 termade replay [--since <seq>] [--json]           # Audit and replay events.jsonl
 
-# Remote Daemon & Shell Completion
-termade daemon --listen 127.0.0.1:7420            # Run daemon listening on TCP (with TOKEN)
-termade --remote 127.0.0.1:7420                   # Connect TUI or CLI to remote daemon
+# Remote Daemon, Multi-Host & Mobile Companion
+termade daemon --listen tailscale                 # Start daemon bound to Tailscale WireGuard IP
+termade daemon --listen 127.0.0.1:7420            # Start daemon listening on TCP (auto-generates token)
+termade daemon --web tailscale                    # Start mobile companion and print terminal QR code
+termade daemon info                               # Print current Tailscale IP, token, and connection examples
+termade --remote tailscale                        # Connect to local Tailscale daemon
+termade --remote workstation:7420 --remote gpu:7420 # Aggregate multiple remote hosts into a single TUI
 termade completions <bash|zsh|fish>               # Generate shell completion script
 ```
 
@@ -302,6 +343,11 @@ layout = "two"                    # Default layout: "two" | "three" | "tabs"
 notify = ["bell", "command"]      # Notification methods: "bell" | "osc9" | "command"
 notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # Turns shorter than this threshold do not notify
+
+[remotes]
+# Multi-host aggregation (T29)
+workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/termade/workstation.token" }
+gpu-box = { addr = "100.64.0.8:7420" }
 
 [limits]
 session_usd = 5.0                 # Max USD budget per session

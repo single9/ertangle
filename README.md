@@ -60,7 +60,7 @@ install -m 755 termade-linux-x86_64 ~/.local/bin/termade
 cargo install --git https://github.com/single9/termade
 
 # 指定版本
-cargo install --git https://github.com/single9/termade --tag v0.2.0
+cargo install --git https://github.com/single9/termade --tag v0.3.0
 ```
 
 **方式三：從原始碼建置**
@@ -158,6 +158,41 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - `bypass`：跳過權限確認。
 - **規則引擎**：支援全域 `~/.config/termade/policy.toml` 與專案 `.termade/policy.toml`，以 `deny` (黑名單) → `allow` (白名單) → session 政策順序過濾指令。
 
+### 6. 遠端連線、Tailscale 整合與斷線自動重連 (T28)
+
+- **自動偵測 Tailscale 位址**：
+  - 支援 `termade daemon --listen tailscale`，自動呼叫本機 `tailscale ip -4` 解析點對點安全通道 IP，無需手動查詢輸入。
+  - 自動生成並持久化安全認證 Token 於 `~/.local/state/termade/remote.token` (檔案權限嚴格限制為 `0600`)。
+- **終端機連線資訊速查**：
+  - 執行 `termade daemon info` 即可一鍵印出目前本機與 Tailscale 遠端連線位址、Token 與連線指令。
+- **無縫斷線重連 (Auto-Reconnect)**：
+  - 當筆電休眠喚醒、跨 Wi-Fi 切換網路或短暫斷線時，TUI 會在背景以指數退避演算法自動重試。
+  - 連線恢復時自動發送帶有最後已知序列號的 `Request::Hello { since, epoch, token }`，無縫還原狀態並補齊離線期間遺漏的事件記錄。
+
+### 7. TUI 多主機聚合視圖 (Multi-Host Aggregation, T29)
+
+- **跨機統一儀表板**：
+  - 在 `config.toml` 中配置 `[remotes]` 或使用命令列參數 `termade --remote workstation:7420 --remote gpu-box:7420`。
+  - 單一 TUI 畫面即可聚合呈現本機與所有遠端伺服器上的 Agent Sessions。
+- **智慧路由與篩選**：
+  - Sessions 清單依主機顯示彩色來源標記 (`[workstation]`、`[gpu-box]`)。
+  - 發送 Prompt、審核權限或檢視 Diff 時，指令會自動透明路由至所屬的遠端主機。
+  - 按 `:` 輸入 `:host <名稱>` (或 `:host all`) 可隨時切換聚焦單一主機或全域視圖。
+
+### 8. 行動端隨身審核器與 Web 介面 (Mobile Companion PWA, T30)
+
+- **隨身審核、買咖啡不中斷**：
+  - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。啟動 `termade daemon --web tailscale` 或 `--web 0.0.0.0:7421`。
+  - 終端機內建 **Unicode QR Code**，手機打開相機一掃即可在瀏覽器開啟專屬 PWA 介面。
+- **零相依原生 HTTP / WebSocket**：
+  - Daemon 內部以純 Rust 同步網路實作，不引入 Node.js 或額外 async 框架，維持單一執行檔與極低記憶體開銷。
+- **App 級大拇指原生設計**：
+  - **待審核懸浮橫幅**：Agent 遇到工具執行或危險指令等待核准時，頂部即時彈出醒目核准卡片，單鍵 Allow / Always / Deny。
+  - **對話回合 (Turn)**：將逐字稿自動重構為結構化對話回合，收攏正文、摺疊 Agent 內部思考過程 (`💭`) 與工具執行記錄。
+  - **對話 Markdown 與程式碼區塊**：完整渲染標題、清單、引言，程式碼區塊附帶一鍵「複製」按鈕。
+  - **文字與圖片檔案即時預覽**：點擊對話中的檔案膠囊，直接在面板中即時預覽文字與程式碼內容 (含行號跳轉與高亮)，或直接檢視渲染圖片。
+  - **即時 Diff 審查與一鍵 Merge**：在手機端審視 Git 變更，確認無誤後單鍵完成合併。
+
 ---
 
 ## TUI 終端機介面操作指南
@@ -237,6 +272,8 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 - `:quota` — 查詢所有 Agent 帳號的額度視窗與重置倒數
 - `:task <標題>` / `:tasks` — 建立新任務 / 切換到任務看板視圖
 - `:task-status <todo|doing|blocked|review|done>` — 修改選取任務的狀態
+- `:host <目標|all>` — 切換多主機視圖篩選 (T29)
+- `:remote` — 顯示目前主機的遠端連線資訊、Tailscale IP 與行動端 Web 網址
 - `:notify on|off|test` — 開關桌面通知或測試發送
 - `:shutdown` — 關閉共用 Daemon 與所有專案的 Agent (安全保護：需輸入 `:shutdown!` 確認)
 
@@ -282,9 +319,13 @@ termade cost [--json]                             # 統計各 session 與整體 
 termade budget <session-or-label> <金額>          # 設定或調高預算上限
 termade replay [--since <seq>] [--json]           # 重播與審核 events.jsonl 事件記錄
 
-# 遠端 Daemon 與 Shell 補齊
-termade daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽遠端 (搭配 TOKEN)
-termade --remote 127.0.0.1:7420                   # 連線至遠端 Daemon
+# 遠端 Daemon、多主機與行動端隨身審核器
+termade daemon --listen tailscale                 # 啟動 Daemon 並自動綁定 Tailscale 安全通道
+termade daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽 TCP (自動產生 token)
+termade daemon --web tailscale                    # 啟動行動端隨身審核器並印出終端機 QR Code
+termade daemon info                               # 查詢目前主機的 Tailscale 位址、Token 與連線指令
+termade --remote tailscale                        # 連線至本機 Tailscale Daemon
+termade --remote workstation:7420 --remote gpu:7420 # 同時連線多台主機並於單一 TUI 聚合呈現
 termade completions <bash|zsh|fish>               # 產生 Shell 自動補齊腳本
 ```
 
@@ -303,6 +344,11 @@ layout = "two"                    # 預設版面："two" | "three" | "tabs"
 notify = ["bell", "command"]      # 通知方式："bell" | "osc9" | "command" (可複選)
 notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # 短於此秒數的回合完成不觸發通知
+
+[remotes]
+# 跨主機聚合設定 (T29)
+workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/termade/workstation.token" }
+gpu-box = { addr = "100.64.0.8:7420" }
 
 [limits]
 session_usd = 5.0                 # 單一 Session 成本上限 (美元)

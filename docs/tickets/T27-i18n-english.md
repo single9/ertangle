@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-tui`、`termade-daemon`、`termade-adapter`、`src/`、CI　相依：—
 
-Status: ready-for-human (已實作於 `t27-i18n` 分支，待審查)
+Status: done
 
 ## 目標與範圍
 
