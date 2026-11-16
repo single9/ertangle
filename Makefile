@@ -16,7 +16,8 @@ BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/termade
 
 .PHONY: check-zigbuild all build dev run tui daemon shutdown test clippy lint fmt \
         macos macos-arm64 macos-x86_64 macos-universal dist install install-completions clean help \
-        i18n-extract i18n-check
+        i18n-extract i18n-check \
+        changelog changelog-unreleased release-bump
 
 all: build
 
@@ -67,6 +68,27 @@ i18n-extract:
 ## 檢查翻譯檔：.pot 同步、沒有 fuzzy 與缺譯、佔位符一致
 i18n-check:
 	PATH="$(BUILD_PATH)" sh scripts/i18n-check.sh
+
+## 使用 git-cliff 產生完整 CHANGELOG.md
+changelog:
+	PATH="$(BUILD_PATH)" git cliff -o CHANGELOG.md
+
+## 預覽下一版 (unreleased) 變更紀錄
+changelog-unreleased:
+	PATH="$(BUILD_PATH)" git cliff --unreleased
+
+## 準備發布新版本 (用法: make release-bump 或 make release-bump VERSION=0.4.0)
+release-bump:
+	@next_ver="$${VERSION:-$$(PATH="$(BUILD_PATH)" git cliff --bumped-version 2>/dev/null | tr -d 'v')}"; \
+	if [ -z "$$next_ver" ]; then echo "無法自動計算版本號，請指定 VERSION=x.y.z" >&2; exit 1; fi; \
+	echo "準備發布版本: v$$next_ver"; \
+	sed -i 's/^version = ".*"/version = "'$$next_ver'"/' Cargo.toml; \
+	PATH="$(BUILD_PATH)" $(CARGO) check >/dev/null 2>&1; \
+	PATH="$(BUILD_PATH)" git cliff --tag "v$$next_ver" -o CHANGELOG.md; \
+	echo "已更新 Cargo.toml 與 CHANGELOG.md 至 v$$next_ver"; \
+	echo "請檢視變更後提交："; \
+	echo "  git commit -am 'chore(release): prepare for v'$$next_ver"; \
+	echo "  git tag -a v$$next_ver -m 'chore: release v'$$next_ver"
 
 ## 交叉編譯 macOS Apple Silicon (aarch64-apple-darwin)
 macos-arm64: check-zigbuild
@@ -130,6 +152,11 @@ help:
 	@echo "  make install-completions  依目前 SHELL 安裝補全腳本 (zsh / bash / fish)"
 	@echo "  make i18n-extract     更新 locales/termade.pot 與各語言 .po"
 	@echo "  make i18n-check       檢查翻譯檔 (CI 也會跑)"
+	@echo ""
+	@echo "版本與發布目標:"
+	@echo "  make changelog        使用 git-cliff 產生完整 CHANGELOG.md"
+	@echo "  make changelog-unreleased  預覽下一版 (unreleased) 變更紀錄"
+	@echo "  make release-bump     自動計算或指定版本號更新 Cargo.toml 與 CHANGELOG.md"
 	@echo ""
 	@echo "macOS 交叉編譯目標:"
 	@echo "  make macos            建置全部 macOS 版本 (arm64 / x86_64 / universal2)"
