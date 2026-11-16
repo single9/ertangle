@@ -375,10 +375,10 @@ fn squash(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-fn pair_writer() -> (ConnStream, std::os::unix::net::UnixStream) {
+fn pair_writer() -> (HostRouter, std::os::unix::net::UnixStream) {
     let (a, b) = std::os::unix::net::UnixStream::pair().unwrap();
     b.set_nonblocking(true).unwrap();
-    (ConnStream::Unix(a), b)
+    (HostRouter::single(termade_daemon::ConnStream::Unix(a)), b)
 }
 
 fn add_pending(app: &mut App) {
@@ -1163,7 +1163,7 @@ fn add_task(
     );
 }
 
-fn key(app: &mut App, w: &mut ConnStream, code: KeyCode) {
+fn key(app: &mut App, w: &mut HostRouter, code: KeyCode) {
     handle_key(app, w, KeyEvent::new(code, KeyModifiers::NONE)).unwrap();
 }
 
@@ -1371,7 +1371,7 @@ fn kev(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
 
-fn type_keys(app: &mut App, w: &mut ConnStream, text: &str) {
+fn type_keys(app: &mut App, w: &mut HostRouter, text: &str) {
     for c in text.chars() {
         handle_key(app, w, kev(KeyCode::Char(c))).unwrap();
     }
@@ -1611,9 +1611,9 @@ fn search_in_diff_view_moves_cursor() {
     assert_eq!(app.transcript_scroll, None, "不該動到逐字稿的捲動");
 
     // diff 重新載入：符合項跟著重算。
-    apply_frame(
-        &mut app,
-        Frame::Diff {
+    app.apply_host_frame(
+        "local",
+        termade_protocol::Frame::Diff {
             session: "ses_test".into(),
             branch: None,
             cwd: "/tmp".into(),
@@ -1877,5 +1877,149 @@ gpt-oss-120b-medium\tGPT OSS\n";
         m[0].0.contains("Gemini 4 Argon") && !m[0].0.contains("Medium"),
         "{:?}",
         m[0]
+    );
+}
+
+#[test]
+fn multi_host_single_mode_has_no_prefixes_and_no_host_dots() {
+    let mut app = sample_app(&["ses_1"]);
+    assert!(!app.has_multiple_hosts());
+    let buf = render(&mut app);
+    // 單機模式下不得出現 [local] 前綴或主機燈號
+    assert!(!buf.contains("[local]"), "單機模式不應顯示 [local]");
+    assert!(!buf.contains("● local"), "單機模式標題列不應顯示主機指示燈");
+}
+
+#[test]
+fn multi_host_aggregated_sessions_and_filter_cycling() {
+    let mut app = App::new();
+
+    // 建立 local 與 remote_box 兩台主機資料
+    let mut local_data = crate::app::HostData::new("local");
+    local_data.status = crate::hosts::HostStatus::Connected;
+    let mut s1 = sample_app(&[]).state.sessions["ses_test"].clone();
+    s1.id = "ses_local_1".into();
+    s1.label = "local_worker".into();
+    s1.created_ms = 100;
+    local_data.state.sessions.insert("ses_local_1".into(), s1);
+
+    let mut remote_data = crate::app::HostData::new("remote_box");
+    remote_data.status = crate::hosts::HostStatus::Connected;
+    let mut s2 = sample_app(&[]).state.sessions["ses_test"].clone();
+    s2.id = "ses_remote_1".into();
+    s2.label = "remote_api".into();
+    s2.created_ms = 200;
+    remote_data.state.sessions.insert("ses_remote_1".into(), s2);
+
+    app.hosts.insert("local".into(), local_data);
+    app.hosts.insert("remote_box".into(), remote_data);
+    app.state = app.hosts["local"].state.clone();
+    app.scope_here = false;
+
+    assert!(app.has_multiple_hosts());
+
+    // 1. 全部主機檢視：應包含兩台機器的 session
+    let vis = app.visible_sessions();
+    assert_eq!(vis.len(), 2);
+    assert_eq!(vis[0], ("local".to_string(), "ses_local_1".into()));
+    assert_eq!(vis[1], ("remote_box".to_string(), "ses_remote_1".into()));
+
+    // 2. 循環篩選主機：全部 -> local -> remote_box -> 全部
+    app.cycle_host_filter();
+    assert_eq!(app.host_filter, Some("local".to_string()));
+    let vis_local = app.visible_sessions();
+    assert_eq!(vis_local.len(), 1);
+    assert_eq!(vis_local[0].1, "ses_local_1");
+
+    app.cycle_host_filter();
+    assert_eq!(app.host_filter, Some("remote_box".to_string()));
+    let vis_remote = app.visible_sessions();
+    assert_eq!(vis_remote.len(), 1);
+    assert_eq!(vis_remote[0].1, "ses_remote_1");
+
+    app.cycle_host_filter();
+    assert_eq!(app.host_filter, None);
+    assert_eq!(app.visible_sessions().len(), 2);
+
+    // 3. 畫面繪製：應帶有主機前綴與標題列指示燈
+    let buf = render(&mut app);
+    assert!(buf.contains("[local]"), "多主機畫面應有 [local] 前綴");
+    assert!(
+        buf.contains("[remote_box]"),
+        "多主機畫面應有 [remote_box] 前綴"
+    );
+    assert!(buf.contains("● local"), "標題列應顯示 local 連線燈號");
+    assert!(
+        buf.contains("● remote_box"),
+        "標題列應顯示 remote_box 連線燈號"
+    );
+}
+
+#[test]
+fn multi_host_router_routes_session_requests_to_owning_host() {
+    use std::io::Read;
+
+    let (local_w, mut local_r) = std::os::unix::net::UnixStream::pair().unwrap();
+    let (remote_w, mut remote_r) = std::os::unix::net::UnixStream::pair().unwrap();
+    local_r.set_nonblocking(true).unwrap();
+    remote_r.set_nonblocking(true).unwrap();
+
+    let mut router = crate::hosts::HostRouter::single(termade_daemon::ConnStream::Unix(local_w));
+    router.set_writer("remote_box", termade_daemon::ConnStream::Unix(remote_w));
+
+    let mut app = App::new();
+    let mut h1 = crate::app::HostData::new("local");
+    let mut s1 = sample_app(&[]).state.sessions["ses_test"].clone();
+    s1.id = "ses_loc".into();
+    h1.state.sessions.insert("ses_loc".into(), s1);
+
+    let mut h2 = crate::app::HostData::new("remote_box");
+    let mut s2 = sample_app(&[]).state.sessions["ses_test"].clone();
+    s2.id = "ses_rem".into();
+    h2.state.sessions.insert("ses_rem".into(), s2);
+
+    app.hosts.insert("local".into(), h1);
+    app.hosts.insert("remote_box".into(), h2);
+
+    router.update_from_app(&app);
+
+    // 1. 送給遠端 session 的 Prompt 應路由至 remote_box
+    let prompt_req = termade_protocol::Request::Prompt {
+        session: "ses_rem".into(),
+        text: "hello remote".into(),
+        attachments: Vec::new(),
+        queue: false,
+    };
+    router.send(&prompt_req).unwrap();
+
+    let mut bytes = [0u8; 1024];
+    let n = remote_r.read(&mut bytes).unwrap();
+    let remote_msg = String::from_utf8_lossy(&bytes[..n]);
+    assert!(
+        remote_msg.contains("prompt"),
+        "遠端主機應收到 prompt: {remote_msg}"
+    );
+    assert!(
+        remote_msg.contains("ses_rem"),
+        "遠端主機應收到 ses_rem: {remote_msg}"
+    );
+    assert!(
+        remote_msg.contains("hello remote"),
+        "遠端主機應收到 text: {remote_msg}"
+    );
+
+    // 2. 送給本機 session 的 Kill 應路由至 local
+    let kill_req = termade_protocol::Request::Kill {
+        session: "ses_loc".into(),
+    };
+    router.send(&kill_req).unwrap();
+
+    let mut loc_bytes = [0u8; 1024];
+    let n_loc = local_r.read(&mut loc_bytes).unwrap();
+    let loc_msg = String::from_utf8_lossy(&loc_bytes[..n_loc]);
+    assert!(loc_msg.contains("kill"), "本機主機應收到 kill: {loc_msg}");
+    assert!(
+        loc_msg.contains("ses_loc"),
+        "本機主機應收到 ses_loc: {loc_msg}"
     );
 }

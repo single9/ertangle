@@ -76,20 +76,18 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use ratatui::backend::CrosstermBackend;
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use termade_daemon::{Client, ConnStream};
-use termade_protocol::{Frame, Request};
+use termade_daemon::Client;
+use termade_protocol::Request;
 use tr::tr;
 
-pub(crate) enum TuiMessage {
-    Frame(Frame),
-    Disconnected,
-    Reconnected { writer: ConnStream },
-}
+pub(crate) mod hosts;
+pub(crate) use hosts::*;
 
 /// 啟動 TUI (會先確保 daemon 在跑)。
 pub fn run() -> Result<()> {
@@ -103,107 +101,63 @@ pub fn run() -> Result<()> {
         token: client_token,
         epoch: None,
     })?;
-    let mut writer = client.try_clone_stream()?;
+    let writer = client.try_clone_stream()?;
+    let mut router = HostRouter::single(writer);
 
-    let (tx, rx) = mpsc::channel::<TuiMessage>();
-    let shared_seq = Arc::new(AtomicU64::new(0));
-    let shared_epoch = Arc::new(Mutex::new(None));
+    let (tx, rx) = mpsc::channel::<HostEvent>();
     let running = Arc::new(AtomicBool::new(true));
 
-    let t_tx = tx.clone();
-    let t_seq = shared_seq.clone();
-    let t_epoch = shared_epoch.clone();
-    let t_running = running.clone();
+    // 啟動本機連線執行緒
+    let local_seq = Arc::new(AtomicU64::new(0));
+    let local_epoch = Arc::new(Mutex::new(None));
+    let mut host_sync = HashMap::new();
+    host_sync.insert(
+        "local".to_string(),
+        (local_seq.clone(), local_epoch.clone()),
+    );
 
-    std::thread::spawn(move || {
-        run_reader_reconnect_loop(client, t_tx, t_seq, t_epoch, t_running);
-    });
+    spawn_host_thread(
+        "local".into(),
+        Some(client),
+        HostConnectSpec::Local,
+        tx.clone(),
+        local_seq,
+        local_epoch,
+        running.clone(),
+    );
+
+    // 讀取設定檔並為每個啟用的遠端主機啟動獨立連線執行緒
+    let global_dir = termade_daemon::config_dir();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cfg = termade_daemon::config::Config::load(&global_dir, &cwd);
+
+    for (name, r) in &cfg.remotes {
+        if !r.enabled {
+            continue;
+        }
+        let seq = Arc::new(AtomicU64::new(0));
+        let epoch = Arc::new(Mutex::new(None));
+        host_sync.insert(name.clone(), (seq.clone(), epoch.clone()));
+
+        spawn_host_thread(
+            name.clone(),
+            None,
+            HostConnectSpec::Tcp {
+                addr: r.addr.clone(),
+                token: r.resolve_token(),
+            },
+            tx.clone(),
+            seq,
+            epoch,
+            running.clone(),
+        );
+    }
 
     let mut terminal = setup_terminal()?;
-    let result = event_loop(&mut terminal, &mut writer, rx, shared_seq, shared_epoch);
+    let result = event_loop(&mut terminal, &mut router, rx, host_sync);
     running.store(false, Ordering::Relaxed);
     restore_terminal(&mut terminal)?;
     result
-}
-
-fn run_reader_reconnect_loop(
-    mut client: Client,
-    tx: mpsc::Sender<TuiMessage>,
-    shared_seq: Arc<AtomicU64>,
-    shared_epoch: Arc<Mutex<Option<String>>>,
-    running: Arc<AtomicBool>,
-) {
-    while running.load(Ordering::Relaxed) {
-        match client.recv() {
-            Ok(frame) => {
-                if tx.send(TuiMessage::Frame(frame)).is_err() {
-                    break;
-                }
-            }
-            Err(_) => {
-                if !running.load(Ordering::Relaxed) {
-                    break;
-                }
-                if tx.send(TuiMessage::Disconnected).is_err() {
-                    break;
-                }
-
-                // 指數退避重試連線 (200ms -> 500ms -> 1s -> 2s，上限 5s)
-                let mut backoff = Duration::from_millis(200);
-                let max_backoff = Duration::from_secs(5);
-                let mut reconnected = false;
-
-                while running.load(Ordering::Relaxed) {
-                    let start = std::time::Instant::now();
-                    while start.elapsed() < backoff {
-                        if !running.load(Ordering::Relaxed) {
-                            break;
-                        }
-                        std::thread::sleep(Duration::from_millis(50));
-                    }
-                    if !running.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    if let Ok(mut new_client) = Client::connect() {
-                        let seq = shared_seq.load(Ordering::Relaxed);
-                        let epoch = shared_epoch.lock().unwrap().clone();
-                        let token = termade_daemon::get_client_token();
-
-                        let hello = Request::Hello {
-                            client: "tui".into(),
-                            since: Some(seq),
-                            token,
-                            epoch,
-                        };
-                        if new_client.send(&hello).is_ok() {
-                            if let Ok(new_writer) = new_client.try_clone_stream() {
-                                client = new_client;
-                                if tx
-                                    .send(TuiMessage::Reconnected { writer: new_writer })
-                                    .is_ok()
-                                {
-                                    reconnected = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    backoff = match backoff.as_millis() {
-                        200 => Duration::from_millis(500),
-                        500 => Duration::from_millis(1000),
-                        1000 => Duration::from_millis(2000),
-                        _ => (backoff * 2).min(max_backoff),
-                    };
-                }
-
-                if !reconnected {
-                    break;
-                }
-            }
-        }
-    }
 }
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
@@ -252,16 +206,17 @@ pub(crate) fn set_mouse_capture(on: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn send(writer: &mut ConnStream, req: &Request) -> Result<()> {
-    termade_daemon::send_request(writer, req)
+pub(crate) fn send(writer: &mut HostRouter, req: &Request) -> Result<()> {
+    writer.send(req)
 }
+
+type HostSyncMap = HashMap<String, (Arc<AtomicU64>, Arc<Mutex<Option<String>>>)>;
 
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    writer: &mut ConnStream,
-    rx: Receiver<TuiMessage>,
-    shared_seq: Arc<AtomicU64>,
-    shared_epoch: Arc<Mutex<Option<String>>>,
+    writer: &mut HostRouter,
+    rx: Receiver<HostEvent>,
+    host_sync: HostSyncMap,
 ) -> Result<()> {
     let mut app = App::new();
     app.prompt_history = history::History::load(Some(history::history_path("prompt")));
@@ -272,24 +227,36 @@ fn event_loop(
     loop {
         loop {
             match rx.try_recv() {
-                Ok(msg) => match msg {
-                    TuiMessage::Frame(frame) => {
-                        apply_frame(&mut app, frame);
-                        shared_seq.store(app.state.seq, Ordering::Relaxed);
-                        *shared_epoch.lock().unwrap() = app.daemon_epoch.clone();
+                Ok(event) => match event {
+                    HostEvent::Frame { host, frame } => {
+                        app.apply_host_frame(&host, frame);
+                        writer.update_from_app(&app);
+                        if let Some((seq_arc, epoch_arc)) = host_sync.get(&host) {
+                            if let Some(h) = app.hosts.get(&host) {
+                                seq_arc.store(h.state.seq, Ordering::Relaxed);
+                                *epoch_arc.lock().unwrap() = h.daemon_epoch.clone();
+                            }
+                        }
                         dirty = true;
                     }
-                    TuiMessage::Disconnected => {
-                        if !app.disconnected {
+                    HostEvent::Disconnected { host } => {
+                        app.set_host_status(&host, HostStatus::Reconnecting(tr!("重連中")));
+                        if host == app.active_host {
                             app.disconnected = true;
-                            app.status = tr!("連線中斷，正在重連…");
-                            dirty = true;
+                            app.status = tr!("與 {host} 連線中斷，正在重連…", host = host);
                         }
+                        dirty = true;
                     }
-                    TuiMessage::Reconnected { writer: new_writer } => {
-                        *writer = new_writer;
-                        app.disconnected = false;
-                        app.status = tr!("已重新連線至 daemon");
+                    HostEvent::Reconnected {
+                        host,
+                        writer: new_stream,
+                    } => {
+                        writer.set_writer(&host, new_stream);
+                        app.set_host_status(&host, HostStatus::Connected);
+                        if host == app.active_host {
+                            app.disconnected = false;
+                            app.status = tr!("已重新連線至 {host}", host = host);
+                        }
                         dirty = true;
                     }
                 },
@@ -356,60 +323,7 @@ fn event_loop(
     Ok(())
 }
 
-fn apply_frame(app: &mut App, frame: Frame) {
-    match frame {
-        Frame::Ready {
-            pid,
-            version,
-            epoch,
-        } => {
-            app.status = format!("daemon pid={pid} v{version}");
-            app.daemon_epoch = Some(epoch);
-        }
-        Frame::Snapshot { state } => {
-            app.state = *state;
-            app.notify.observe_snapshot(&app.state);
-            app.clamp_selection();
-        }
-        Frame::Record { record } => {
-            let selected = app.selected_id();
-            app.notify.observe(
-                &app.state,
-                &record,
-                selected.as_deref(),
-                app.scope_here,
-                &app.home_project,
-                now_millis(),
-            );
-            app.state.apply(&record);
-            app.clamp_selection();
-        }
-        Frame::Messages { .. } => {}
-        Frame::Diff { session, diff, .. } => {
-            app.diff_session = Some(session);
-            app.diff_lines = diff.lines().map(|l| l.to_string()).collect();
-            app.diff_gutter = build_gutter(&app.diff_lines);
-            let (added, removed) = diff_stat(&app.diff_lines);
-            app.diff_added = added;
-            app.diff_removed = removed;
-            app.diff_cursor = 0;
-            search::refresh(app);
-        }
-        Frame::Worktrees { worktrees } => {
-            app.worktrees = worktrees;
-        }
-        Frame::Ok { note } => {
-            if let Some(n) = note {
-                app.status = n;
-            }
-        }
-        Frame::Error { message } => {
-            app.status = tr!("錯誤：{message}", message = message);
-        }
-    }
-}
-
-pub(crate) fn request_selected_diff(app: &mut App, writer: &mut ConnStream) -> Result<()> {
+pub(crate) fn request_selected_diff(app: &mut App, writer: &mut HostRouter) -> Result<()> {
     if let Some(id) = app.selected_id() {
         send(writer, &Request::WorktreeDiff { session: id })?;
     }

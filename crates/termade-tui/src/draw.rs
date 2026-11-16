@@ -563,10 +563,17 @@ pub(crate) fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
         .values()
         .map(|p| &p.session)
         .collect();
+    let vis = app.visible_sessions();
+    let multi_host = app.has_multiple_hosts();
     // (文字, 樣式)
     let mut items: Vec<(String, Style)> = Vec::new();
     for (i, id) in ids.iter().enumerate() {
-        let Some(s) = app.state.sessions.get(id) else {
+        let s_opt = vis
+            .get(i)
+            .and_then(|(h, _)| app.hosts.get(h))
+            .and_then(|h| h.state.sessions.get(id))
+            .or_else(|| app.state.sessions.get(id));
+        let Some(s) = s_opt else {
             items.push((String::new(), Style::default()));
             continue;
         };
@@ -586,7 +593,13 @@ pub(crate) fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
         if i == sel {
             style = style.add_modifier(Modifier::REVERSED | Modifier::BOLD);
         }
-        items.push((format!(" {} {} ", s.status.glyph(), s.label), style));
+        let label = if multi_host {
+            let hname = vis.get(i).map(|(h, _)| h.as_str()).unwrap_or("");
+            format!(" {} [{hname}] {} ", s.status.glyph(), s.label)
+        } else {
+            format!(" {} {} ", s.status.glyph(), s.label)
+        };
+        items.push((label, style));
     }
     let widths: Vec<usize> = items.iter().map(|(t, _)| t.width()).collect();
     let total = area.width as usize;
@@ -693,7 +706,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
     let live = app.state.live_sessions().count();
     let cost = app.state.total_cost();
 
-    let tabs = Line::from(vec![
+    let mut tab_spans = vec![
         Span::styled(
             " termade ",
             Style::default()
@@ -720,7 +733,35 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
             format!("  · {} tasks", crate::tasks::open_task_count(app)),
             Style::default().fg(Color::Gray),
         ),
-    ]);
+    ];
+
+    if app.has_multiple_hosts() {
+        tab_spans.push(Span::raw("  "));
+        for (hname, hdata) in &app.hosts {
+            let (sym, color) = match hdata.status {
+                crate::hosts::HostStatus::Connected => ("●", Color::Green),
+                crate::hosts::HostStatus::Reconnecting(_) => ("◌", Color::Yellow),
+                crate::hosts::HostStatus::Disconnected => ("◌", Color::DarkGray),
+            };
+            let is_filtered = app.host_filter.as_deref() == Some(hname.as_str());
+            let name_str = if is_filtered {
+                format!(" [{hname}]")
+            } else {
+                format!(" {hname}")
+            };
+            tab_spans.push(Span::styled(format!(" {sym}"), Style::default().fg(color)));
+            tab_spans.push(Span::styled(
+                name_str,
+                Style::default().fg(if is_filtered {
+                    Color::Cyan
+                } else {
+                    Color::White
+                }),
+            ));
+        }
+    }
+
+    let tabs = Line::from(tab_spans);
 
     let stats = Line::from(vec![
         Span::styled("  cost ", Style::default().fg(Color::DarkGray)),
@@ -768,25 +809,36 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.sessions_area = area;
-    let ids = app.session_ids();
+    let vis = app.visible_sessions();
+    let multi_host = app.has_multiple_hosts();
+    let sessions: Vec<(String, &termade_core::Session)> = vis
+        .iter()
+        .filter_map(|(host, id)| {
+            app.hosts
+                .get(host)
+                .and_then(|h| h.state.sessions.get(id))
+                .or_else(|| app.state.sessions.get(id))
+                .map(|s| (host.clone(), s))
+        })
+        .collect();
+
     let roots: Vec<&str> = {
-        let mut r: Vec<&str> = app
-            .state
-            .sessions
-            .values()
-            .map(|s| s.project_root())
-            .collect();
+        let mut r: Vec<&str> = sessions.iter().map(|(_, s)| s.project_root()).collect();
         r.sort_unstable();
         r.dedup();
         r
     };
     let multi_project = roots.len() > 1;
     let show_project = multi_project || !app.scope_here;
-    let hidden = app.state.sessions.len().saturating_sub(ids.len());
-    let items: Vec<ListItem> = ids
+    let total_sessions = if multi_host {
+        app.hosts.values().map(|h| h.state.sessions.len()).sum()
+    } else {
+        app.state.sessions.len()
+    };
+    let hidden = total_sessions.saturating_sub(sessions.len());
+    let items: Vec<ListItem> = sessions
         .iter()
-        .filter_map(|id| app.state.sessions.get(id))
-        .map(|s| {
+        .map(|(host_name, s)| {
             let color = match s.status {
                 SessionStatus::Failed => Color::Red,
                 SessionStatus::WaitingApproval => Color::Yellow,
@@ -815,6 +867,12 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 format!("{} ", s.status.glyph()),
                 Style::default().fg(color),
             ));
+            if multi_host {
+                spans.push(Span::styled(
+                    format!("[{host_name}] "),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
             spans.extend([
                 Span::raw(s.label.clone()),
                 Span::styled(
@@ -880,8 +938,8 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         .collect();
 
     let mut list_state = ListState::default();
-    if !ids.is_empty() {
-        list_state.select(Some(app.selected.min(ids.len() - 1)));
+    if !sessions.is_empty() {
+        list_state.select(Some(app.selected.min(sessions.len() - 1)));
     }
 
     let list = List::new(items)

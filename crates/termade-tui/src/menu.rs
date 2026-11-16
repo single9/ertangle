@@ -3,11 +3,11 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use termade_core::AgentKind;
-use termade_daemon::ConnStream;
 use tr::tr;
 
 use crate::app::{App, Mode};
 use crate::commands::execute_command;
+use crate::hosts::HostRouter;
 
 /// 選單項目的動作。
 #[derive(Clone, Copy)]
@@ -223,7 +223,7 @@ pub(crate) fn open_menu(app: &mut App) {
     app.menu_path.clear();
 }
 
-pub(crate) fn handle_menu_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<()> {
+pub(crate) fn handle_menu_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Esc => close(app),
         KeyCode::Backspace => {
@@ -587,7 +587,7 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
 
 fn finish_picker(
     app: &mut App,
-    writer: &mut ConnStream,
+    writer: &mut HostRouter,
     kind: AgentKind,
     model: Option<String>,
     effort: Option<String>,
@@ -642,7 +642,7 @@ fn finish_picker(
     Ok(())
 }
 
-pub(crate) fn handle_pick_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<()> {
+pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     let Some(p) = app.picker.as_mut() else {
         app.mode = Mode::Normal;
         return Ok(());

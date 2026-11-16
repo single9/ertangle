@@ -1,11 +1,15 @@
 //! TUI 狀態模型、版面模式與畫面快取。
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 use tr::tr;
 
 use ratatui::layout::Rect;
 use ratatui::text::Line;
-use termade_core::{AgentKind, PermissionPolicy, SessionId, State, WorktreeInfo};
+use termade_core::{now_millis, AgentKind, PermissionPolicy, SessionId, State, WorktreeInfo};
+use termade_protocol::Frame;
+
+use crate::diff::{build_gutter, diff_stat};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum Mode {
@@ -103,8 +107,49 @@ pub(crate) struct MdCache {
     pub(crate) lines: Vec<Line<'static>>,
 }
 
+/// 單一主機的狀態與資料快照。
+#[derive(Debug, Clone)]
+pub(crate) struct HostData {
+    #[allow(dead_code)]
+    pub(crate) name: String,
+    pub(crate) state: State,
+    pub(crate) status: crate::hosts::HostStatus,
+    pub(crate) daemon_epoch: Option<String>,
+    pub(crate) diff_session: Option<SessionId>,
+    pub(crate) diff_lines: Vec<String>,
+    pub(crate) diff_cursor: usize,
+    pub(crate) diff_gutter: Vec<(Option<u64>, Option<u64>)>,
+    pub(crate) diff_added: usize,
+    pub(crate) diff_removed: usize,
+    pub(crate) worktrees: Vec<WorktreeInfo>,
+}
+
+impl HostData {
+    pub(crate) fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            state: State::default(),
+            status: crate::hosts::HostStatus::Disconnected,
+            daemon_epoch: None,
+            diff_session: None,
+            diff_lines: Vec::new(),
+            diff_cursor: 0,
+            diff_gutter: Vec::new(),
+            diff_added: 0,
+            diff_removed: 0,
+            worktrees: Vec::new(),
+        }
+    }
+}
+
 pub(crate) struct App {
     pub(crate) state: State,
+    /// 多主機狀態快照清單 (以 host name 為鍵)。
+    pub(crate) hosts: BTreeMap<String, HostData>,
+    /// 目前活躍／聚焦的主機名稱 (預設 "local")。
+    pub(crate) active_host: String,
+    /// 主機篩選器：`None` 代表顯示全部主機，`Some(h)` 代表僅顯示該主機。
+    pub(crate) host_filter: Option<String>,
     pub(crate) selected: usize,
     pub(crate) view: CenterView,
     pub(crate) mode: Mode,
@@ -215,8 +260,18 @@ impl App {
             .as_deref()
             .and_then(LayoutMode::parse)
             .unwrap_or(LayoutMode::Two);
+        let mut hosts = BTreeMap::new();
+        hosts.insert("local".into(), HostData::new("local"));
+        for (name, r) in &cfg.remotes {
+            if r.enabled {
+                hosts.insert(name.clone(), HostData::new(name));
+            }
+        }
         App {
             state: State::new(),
+            hosts,
+            active_host: "local".into(),
+            host_filter: None,
             selected: 0,
             view: CenterView::Transcript,
             mode: Mode::Normal,
@@ -281,7 +336,41 @@ impl App {
         }
     }
 
-    pub(crate) fn session_ids(&self) -> Vec<SessionId> {
+    pub(crate) fn has_multiple_hosts(&self) -> bool {
+        self.hosts.len() > 1
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn active_host(&self) -> &str {
+        &self.active_host
+    }
+
+    pub(crate) fn visible_sessions(&self) -> Vec<(String, SessionId)> {
+        if !self.has_multiple_hosts() {
+            return self
+                .session_ids_single()
+                .into_iter()
+                .map(|id| (self.active_host.clone(), id))
+                .collect();
+        }
+        let mut out = Vec::new();
+        for (host_name, host) in &self.hosts {
+            if let Some(f) = &self.host_filter {
+                if f != host_name {
+                    continue;
+                }
+            }
+            for s in host.state.sessions_sorted() {
+                if self.scope_here && s.project_root() != self.home_project {
+                    continue;
+                }
+                out.push((host_name.clone(), s.id.clone()));
+            }
+        }
+        out
+    }
+
+    fn session_ids_single(&self) -> Vec<SessionId> {
         let mut v: Vec<&termade_core::Session> = self
             .state
             .sessions_sorted()
@@ -293,6 +382,190 @@ impl App {
             v.sort_by_key(|s| (s.project_root() != self.home_project, s.project_root()));
         }
         v.into_iter().map(|s| s.id.clone()).collect()
+    }
+
+    pub(crate) fn session_ids(&self) -> Vec<SessionId> {
+        self.visible_sessions()
+            .into_iter()
+            .map(|(_, id)| id)
+            .collect()
+    }
+
+    pub(crate) fn selected_host(&self) -> String {
+        let vis = self.visible_sessions();
+        vis.get(self.selected)
+            .map(|(h, _)| h.clone())
+            .unwrap_or_else(|| self.active_host.clone())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn session_host(&self, session_id: &str) -> Option<String> {
+        for (name, host) in &self.hosts {
+            if host.state.sessions.contains_key(session_id) {
+                return Some(name.clone());
+            }
+        }
+        if self.state.sessions.contains_key(session_id) {
+            return Some(self.active_host.clone());
+        }
+        None
+    }
+
+    pub(crate) fn sync_active_host_from_selection(&mut self) {
+        let new_host = self.selected_host();
+        if new_host != self.active_host {
+            self.switch_active_host(&new_host);
+        }
+    }
+
+    pub(crate) fn switch_active_host(&mut self, new_host: &str) {
+        if let Some(entry) = self.hosts.get(new_host) {
+            self.active_host = new_host.to_string();
+            self.state = entry.state.clone();
+            self.daemon_epoch = entry.daemon_epoch.clone();
+            self.diff_session = entry.diff_session.clone();
+            self.diff_lines = entry.diff_lines.clone();
+            self.diff_gutter = entry.diff_gutter.clone();
+            self.diff_added = entry.diff_added;
+            self.diff_removed = entry.diff_removed;
+            self.diff_cursor = entry.diff_cursor;
+            self.worktrees = entry.worktrees.clone();
+            self.transcript_scroll = None;
+            self.rebuild_pending = true;
+            crate::search::refresh(self);
+        }
+    }
+
+    pub(crate) fn cycle_host_filter(&mut self) {
+        if !self.has_multiple_hosts() {
+            return;
+        }
+        let names: Vec<String> = self.hosts.keys().cloned().collect();
+        self.host_filter = match &self.host_filter {
+            None => names.first().cloned(),
+            Some(curr) => {
+                let idx = names.iter().position(|n| n == curr);
+                match idx {
+                    Some(i) if i + 1 < names.len() => Some(names[i + 1].clone()),
+                    _ => None,
+                }
+            }
+        };
+        self.status = match &self.host_filter {
+            Some(h) => tr!("主機篩選：{h}", h = h),
+            None => tr!("主機篩選：全部主機"),
+        };
+        self.clamp_selection();
+        self.sync_active_host_from_selection();
+    }
+
+    pub(crate) fn set_host_status(&mut self, host: &str, status: crate::hosts::HostStatus) {
+        if let Some(entry) = self.hosts.get_mut(host) {
+            entry.status = status;
+        }
+    }
+
+    pub(crate) fn apply_host_frame(&mut self, host: &str, frame: Frame) {
+        let is_active = self.active_host == host;
+        if let Some(entry) = self.hosts.get_mut(host) {
+            entry.status = crate::hosts::HostStatus::Connected;
+        } else {
+            let mut h = HostData::new(host);
+            h.status = crate::hosts::HostStatus::Connected;
+            self.hosts.insert(host.to_string(), h);
+        }
+
+        match frame {
+            Frame::Ready {
+                pid,
+                version,
+                epoch,
+            } => {
+                if let Some(entry) = self.hosts.get_mut(host) {
+                    entry.daemon_epoch = Some(epoch.clone());
+                }
+                if is_active {
+                    self.status = format!("{host} pid={pid} v{version}");
+                    self.daemon_epoch = Some(epoch);
+                }
+            }
+            Frame::Snapshot { state } => {
+                self.notify.observe_snapshot(&state);
+                if let Some(entry) = self.hosts.get_mut(host) {
+                    entry.state = *state.clone();
+                }
+                if is_active {
+                    self.state = *state;
+                    self.clamp_selection();
+                }
+            }
+            Frame::Record { record } => {
+                let selected = self.selected_id();
+                let now = now_millis();
+                if let Some(entry) = self.hosts.get_mut(host) {
+                    self.notify.observe(
+                        &entry.state,
+                        &record,
+                        selected.as_deref(),
+                        self.scope_here,
+                        &self.home_project,
+                        now,
+                    );
+                    entry.state.apply(&record);
+                }
+                if is_active {
+                    self.state.apply(&record);
+                    self.clamp_selection();
+                }
+            }
+            Frame::Messages { .. } => {}
+            Frame::Diff { session, diff, .. } => {
+                let lines: Vec<String> = diff.lines().map(|l| l.to_string()).collect();
+                let gutter = build_gutter(&lines);
+                let (added, removed) = diff_stat(&lines);
+                if let Some(entry) = self.hosts.get_mut(host) {
+                    entry.diff_session = Some(session.clone());
+                    entry.diff_lines = lines.clone();
+                    entry.diff_gutter = gutter.clone();
+                    entry.diff_added = added;
+                    entry.diff_removed = removed;
+                    entry.diff_cursor = 0;
+                }
+                if is_active {
+                    self.diff_session = Some(session);
+                    self.diff_lines = lines;
+                    self.diff_gutter = gutter;
+                    self.diff_added = added;
+                    self.diff_removed = removed;
+                    self.diff_cursor = 0;
+                    crate::search::refresh(self);
+                }
+            }
+            Frame::Worktrees { worktrees } => {
+                if let Some(entry) = self.hosts.get_mut(host) {
+                    entry.worktrees = worktrees.clone();
+                }
+                if is_active {
+                    self.worktrees = worktrees;
+                }
+            }
+            Frame::Ok { note } => {
+                if let Some(n) = note {
+                    self.status = if self.has_multiple_hosts() {
+                        format!("[{host}] {n}")
+                    } else {
+                        n
+                    };
+                }
+            }
+            Frame::Error { message } => {
+                self.status = if self.has_multiple_hosts() {
+                    tr!("[{host}] 錯誤：{message}", host = host, message = message)
+                } else {
+                    tr!("錯誤：{message}", message = message)
+                };
+            }
+        }
     }
 
     /// 目前有幾個不同的專案 (含已結束的 session)。
@@ -366,6 +639,7 @@ impl App {
         } else if self.selected >= n {
             self.selected = n - 1;
         }
+        self.sync_active_host_from_selection();
     }
 
     /// 取得目前 diff 游標所在行的位置描述 (`檔案 :: 行內容`)。

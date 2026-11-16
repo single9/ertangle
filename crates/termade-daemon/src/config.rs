@@ -3,9 +3,9 @@
 //! 位置：`~/.config/termade/config.toml`，repo 的 `.termade/config.toml` 逐欄覆寫。
 //! 解析順序：spawn 請求的明確值 → `roles.<role>` → `agents.<kind>` → `defaults`。
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use termade_core::{AgentKind, PermissionPolicy, Role};
 pub use toml::Value as TomlValue;
 use tr::tr;
@@ -188,6 +188,50 @@ pub struct HandoffCfg {
     pub fallback: Vec<String>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+/// 遠端主機連線設定 ([remotes.<name>])。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RemoteHostCfg {
+    pub addr: String,
+    #[serde(default)]
+    pub token_file: Option<String>,
+    #[serde(default)]
+    pub token_env: Option<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl RemoteHostCfg {
+    pub fn resolve_token(&self) -> Option<String> {
+        if let Some(env) = &self.token_env {
+            if let Ok(t) = std::env::var(env) {
+                let trimmed = t.trim().to_string();
+                if !trimmed.is_empty() {
+                    return Some(trimmed);
+                }
+            }
+        }
+        if let Some(file) = &self.token_file {
+            let p = if let Some(rest) = file.strip_prefix("~/") {
+                if let Some(home) = std::env::var_os("HOME") {
+                    PathBuf::from(home).join(rest)
+                } else {
+                    PathBuf::from(file)
+                }
+            } else {
+                PathBuf::from(file)
+            };
+            if let Ok(t) = crate::read_token_file(&p) {
+                return Some(t);
+            }
+        }
+        crate::get_client_token()
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
@@ -199,6 +243,8 @@ pub struct Config {
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
     pub tui: TuiCfg,
+    /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
+    pub remotes: BTreeMap<String, RemoteHostCfg>,
 }
 
 /// 解析後、可直接餵給 `SessionSpec` 的結果。
@@ -808,5 +854,44 @@ allowed_models = ["haiku", "sonnet"]
         let merged = Config::layered(c, local);
         assert_eq!(merged.agent_spawn.confirm(), "costly");
         assert!(merged.agent_spawn.worktree());
+    }
+
+    #[test]
+    fn remotes_parsing_and_security_ignored_in_local() {
+        let global_src = r#"
+[remotes.workstation]
+addr = "100.64.0.12:7420"
+token_file = "~/.config/termade/workstation.token"
+enabled = true
+
+[remotes.gpu]
+addr = "100.64.0.50:7420"
+token_env = "GPU_TOKEN"
+enabled = false
+"#;
+        let global = Config::parse(global_src).unwrap();
+        assert_eq!(global.remotes.len(), 2);
+        let ws = &global.remotes["workstation"];
+        assert_eq!(ws.addr, "100.64.0.12:7420");
+        assert_eq!(
+            ws.token_file.as_deref(),
+            Some("~/.config/termade/workstation.token")
+        );
+        assert!(ws.enabled);
+        let gpu = &global.remotes["gpu"];
+        assert_eq!(gpu.token_env.as_deref(), Some("GPU_TOKEN"));
+        assert!(!gpu.enabled);
+
+        // repo 設定中定義的 remotes 必須被忽略，不得覆蓋全域 remotes
+        let local_src = r#"
+[remotes.evil]
+addr = "6.6.6.6:7420"
+enabled = true
+"#;
+        let local = Config::parse(local_src).unwrap();
+        let merged = Config::layered(global, local);
+        assert_eq!(merged.remotes.len(), 2);
+        assert!(!merged.remotes.contains_key("evil"));
+        assert!(merged.remotes.contains_key("workstation"));
     }
 }

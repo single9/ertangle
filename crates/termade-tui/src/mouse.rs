@@ -4,17 +4,17 @@ use anyhow::Result;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use termade_daemon::ConnStream;
 use tr::tr;
 use unicode_width::UnicodeWidthChar;
 
 use crate::app::{scroll_transcript_lines, App, CenterView};
 use crate::clipboard::write_clipboard;
+use crate::hosts::HostRouter;
 use crate::request_selected_diff;
 
 pub(crate) fn handle_mouse(
     app: &mut App,
-    writer: &mut ConnStream,
+    writer: &mut HostRouter,
     mouse: MouseEvent,
 ) -> Result<()> {
     match mouse.kind {
@@ -43,6 +43,8 @@ pub(crate) fn handle_mouse(
             if let Some(&(_, idx)) = app.tab_areas.iter().find(|(r, _)| r.contains(pos)) {
                 if idx < app.session_ids().len() {
                     app.selected = idx;
+                    app.sync_active_host_from_selection();
+                    writer.set_active(&app.active_host);
                     app.selection = None;
                     if app.view == CenterView::Diff {
                         request_selected_diff(app, writer)?;
@@ -58,6 +60,8 @@ pub(crate) fn handle_mouse(
                 let idx = app.sessions_offset + mouse.row.saturating_sub(area.y + 1) as usize;
                 if idx < app.session_ids().len() {
                     app.selected = idx;
+                    app.sync_active_host_from_selection();
+                    writer.set_active(&app.active_host);
                     app.selection = None;
                     if app.view == CenterView::Diff {
                         request_selected_diff(app, writer)?;

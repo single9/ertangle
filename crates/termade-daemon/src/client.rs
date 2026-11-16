@@ -85,6 +85,24 @@ impl Client {
         Ok(client)
     }
 
+    /// 連線至指定 TCP 位址的遠端 daemon。
+    pub fn connect_tcp(addr: &str, token: Option<String>) -> Result<Client> {
+        let tcp = TcpStream::connect(addr.trim())
+            .with_context(|| tr!("無法連線遠端 daemon ({addr})", addr = addr))?;
+        let stream = ConnStream::Tcp(tcp);
+        let reader = BufReader::new(stream.try_clone()?);
+        let mut client = Client { stream, reader };
+        if let Some(token) = token {
+            client.send(&Request::Hello {
+                epoch: None,
+                client: "auth".into(),
+                since: None,
+                token: Some(token),
+            })?;
+        }
+        Ok(client)
+    }
+
     pub fn send(&mut self, req: &Request) -> Result<()> {
         let line = encode_line(req)?;
         self.stream.write_all(line.as_bytes())?;

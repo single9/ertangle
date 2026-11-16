@@ -1,19 +1,19 @@
 //! TUI 命令面板、跳轉、啟動與核准回覆。
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use termade_core::{AgentKind, Decision, MsgKind, PermissionPolicy, Role, Target};
-use termade_daemon::ConnStream;
 use termade_protocol::{Request, SpawnRequest, Transport};
 use tr::tr;
 
 use crate::app::{toggle_scope, toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode};
 use crate::clipboard::copy_main_pane;
+use crate::hosts::HostRouter;
 use crate::{request_selected_diff, send};
 
 /// 在輸入框支援 `@session 訊息`、`#channel 訊息`、`/command` 或直接送 prompt 給當前 session。
 pub(crate) fn submit_prompt_or_route(
     app: &mut App,
-    writer: &mut ConnStream,
+    writer: &mut HostRouter,
     text: &str,
 ) -> Result<()> {
     let trimmed = text.trim();
@@ -77,7 +77,7 @@ pub(crate) fn submit_prompt_or_route(
 
 /// 把一則 prompt 排進選取 session 的佇列 (交由 daemon 管理)；session 已閒置就直接送。
 /// 只處理一般 prompt (含 `@檔案` 附件)；`/命令`、`@peer`、`#channel` 不排隊。
-pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
+pub(crate) fn queue_prompt(app: &mut App, writer: &mut HostRouter, text: &str) -> Result<()> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return Ok(());
@@ -138,7 +138,7 @@ pub(crate) fn queue_prompt(app: &mut App, writer: &mut ConnStream, text: &str) -
 }
 
 /// `:queue [文字|clear]`、`:unqueue`。
-fn queue_command(app: &mut App, writer: &mut ConnStream, rest: &str) -> Result<()> {
+fn queue_command(app: &mut App, writer: &mut HostRouter, rest: &str) -> Result<()> {
     let Some(id) = app.selected_id() else {
         app.status = tr!("沒有選取的 session");
         return Ok(());
@@ -173,7 +173,7 @@ fn queue_command(app: &mut App, writer: &mut ConnStream, rest: &str) -> Result<(
 }
 
 /// `:command` 命令：`:unqueue`。
-fn unqueue(app: &mut App, writer: &mut ConnStream) -> Result<()> {
+fn unqueue(app: &mut App, writer: &mut HostRouter) -> Result<()> {
     let Some(id) = app.selected_id() else {
         return Ok(());
     };
@@ -301,7 +301,7 @@ pub(crate) fn command_hints(input: &str) -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
-pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str) -> Result<()> {
+pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str) -> Result<()> {
     // `//名稱 …`：強制轉發給 agent (即使跟 TUI 命令同名)。
     if let Some(native) = raw.trim().strip_prefix('/').filter(|r| r.starts_with('/')) {
         let native = native.trim_start_matches('/');
@@ -549,6 +549,28 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
         },
         "queue" => queue_command(app, writer, rest)?,
         "unqueue" => unqueue(app, writer)?,
+        "host" => {
+            let target = rest.trim();
+            if target.is_empty() || target == "all" || target == "*" {
+                app.host_filter = None;
+                app.status = tr!("主機篩選：全部主機");
+            } else if app.hosts.contains_key(target) {
+                app.host_filter = Some(target.to_string());
+                app.status = tr!("主機篩選：{target}", target = target);
+            } else {
+                let avail = app.hosts.keys().cloned().collect::<Vec<_>>().join(", ");
+                bail!(
+                    "{}",
+                    tr!(
+                        "未知的主機：{target}，可用主機：{avail}",
+                        target = target,
+                        avail = avail
+                    )
+                );
+            }
+            app.clamp_selection();
+            writer.set_active(&app.active_host);
+        }
         "layout" => {
             if rest.is_empty() {
                 app.cycle_layout();
@@ -653,7 +675,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut ConnStream, raw: &str)
 
 /// TUI 不認得的 `/指令` 是 agent 的原生斜線指令：原樣轉發給選取的 session。
 /// `/` 開頭的名稱若跟 TUI 命令同名 (如 `/model`)，TUI 的優先；要送給 agent 就打 `//名稱`。
-fn forward_native(app: &mut App, writer: &mut ConnStream, verb: &str, rest: &str) -> Result<()> {
+fn forward_native(app: &mut App, writer: &mut HostRouter, verb: &str, rest: &str) -> Result<()> {
     let Some(id) = app.selected_id() else {
         app.status = tr!(
             "未知的命令：/{verb} (沒有選取的 session 可轉發)",
@@ -719,7 +741,7 @@ pub(crate) fn hints_with_native(app: &App) -> Vec<(String, String)> {
     out
 }
 
-pub(crate) fn execute_jump(app: &mut App, writer: &mut ConnStream, query: &str) -> Result<()> {
+pub(crate) fn execute_jump(app: &mut App, writer: &mut HostRouter, query: &str) -> Result<()> {
     let q = query.trim().to_ascii_lowercase();
     if q.is_empty() {
         return Ok(());
@@ -746,7 +768,28 @@ pub(crate) fn execute_jump(app: &mut App, writer: &mut ConnStream, query: &str) 
     Ok(())
 }
 
-pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -> Result<()> {
+pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -> Result<()> {
+    // 支援指定主機：--host <名稱>
+    let (target_host, clean_text) = if let Some(idx) = text.find("--host") {
+        let after = &text[idx + "--host".len()..];
+        let mut parts = after.split_whitespace();
+        if let Some(h) = parts.next() {
+            let before = &text[..idx];
+            let remainder = parts.collect::<Vec<_>>().join(" ");
+            let rest_text = format!("{} {}", before.trim(), remainder.trim())
+                .trim()
+                .to_string();
+            (Some(h.to_string()), rest_text)
+        } else {
+            (None, text.to_string())
+        }
+    } else {
+        (None, text.to_string())
+    };
+    if let Some(h) = &target_host {
+        writer.set_active(h);
+    }
+    let text = clean_text.as_str();
     // 由選擇器選好 agent／model 時，輸入框的內容就是 prompt；
     // 否則維持舊格式 `<agent[:model]> <prompt>`(`:spawn claude:opus …`)。
     let (kind, model, prompt) = if let Some((kind, model)) = app.spawn_target.clone() {
@@ -824,7 +867,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut ConnStream, text: &str) -
 
 pub(crate) fn respond_permission(
     app: &mut App,
-    writer: &mut ConnStream,
+    writer: &mut HostRouter,
     decision: Decision,
 ) -> Result<()> {
     let Some(id) = app.selected_id() else {
@@ -853,7 +896,7 @@ pub(crate) fn respond_permission(
 /// `:model [名稱]`、`:effort [等級]`：對選取的 session 執行期切換；不帶參數只顯示。
 fn session_config_command(
     app: &mut App,
-    writer: &mut ConnStream,
+    writer: &mut HostRouter,
     verb: &str,
     rest: &str,
 ) -> Result<()> {

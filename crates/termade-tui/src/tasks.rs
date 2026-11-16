@@ -1,5 +1,6 @@
 //! 任務視圖 (T18)：依狀態分組的任務清單、選取任務的說明，以及游標／跳轉／改狀態。
 
+use crate::hosts::HostRouter;
 use anyhow::Result;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -7,7 +8,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame as TuiFrame;
 use termade_core::{Task, TaskId, TaskStatus};
-use termade_daemon::ConnStream;
 use termade_protocol::Request;
 use tr::tr;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -124,7 +124,7 @@ pub(crate) fn jump_to_assignee(app: &mut App) {
 }
 
 /// `:task-status <狀態>`：更新任務視圖裡選取的任務。
-pub(crate) fn set_selected_status(app: &mut App, writer: &mut ConnStream, arg: &str) -> Result<()> {
+pub(crate) fn set_selected_status(app: &mut App, writer: &mut HostRouter, arg: &str) -> Result<()> {
     if app.view != CenterView::Tasks {
         app.status = tr!("task-status 作用在任務視圖選取的任務：先用 :tasks 或 Tab 切過去");
         return Ok(());

@@ -3,7 +3,6 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use termade_core::{Decision, MsgKind, PermissionPolicy, SessionStatus, Target};
-use termade_daemon::ConnStream;
 use termade_protocol::Request;
 use tr::tr;
 
@@ -16,9 +15,10 @@ use crate::commands::{
     execute_command, execute_jump, respond_permission, submit_prompt_or_route, submit_spawn,
 };
 use crate::diff::jump_hunk;
+use crate::hosts::HostRouter;
 use crate::{request_selected_diff, send, set_mouse_capture};
 
-pub(crate) fn handle_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<()> {
+pub(crate) fn handle_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     match app.mode {
         Mode::Normal => {}
         Mode::Menu => return crate::menu::handle_menu_key(app, writer, key),
@@ -78,10 +78,14 @@ fn handle_ctrl_key(app: &mut App, key: KeyEvent) -> Result<bool> {
     }
 }
 
-fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> Result<()> {
+fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Char('Q') => execute_command(app, writer, "shutdown")?,
+        KeyCode::Char('H') => {
+            app.cycle_host_filter();
+            writer.set_active(&app.active_host);
+        }
         KeyCode::Tab => {
             app.selection = None;
             app.view = match app.view {
@@ -131,6 +135,8 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 crate::tasks::move_task_cursor(app, 1);
             } else if app.selected + 1 < app.session_ids().len() {
                 app.selected += 1;
+                app.sync_active_host_from_selection();
+                writer.set_active(&app.active_host);
             }
         }
         KeyCode::Char('k') => {
@@ -140,11 +146,15 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
                 crate::tasks::move_task_cursor(app, -1);
             } else {
                 app.selected = app.selected.saturating_sub(1);
+                app.sync_active_host_from_selection();
+                writer.set_active(&app.active_host);
             }
         }
         KeyCode::Char(']') => {
             if app.selected + 1 < app.session_ids().len() {
                 app.selected += 1;
+                app.sync_active_host_from_selection();
+                writer.set_active(&app.active_host);
                 if app.view == CenterView::Diff {
                     request_selected_diff(app, writer)?;
                 }
@@ -152,6 +162,8 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
         }
         KeyCode::Char('[') => {
             app.selected = app.selected.saturating_sub(1);
+            app.sync_active_host_from_selection();
+            writer.set_active(&app.active_host);
             if app.view == CenterView::Diff {
                 request_selected_diff(app, writer)?;
             }
@@ -311,7 +323,7 @@ fn handle_normal_key(app: &mut App, writer: &mut ConnStream, key: KeyEvent) -> R
 
 pub(crate) fn handle_input_mode(
     app: &mut App,
-    writer: &mut ConnStream,
+    writer: &mut HostRouter,
     key: KeyEvent,
 ) -> Result<()> {
     // `@` 檔案建議：查詢改變就把選取索引歸零；上下鍵／Ctrl-N／Ctrl-P 在建議間移動，Tab 採用。
