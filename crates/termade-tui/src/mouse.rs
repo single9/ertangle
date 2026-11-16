@@ -94,6 +94,9 @@ pub(crate) fn handle_mouse(
                 let ((l0, c0), (l1, c1)) = normalize_selection(sel);
                 if (l0, c0) == (l1, c1) {
                     app.selection = None;
+                    if open_url_at(app, l0, c0) {
+                        return Ok(());
+                    }
                 } else {
                     let text = selection_text(app);
                     if text.is_empty() {
@@ -256,4 +259,126 @@ pub(crate) fn selection_text(app: &App) -> String {
         out.pop();
     }
     out.join("\n")
+}
+
+fn open_url_at(app: &mut App, line: usize, col: usize) -> bool {
+    let Some(cache) = &app.md_cache else {
+        return false;
+    };
+    let Some(rendered) = cache.lines.get(line) else {
+        return false;
+    };
+    let text: String = rendered.spans.iter().map(|s| s.content.as_ref()).collect();
+    let Some(url) = url_at_display_col(&text, col) else {
+        return false;
+    };
+    match open_external(&url) {
+        Ok(()) => {
+            app.status = tr!("已開啟連結：{url}", url = url);
+            true
+        }
+        Err(e) => {
+            app.status = tr!("無法開啟連結：{e}", e = e);
+            true
+        }
+    }
+}
+
+/// 找出覆蓋 `col` (顯示欄位)的 http(s) URL。
+fn url_at_display_col(text: &str, col: usize) -> Option<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut starts = Vec::new();
+    let mut i = 0usize;
+    while i + 7 < chars.len() {
+        let s: String = chars[i..].iter().take(8).collect();
+        if s.starts_with("https://") || s.starts_with("http://") {
+            starts.push(i);
+        }
+        i += 1;
+    }
+    for start in starts {
+        let mut end = start;
+        while end < chars.len() {
+            let ch = chars[end];
+            if ch.is_whitespace() || matches!(ch, '"' | '\'' | '<' | '>' | '`') {
+                break;
+            }
+            end += 1;
+        }
+        while end > start {
+            let ch = chars[end - 1];
+            if matches!(
+                ch,
+                '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}' | '\'' | '"'
+            ) {
+                // 括號成對時保留右括號 (常見於 Wikipedia 連結)。
+                if matches!(ch, ')' | ']' | '}') {
+                    let open = match ch {
+                        ')' => '(',
+                        ']' => '[',
+                        '}' => '{',
+                        _ => ' ',
+                    };
+                    let closes = chars[start..end].iter().filter(|&&c| c == ch).count();
+                    let opens = chars[start..end].iter().filter(|&&c| c == open).count();
+                    if closes <= opens {
+                        break;
+                    }
+                }
+                end -= 1;
+            } else {
+                break;
+            }
+        }
+        if start >= end {
+            continue;
+        }
+        let mut dcol = 0usize;
+        let mut from = 0usize;
+        let mut to = 0usize;
+        for (idx, &ch) in chars.iter().enumerate() {
+            if idx == start {
+                from = dcol;
+            }
+            dcol += ch.width().unwrap_or(0);
+            if idx + 1 == end {
+                to = dcol;
+                break;
+            }
+        }
+        if to == 0 {
+            // URL 到行尾
+            let mut dc = 0usize;
+            for (idx, &ch) in chars.iter().enumerate() {
+                if idx == start {
+                    from = dc;
+                }
+                dc += ch.width().unwrap_or(0);
+            }
+            to = dc;
+        }
+        if col >= from && col < to {
+            return Some(chars[start..end].iter().collect());
+        }
+    }
+    None
+}
+
+fn open_external(url: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", ""]);
+        c
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut cmd = std::process::Command::new("xdg-open");
+
+    cmd.arg(url);
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
+    cmd.spawn().map(|_| ())
 }

@@ -593,10 +593,14 @@ pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
                 if let Some(paren) = rest[close + 2..].find(')') {
                     flush(&mut spans, &mut buf, base);
                     let label = &rest[1..close];
-                    spans.push(Span::styled(
-                        label.to_string(),
-                        Style::default().fg(LINK).add_modifier(Modifier::UNDERLINED),
-                    ));
+                    let url = &rest[close + 2..close + 2 + paren];
+                    let link_style = Style::default().fg(LINK).add_modifier(Modifier::UNDERLINED);
+                    spans.push(Span::styled(label.to_string(), link_style));
+                    if !url.is_empty() && url != label {
+                        spans.push(Span::raw(" ("));
+                        spans.push(Span::styled(url.to_string(), link_style));
+                        spans.push(Span::raw(")"));
+                    }
                     i += close + 2 + paren + 1;
                     continue;
                 }
@@ -696,7 +700,7 @@ mod tests {
     fn inline_bold_italic_code_link() {
         let spans = inline("a **b** *c* `d` [e](http://x)", Style::default());
         let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
-        assert_eq!(text, "a b c d e");
+        assert_eq!(text, "a b c d e (http://x)");
 
         let bold = spans.iter().find(|s| s.content == "b").expect("bold span");
         assert!(bold.style.add_modifier.contains(Modifier::BOLD));
@@ -709,6 +713,8 @@ mod tests {
         assert_eq!(code.style.bg, Some(CODE_BG));
         let link = spans.iter().find(|s| s.content == "e").expect("link span");
         assert_eq!(link.style.fg, Some(LINK));
+        let url = spans.iter().find(|s| s.content == "http://x").expect("url span");
+        assert_eq!(url.style.fg, Some(LINK));
     }
 
     #[test]
@@ -834,7 +840,7 @@ mod tests {
         assert!(all.contains('b'));
         assert!(all.contains('c'));
         assert!(all.contains('x'));
-        assert!(!all.contains("http://e"));
+        assert!(all.contains("http://e"), "url should be shown: {all}");
     }
 
     #[test]
@@ -869,17 +875,21 @@ mod tests {
     }
 
     #[test]
-    fn link_shows_label_only() {
+    fn link_shows_label_and_url() {
         let spans = inline("see [docs](https://example.com/x) now", Style::default());
         let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
-        assert_eq!(text, "see docs now");
-        assert!(!text.contains("http"), "url should be hidden");
+        assert_eq!(text, "see docs (https://example.com/x) now");
         let link = spans
             .iter()
             .find(|s| s.content == "docs")
             .expect("link span");
         assert_eq!(link.style.fg, Some(LINK));
         assert!(link.style.add_modifier.contains(Modifier::UNDERLINED));
+        let url = spans
+            .iter()
+            .find(|s| s.content == "https://example.com/x")
+            .expect("url span");
+        assert_eq!(url.style.fg, Some(LINK));
     }
 
     #[test]
