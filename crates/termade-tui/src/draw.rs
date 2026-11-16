@@ -1006,23 +1006,15 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             line2.push(Span::raw(detail_indent));
             let meta_text = meta.join(" · ");
             // context/budget 警示色以整段標示簡化，仍保留可讀性。
+            let pct = s.context.and_then(|c| c.percent());
             let meta_color = if s.over_budget
                 || s.budget_usd
                     .zip(Some(s.cost.usd))
                     .is_some_and(|(l, u)| u >= l)
+                || pct.is_some_and(|p| p >= 92.0)
             {
                 Color::Red
-            } else if s
-                .context
-                .and_then(|c| c.percent())
-                .is_some_and(|p| p >= 92.0)
-            {
-                Color::Red
-            } else if s
-                .context
-                .and_then(|c| c.percent())
-                .is_some_and(|p| p >= 80.0)
-            {
+            } else if pct.is_some_and(|p| p >= 80.0) {
                 Color::Yellow
             } else {
                 Color::DarkGray
