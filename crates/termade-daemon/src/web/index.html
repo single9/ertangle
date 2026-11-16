@@ -3,21 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0d0e12">
+  <meta name="theme-color" content="#090a0f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
   <title>termade companion</title>
   <style>
     :root {
-      --bg: #0d0e12;
-      --card-bg: #16181f;
-      --card-hover: #1e2029;
-      --border: #262933;
-      --text: #f0f2f5;
-      --text-dim: #8b92a5;
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
+      --bg: #090a0f;
+      --card-bg: #13151f;
+      --card-hover: #1a1c29;
+      --border: #232636;
+      --border-subtle: #191b26;
+      --text: #f1f3f9;
+      --text-dim: #82899d;
+      --text-muted: #52576b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
       --cyan: #06b6d4;
       --green: #10b981;
       --yellow: #f59e0b;
@@ -44,11 +46,11 @@
       position: relative;
     }
 
-    /* 頂部應用程式列 */
+    /* 頂部應用程式導覽列 */
     header {
-      background: rgba(16, 18, 24, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(14, 16, 24, 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border);
       padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 8px 14px;
       display: flex;
@@ -60,14 +62,14 @@
     .header-left {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       cursor: pointer;
     }
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--text-dim);
+      background: var(--text-muted);
       flex-shrink: 0;
     }
     .status-dot.connected { background: var(--green); box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
@@ -90,19 +92,50 @@
       color: var(--text-dim);
       font-family: var(--font-mono);
     }
-    .header-right {
+    .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .header-badge {
+    .icon-btn {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      padding: 3px 8px;
-      border-radius: 12px;
+      color: var(--text-dim);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .icon-btn:active { background: var(--card-hover); color: var(--text); }
+    .cost-badge {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 8px;
       font-size: 11px;
       font-family: var(--font-mono);
       color: var(--cyan);
+    }
+
+    /* 搜尋列 */
+    #search-bar-wrap {
+      background: #11131c;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 14px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
     }
 
     /* 主要內容視圖 */
@@ -122,9 +155,9 @@
       display: flex;
     }
 
-    /* 頂部置頂核准卡片 (若有等待核准) */
+    /* 置頂緊急核准卡片 */
     .urgent-banner {
-      background: linear-gradient(135deg, #2b1f05 0%, #1c1503 100%);
+      background: linear-gradient(135deg, #2b1f05 0%, #171306 100%);
       border-bottom: 2px solid var(--yellow);
       padding: 12px 14px;
       flex-shrink: 0;
@@ -216,11 +249,11 @@
       border-radius: 4px;
     }
 
-    /* 工具呼叫卡片 */
+    /* 工具卡片 */
     .tool-chip {
       align-self: flex-start;
       width: 100%;
-      background: #12141a;
+      background: #10121a;
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 8px 12px;
@@ -238,6 +271,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      font-family: var(--font-mono);
     }
     .tool-body {
       margin-top: 8px;
@@ -253,9 +287,9 @@
 
     /* 對話輸入區域 */
     #chat-composer {
-      background: rgba(16, 18, 24, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(14, 16, 24, 0.95);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
       padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 8px) 12px;
       display: flex;
@@ -282,7 +316,7 @@
       font-size: 11px;
     }
     .toggle-pill.active {
-      background: #1c2738;
+      background: #1a2738;
       border-color: var(--cyan);
       color: var(--cyan);
       font-weight: 600;
@@ -308,9 +342,7 @@
       outline: none;
       transition: border-color 0.2s;
     }
-    #prompt-textarea:focus {
-      border-color: var(--cyan);
-    }
+    #prompt-textarea:focus { border-color: var(--cyan); }
     .btn-circle {
       width: 38px;
       height: 38px;
@@ -322,21 +354,12 @@
       cursor: pointer;
       flex-shrink: 0;
     }
-    .btn-send {
-      background: var(--cyan);
-      color: #000;
-      font-size: 16px;
-    }
-    .btn-cancel-round {
-      background: #2a1b1e;
-      color: var(--red);
-      border: 1px solid #4a2128;
-      font-size: 14px;
-    }
+    .btn-send { background: var(--cyan); color: #000; }
+    .btn-cancel-round { background: #2a1b1e; color: var(--red); border: 1px solid #4a2128; }
 
     /* 接續醒目標示 */
     .resume-strip {
-      background: #261f0a;
+      background: #241c09;
       border: 1px solid var(--yellow);
       border-radius: 8px;
       padding: 8px 12px;
@@ -397,6 +420,30 @@
       flex-direction: column;
       gap: 10px;
     }
+    .filter-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .filter-chip.active {
+      background: #182333;
+      border-color: var(--cyan);
+      color: var(--cyan);
+      font-weight: 600;
+    }
     .task-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -422,10 +469,11 @@
       padding: 3px 8px;
       border-radius: 10px;
       cursor: pointer;
+      font-family: var(--font-mono);
     }
     .st-todo { background: #2e2609; color: var(--yellow); border: 1px solid var(--yellow); }
     .st-doing { background: #0c2b1a; color: var(--green); border: 1px solid var(--green); }
-    .st-done { background: #1f2024; color: var(--text-dim); text-decoration: line-through; }
+    .st-done { background: #1c1d24; color: var(--text-dim); text-decoration: line-through; }
 
     /* Session 切換視圖 (Sessions) */
     .sessions-wrap {
@@ -435,6 +483,20 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+    }
+    .quota-card {
+      background: linear-gradient(135deg, #131929 0%, #0d121c 100%);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 12px;
+    }
+    .quota-title {
+      font-weight: 600;
+      color: var(--cyan);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
     }
     .session-item {
       background: var(--card-bg);
@@ -469,12 +531,21 @@
       color: var(--text-dim);
       font-family: var(--font-mono);
     }
+    .session-actions-btn {
+      padding: 4px 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+    }
 
     /* 底部導覽列 (Bottom Navigation Bar) */
     nav {
-      background: rgba(16, 18, 24, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(14, 16, 24, 0.95);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
       display: flex;
       padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -489,9 +560,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 3px;
+      gap: 4px;
       color: var(--text-dim);
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 500;
       cursor: pointer;
       position: relative;
@@ -500,13 +571,18 @@
       color: var(--cyan);
       font-weight: 600;
     }
-    .nav-icon {
-      font-size: 17px;
-      line-height: 1;
+    .nav-svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .nav-badge {
       position: absolute;
-      top: 4px;
+      top: 6px;
       right: calc(50% - 14px);
       width: 7px;
       height: 7px;
@@ -518,7 +594,7 @@
     .sheet-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
       opacity: 0;
@@ -535,7 +611,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: #161820;
+      background: #141620;
       border-top: 1px solid var(--border);
       border-radius: 20px 20px 0 0;
       padding: 16px 18px calc(env(safe-area-inset-bottom, 0px) + 16px) 18px;
@@ -545,7 +621,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      max-height: 85vh;
+      max-height: 88vh;
       overflow-y: auto;
     }
     .sheet-backdrop.open .sheet-container {
@@ -555,7 +631,7 @@
       width: 36px;
       height: 4px;
       border-radius: 2px;
-      background: #3a3f50;
+      background: #373c4f;
       align-self: center;
       margin-bottom: 4px;
     }
@@ -564,19 +640,37 @@
       font-weight: 600;
       color: var(--text);
     }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .form-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
     .sheet-input {
       width: 100%;
-      background: #0f1015;
+      background: #0d0e14;
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 10px 12px;
+      padding: 9px 12px;
       font-family: var(--font-sans);
-      font-size: 14px;
+      font-size: 13px;
       color: var(--text);
       outline: none;
     }
-    .sheet-input:focus {
-      border-color: var(--cyan);
+    .sheet-input:focus { border-color: var(--cyan); }
+    .sheet-select {
+      background: #0d0e14;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
     }
     .sheet-btn-row {
       display: flex;
@@ -599,14 +693,19 @@
       color: var(--text-dim);
       border: 1px solid var(--border);
     }
+    .btn-danger-outline {
+      background: transparent;
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
 
-    /* 懸浮 Toast 提示 */
+    /* 浮層 Toast */
     #toast {
       position: fixed;
       top: calc(env(safe-area-inset-top, 0px) + 52px);
       left: 50%;
       transform: translateX(-50%) translateY(-10px);
-      background: rgba(22, 24, 32, 0.95);
+      background: rgba(20, 22, 32, 0.95);
       border: 1px solid var(--border);
       box-shadow: 0 4px 16px rgba(0,0,0,0.4);
       color: var(--text);
@@ -632,7 +731,7 @@
 </head>
 <body>
   <div id="app">
-    <!-- 頂部應用程式列 -->
+    <!-- 頂部導覽列 -->
     <header>
       <div class="header-left" onclick="switchNavTab('sessions')">
         <span id="conn-dot" class="status-dot"></span>
@@ -644,52 +743,69 @@
           <div id="header-sub" class="session-sub">連線中…</div>
         </div>
       </div>
-      <div class="header-right">
-        <div id="header-cost" class="header-badge">$0.00</div>
+      <div class="header-actions">
+        <button class="icon-btn" onclick="toggleSearchBar()" title="搜尋逐字稿">
+          <svg class="nav-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+        <button class="icon-btn" onclick="openCurrentSessionSettings()" title="Session 設定">
+          <svg class="nav-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+        <div id="header-cost" class="cost-badge">$0.00</div>
       </div>
     </header>
 
-    <!-- 主內容視圖區 -->
+    <!-- 搜尋列抽屜 -->
+    <div id="search-bar-wrap">
+      <svg class="nav-svg" style="width:14px; height:14px; color:var(--text-dim);" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input id="search-keyword" class="search-input" placeholder="在逐字稿中搜尋…" oninput="filterTranscript()">
+      <button style="background:none; border:none; color:var(--text-dim); font-size:12px; cursor:pointer;" onclick="toggleSearchBar()">關閉</button>
+    </div>
+
+    <!-- 主要內容區 -->
     <main>
       <!-- TAB 1: 對話 (Chat) -->
       <div id="view-chat" class="tab-view active">
-        <!-- 待核准置頂橫幅 (若有需要核准的請求) -->
+        <!-- 待核准置頂橫幅 -->
         <div id="urgent-approval-banner" class="urgent-banner" style="display:none;">
           <div class="urgent-title">
-            <span>⚠️ 待核准操作 (Waiting Approval)</span>
+            <span>待核准操作 (Waiting Approval)</span>
             <span id="urgent-session-id" style="font-family:var(--font-mono); font-size:11px;"></span>
           </div>
           <div id="urgent-detail" class="urgent-desc"></div>
           <div class="btn-row">
-            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
-            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
-            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
+            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow</button>
+            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always</button>
+            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny</button>
           </div>
         </div>
 
         <!-- 歷史 Session 接續提示條 -->
         <div id="resume-strip" class="resume-strip">
-          <span>此對話目前處於結束／中斷狀態</span>
+          <span>此對話目前已結束或中斷</span>
           <button class="btn-pill" style="flex:none; background:var(--yellow); color:#000; padding:4px 10px; font-size:11px;" onclick="resumeCurrentSession()">接續對話 (Resume)</button>
         </div>
 
-        <!-- 即時逐字稿氣泡串流 -->
+        <!-- 逐字稿氣泡串流 -->
         <div id="chat-transcript">
           <div style="text-align:center; color:var(--text-dim); margin-top:30px; font-size:12px;">載入中…</div>
         </div>
 
-        <!-- 底部輸入面板 -->
+        <!-- 底部輸入列 -->
         <div id="chat-composer">
           <div class="composer-toolbar">
             <div id="queue-toggle" class="toggle-pill" onclick="toggleQueue()">
-              <span>⚡ 排入佇列</span>
+              <span>佇列模式</span>
             </div>
-            <span id="composer-status" style="color:var(--text-dim); font-size:11px;"></span>
+            <span id="composer-status" style="color:var(--text-dim); font-size:11px; font-family:var(--font-mono);"></span>
           </div>
           <div class="composer-row">
             <textarea id="prompt-textarea" rows="1" placeholder="輸入 prompt 給 Agent…"></textarea>
-            <button id="btn-cancel" class="btn-circle btn-cancel-round" style="display:none;" onclick="cancelTurn()">⏹</button>
-            <button id="btn-send" class="btn-circle btn-send" onclick="sendPrompt()">↑</button>
+            <button id="btn-cancel" class="btn-circle btn-cancel-round" style="display:none;" onclick="cancelTurn()" title="中斷回合">
+              <svg class="nav-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"></rect></svg>
+            </button>
+            <button id="btn-send" class="btn-circle btn-send" onclick="sendPrompt()" title="送出">
+              <svg class="nav-svg" style="width:18px; height:18px; stroke:#000;" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -697,7 +813,7 @@
       <!-- TAB 2: 審核與 Diff (Review) -->
       <div id="view-review" class="tab-view">
         <div class="review-wrap">
-          <!-- 權限審核卡片 -->
+          <!-- 權限審查卡片 -->
           <div class="section-card">
             <div class="section-title">權限審查 (Approval)</div>
             <div id="review-approval-slot" style="color:var(--text-dim); font-size:13px; margin-top:6px;">
@@ -709,7 +825,10 @@
           <div class="section-card" style="flex:1; display:flex; flex-direction:column;">
             <div class="section-header">
               <div class="section-title">工作區變更 (Git Diff)</div>
-              <button id="btn-merge-diff" class="btn-pill btn-always" style="display:none; padding:4px 10px; font-size:11px; flex:none;" onclick="confirmMerge()">一鍵 Merge</button>
+              <div style="display:flex; gap:6px;">
+                <button id="btn-pr-diff" class="btn-pill btn-secondary" style="display:none; padding:4px 8px; font-size:11px; flex:none;" onclick="openPrSheet()">建立 PR</button>
+                <button id="btn-merge-diff" class="btn-pill btn-always" style="display:none; padding:4px 10px; font-size:11px; flex:none;" onclick="confirmMerge()">一鍵 Merge</button>
+              </div>
             </div>
             <div id="diff-status-text" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">無變更</div>
             <div id="diff-lines-container" style="flex:1; overflow-y:auto;"></div>
@@ -720,9 +839,15 @@
       <!-- TAB 3: 任務板 (Tasks) -->
       <div id="view-tasks" class="tab-view">
         <div class="tasks-wrap">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:14px; font-weight:600; color:var(--text);">協作任務看板</span>
             <button class="btn-pill btn-always" style="flex:none; padding:5px 12px; font-size:12px;" onclick="openNewTaskSheet()">+ 新增任務</button>
+          </div>
+          <div class="filter-bar">
+            <div class="filter-chip active" onclick="setTaskFilter('all', this)">全部</div>
+            <div class="filter-chip" onclick="setTaskFilter('todo', this)">待處理</div>
+            <div class="filter-chip" onclick="setTaskFilter('doing', this)">進行中</div>
+            <div class="filter-chip" onclick="setTaskFilter('done', this)">已完成</div>
           </div>
           <div id="tasks-list"></div>
         </div>
@@ -731,8 +856,11 @@
       <!-- TAB 4: Session 切換與管理 (Sessions) -->
       <div id="view-sessions" class="tab-view">
         <div class="sessions-wrap">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-            <span style="font-size:14px; font-weight:600; color:var(--text);">所有 Agent Session</span>
+          <!-- 帳號額度檢視卡片 -->
+          <div id="quota-container" style="display:none;"></div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:14px; font-weight:600; color:var(--text);">Agent Sessions</span>
             <button class="btn-pill btn-allow" style="flex:none; padding:5px 12px; font-size:12px;" onclick="openNewSessionSheet()">+ 建立新 Session</button>
           </div>
           <div id="sessions-list"></div>
@@ -740,23 +868,23 @@
       </div>
     </main>
 
-    <!-- 底部大拇指導覽列 -->
+    <!-- 底部導覽列 -->
     <nav>
       <button class="nav-btn active" onclick="switchNavTab('chat')">
-        <span class="nav-icon">💬</span>
+        <svg class="nav-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         <span>對話</span>
       </button>
       <button class="nav-btn" onclick="switchNavTab('review')">
         <span id="nav-review-badge" class="nav-badge" style="display:none;"></span>
-        <span class="nav-icon">🛡️</span>
+        <svg class="nav-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
         <span>審核</span>
       </button>
       <button class="nav-btn" onclick="switchNavTab('tasks')">
-        <span class="nav-icon">📋</span>
+        <svg class="nav-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line><line x1="9" y1="17" x2="13" y2="17"></line></svg>
         <span>任務</span>
       </button>
       <button class="nav-btn" onclick="switchNavTab('sessions')">
-        <span class="nav-icon">⚙️</span>
+        <svg class="nav-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         <span>Session</span>
       </button>
     </nav>
@@ -764,42 +892,156 @@
     <!-- 懸浮提示 Toast -->
     <div id="toast"></div>
 
-    <!-- 抽屜 1：建立新 Session (New Session Sheet) -->
+    <!-- 抽屜 1：建立新 Session (完整參數支援) -->
     <div id="sheet-new-session" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
         <div class="sheet-title">建立新 Agent Session</div>
-        <div>
-          <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">Agent 種類 (Kind)</label>
-          <div style="display:flex; gap:8px;">
-            <button id="kind-opencode" class="btn-pill btn-always" onclick="selectKind('opencode')">opencode</button>
-            <button id="kind-claude" class="btn-pill btn-secondary" onclick="selectKind('claude')">claude</button>
-            <button id="kind-antigravity" class="btn-pill btn-secondary" onclick="selectKind('antigravity')">antigravity</button>
+
+        <div class="form-group">
+          <label class="form-label">自訂標籤 (Label，選填)</label>
+          <input id="new-label" class="sheet-input" placeholder="例如：worker/frontend、tester">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Agent 種類 (Kind)</label>
+          <select id="new-kind" class="sheet-select" onchange="onKindChanged(this.value)">
+            <option value="opencode">opencode</option>
+            <option value="claude">claude (Claude Code)</option>
+            <option value="antigravity">antigravity (Google Antigravity)</option>
+            <option value="codex">codex (OpenAI Codex)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">模型 (Model)</label>
+          <input id="new-model" class="sheet-input" placeholder="可手動輸入或點選下方推薦" list="model-suggestions">
+          <datalist id="model-suggestions">
+            <option value="claude-3-7-sonnet"></option>
+            <option value="claude-3-5-sonnet"></option>
+            <option value="gemini-2.5-pro"></option>
+            <option value="gemini-2.5-flash"></option>
+            <option value="o3-mini"></option>
+            <option value="gpt-4o"></option>
+          </datalist>
+          <div id="model-chips" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;"></div>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">推理強度 (Effort)</label>
+            <select id="new-effort" class="sheet-select">
+              <option value="">預設 (依設定檔)</option>
+              <option value="low">low (低)</option>
+              <option value="medium">medium (中)</option>
+              <option value="high">high (高)</option>
+              <option value="max">max (最高)</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">權限政策 (Permission)</label>
+            <select id="new-permission" class="sheet-select">
+              <option value="auto">auto (自動核准安全操作)</option>
+              <option value="ask">ask (逐項問人)</option>
+              <option value="bypass">bypass (完全跳過)</option>
+            </select>
           </div>
         </div>
-        <div>
-          <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">初始 Prompt</label>
-          <textarea id="sheet-session-prompt" class="sheet-input" rows="3" placeholder="請描述想要指派給此 Agent 的工作…"></textarea>
+
+        <div style="display:flex; gap:10px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">成本預算上限 (USD)</label>
+            <input id="new-budget" class="sheet-input" type="number" step="0.5" placeholder="無上限 (例如 3.00)">
+          </div>
+          <div class="form-group" style="flex:1; justify-content:center;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer; margin-top:16px;">
+              <input id="new-worktree" type="checkbox"> 獨立 Git Worktree 分支
+            </label>
+          </div>
         </div>
+
+        <div class="form-group">
+          <label class="form-label">初始 Prompt</label>
+          <textarea id="new-prompt" class="sheet-input" rows="3" placeholder="描述指派給此 Agent 的初始工作…"></textarea>
+        </div>
+
         <div class="sheet-btn-row">
           <button class="btn-action btn-secondary" onclick="closeSheet('sheet-new-session')">取消</button>
-          <button class="btn-action" onclick="submitNewSession()">立即建立啟動</button>
+          <button class="btn-action" onclick="submitDetailedSession()">立即啟動</button>
         </div>
       </div>
     </div>
 
-    <!-- 抽屜 2：新增任務 (New Task Sheet) -->
+    <!-- 抽屜 2：Session 控制與設定 (管理面板) -->
+    <div id="sheet-session-manage" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="manage-session-title">Session 設定與操作</div>
+
+        <div class="form-group">
+          <label class="form-label">切換 Model (執行期動態切換)</label>
+          <input id="manage-model" class="sheet-input" placeholder="輸入新模型名稱">
+        </div>
+        <div class="form-group">
+          <label class="form-label">切換推理強度 (Effort)</label>
+          <select id="manage-effort" class="sheet-select">
+            <option value="">維持現狀</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="max">max</option>
+          </select>
+        </div>
+        <button class="btn-pill btn-secondary" style="padding:8px 0;" onclick="submitSwitchModel()">套用模型與推理變更</button>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
+
+        <div class="form-group">
+          <label class="form-label">調高成本預算上限 (USD)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="manage-budget" class="sheet-input" type="number" step="0.5" placeholder="例如 5.00">
+            <button class="btn-pill btn-secondary" style="flex:none; padding:0 12px;" onclick="submitSetBudget()">設定預算</button>
+          </div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
+
+        <div class="form-group">
+          <label class="form-label">工作交接 (Handoff 轉交給另一 Agent)</label>
+          <div style="display:flex; gap:8px; margin-bottom:6px;">
+            <select id="handoff-kind" class="sheet-select" style="flex:1;">
+              <option value="claude">轉給 claude</option>
+              <option value="antigravity">轉給 antigravity</option>
+              <option value="codex">轉給 codex</option>
+              <option value="opencode">轉給 opencode</option>
+            </select>
+            <button class="btn-pill btn-secondary" style="flex:none; padding:0 12px;" onclick="submitHandoff()">執行交接</button>
+          </div>
+          <input id="handoff-note" class="sheet-input" placeholder="交接說明給接手者 (選填)">
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
+
+        <div style="display:flex; gap:8px;">
+          <button class="btn-pill btn-secondary" style="flex:1;" onclick="toggleSleepCurrent()">休眠 (Sleep) / 喚醒 (Wake)</button>
+          <button class="btn-pill btn-danger-outline" style="flex:1;" onclick="killCurrentSession()">結束處理程序 (Kill)</button>
+        </div>
+        <button class="btn-pill btn-danger-outline" style="padding:8px 0;" onclick="removeCurrentSession()">從清單中移除 (Remove)</button>
+      </div>
+    </div>
+
+    <!-- 抽屜 3：新增任務 -->
     <div id="sheet-new-task" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
         <div class="sheet-title">建立協作任務</div>
-        <div>
-          <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">任務標題</label>
-          <input id="sheet-task-title" class="sheet-input" placeholder="例如：實作單元測試、修正重試錯誤…">
+        <div class="form-group">
+          <label class="form-label">任務標題</label>
+          <input id="sheet-task-title" class="sheet-input" placeholder="例如：補齊單元測試、修正斷線重連…">
         </div>
-        <div>
-          <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">詳細說明 (可選)</label>
-          <textarea id="sheet-task-detail" class="sheet-input" rows="2" placeholder="補充驗收標準或脈絡…"></textarea>
+        <div class="form-group">
+          <label class="form-label">詳細說明 (選填)</label>
+          <textarea id="sheet-task-detail" class="sheet-input" rows="2" placeholder="補充驗收標準或背景說明…"></textarea>
         </div>
         <div class="sheet-btn-row">
           <button class="btn-action btn-secondary" onclick="closeSheet('sheet-new-task')">取消</button>
@@ -808,15 +1050,15 @@
       </div>
     </div>
 
-    <!-- 抽屜 3：行內審查註解 (Review Sheet) -->
+    <!-- 抽屜 4：行內審查註解 -->
     <div id="sheet-review-comment" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
         <div class="sheet-title">留下程式碼審查註解</div>
-        <div id="sheet-review-preview" style="font-family:var(--font-mono); font-size:11px; background:#000; padding:6px 8px; border-radius:6px; color:var(--text-dim);"></div>
-        <div>
-          <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">審查意見</label>
-          <textarea id="sheet-review-text" class="sheet-input" rows="2" placeholder="指出問題或提出修改建議…"></textarea>
+        <div id="sheet-review-preview" style="font-family:var(--font-mono); font-size:11px; background:#000; padding:6px 8px; border-radius:6px; color:var(--text-dim); overflow-x:auto;"></div>
+        <div class="form-group">
+          <label class="form-label">審查意見</label>
+          <textarea id="sheet-review-text" class="sheet-input" rows="2" placeholder="說明需要修改的理由或建議…"></textarea>
         </div>
         <div class="sheet-btn-row">
           <button class="btn-action btn-secondary" onclick="closeSheet('sheet-review-comment')">取消</button>
@@ -824,10 +1066,30 @@
         </div>
       </div>
     </div>
+
+    <!-- 抽屜 5：建立 GitHub PR -->
+    <div id="sheet-create-pr" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">為目前 Worktree 建立 Pull Request</div>
+        <div class="form-group">
+          <label class="form-label">PR 標題</label>
+          <input id="pr-title" class="sheet-input" placeholder="例如：feat: 實作新功能">
+        </div>
+        <div class="form-group">
+          <label class="form-label">PR 說明 (選填)</label>
+          <textarea id="pr-body" class="sheet-input" rows="3" placeholder="描述此 PR 的改動重點…"></textarea>
+        </div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-create-pr')">取消</button>
+          <button class="btn-action" onclick="submitCreatePr()">送出建立 PR</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
-    // 1. Token 與連線初始化
+    // 1. 初始化 Token
     let token = "";
     const hash = window.location.hash.substring(1);
     const hashParams = new URLSearchParams(hash);
@@ -845,6 +1107,7 @@
       tasks: {},
       pending_permissions: {},
       transcripts: {},
+      quotas: {},
       seq: 0
     };
     let activeSession = null;
@@ -852,10 +1115,10 @@
     let daemonEpoch = null;
     let pendingApprovalReq = null;
     let queueMode = false;
-    let selectedKind = "opencode";
+    let taskFilter = "all";
     let pendingReviewLine = null;
 
-    // Toast 浮層通知
+    // Toast 浮層
     function showToast(msg, isError = false) {
       const t = document.getElementById("toast");
       t.innerText = msg;
@@ -863,7 +1126,7 @@
       setTimeout(() => { t.className = ""; }, 2500);
     }
 
-    // WebSocket 連線與斷線自動重試
+    // WebSocket 連線
     function connect() {
       const dot = document.getElementById("conn-dot");
       const sub = document.getElementById("header-sub");
@@ -896,14 +1159,13 @@
 
       ws.onclose = () => {
         dot.className = "status-dot disconnected";
-        sub.innerText = "連線中斷，重試中…";
+        sub.innerText = "斷線重試中…";
         setTimeout(connect, 2000);
       };
 
       ws.onerror = () => ws.close();
     }
 
-    // 處理伺服器端 Frame
     function handleFrame(frame) {
       const op = frame.ev;
       if (op === "ready") {
@@ -923,7 +1185,6 @@
       }
     }
 
-    // 增量事件更新
     function applyRecord(record) {
       state.seq = record.seq;
       const event = record.event;
@@ -936,6 +1197,14 @@
       } else if (kind === "session_status") {
         if (state.sessions[event.session]) {
           state.sessions[event.session].status = event.status;
+        }
+      } else if (kind === "session_model") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].model = event.model;
+        }
+      } else if (kind === "session_effort") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].effort = event.effort;
         }
       } else if (kind === "session_note") {
         if (state.sessions[event.session]) {
@@ -954,6 +1223,9 @@
         delete state.pending_permissions[event.req];
       } else if (kind === "task_changed") {
         state.tasks[event.task.id] = event.task;
+      } else if (kind === "quota_updated") {
+        if (!state.quotas) state.quotas = {};
+        state.quotas[event.quota.agent] = event.quota;
       } else if (kind === "cost") {
         if (state.sessions[event.session]) {
           state.sessions[event.session].cost = event.cost;
@@ -967,7 +1239,7 @@
         state.transcripts[event.session].push(event.text);
         if (event.session === activeSession) appendBubble(event.text, false);
       } else if (kind === "tool_call") {
-        const icon = event.ok === true ? "✓" : (event.ok === false ? "✗" : "⏳");
+        const icon = event.ok === true ? "✓" : (event.ok === false ? "✗" : "…");
         const summary = `[工具 ${event.name}] ${icon} ${event.input || ""}`;
         if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
         state.transcripts[event.session].push(summary);
@@ -977,7 +1249,6 @@
       updateAllViews();
     }
 
-    // 格式化輸出泡泡與 Markdown 簡易轉義
     function appendBubble(rawText, isUser) {
       const box = document.getElementById("chat-transcript");
       const bubble = document.createElement("div");
@@ -993,7 +1264,7 @@
       chip.className = "tool-chip";
       chip.innerHTML = `
         <div class="tool-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-          <span class="tool-name">⚡ ${escapeHtml(name)}</span>
+          <span class="tool-name">[工具] ${escapeHtml(name)}</span>
           <span style="font-size:11px; color:var(--text-dim);">${icon} 詳細 ▾</span>
         </div>
         <div class="tool-body" style="display:none;">${escapeHtml(input || "")}\n\n${escapeHtml(output || "無進一步輸出")}</div>
@@ -1004,13 +1275,8 @@
 
     function renderSimpleMarkdown(text) {
       let safe = escapeHtml(text || "");
-      // 支援 ``` 程式碼區塊
-      safe = safe.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        return `<pre><code>${code}</code></pre>`;
-      });
-      // 支援行內 code
+      safe = safe.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => `<pre><code>${code}</code></pre>`);
       safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
-      // 支援換行
       safe = safe.replace(/\n/g, "<br>");
       return safe;
     }
@@ -1019,16 +1285,16 @@
       return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
-    // 畫面完整更新
     function updateAllViews() {
       const sids = Object.keys(state.sessions);
-      if (!activeSession && sids.length > 0) {
-        activeSession = sids[0];
-      }
+      if (!activeSession && sids.length > 0) activeSession = sids[0];
 
       // 1. 頂部狀態列
       const current = activeSession ? state.sessions[activeSession] : null;
       document.getElementById("header-label").innerText = current ? (current.label || activeSession) : "termade";
+      if (current) {
+        document.getElementById("header-sub").innerText = `${current.kind || "agent"}${current.model ? " (" + current.model + ")" : ""} • ${current.status || "idle"}`;
+      }
       let totalCost = 0;
       for (const id in state.sessions) {
         const s = state.sessions[id];
@@ -1036,7 +1302,7 @@
       }
       document.getElementById("header-cost").innerText = `$${totalCost.toFixed(2)}`;
 
-      // 2. 核准請求狀態
+      // 2. 審查橫幅
       const pendingKeys = Object.keys(state.pending_permissions || {});
       const urgentBanner = document.getElementById("urgent-approval-banner");
       const navBadge = document.getElementById("nav-review-badge");
@@ -1095,6 +1361,9 @@
 
       // 6. Session 列表渲染
       renderSessionsList();
+
+      // 7. 額度資訊
+      renderQuota();
     }
 
     function renderCurrentChatTranscript() {
@@ -1113,13 +1382,35 @@
       lines.forEach(line => {
         if (line.startsWith("> ")) {
           appendBubble(line.substring(2), true);
-        } else if (line.startsWith("[工具 ")) {
-          appendBubble(line, false);
         } else {
           appendBubble(line, false);
         }
       });
       box.scrollTop = box.scrollHeight;
+    }
+
+    function filterTranscript() {
+      const query = document.getElementById("search-keyword").value.toLowerCase().trim();
+      const bubbles = document.querySelectorAll("#chat-transcript .bubble");
+      bubbles.forEach(b => {
+        if (!query || b.innerText.toLowerCase().includes(query)) {
+          b.style.display = "";
+        } else {
+          b.style.display = "none";
+        }
+      });
+    }
+
+    function toggleSearchBar() {
+      const wrap = document.getElementById("search-bar-wrap");
+      const isVisible = wrap.style.display === "flex";
+      wrap.style.display = isVisible ? "none" : "flex";
+      if (!isVisible) {
+        document.getElementById("search-keyword").focus();
+      } else {
+        document.getElementById("search-keyword").value = "";
+        filterTranscript();
+      }
     }
 
     function renderTasksList() {
@@ -1133,9 +1424,11 @@
 
       taskKeys.forEach(id => {
         const t = state.tasks[id];
+        const st = (t.status || "todo").toLowerCase();
+        if (taskFilter !== "all" && st !== taskFilter) return;
+
         const card = document.createElement("div");
         card.className = "task-card";
-        const st = (t.status || "todo").toLowerCase();
         const badgeClass = st === "done" ? "st-done" : (st === "doing" ? "st-doing" : "st-todo");
         card.innerHTML = `
           <div class="task-top">
@@ -1147,6 +1440,13 @@
         `;
         container.appendChild(card);
       });
+    }
+
+    function setTaskFilter(filter, el) {
+      taskFilter = filter;
+      document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+      el.classList.add("active");
+      renderTasksList();
     }
 
     function renderSessionsList() {
@@ -1162,26 +1462,52 @@
         const s = state.sessions[id];
         const item = document.createElement("div");
         item.className = `session-item ${id === activeSession ? "active" : ""}`;
-        item.onclick = () => {
-          activeSession = id;
-          switchNavTab("chat");
-        };
         const costStr = s.cost && s.cost.usd ? `$${s.cost.usd.toFixed(2)}` : "$0.00";
         item.innerHTML = `
-          <div class="session-info-left">
+          <div class="session-info-left" onclick="selectSession('${id}')">
             <div class="session-name">
               <span>●</span>
               <span>${escapeHtml(s.label || id)}</span>
             </div>
-            <div class="session-meta">${s.kind || "agent"} • ${s.status || "idle"}</div>
+            <div class="session-meta">${s.kind || "agent"}${s.model ? " (" + s.model + ")" : ""} • ${s.status || "idle"}</div>
           </div>
-          <div style="font-family:var(--font-mono); font-size:12px; color:var(--cyan);">${costStr}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--cyan);">${costStr}</div>
+            <button class="session-actions-btn" onclick="openSessionSettings('${id}')">設定</button>
+          </div>
         `;
         container.appendChild(item);
       });
     }
 
-    // 導覽標籤切換
+    function renderQuota() {
+      const qc = document.getElementById("quota-container");
+      if (!state.quotas || Object.keys(state.quotas).length === 0) {
+        qc.style.display = "none";
+        return;
+      }
+      qc.style.display = "block";
+      qc.innerHTML = "";
+      for (const k in state.quotas) {
+        const q = state.quotas[k];
+        const card = document.createElement("div");
+        card.className = "quota-card";
+        card.innerHTML = `
+          <div class="quota-title">
+            <span>${escapeHtml(q.agent || k)} 額度指標</span>
+            <span>${q.pct != null ? q.pct + "%" : "正常"}</span>
+          </div>
+          <div style="color:var(--text-dim); font-size:11px;">重置時間：${q.reset_at || "未設定"}</div>
+        `;
+        qc.appendChild(card);
+      }
+    }
+
+    function selectSession(id) {
+      activeSession = id;
+      switchNavTab("chat");
+    }
+
     function switchNavTab(tabName) {
       currentTab = tabName;
       document.querySelectorAll(".tab-view").forEach(v => v.classList.remove("active"));
@@ -1201,7 +1527,6 @@
       }
     }
 
-    // 傳送 Prompt
     function sendPrompt() {
       const textarea = document.getElementById("prompt-textarea");
       const text = textarea.value.trim();
@@ -1218,22 +1543,19 @@
       textarea.style.height = "auto";
     }
 
-    // 佇列開關切換
     function toggleQueue() {
       queueMode = !queueMode;
       const el = document.getElementById("queue-toggle");
       el.className = `toggle-pill ${queueMode ? "active" : ""}`;
-      showToast(queueMode ? "已開啟：忙碌時排入佇列" : "已關閉排隊模式");
+      showToast(queueMode ? "已開啟：忙碌時排入佇列" : "已關閉佇列模式");
     }
 
-    // 中斷當前回合
     function cancelTurn() {
       if (!activeSession || !ws) return;
       ws.send(JSON.stringify({ op: "cancel", session: activeSession }));
       showToast("已發送中斷請求…");
     }
 
-    // 接續已結束的 Session
     function resumeCurrentSession() {
       if (!activeSession || !ws) return;
       ws.send(JSON.stringify({
@@ -1244,7 +1566,6 @@
       showToast("正在接續原對話…");
     }
 
-    // 核准回覆
     function submitPermission(decision) {
       if (!pendingApprovalReq || !ws) return;
       ws.send(JSON.stringify({
@@ -1253,10 +1574,9 @@
         req: pendingApprovalReq.req,
         decision: decision
       }));
-      showToast(`已送出核准決定：${decision}`);
+      showToast(`已送出核准：${decision}`);
     }
 
-    // Diff 請求與渲染
     function requestDiff() {
       if (!activeSession || !ws) return;
       ws.send(JSON.stringify({ op: "worktree_diff", session: activeSession }));
@@ -1267,15 +1587,18 @@
       container.innerHTML = "";
       const statusText = document.getElementById("diff-status-text");
       const mergeBtn = document.getElementById("btn-merge-diff");
+      const prBtn = document.getElementById("btn-pr-diff");
 
       if (!diffText || diffText.trim().length === 0) {
-        statusText.innerText = "目前工作區無未合併之變更。";
+        statusText.innerText = "目前工作區無未合併變更。";
         mergeBtn.style.display = "none";
+        prBtn.style.display = "none";
         return;
       }
 
-      statusText.innerText = "變更程式碼 (點擊任一行加入審查註解)：";
+      statusText.innerText = "變更內容 (點擊行加入註解)：";
       mergeBtn.style.display = "block";
+      prBtn.style.display = "block";
 
       diffText.split("\n").forEach((line, idx) => {
         const row = document.createElement("div");
@@ -1291,51 +1614,186 @@
 
     function confirmMerge() {
       if (!activeSession || !ws) return;
-      if (window.confirm("確定將此 Session 的 Worktree 變更合併至主分支？")) {
+      if (window.confirm("確定合併此 Session 的變更到主分支？")) {
         ws.send(JSON.stringify({ op: "worktree_merge", session: activeSession, message: null }));
         showToast("已送出 Worktree 合併請求");
       }
     }
 
-    // 抽屜控制輔助
-    function openSheet(id) {
-      document.getElementById(id).classList.add("open");
+    function openPrSheet() {
+      document.getElementById("pr-title").value = "";
+      document.getElementById("pr-body").value = "";
+      openSheet("sheet-create-pr");
     }
-    function closeSheet(id) {
-      document.getElementById(id).classList.remove("open");
-    }
-    function closeSheetOnBackdrop(e, el) {
-      if (e.target === el) el.classList.remove("open");
+    function submitCreatePr() {
+      const title = document.getElementById("pr-title").value.trim();
+      if (!title || !activeSession || !ws) return;
+      const body = document.getElementById("pr-body").value.trim();
+      ws.send(JSON.stringify({
+        op: "worktree_pr",
+        session: activeSession,
+        title: title,
+        body: body
+      }));
+      closeSheet("sheet-create-pr");
+      showToast("已送出建立 PR 請求…");
     }
 
-    // 建立新 Session 抽屜
-    function openNewSessionSheet() {
-      document.getElementById("sheet-session-prompt").value = "";
-      openSheet("sheet-new-session");
-    }
-    function selectKind(kind) {
-      selectedKind = kind;
-      ["opencode", "claude", "antigravity"].forEach(k => {
-        const btn = document.getElementById(`kind-${k}`);
-        btn.className = `btn-pill ${k === kind ? "btn-always" : "btn-secondary"}`;
+    // 抽屜控制
+    function openSheet(id) { document.getElementById(id).classList.add("open"); }
+    function closeSheet(id) { document.getElementById(id).classList.remove("open"); }
+    function closeSheetOnBackdrop(e, el) { if (e.target === el) el.classList.remove("open"); }
+
+    // 建立新 Session 抽屜控制與模型晶片推薦
+    const modelPresets = {
+      claude: ["claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus"],
+      antigravity: ["gemini-2.5-pro", "gemini-2.5-flash", "claude-3-7-sonnet"],
+      codex: ["o3-mini", "o1", "gpt-4o"],
+      opencode: ["default", "claude-3-7-sonnet", "gemini-2.5-pro"]
+    };
+
+    function onKindChanged(kind) {
+      const chipsContainer = document.getElementById("model-chips");
+      chipsContainer.innerHTML = "";
+      const models = modelPresets[kind] || [];
+      models.forEach(m => {
+        const chip = document.createElement("span");
+        chip.style.cssText = "font-size:11px; font-family:var(--font-mono); background:var(--card-bg); border:1px solid var(--border); padding:2px 8px; border-radius:10px; cursor:pointer;";
+        chip.innerText = m;
+        chip.onclick = () => { document.getElementById("new-model").value = m; };
+        chipsContainer.appendChild(chip);
       });
     }
-    function submitNewSession() {
-      const p = document.getElementById("sheet-session-prompt").value.trim();
-      if (!p || !ws) return;
+
+    function openNewSessionSheet() {
+      document.getElementById("new-label").value = "";
+      document.getElementById("new-model").value = "";
+      document.getElementById("new-budget").value = "";
+      document.getElementById("new-prompt").value = "";
+      document.getElementById("new-worktree").checked = false;
+      onKindChanged(document.getElementById("new-kind").value);
+      openSheet("sheet-new-session");
+    }
+
+    function submitDetailedSession() {
+      const promptText = document.getElementById("new-prompt").value.trim();
+      if (!promptText || !ws) return;
+
+      const kind = document.getElementById("new-kind").value;
+      const label = document.getElementById("new-label").value.trim() || null;
+      const model = document.getElementById("new-model").value.trim() || null;
+      const effort = document.getElementById("new-effort").value || null;
+      const permission = document.getElementById("new-permission").value || null;
+      const budgetVal = parseFloat(document.getElementById("new-budget").value);
+      const budgetUsd = !isNaN(budgetVal) && budgetVal > 0 ? budgetVal : null;
+      const worktree = document.getElementById("new-worktree").checked;
+
       ws.send(JSON.stringify({
         op: "spawn",
-        kind: selectedKind,
-        prompt: p,
+        kind: kind,
+        label: label,
+        model: model,
+        effort: effort,
+        permission: permission,
+        budget_usd: budgetUsd,
+        worktree: worktree,
+        prompt: promptText,
         role: "worker",
-        worktree: false,
         transport: "auto"
       }));
       closeSheet("sheet-new-session");
-      showToast("正在啟動建立新 Agent Session…");
+      showToast("已建立新 Agent Session…");
     }
 
-    // 建立新任務抽屜
+    // Session 詳情面板操作
+    let targetManageSessionId = null;
+    function openCurrentSessionSettings() {
+      if (activeSession) openSessionSettings(activeSession);
+    }
+    function openSessionSettings(sessionId) {
+      targetManageSessionId = sessionId;
+      const s = state.sessions[sessionId] || {};
+      document.getElementById("manage-session-title").innerText = `${s.label || sessionId} 管理面板`;
+      document.getElementById("manage-model").value = s.model || "";
+      document.getElementById("manage-effort").value = s.effort || "";
+      document.getElementById("manage-budget").value = s.budget_usd || "";
+      openSheet("sheet-session-manage");
+    }
+
+    function submitSwitchModel() {
+      if (!targetManageSessionId || !ws) return;
+      const model = document.getElementById("manage-model").value.trim() || null;
+      const effort = document.getElementById("manage-effort").value || null;
+      ws.send(JSON.stringify({
+        op: "session_config",
+        session: targetManageSessionId,
+        model: model,
+        effort: effort
+      }));
+      closeSheet("sheet-session-manage");
+      showToast("已更新 Session 模型與推理設定");
+    }
+
+    function submitSetBudget() {
+      if (!targetManageSessionId || !ws) return;
+      const val = parseFloat(document.getElementById("manage-budget").value);
+      if (isNaN(val) || val <= 0) return;
+      ws.send(JSON.stringify({
+        op: "session_budget",
+        session: targetManageSessionId,
+        budget_usd: val
+      }));
+      closeSheet("sheet-session-manage");
+      showToast(`已調整預算上限為 $${val.toFixed(2)}`);
+    }
+
+    function submitHandoff() {
+      if (!targetManageSessionId || !ws) return;
+      const kind = document.getElementById("handoff-kind").value;
+      const note = document.getElementById("handoff-note").value.trim() || null;
+      ws.send(JSON.stringify({
+        op: "handoff",
+        session: targetManageSessionId,
+        kind: kind,
+        note: note
+      }));
+      closeSheet("sheet-session-manage");
+      showToast("已送出交接請求…");
+    }
+
+    function toggleSleepCurrent() {
+      if (!targetManageSessionId || !ws) return;
+      const s = state.sessions[targetManageSessionId] || {};
+      const isSleeping = (s.status || "").toLowerCase() === "sleeping";
+      if (isSleeping) {
+        ws.send(JSON.stringify({ op: "wake", session: targetManageSessionId }));
+        showToast("已發送喚醒請求");
+      } else {
+        ws.send(JSON.stringify({ op: "sleep", session: targetManageSessionId }));
+        showToast("已發送休眠請求");
+      }
+      closeSheet("sheet-session-manage");
+    }
+
+    function killCurrentSession() {
+      if (!targetManageSessionId || !ws) return;
+      if (window.confirm("確定強制結束此 Agent 子處理程序 (Kill)？")) {
+        ws.send(JSON.stringify({ op: "kill", session: targetManageSessionId }));
+        closeSheet("sheet-session-manage");
+        showToast("已發送強制結束訊號");
+      }
+    }
+
+    function removeCurrentSession() {
+      if (!targetManageSessionId || !ws) return;
+      if (window.confirm("確定從清單中移除此 Session？")) {
+        ws.send(JSON.stringify({ op: "session_remove", session: targetManageSessionId, force: true }));
+        closeSheet("sheet-session-manage");
+        showToast("已送出移除請求");
+      }
+    }
+
+    // 任務相關控制
     function openNewTaskSheet() {
       document.getElementById("sheet-task-title").value = "";
       document.getElementById("sheet-task-detail").value = "";
@@ -1354,10 +1812,8 @@
         depends_on: []
       }));
       closeSheet("sheet-new-task");
-      showToast("已建立新協作任務");
+      showToast("已建立協作任務");
     }
-
-    // 狀態切換
     function cycleTaskStatus(taskId, currentStatus) {
       if (!ws) return;
       const cycle = { Todo: "Doing", Doing: "Done", Done: "Todo", Blocked: "Doing", Review: "Done" };
@@ -1382,17 +1838,16 @@
         comment: comment
       }));
       closeSheet("sheet-review-comment");
-      showToast("審查註解已送交 Agent");
+      showToast("已送交審查意見給 Agent");
     }
 
-    // 自動調整輸入框高度
+    // 輸入框高度自適應
     const promptTextarea = document.getElementById("prompt-textarea");
     promptTextarea.addEventListener("input", function() {
       this.style.height = "auto";
       this.style.height = (this.scrollHeight) + "px";
     });
 
-    // 啟動連線
     connect();
   </script>
 </body>
