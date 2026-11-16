@@ -23,10 +23,11 @@ pub(crate) enum Item {
     SpawnMaxEffort,
     CollabInstructions,
     WebCompanion,
+    WebPort,
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 11] = [
+pub(crate) const ITEMS: [Item; 12] = [
     Item::DefaultAgent,
     Item::DefaultPermission,
     Item::TargetAgent,
@@ -37,6 +38,7 @@ pub(crate) const ITEMS: [Item; 11] = [
     Item::SpawnMaxEffort,
     Item::CollabInstructions,
     Item::WebCompanion,
+    Item::WebPort,
     Item::Language,
 ];
 
@@ -134,6 +136,7 @@ impl Item {
             Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
             Item::WebCompanion => tr!("Web 版支援 (Web UI)"),
+            Item::WebPort => tr!("Web 版連接埠 (Web Port)"),
             Item::Language => tr!("介面語言"),
         }
     }
@@ -165,6 +168,7 @@ impl Item {
                     })
                 }
             }
+            Item::WebPort => c.web.port.map(|p| p.to_string()).unwrap_or_default(),
             Item::Language => c.tui.language.clone().unwrap_or_default(),
         }
     }
@@ -226,11 +230,28 @@ impl Item {
                 .iter()
                 .map(|l| pair(l, l))
                 .collect(),
-            Item::WebCompanion => vec![
-                pair("", &tr!("關閉")),
-                pair("tailscale", &tr!("Tailscale (自動 IP:7421)")),
-                pair("127.0.0.1:7421", &tr!("本機 (127.0.0.1:7421)")),
-                pair("0.0.0.0:7421", &tr!("全網 (0.0.0.0:7421)")),
+            Item::WebCompanion => {
+                let port = s.cfg.web.resolved_port();
+                vec![
+                    pair("", &tr!("關閉")),
+                    pair("tailscale", &tr!("Tailscale (自動 IP:{port})", port = port)),
+                    pair(
+                        &format!("127.0.0.1:{port}"),
+                        &tr!("本機 (127.0.0.1:{port})", port = port),
+                    ),
+                    pair(
+                        &format!("0.0.0.0:{port}"),
+                        &tr!("全網 (0.0.0.0:{port})", port = port),
+                    ),
+                ]
+            }
+            Item::WebPort => vec![
+                pair("", &tr!("預設 (7421)")),
+                pair("7421", "7421"),
+                pair("8080", "8080"),
+                pair("8000", "8000"),
+                pair("3000", "3000"),
+                pair("9090", "9090"),
             ],
             Item::Language => {
                 let mut v = vec![pair("", &tr!("自動 (依 LANG 環境變數)"))];
@@ -335,6 +356,32 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         }
         return;
     }
+    if item == Item::WebPort {
+        let port_val = if value.is_empty() {
+            None
+        } else {
+            value
+                .parse::<i64>()
+                .ok()
+                .map(termade_daemon::config::TomlValue::Integer)
+        };
+        let _ = Config::set_toml(&path, &["web"], "port", port_val);
+        s.cfg = Config::load_file(&path);
+        if s.cfg.web.is_enabled() {
+            if let Some(w) = writer {
+                let addr = s.cfg.web.resolved_addr();
+                let _ = crate::send(
+                    w,
+                    &termade_protocol::Request::WebControl {
+                        enabled: Some(true),
+                        addr: Some(addr),
+                    },
+                );
+            }
+        }
+        app.status = tr!("已更新 Web 版連接埠並儲存至 {path}", path = path.display());
+        return;
+    }
     let (table, key): (&[&str], &str) = match item {
         Item::DefaultAgent => (&["defaults"], "agent"),
         Item::DefaultPermission => (&["defaults"], "permission"),
@@ -342,7 +389,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::SpawnConfirm => (&["agent_spawn"], "confirm"),
         Item::SpawnMaxEffort => (&["agent_spawn"], "max_effort"),
         Item::CollabInstructions => (&["collab"], "instructions"),
-        Item::WebCompanion => return,
+        Item::WebCompanion | Item::WebPort => return,
         Item::Language => (&["tui"], "language"),
         Item::Model => (&["agents", ""], "model"),
         Item::Effort => (&["agents", ""], "effort"),

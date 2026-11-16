@@ -103,6 +103,8 @@ pub struct RemoteOptions {
     pub listen: Option<String>,
     /// `--web host:port` (Web 版支援 HTTP/WebSocket)
     pub web: Option<String>,
+    /// `--web-port <port>` (Web 版自訂連接埠)
+    pub web_port: Option<u16>,
     /// 已棄用的 `--token`
     pub token: Option<String>,
     /// `--token-file <path>` (權限須為 0600)
@@ -187,14 +189,31 @@ pub fn resolve_listen_addr(spec: &str) -> Result<(String, bool)> {
     Ok((spec.to_string(), all_tailscale))
 }
 
+/// 將自訂 port 套用到位址規格。
+pub fn apply_port_to_spec(spec: &str, port: u16) -> String {
+    let s = spec.trim();
+    if s == "tailscale"
+        || s.starts_with("tailscale:")
+        || s.chars().all(|c| c.is_ascii_digit())
+        || s.starts_with(':')
+    {
+        format!("tailscale:{port}")
+    } else if let Some((host, _)) = s.rsplit_once(':') {
+        format!("{host}:{port}")
+    } else {
+        format!("{s}:{port}")
+    }
+}
+
 /// 解析 `--web` 規格：
-/// 支援 `tailscale` (預設 port 7421)、`tailscale:<port>` 與一般 `host:port`。
+/// 支援 `tailscale` (預設 port 7421)、`tailscale:<port>`、純 port (如 `8080` 或 `:8080`) 與一般 `host:port`。
 pub fn resolve_web_addr(spec: &str) -> Result<(String, bool)> {
-    if spec == "tailscale" || spec.starts_with("tailscale:") {
-        let port: u16 = if spec == "tailscale" {
+    let trimmed = spec.trim();
+    if trimmed == "tailscale" || trimmed.starts_with("tailscale:") {
+        let port: u16 = if trimmed == "tailscale" {
             7421
         } else {
-            let port_str = &spec["tailscale:".len()..];
+            let port_str = &trimmed["tailscale:".len()..];
             port_str
                 .parse()
                 .with_context(|| tr!("無效的 port 設定：{port_str}", port_str = port_str))?
@@ -203,8 +222,26 @@ pub fn resolve_web_addr(spec: &str) -> Result<(String, bool)> {
         return Ok((format!("{ip}:{port}"), true));
     }
 
+    // 若規格是純數字 (如 "8080") 或以 ":" 開頭 (如 ":8080")
+    let port_candidate = if let Some(stripped) = trimmed.strip_prefix(':') {
+        stripped.parse::<u16>().ok()
+    } else {
+        trimmed.parse::<u16>().ok()
+    };
+    if let Some(port) = port_candidate {
+        return match detect_tailscale_ip() {
+            Ok(ip) => Ok((format!("{ip}:{port}"), true)),
+            Err(_) => Ok((format!("127.0.0.1:{port}"), false)),
+        };
+    }
+
     use std::net::ToSocketAddrs;
-    let addrs: Vec<_> = spec
+    let socket_spec = if !trimmed.contains(':') {
+        format!("{trimmed}:7421")
+    } else {
+        trimmed.to_string()
+    };
+    let addrs: Vec<_> = socket_spec
         .to_socket_addrs()
         .with_context(|| tr!("無法解析 Web 監聽位址 {spec}", spec = spec))?
         .collect();
@@ -212,7 +249,7 @@ pub fn resolve_web_addr(spec: &str) -> Result<(String, bool)> {
         bail!("{}", tr!("無法解析 Web 監聽位址 {spec}", spec = spec));
     }
     let all_tailscale = addrs.iter().all(|a| is_tailscale_ip(a.ip()));
-    Ok((spec.to_string(), all_tailscale))
+    Ok((socket_spec, all_tailscale))
 }
 
 /// 讀取 token 檔；要求不對 group/other 開放權限。
@@ -451,15 +488,26 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
         None
     };
 
-    let web_spec = opts.web.as_deref().or_else(|| {
-        if cfg.web.is_enabled() {
-            Some(cfg.web.resolved_addr())
+    let web_spec: Option<String> = if let Some(spec) = opts.web.as_deref() {
+        if let Some(port) = opts.web_port {
+            Some(apply_port_to_spec(spec, port))
         } else {
-            None
+            Some(spec.to_string())
         }
-    });
+    } else if let Some(port) = opts.web_port {
+        let base = if cfg.web.is_enabled() {
+            cfg.web.resolved_addr()
+        } else {
+            "tailscale".to_string()
+        };
+        Some(apply_port_to_spec(&base, port))
+    } else if cfg.web.is_enabled() {
+        Some(cfg.web.resolved_addr())
+    } else {
+        None
+    };
 
-    let resolved_web = if let Some(addr_spec) = web_spec {
+    let resolved_web = if let Some(addr_spec) = web_spec.as_deref() {
         let (resolved, _) = resolve_web_addr(addr_spec)?;
         Some(resolved)
     } else {

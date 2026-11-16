@@ -324,7 +324,8 @@ termade replay [--since <seq>] [--json]           # Audit and replay events.json
 # Remote Daemon, Multi-Host & Web Version Support
 termade daemon --listen tailscale                 # Start daemon bound to Tailscale WireGuard IP
 termade daemon --listen 127.0.0.1:7420            # Start daemon listening on TCP (auto-generates token)
-termade daemon --web tailscale                    # Start Web version and print terminal QR code
+termade daemon --web tailscale                    # Start Web version and print terminal QR code (default port 7421)
+termade daemon --web tailscale --web-port 8080    # Start Web version with custom port (8080)
 termade daemon info                               # Print current Tailscale IP, token, and connection examples
 termade --remote tailscale                        # Connect to local Tailscale daemon
 termade --remote workstation:7420 --remote gpu:7420 # Aggregate multiple remote hosts into a single TUI
@@ -349,7 +350,8 @@ notify_min_turn_secs = 10         # Turns shorter than this threshold do not not
 [web]
 # Web version settings (global only; can also be toggled in TUI :settings)
 enabled = true                    # Enable Web version
-addr = "tailscale"                # Listen address: "tailscale" (auto-detect IP:7421) | "127.0.0.1:7421" | "0.0.0.0:7421"
+port = 7421                       # Custom port: default 7421 (can also be specified in addr, e.g. "127.0.0.1:8080")
+addr = "tailscale"                # Listen address: "tailscale" (auto-detect IP) | "127.0.0.1" | "0.0.0.0"
 
 [remotes]
 # Multi-host aggregation (T29)

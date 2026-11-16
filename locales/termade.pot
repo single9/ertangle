@@ -142,6 +142,10 @@ msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` 
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "Web 版自訂連接埠 (預設 7421)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)"
 msgstr ""
 
@@ -222,7 +226,7 @@ msgid "啟動 TUI (預設行為)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"
+msgid "啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale、127.0.0.1:7421 或 8080)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -2011,7 +2015,11 @@ msgid "model／effort 預設是針對某個 agent；先選取一個 session"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "可設定：agent、permission、model、effort、web"
+msgid "無效的 port 設定：{value}"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "可設定：agent、permission、model、effort、web、web-port"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2047,7 +2055,11 @@ msgid "選取 session 的 agent 的預設 effort"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "Web 版支援 (off／tailscale／位址)"
+msgid "Web 版支援 (off／tailscale／位址／port)"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "Web 版自訂連接埠 (例如 7421、8080)"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2080,6 +2092,14 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "全網位址"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "預設連接埠"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs
+msgid "常用連接埠"
 msgstr ""
 
 #: crates/termade-tui/src/diff.rs
@@ -2952,6 +2972,10 @@ msgid "Web 版支援 (Web UI)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "Web 版連接埠 (Web Port)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
 msgid "介面語言"
 msgstr ""
 
@@ -3000,15 +3024,19 @@ msgid "不問 (effort 調降、model 拒絕)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
-msgid "Tailscale (自動 IP:7421)"
+msgid "Tailscale (自動 IP:{port})"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
-msgid "本機 (127.0.0.1:7421)"
+msgid "本機 (127.0.0.1:{port})"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
-msgid "全網 (0.0.0.0:7421)"
+msgid "全網 (0.0.0.0:{port})"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "預設 (7421)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
@@ -3025,6 +3053,10 @@ msgstr ""
 
 #: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
 msgid "已儲存到 {path}"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "已更新 Web 版連接埠並儲存至 {path}"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs

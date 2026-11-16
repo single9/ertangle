@@ -66,7 +66,7 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[test]
 fn test_web_companion_http_and_websocket() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = std::env::temp_dir().join(format!("termade-webtest-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
@@ -335,7 +335,7 @@ fn test_web_companion_http_and_websocket() {
 
 #[test]
 fn test_web_companion_dynamic_control_and_config() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = std::env::temp_dir().join(format!("termade-webdyn-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
@@ -360,6 +360,7 @@ fn test_web_companion_dynamic_control_and_config() {
             token: None,
             token_file: None,
             insecure_listen_public: false,
+            ..Default::default()
         });
     });
 
@@ -441,6 +442,56 @@ fn test_web_companion_dynamic_control_and_config() {
         let frame = client.recv().unwrap();
         assert!(matches!(frame, Frame::Ok { .. }));
     }
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_web_companion_custom_port() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let root = std::env::temp_dir().join(format!("termade-webtest-port-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+
+    let sock = root.join("daemon.sock");
+    std::env::set_var("TERMADE_SOCKET", &sock);
+    std::env::set_var("XDG_STATE_HOME", root.join("state"));
+    std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+    std::env::remove_var("TERMADE_TOKEN");
+    std::env::remove_var("TERMADE_REMOTE");
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let web_port = listener.local_addr().unwrap().port();
+    drop(listener);
+
+    // 啟動 daemon 並指定 --web 127.0.0.1 與 --web-port
+    let d_sock = sock.clone();
+    std::thread::spawn(move || {
+        let _ = termade_daemon::run_remote(RemoteOptions {
+            web: Some("127.0.0.1".into()),
+            web_port: Some(web_port),
+            ..Default::default()
+        });
+    });
+
+    let start = Instant::now();
+    while !d_sock.exists() {
+        if start.elapsed() > Duration::from_secs(3) {
+            panic!("daemon 啟動逾時");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let addr = format!("127.0.0.1:{web_port}");
+    let mut http_stream = TcpStream::connect(&addr).unwrap();
+    http_stream
+        .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        .unwrap();
+    http_stream.flush().unwrap();
+    let mut reader = BufReader::new(http_stream);
+    let mut status_line = String::new();
+    reader.read_line(&mut status_line).unwrap();
+    assert!(status_line.contains("200 OK"));
 
     let _ = fs::remove_dir_all(&root);
 }

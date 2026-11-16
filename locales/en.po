@@ -135,6 +135,10 @@ msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` 
 msgstr "Agent kind: opencode / claude / codex / antigravity; may include `:model` (e.g. claude:opus)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "Web 版自訂連接埠 (預設 7421)"
+msgstr "Custom port for Web version (default 7421)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)"
 msgstr "Run as a stdio MCP server (for agent child processes to use as an MCP tool)"
 
@@ -215,8 +219,8 @@ msgid "啟動 TUI (預設行為)"
 msgstr "Start the TUI (default behavior)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"
-msgstr "Start Web version HTTP/WebSocket interface (e.g. tailscale or 127.0.0.1:7421)"
+msgid "啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale、127.0.0.1:7421 或 8080)"
+msgstr "Start Web version HTTP/WebSocket interface (e.g. tailscale, 127.0.0.1:7421 or 8080)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "啟動後立刻送出的 prompt"
@@ -2016,8 +2020,12 @@ msgid "model／effort 預設是針對某個 agent；先選取一個 session"
 msgstr "model/effort defaults are per agent; select a session first"
 
 #: crates/termade-tui/src/commands.rs
-msgid "可設定：agent、permission、model、effort、web"
-msgstr "Settable keys: agent, permission, model, effort, web"
+msgid "無效的 port 設定：{value}"
+msgstr "Invalid port setting: {value}"
+
+#: crates/termade-tui/src/commands.rs
+msgid "可設定：agent、permission、model、effort、web、web-port"
+msgstr "Configurable: agent, permission, model, effort, web, web-port"
 
 #: crates/termade-tui/src/commands.rs
 msgid "已移除 {key} 預設 ({path})"
@@ -2052,8 +2060,12 @@ msgid "選取 session 的 agent 的預設 effort"
 msgstr "Default effort for the selected session's agent"
 
 #: crates/termade-tui/src/commands.rs
-msgid "Web 版支援 (off／tailscale／位址)"
-msgstr "Web version support (off/tailscale/address)"
+msgid "Web 版支援 (off／tailscale／位址／port)"
+msgstr "Web version support (off/tailscale/address/port)"
+
+#: crates/termade-tui/src/commands.rs
+msgid "Web 版自訂連接埠 (例如 7421、8080)"
+msgstr "Custom port for Web version (e.g. 7421, 8080)"
 
 #: crates/termade-tui/src/commands.rs
 msgid "寫到 .termade/config.toml"
@@ -2086,6 +2098,14 @@ msgstr "Local address"
 #: crates/termade-tui/src/commands.rs
 msgid "全網位址"
 msgstr "Public address"
+
+#: crates/termade-tui/src/commands.rs
+msgid "預設連接埠"
+msgstr "Default port"
+
+#: crates/termade-tui/src/commands.rs
+msgid "常用連接埠"
+msgstr "Common port"
 
 #: crates/termade-tui/src/diff.rs
 msgid "沒有更多 hunk"
@@ -2957,6 +2977,10 @@ msgid "Web 版支援 (Web UI)"
 msgstr "Web version support (Web UI)"
 
 #: crates/termade-tui/src/settings.rs
+msgid "Web 版連接埠 (Web Port)"
+msgstr "Web version port (Web Port)"
+
+#: crates/termade-tui/src/settings.rs
 msgid "介面語言"
 msgstr "Interface language"
 
@@ -3005,16 +3029,20 @@ msgid "不問 (effort 調降、model 拒絕)"
 msgstr "Never ask (lower effort, reject model)"
 
 #: crates/termade-tui/src/settings.rs
-msgid "Tailscale (自動 IP:7421)"
-msgstr "Tailscale (auto IP:7421)"
+msgid "Tailscale (自動 IP:{port})"
+msgstr "Tailscale (auto IP:{port})"
 
 #: crates/termade-tui/src/settings.rs
-msgid "本機 (127.0.0.1:7421)"
-msgstr "Local (127.0.0.1:7421)"
+msgid "本機 (127.0.0.1:{port})"
+msgstr "Local (127.0.0.1:{port})"
 
 #: crates/termade-tui/src/settings.rs
-msgid "全網 (0.0.0.0:7421)"
-msgstr "Public (0.0.0.0:7421)"
+msgid "全網 (0.0.0.0:{port})"
+msgstr "Public (0.0.0.0:{port})"
+
+#: crates/termade-tui/src/settings.rs
+msgid "預設 (7421)"
+msgstr "Default (7421)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "自動 (依 LANG 環境變數)"
@@ -3031,6 +3059,10 @@ msgstr "Web version started and saved to {path}"
 #: crates/termade-tui/src/settings.rs
 msgid "已儲存到 {path}"
 msgstr "Saved to {path}"
+
+#: crates/termade-tui/src/settings.rs
+msgid "已更新 Web 版連接埠並儲存至 {path}"
+msgstr "Web version port updated and saved to {path}"
 
 #: crates/termade-tui/src/settings.rs
 msgid "載入翻譯失敗：{e}"
@@ -3115,6 +3147,24 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"
+#~ msgstr "Start Web version HTTP/WebSocket interface (e.g. tailscale or 127.0.0.1:7421)"
+
+#~ msgid "可設定：agent、permission、model、effort、web"
+#~ msgstr "Settable keys: agent, permission, model, effort, web"
+
+#~ msgid "Web 版支援 (off／tailscale／位址)"
+#~ msgstr "Web version support (off/tailscale/address)"
+
+#~ msgid "Tailscale (自動 IP:7421)"
+#~ msgstr "Tailscale (auto IP:7421)"
+
+#~ msgid "本機 (127.0.0.1:7421)"
+#~ msgstr "Local (127.0.0.1:7421)"
+
+#~ msgid "全網 (0.0.0.0:7421)"
+#~ msgstr "Public (0.0.0.0:7421)"
 
 #~ msgid "行動端隨身審核器：{url}"
 #~ msgstr "Mobile Companion: {url}"

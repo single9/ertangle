@@ -239,6 +239,7 @@ impl RemoteHostCfg {
 pub struct WebCfg {
     pub enabled: Option<bool>,
     pub addr: Option<String>,
+    pub port: Option<u16>,
 }
 
 impl WebCfg {
@@ -251,10 +252,58 @@ impl WebCfg {
         }
     }
 
-    pub fn resolved_addr(&self) -> &str {
+    /// 取得設定的 port，若未指定則依序從 addr 解析或使用預設 7421。
+    pub fn resolved_port(&self) -> u16 {
+        if let Some(p) = self.port {
+            return p;
+        }
+        if let Some(a) = self.addr.as_deref() {
+            if let Some((_, p_str)) = a.rsplit_once(':') {
+                if let Ok(p) = p_str.parse::<u16>() {
+                    return p;
+                }
+            } else if let Ok(p) = a.parse::<u16>() {
+                return p;
+            }
+        }
+        7421
+    }
+
+    pub fn resolved_addr(&self) -> String {
+        let port = self.resolved_port();
         match self.addr.as_deref() {
-            Some(a) if !a.is_empty() && a != "off" => a,
-            _ => "tailscale",
+            Some(a) if !a.is_empty() && a != "off" => {
+                if a == "tailscale" {
+                    if self.port.is_some() {
+                        format!("tailscale:{port}")
+                    } else {
+                        "tailscale".to_string()
+                    }
+                } else if a.starts_with("tailscale:") {
+                    if self.port.is_some() {
+                        format!("tailscale:{port}")
+                    } else {
+                        a.to_string()
+                    }
+                } else if a.chars().all(|c| c.is_ascii_digit()) || a.starts_with(':') {
+                    format!("tailscale:{port}")
+                } else if let Some((host, _)) = a.rsplit_once(':') {
+                    if self.port.is_some() {
+                        format!("{host}:{port}")
+                    } else {
+                        a.to_string()
+                    }
+                } else {
+                    format!("{a}:{port}")
+                }
+            }
+            _ => {
+                if self.port.is_some() {
+                    format!("tailscale:{port}")
+                } else {
+                    "tailscale".to_string()
+                }
+            }
         }
     }
 }
@@ -628,6 +677,26 @@ addr = "tailscale"
 "#;
         let c4 = Config::parse(toml_implicit).unwrap();
         assert!(c4.web.is_enabled());
+
+        let toml_port = r#"
+[web]
+enabled = true
+port = 8080
+"#;
+        let c5 = Config::parse(toml_port).unwrap();
+        assert!(c5.web.is_enabled());
+        assert_eq!(c5.web.resolved_port(), 8080);
+        assert_eq!(c5.web.resolved_addr(), "tailscale:8080");
+
+        let toml_port_override = r#"
+[web]
+enabled = true
+addr = "127.0.0.1:7421"
+port = 9090
+"#;
+        let c6 = Config::parse(toml_port_override).unwrap();
+        assert_eq!(c6.web.resolved_port(), 9090);
+        assert_eq!(c6.web.resolved_addr(), "127.0.0.1:9090");
     }
 
     #[test]

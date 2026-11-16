@@ -1867,6 +1867,24 @@ fn settings_panel_cycles_values_and_writes_config() {
     assert_eq!(cfg.web.enabled, Some(true));
     assert_eq!(cfg.web.addr.as_deref(), Some("127.0.0.1:7421"));
 
+    // 測試 WebPort 項目：改為 8080
+    let port_idx = crate::settings::ITEMS
+        .iter()
+        .position(|i| *i == crate::settings::Item::WebPort)
+        .unwrap();
+    app.settings.as_mut().unwrap().cursor = port_idx;
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
+    assert!(app.settings.as_ref().unwrap().sub.is_some());
+    for c in "8080".chars() {
+        crate::settings::handle_key(&mut app, None, key(KeyCode::Char(c)));
+    }
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
+
+    let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
+    assert_eq!(cfg.web.port, Some(8080));
+    assert_eq!(cfg.web.resolved_port(), 8080);
+    assert_eq!(cfg.web.resolved_addr(), "127.0.0.1:8080");
+
     crate::settings::handle_key(&mut app, None, key(KeyCode::Esc));
     assert_eq!(app.mode, Mode::Normal);
     let _ = std::fs::remove_dir_all(&dir);

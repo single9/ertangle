@@ -12,6 +12,7 @@ use super::roundtrip;
 pub(crate) fn cmd_daemon(
     listen: Option<String>,
     web: Option<String>,
+    web_port: Option<u16>,
     token: Option<String>,
     token_file: Option<PathBuf>,
     insecure_listen_public: bool,
@@ -19,6 +20,7 @@ pub(crate) fn cmd_daemon(
     termade_daemon::run_remote(RemoteOptions {
         listen,
         web,
+        web_port,
         token,
         token_file,
         insecure_listen_public,
@@ -45,11 +47,15 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
         .ok()
         .map(|ip| ip.to_string());
 
+    let cfg = termade_daemon::config::Config::load_file(
+        &termade_daemon::config_dir().join("config.toml"),
+    );
+    let web_port = cfg.web.resolved_port();
     let token_hint = token.as_deref().unwrap_or("<token>");
     let web_url = if let Some(ip) = &tailscale_ip {
-        format!("http://{ip}:7421/#token={token_hint}")
+        format!("http://{ip}:{web_port}/#token={token_hint}")
     } else {
-        format!("http://127.0.0.1:7421/#token={token_hint}")
+        format!("http://127.0.0.1:{web_port}/#token={token_hint}")
     };
 
     if json {

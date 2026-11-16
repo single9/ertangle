@@ -324,7 +324,8 @@ termade replay [--since <seq>] [--json]           # 重播與審核 events.jsonl
 # 遠端 Daemon、多主機與 Web 版支援
 termade daemon --listen tailscale                 # 啟動 Daemon 並自動綁定 Tailscale 安全通道
 termade daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽 TCP (自動產生 token)
-termade daemon --web tailscale                    # 啟動 Web 版並印出終端機 QR Code
+termade daemon --web tailscale                    # 啟動 Web 版並印出終端機 QR Code (預設 port 7421)
+termade daemon --web tailscale --web-port 8080    # 啟動 Web 版並指定自訂 port (8080)
 termade daemon info                               # 查詢目前主機的 Tailscale 位址、Token 與連線指令
 termade --remote tailscale                        # 連線至本機 Tailscale Daemon
 termade --remote workstation:7420 --remote gpu:7420 # 同時連線多台主機並於單一 TUI 聚合呈現
@@ -350,7 +351,8 @@ notify_min_turn_secs = 10         # 短於此秒數的回合完成不觸發通�
 [web]
 # Web 版支援設定 (只認全域設定；亦可在 TUI :settings 中隨時切換)
 enabled = true                    # 是否啟用
-addr = "tailscale"                # 監聽位址："tailscale" (自動偵測 IP:7421) | "127.0.0.1:7421" | "0.0.0.0:7421"
+port = 7421                       # 自訂連接埠：預設 7421 (亦可直接於 addr 指定，例如 "127.0.0.1:8080")
+addr = "tailscale"                # 監聽位址："tailscale" (自動偵測 IP) | "127.0.0.1" | "0.0.0.0"
 
 [remotes]
 # 跨主機聚合設定 (T29)

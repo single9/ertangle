@@ -554,6 +554,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         "remote" | "web" => {
             let cmd_arg = rest.trim();
             let config_p = termade_daemon::config_dir().join("config.toml");
+            let cfg = termade_daemon::config::Config::load_file(&config_p);
             if cmd_arg == "off" {
                 send(
                     writer,
@@ -573,10 +574,20 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 return Ok(());
             }
 
-            if cmd_arg == "on" || cmd_arg.starts_with("on ") {
-                let spec = cmd_arg.strip_prefix("on").unwrap().trim();
+            let is_start = cmd_arg == "on"
+                || cmd_arg.starts_with("on ")
+                || (!cmd_arg.is_empty() && !matches!(cmd_arg, "qr" | "show" | "status"));
+
+            if is_start {
+                let spec = if cmd_arg == "on" {
+                    ""
+                } else if let Some(s) = cmd_arg.strip_prefix("on ") {
+                    s.trim()
+                } else {
+                    cmd_arg
+                };
                 let addr = if spec.is_empty() {
-                    "tailscale".to_string()
+                    cfg.web.resolved_addr()
                 } else {
                     spec.to_string()
                 };
@@ -593,12 +604,21 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                     "enabled",
                     Some(termade_daemon::config::TomlValue::Boolean(true)),
                 );
-                let _ = termade_daemon::config::Config::set_toml(
-                    &config_p,
-                    &["web"],
-                    "addr",
-                    Some(termade_daemon::config::TomlValue::String(addr)),
-                );
+                if let Ok(port) = addr.parse::<u16>() {
+                    let _ = termade_daemon::config::Config::set_toml(
+                        &config_p,
+                        &["web"],
+                        "port",
+                        Some(termade_daemon::config::TomlValue::Integer(port as i64)),
+                    );
+                } else {
+                    let _ = termade_daemon::config::Config::set_toml(
+                        &config_p,
+                        &["web"],
+                        "addr",
+                        Some(termade_daemon::config::TomlValue::String(addr)),
+                    );
+                }
                 app.status = tr!("正在啟動 Web 版…");
                 return Ok(());
             }
@@ -613,10 +633,11 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 .ok()
                 .map(|ip| ip.to_string());
             let token_hint = token.as_deref().unwrap_or("");
+            let web_port = cfg.web.resolved_port();
             let url = if let Some(ip) = &tailscale_ip {
-                format!("http://{ip}:7421/#token={token_hint}")
+                format!("http://{ip}:{web_port}/#token={token_hint}")
             } else {
-                format!("http://127.0.0.1:7421/#token={token_hint}")
+                format!("http://127.0.0.1:{web_port}/#token={token_hint}")
             };
 
             if cmd_arg == "qr" || cmd_arg == "show" {
@@ -1113,6 +1134,19 @@ fn set_default_command(app: &mut App, rest: &str) {
                     Some(termade_daemon::config::TomlValue::Boolean(false)),
                 );
                 termade_daemon::config::Config::set_toml(&path, &["web"], "addr", None)
+            } else if let Ok(port) = value.parse::<u16>() {
+                let _ = termade_daemon::config::Config::set_toml(
+                    &path,
+                    &["web"],
+                    "enabled",
+                    Some(termade_daemon::config::TomlValue::Boolean(true)),
+                );
+                termade_daemon::config::Config::set_toml(
+                    &path,
+                    &["web"],
+                    "port",
+                    Some(termade_daemon::config::TomlValue::Integer(port as i64)),
+                )
             } else {
                 let _ = termade_daemon::config::Config::set_toml(
                     &path,
@@ -1128,8 +1162,23 @@ fn set_default_command(app: &mut App, rest: &str) {
                 )
             }
         }
+        "web-port" | "web_port" => {
+            if value.is_empty() {
+                termade_daemon::config::Config::set_toml(&path, &["web"], "port", None)
+            } else if let Ok(port) = value.parse::<u16>() {
+                termade_daemon::config::Config::set_toml(
+                    &path,
+                    &["web"],
+                    "port",
+                    Some(termade_daemon::config::TomlValue::Integer(port as i64)),
+                )
+            } else {
+                app.status = tr!("無效的 port 設定：{value}", value = value);
+                return;
+            }
+        }
         _ => {
-            app.status = tr!("可設定：agent、permission、model、effort、web");
+            app.status = tr!("可設定：agent、permission、model、effort、web、web-port");
             return;
         }
     };
@@ -1195,7 +1244,8 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                         ("permission".into(), tr!("預設權限 (ask／auto／bypass)")),
                         ("model".into(), tr!("選取 session 的 agent 的預設 model")),
                         ("effort".into(), tr!("選取 session 的 agent 的預設 effort")),
-                        ("web".into(), tr!("Web 版支援 (off／tailscale／位址)")),
+                        ("web".into(), tr!("Web 版支援 (off／tailscale／位址／port)")),
+                        ("web-port".into(), tr!("Web 版自訂連接埠 (例如 7421、8080)")),
                     ];
                     if !input.contains("--repo") {
                         v.push(("--repo".into(), tr!("寫到 .termade/config.toml")));
@@ -1221,6 +1271,15 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                     ("tailscale", tr!("Tailscale 自動偵測")),
                     ("127.0.0.1:7421", tr!("本機位址")),
                     ("0.0.0.0:7421", tr!("全網位址")),
+                ]
+                .into_iter()
+                .map(|(a, d)| (a.to_string(), d))
+                .collect(),
+                Some("web-port") if words.len() == 1 => [
+                    ("7421", tr!("預設連接埠")),
+                    ("8080", tr!("常用連接埠")),
+                    ("8000", tr!("常用連接埠")),
+                    ("3000", tr!("常用連接埠")),
                 ]
                 .into_iter()
                 .map(|(a, d)| (a.to_string(), d))
