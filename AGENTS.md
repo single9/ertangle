@@ -1,8 +1,12 @@
 # Agent Guidelines for ade-rust / termade
 
+## Git Commit Convention
+
+All git commit messages **MUST** be written in **English** following standard Conventional Commits format (e.g. `feat(scope): description`, `fix(scope): description`, `refactor(scope): description`, `chore: description`, etc.). Do **NOT** write git commit messages in Chinese.
+
 ## Traditional Chinese Documentation & Copywriting Rules (台灣繁體中文規範)
 
-Whenever generating, modifying, or reviewing documentation, comments, commit messages, or user-facing text in **Traditional Chinese (zh-TW)**, you **MUST** strictly adhere to the following rules (detailed in `.agents/skills/taiwanese-tech-writing/SKILL.md`):
+Whenever generating, modifying, or reviewing documentation, comments, or user-facing text in **Traditional Chinese (zh-TW)**, you **MUST** strictly adhere to the following rules (detailed in `.agents/skills/taiwanese-tech-writing/SKILL.md`):
 
 1. **No Full-Width Parentheses**:
    - Always use half-width parentheses `(` and `)`.
