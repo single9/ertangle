@@ -113,7 +113,7 @@
     }
     #session-bar::-webkit-scrollbar { display: none; }
     .session-chip {
-      padding: 4px 10px;
+      padding: 5px 10px;
       border-radius: 14px;
       background: #252525;
       color: var(--dim);
@@ -123,15 +123,21 @@
       align-items: center;
       gap: 4px;
       cursor: pointer;
+      flex-shrink: 0;
     }
     .session-chip.active {
-      background: #223;
+      background: #1a2a3a;
       color: var(--cyan);
       border-color: var(--cyan);
     }
     .session-chip.waiting {
       border-color: var(--yellow);
       color: var(--yellow);
+    }
+    .session-chip.add-btn {
+      background: #1f3325;
+      color: var(--green);
+      border: 1px dashed var(--green);
     }
 
     /* 導覽分頁列 */
@@ -144,7 +150,7 @@
     .tab-btn {
       flex: 1;
       text-align: center;
-      padding: 8px 0;
+      padding: 9px 0;
       color: var(--dim);
       background: transparent;
       border-radius: 0;
@@ -163,44 +169,99 @@
       position: relative;
     }
     .view-pane { display: none; height: 100%; }
-    .view-pane.active { display: block; }
+    .view-pane.active { display: flex; flex-direction: column; }
 
     /* 逐字稿 */
-    #transcript {
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 13px;
+    #transcript-box {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-bottom: 8px;
     }
-    .msg-row { margin-bottom: 8px; }
-    .msg-user { color: var(--cyan); font-weight: bold; }
-    .msg-agent { color: var(--text); }
-    .msg-system { color: var(--dim); font-style: italic; }
-    details {
+    .msg-row {
+      padding: 6px 8px;
+      border-radius: 4px;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .msg-user {
+      background: #182838;
+      color: var(--cyan);
+      align-self: flex-end;
+      max-width: 92%;
+      border-left: 3px solid var(--cyan);
+    }
+    .msg-agent {
+      background: #1e1e1e;
+      color: var(--text);
+      max-width: 96%;
+      border-left: 3px solid #555;
+    }
+    .msg-tool {
       background: #181818;
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 4px 8px;
-      margin: 4px 0;
+      color: var(--dim);
+      font-size: 12px;
     }
-    summary { color: var(--dim); cursor: pointer; }
+    details {
+      margin-top: 4px;
+      padding: 4px;
+      background: #111;
+      border-radius: 4px;
+    }
+    summary { cursor: pointer; color: var(--dim); }
+
+    /* 狀態提示列 */
+    #session-notice-bar {
+      background: #262214;
+      border: 1px solid var(--yellow);
+      color: var(--yellow);
+      padding: 8px 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .btn-resume {
+      background: var(--yellow);
+      color: #000;
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+    }
 
     /* Diff 視圖 */
+    #pane-diff { flex: 1; overflow-y: auto; }
     .diff-line-add { background: rgba(0, 230, 118, 0.15); color: #69f0ae; }
     .diff-line-del { background: rgba(255, 23, 68, 0.15); color: #ff5252; }
     .diff-line-hdr { color: var(--cyan); font-weight: bold; }
-    .diff-row { padding: 2px 4px; cursor: pointer; }
+    .diff-row { padding: 3px 6px; cursor: pointer; font-size: 12px; white-space: pre-wrap; }
 
     /* Tasks 視圖 */
+    #pane-tasks { flex: 1; overflow-y: auto; }
     .task-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 10px 12px;
       margin-bottom: 8px;
     }
-    .task-status-todo { color: var(--yellow); }
-    .task-status-in_progress { color: var(--green); }
-    .task-status-done { color: var(--dim); text-decoration: line-through; }
+    .task-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .task-status-todo { background: #332b00; color: var(--yellow); border: 1px solid var(--yellow); }
+    .task-status-doing { background: #003314; color: var(--green); border: 1px solid var(--green); }
+    .task-status-blocked { background: #33000b; color: var(--red); border: 1px solid var(--red); }
+    .task-status-done { background: #222; color: var(--dim); text-decoration: line-through; }
 
     /* 底部輸入列 */
     #input-bar {
@@ -238,6 +299,26 @@
       color: var(--dim);
     }
     .checkbox-label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+    /* 彈出提示 Toast */
+    #toast {
+      position: fixed;
+      bottom: 75px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(30,30,30,0.95);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+    }
+    #toast.show { opacity: 1; }
+    #toast.error { border-color: var(--red); color: var(--red); }
   </style>
 </head>
 <body>
@@ -275,7 +356,11 @@
 
   <div id="content-area">
     <div id="pane-transcript" class="view-pane active">
-      <div id="transcript"></div>
+      <div id="session-notice-bar">
+        <span id="session-notice-text">Session 已結束</span>
+        <button class="btn-resume" onclick="resumeSession()">接續 (Resume)</button>
+      </div>
+      <div id="transcript-box"></div>
     </div>
     <div id="pane-diff" class="view-pane">
       <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
@@ -285,6 +370,9 @@
       <div id="diff-container" style="font-size:12px;"></div>
     </div>
     <div id="pane-tasks" class="view-pane">
+      <div style="margin-bottom: 8px; display:flex; justify-content: flex-end;">
+        <button class="btn-always" style="padding:4px 10px; font-size:12px;" onclick="promptNewTask()">+ 建立新任務</button>
+      </div>
       <div id="tasks-container"></div>
     </div>
   </div>
@@ -303,6 +391,8 @@
     </div>
   </div>
 
+  <div id="toast"></div>
+
   <script>
     let token = "";
     const hash = window.location.hash.substring(1);
@@ -316,11 +406,24 @@
     }
 
     let ws = null;
-    let state = { sessions: {}, tasks: {}, pending_permissions: {}, seq: 0 };
+    let state = {
+      sessions: {},
+      tasks: {},
+      pending_permissions: {},
+      transcripts: {},
+      seq: 0
+    };
     let activeSession = null;
     let currentTab = "transcript";
     let daemonEpoch = null;
     let pendingApprovalReq = null;
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.className = `show ${isError ? "error" : ""}`;
+      setTimeout(() => { t.className = ""; }, 3000);
+    }
 
     function connect() {
       const dot = document.getElementById("conn-dot");
@@ -335,12 +438,11 @@
         dot.className = "status-dot connected";
         text.innerText = "termade";
         ws.send(JSON.stringify({
-          Hello: {
-            client: "web",
-            since: state.seq > 0 ? state.seq : null,
-            token: token || null,
-            epoch: daemonEpoch
-          }
+          op: "hello",
+          client: "web",
+          since: state.seq > 0 ? state.seq : null,
+          token: token || null,
+          epoch: daemonEpoch
         }));
       };
 
@@ -363,41 +465,122 @@
     }
 
     function handleFrame(frame) {
-      if (frame.Ready) {
-        daemonEpoch = frame.Ready.epoch;
-      } else if (frame.Snapshot) {
-        state = frame.Snapshot.state;
+      const op = frame.ev;
+      if (op === "ready") {
+        daemonEpoch = frame.epoch;
+      } else if (op === "snapshot") {
+        state = frame.state;
+        if (!state.transcripts) state.transcripts = {};
         updateUI();
-      } else if (frame.Record) {
-        applyRecord(frame.Record.record);
-      } else if (frame.Diff) {
-        renderDiff(frame.Diff.diff);
-      } else if (frame.Error) {
-        alert(frame.Error.message);
+        renderActiveTranscript();
+      } else if (op === "record") {
+        applyRecord(frame.record);
+      } else if (op === "diff") {
+        renderDiff(frame.diff);
+      } else if (op === "ok") {
+        if (frame.note) showToast(frame.note);
+      } else if (op === "error") {
+        showToast(frame.message, true);
       }
     }
 
     function applyRecord(record) {
       state.seq = record.seq;
-      const ev = record.event;
-      if (ev.SessionStarted) {
-        state.sessions[ev.SessionStarted.session.id] = ev.SessionStarted.session;
-      } else if (ev.SessionStatusChanged) {
-        if (state.sessions[ev.SessionStatusChanged.session]) {
-          state.sessions[ev.SessionStatusChanged.session].status = ev.SessionStatusChanged.status;
-          state.sessions[ev.SessionStatusChanged.session].status_note = ev.SessionStatusChanged.note;
+      const event = record.event;
+      if (!event) return;
+      const kind = event.kind;
+
+      if (kind === "session_started") {
+        state.sessions[event.session.id] = event.session;
+        if (!state.transcripts[event.session.id]) state.transcripts[event.session.id] = [];
+      } else if (kind === "session_status") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].status = event.status;
         }
-      } else if (ev.PermissionRequested) {
-        state.pending_permissions[ev.PermissionRequested.request.req] = ev.PermissionRequested.request;
+      } else if (kind === "session_note") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].status_note = event.note;
+        }
+      } else if (kind === "session_removed") {
+        delete state.sessions[event.session];
+        delete state.transcripts[event.session];
+        if (activeSession === event.session) {
+          activeSession = Object.keys(state.sessions)[0] || null;
+        }
+      } else if (kind === "permission_requested") {
+        state.pending_permissions[event.request.req] = event.request;
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-      } else if (ev.PermissionResolved) {
-        delete state.pending_permissions[ev.PermissionResolved.req];
-      } else if (ev.SessionClosed) {
-        if (state.sessions[ev.SessionClosed.session]) {
-          state.sessions[ev.SessionClosed.session].status = "Closed";
+      } else if (kind === "permission_resolved") {
+        delete state.pending_permissions[event.req];
+      } else if (kind === "task_changed") {
+        state.tasks[event.task.id] = event.task;
+      } else if (kind === "cost") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].cost = event.cost;
         }
+      } else if (kind === "user_prompt") {
+        if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
+        state.transcripts[event.session].push(`> ${event.text}`);
+        if (event.session === activeSession) appendTranscript(`> ${event.text}`, "msg-user");
+      } else if (kind === "output") {
+        if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
+        state.transcripts[event.session].push(event.text);
+        if (event.session === activeSession) appendTranscript(event.text, "msg-agent");
+      } else if (kind === "tool_call") {
+        const icon = event.ok === true ? "✓" : (event.ok === false ? "✗" : "⏳");
+        const summary = `[工具 ${event.name}] ${icon} ${event.input || ""}`;
+        if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
+        state.transcripts[event.session].push(summary);
+        if (event.session === activeSession) appendTranscript(summary, "msg-tool", event.output);
       }
+
       updateUI();
+    }
+
+    function appendTranscript(text, className, extraOutput = null) {
+      const box = document.getElementById("transcript-box");
+      const row = document.createElement("div");
+      row.className = `msg-row ${className}`;
+      if (extraOutput) {
+        row.innerHTML = `<div>${escapeHtml(text)}</div><details><summary>詳細輸出</summary><pre style="margin-top:4px; font-size:11px;">${escapeHtml(extraOutput)}</pre></details>`;
+      } else {
+        row.innerText = text;
+      }
+      box.appendChild(row);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function renderActiveTranscript() {
+      const box = document.getElementById("transcript-box");
+      box.innerHTML = "";
+      if (!activeSession) return;
+      const lines = state.transcripts[activeSession] || [];
+      if (lines.length === 0) {
+        const hint = document.createElement("div");
+        hint.style.color = "var(--dim)";
+        hint.style.padding = "20px 0";
+        hint.style.textAlign = "center";
+        hint.innerText = "尚未有逐字稿紀錄，請在下方送出 prompt 開始對話";
+        box.appendChild(hint);
+        return;
+      }
+      lines.forEach(line => {
+        const row = document.createElement("div");
+        if (line.startsWith("> ")) {
+          row.className = "msg-row msg-user";
+        } else if (line.startsWith("[工具 ")) {
+          row.className = "msg-row msg-tool";
+        } else {
+          row.className = "msg-row msg-agent";
+        }
+        row.innerText = line;
+        box.appendChild(row);
+      });
+      box.scrollTop = box.scrollHeight;
     }
 
     function updateUI() {
@@ -420,7 +603,7 @@
       let liveCount = 0;
       for (const id in state.sessions) {
         const s = state.sessions[id];
-        if (s.status !== "Closed" && s.status !== "Failed") liveCount++;
+        if (s.status !== "exited" && s.status !== "failed" && s.status !== "Failed" && s.status !== "Exited") liveCount++;
         if (s.cost && s.cost.usd) totalCost += s.cost.usd;
       }
       document.getElementById("stat-cost").innerText = `$${totalCost.toFixed(3)}`;
@@ -430,30 +613,58 @@
       const sbar = document.getElementById("session-bar");
       sbar.innerHTML = "";
       const sids = Object.keys(state.sessions);
-      if (!activeSession && sids.length > 0) activeSession = sids[0];
+      if (!activeSession && sids.length > 0) {
+        activeSession = sids[0];
+        renderActiveTranscript();
+      }
 
       sids.forEach(id => {
         const s = state.sessions[id];
         const chip = document.createElement("div");
         chip.className = `session-chip ${id === activeSession ? "active" : ""}`;
-        if (s.status === "WaitingApproval") chip.classList.add("waiting");
-        chip.innerText = `${s.label} (${s.kind})`;
+        const st = (s.status || "").toLowerCase();
+        if (st.includes("approval")) chip.classList.add("waiting");
+        chip.innerText = `${s.label || id} (${s.kind || "agent"})`;
         chip.onclick = () => selectSession(id);
         sbar.appendChild(chip);
       });
 
-      // 4. 任務板
+      // + 建立 Session 按鈕
+      const addChip = document.createElement("div");
+      addChip.className = "session-chip add-btn";
+      addChip.innerText = "+ 新建";
+      addChip.onclick = promptNewSession;
+      sbar.appendChild(addChip);
+
+      // 4. Session 狀態橫幅 (若 Failed / Exited 顯示 Resume)
+      const noticeBar = document.getElementById("session-notice-bar");
+      if (activeSession && state.sessions[activeSession]) {
+        const current = state.sessions[activeSession];
+        const st = (current.status || "").toLowerCase();
+        if (st === "failed" || st === "exited") {
+          noticeBar.style.display = "flex";
+          document.getElementById("session-notice-text").innerText = `${current.label || activeSession} 已結束，可點擊接續`;
+        } else {
+          noticeBar.style.display = "none";
+        }
+      } else {
+        noticeBar.style.display = "none";
+      }
+
+      // 5. 任務板
       const tasksContainer = document.getElementById("tasks-container");
       tasksContainer.innerHTML = "";
       for (const tid in state.tasks || {}) {
         const t = state.tasks[tid];
         const card = document.createElement("div");
         card.className = "task-card";
-        card.innerHTML = `<div style="display:flex; justify-content:space-between;">
-          <span style="font-weight:bold;">${t.title}</span>
-          <span class="task-status-${t.status.toLowerCase()}">${t.status}</span>
+        const stClass = `task-status-${(t.status || "todo").toLowerCase()}`;
+        card.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:bold;">${escapeHtml(t.title)}</span>
+          <span class="task-badge ${stClass}" onclick="cycleTaskStatus('${t.id}', '${t.status}')">${t.status}</span>
         </div>
-        <div style="color:var(--dim); font-size:11px; margin-top:4px;">${t.assignee || "未指派"}</div>`;
+        <div style="color:var(--dim); font-size:11px; margin-top:6px;">${escapeHtml(t.detail || "")}</div>
+        <div style="color:#666; font-size:10px; margin-top:4px;">指派：${t.assignee || "未指派"}</div>`;
         tasksContainer.appendChild(card);
       }
     }
@@ -461,6 +672,7 @@
     function selectSession(id) {
       activeSession = id;
       updateUI();
+      renderActiveTranscript();
       if (currentTab === "diff") requestDiff();
     }
 
@@ -477,11 +689,10 @@
       if (!pendingApprovalReq || !ws) return;
       const decMap = { allow: "Allow", always: "Always", deny: "Deny" };
       ws.send(JSON.stringify({
-        Permission: {
-          session: pendingApprovalReq.session,
-          req: pendingApprovalReq.req,
-          decision: decMap[decision]
-        }
+        op: "permission",
+        session: pendingApprovalReq.session,
+        req: pendingApprovalReq.req,
+        decision: decMap[decision]
       }));
     }
 
@@ -491,24 +702,33 @@
       if (!text || !activeSession || !ws) return;
       const queue = document.getElementById("queue-checkbox").checked;
       ws.send(JSON.stringify({
-        Prompt: {
-          session: activeSession,
-          text: text,
-          attachments: [],
-          queue: queue
-        }
+        op: "prompt",
+        session: activeSession,
+        text: text,
+        attachments: [],
+        queue: queue
       }));
       input.value = "";
     }
 
+    function resumeSession() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({
+        op: "resume",
+        session: activeSession,
+        prompt: null
+      }));
+      showToast("已送出接續請求…");
+    }
+
     function cancelTurn() {
       if (!activeSession || !ws) return;
-      ws.send(JSON.stringify({ Cancel: { session: activeSession } }));
+      ws.send(JSON.stringify({ op: "cancel", session: activeSession }));
     }
 
     function requestDiff() {
       if (!activeSession || !ws) return;
-      ws.send(JSON.stringify({ WorktreeDiff: { session: activeSession } }));
+      ws.send(JSON.stringify({ op: "worktree_diff", session: activeSession }));
     }
 
     function renderDiff(diffText) {
@@ -516,6 +736,8 @@
       container.innerHTML = "";
       document.getElementById("btn-merge").style.display = diffText ? "block" : "none";
       document.getElementById("diff-info").innerText = diffText ? "變更內容 (點擊行加入註解)" : "無未合併變更";
+
+      if (!diffText) return;
 
       diffText.split("\n").forEach((line, idx) => {
         const row = document.createElement("div");
@@ -525,16 +747,15 @@
         else if (line.startsWith("diff") || line.startsWith("@@")) row.className += " diff-line-hdr";
         row.innerText = line;
         row.onclick = () => {
-          const comment = prompt(`對行 ${idx + 1} 留下審查註解：\n${line}`);
+          const comment = prompt(`對第 ${idx + 1} 行留下審查註解：\n${line}`);
           if (comment && activeSession && ws) {
             ws.send(JSON.stringify({
-              ReviewComment: {
-                session: activeSession,
-                file: "diff",
-                line: idx + 1,
-                body: comment
-              }
+              op: "review_comment",
+              session: activeSession,
+              location: `line:${idx + 1}`,
+              comment: comment
             }));
+            showToast("審查註解已送出");
           }
         };
         container.appendChild(row);
@@ -544,8 +765,54 @@
     function mergeDiff() {
       if (!activeSession || !ws) return;
       if (confirm("確定合併此 Session 的變更到主分支？")) {
-        ws.send(JSON.stringify({ WorktreeMerge: { session: activeSession, message: null } }));
+        ws.send(JSON.stringify({ op: "worktree_merge", session: activeSession, message: null }));
       }
+    }
+
+    function promptNewSession() {
+      const promptText = prompt("請輸入初始 Prompt：");
+      if (!promptText || !ws) return;
+      ws.send(JSON.stringify({
+        op: "spawn",
+        kind: "opencode",
+        prompt: promptText,
+        role: "worker",
+        worktree: false,
+        transport: "auto"
+      }));
+      showToast("正在建立新 Session…");
+    }
+
+    function promptNewTask() {
+      const title = prompt("任務標題：");
+      if (!title || !ws) return;
+      const detail = prompt("任務說明 (可選)：") || "";
+      ws.send(JSON.stringify({
+        op: "task_create",
+        title: title,
+        detail: detail,
+        assignee: activeSession,
+        created_by: null,
+        depends_on: []
+      }));
+      showToast("正在建立任務…");
+    }
+
+    function cycleTaskStatus(taskId, currentStatus) {
+      if (!ws) return;
+      const cycle = {
+        Todo: "Doing",
+        Doing: "Done",
+        Done: "Todo",
+        Blocked: "Doing",
+        Review: "Done"
+      };
+      const next = cycle[currentStatus] || "Doing";
+      ws.send(JSON.stringify({
+        op: "task_update",
+        id: taskId,
+        status: next
+      }));
     }
 
     connect();
