@@ -35,7 +35,7 @@
 | [T27](T27-i18n-english.md) | 多國語系：以 gettext `.po` 提供英文介面 (已實作，待審查) | P2 | — |
 | [T28](T28-remote-tailscale-and-reconnect.md) | 遠端連線韌性與 Tailscale 整合：自動偵測 Tailscale 位址、Token 持久化與 TUI 自動斷線重連 (已完成) | P1 | T05 |
 | [T29](T29-multi-host-tui.md) | TUI 多主機聚合視圖 (`[remotes]` 設定與跨機 Session 操控) (已完成) | P2 | T28 |
-| [T30](T30-mobile-companion-web.md) | 行動端隨身審核器 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code) | P2 | T28 |
+| [T30](T30-mobile-companion-web.md) | 行動端隨身審核器 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code) (已完成) | P2 | T28 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

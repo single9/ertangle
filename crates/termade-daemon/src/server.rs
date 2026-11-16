@@ -101,6 +101,8 @@ pub(crate) fn token_matches(given: Option<&str>, expected: &str) -> bool {
 pub struct RemoteOptions {
     /// `--listen host:port`
     pub listen: Option<String>,
+    /// `--web host:port` (行動端隨身審核器 Web/WebSocket)
+    pub web: Option<String>,
     /// 已棄用的 `--token`
     pub token: Option<String>,
     /// `--token-file <path>` (權限須為 0600)
@@ -180,6 +182,34 @@ pub fn resolve_listen_addr(spec: &str) -> Result<(String, bool)> {
         .collect();
     if addrs.is_empty() {
         bail!("{}", tr!("無法解析監聽位址 {spec}", spec = spec));
+    }
+    let all_tailscale = addrs.iter().all(|a| is_tailscale_ip(a.ip()));
+    Ok((spec.to_string(), all_tailscale))
+}
+
+/// 解析 `--web` 規格：
+/// 支援 `tailscale` (預設 port 7421)、`tailscale:<port>` 與一般 `host:port`。
+pub fn resolve_web_addr(spec: &str) -> Result<(String, bool)> {
+    if spec == "tailscale" || spec.starts_with("tailscale:") {
+        let port: u16 = if spec == "tailscale" {
+            7421
+        } else {
+            let port_str = &spec["tailscale:".len()..];
+            port_str
+                .parse()
+                .with_context(|| tr!("無效的 port 設定：{port_str}", port_str = port_str))?
+        };
+        let ip = detect_tailscale_ip()?;
+        return Ok((format!("{ip}:{port}"), true));
+    }
+
+    use std::net::ToSocketAddrs;
+    let addrs: Vec<_> = spec
+        .to_socket_addrs()
+        .with_context(|| tr!("無法解析 Web 監聽位址 {spec}", spec = spec))?
+        .collect();
+    if addrs.is_empty() {
+        bail!("{}", tr!("無法解析 Web 監聽位址 {spec}", spec = spec));
     }
     let all_tailscale = addrs.iter().all(|a| is_tailscale_ip(a.ip()));
     Ok((spec.to_string(), all_tailscale))
@@ -297,7 +327,7 @@ pub(crate) fn resolve_token(opts: &RemoteOptions) -> Result<Option<String>> {
             return Ok(Some(t));
         }
     }
-    if opts.listen.is_some() {
+    if opts.listen.is_some() || opts.web.is_some() {
         let token = get_or_create_default_token()?;
         return Ok(Some(token));
     }
@@ -417,8 +447,18 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
         None
     };
 
+    let resolved_web = if let Some(addr_spec) = &opts.web {
+        let (resolved, _) = resolve_web_addr(addr_spec)?;
+        Some(resolved)
+    } else {
+        None
+    };
+
     let auth_token = resolve_token(&opts)?;
     if let Some(addr) = &resolved_listen {
+        validate_listen(addr, auth_token.is_some(), opts.insecure_listen_public)?;
+    }
+    if let Some(addr) = &resolved_web {
         validate_listen(addr, auth_token.is_some(), opts.insecure_listen_public)?;
     }
     let listen_tcp = resolved_listen;
@@ -485,6 +525,21 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
                 }
             }
         });
+    }
+
+    let running = Arc::new(AtomicBool::new(true));
+
+    // 若指定了 `--web <host:port>`，啟動行動端隨身審核器 HTTP/WebSocket。
+    if let Some(web_addr) = resolved_web {
+        crate::web::start_web_server(shared.clone(), &web_addr, running.clone())?;
+        tracing::info!("termade 行動端隨身審核器已啟動：http://{web_addr}");
+        eprintln!(
+            "{}",
+            tr!(
+                "termade 行動端隨身審核器已啟動：http://{web_addr}",
+                web_addr = web_addr
+            )
+        );
     }
 
     tracing::info!(

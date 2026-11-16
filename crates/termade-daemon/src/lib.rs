@@ -26,13 +26,15 @@ pub use logwriter::{rotated_log_path, LogConfig};
 use server::*;
 pub use server::{
     detect_tailscale_ip, get_client_token, get_or_create_default_token, is_tailscale_ip,
-    read_token_file, resolve_listen_addr, run, run_remote, run_with_options, RemoteOptions,
+    read_token_file, resolve_listen_addr, resolve_web_addr, run, run_remote, run_with_options,
+    RemoteOptions,
 };
 mod paths;
 pub use client::{ensure_daemon, is_running, send_request, Client, ConnStream};
 pub use git::compute_worktree_diff;
 pub use paths::{config_dir, default_token_path, log_path, runtime_dir, socket_path, state_dir};
 pub mod mcp;
+pub mod web;
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -216,7 +218,7 @@ struct ClientRx {
     pending: Arc<AtomicUsize>,
 }
 
-fn client_channel(closer: Option<ConnStream>) -> (ClientTx, ClientRx) {
+pub(crate) fn client_channel(closer: Option<ConnStream>) -> (ClientTx, ClientRx) {
     let (tx, rx) = mpsc::channel();
     let pending = Arc::new(AtomicUsize::new(0));
     (

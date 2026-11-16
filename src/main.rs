@@ -41,6 +41,9 @@ enum Cmd {
         /// 同時綁定 TCP 位址供遠端連線 (例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token)
         #[arg(long)]
         listen: Option<String>,
+        /// 啟動行動端隨身審核器 Web/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)
+        #[arg(long)]
+        web: Option<String>,
         /// 遠端連線認證用的 token (未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發)
         #[arg(long)]
         token: Option<String>,
@@ -407,10 +410,11 @@ fn main() -> Result<()> {
         Cmd::Tui => termade_tui::run(),
         Cmd::Daemon {
             listen,
+            web,
             token,
             token_file,
             insecure_listen_public,
-        } => cmd_daemon(listen, token, token_file, insecure_listen_public),
+        } => cmd_daemon(listen, web, token, token_file, insecure_listen_public),
         Cmd::RemoteInfo { json } => cmd_remote_info(json),
         Cmd::Mcp { session } => termade_daemon::mcp::run(session),
         Cmd::Whoami { session, json } => cmd_whoami(session, json),

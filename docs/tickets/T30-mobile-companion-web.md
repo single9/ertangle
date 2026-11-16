@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-daemon`、`termade-tui`、`src/`　相依：T28
 
-Status: ready-for-agent
+Status: ready-for-human
 
 ## 問題
 
@@ -35,7 +35,7 @@ Status: ready-for-agent
    - 實作輕量 HTTP + RFC 6455 WebSocket 處理器：
      - `GET /`：回傳 `200 OK`、`Content-Type: text/html; charset=utf-8` 與 `CSP` 安全標頭，內容為 `include_str!("web/index.html")`。
      - `GET /manifest.json`：回傳 PWA manifest，支援手機「加入主畫面」全螢幕啟動。
-     - `GET /ws`：完成 WebSocket 握手後，套用與 `server.rs:handle_conn` 相同的認證閘門 (首則訊息必須為帶正確 `token` 的 `Request::Hello`，失敗則延遲 `AUTH_FAIL_DELAY` 後關閉)，認證通過後橋接 `ClientTx` / `ClientRx`。
+     - `GET /ws`：完成 WebSocket 握手後，套用與 `server.rs:handle_conn` 相同的認證閘門 (首則訊息必須為帶正確 `token` 的 `Request::Hello`，失敗則延遲 `AUTH_FAIL_DELAY` 後關閉)，認證成功後橋接 `ClientTx` / `ClientRx`。
 2. **內嵌單檔 Mobile Companion 前端 (`crates/termade-daemon/src/web/index.html`)**：
    - 零外部 CDN 相依 (離線區網/Tailscale 皆可開)，深色終端機風格主題。
    - **四大功能區塊**：
@@ -54,4 +54,4 @@ Status: ready-for-agent
 - `termade daemon --web 127.0.0.1:0` 啟動成功，對 `/` 發送 HTTP GET 回傳 `200 OK` 與內嵌 HTML。
 - 整合測試：透過 WebSocket 連上 `/ws`，未帶有效 token 時收到錯誤並被斷線；帶有效 token 送出 `Hello` 後，能收到 `Ready` 與 `Snapshot`，並能成功送出 `Prompt` 與 `Permission` 決策。
 - WebSocket 斷線後重連並帶上 `Hello { since, epoch }`，能正確收到斷線期間的新 `Record`。
-- `cargo test`、`cargo clippy --all-targets -- -D warnings` 全部通過，且編譯產物仍為單一獨立執行檔。
+- `cargo test`、`cargo clippy --all-targets -- -D warnings` 全數驗證合格，且編譯產物仍為單一獨立執行檔。

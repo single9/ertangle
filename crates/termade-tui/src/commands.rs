@@ -263,6 +263,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         termade_core::tr_noop!("[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出"),
     ),
     ("unqueue", termade_core::tr_noop!("取消最後一則排隊並放回輸入框")),
+    ("remote", termade_core::tr_noop!("顯示行動端隨身審核器網址與連線資訊")),
     ("bus", termade_core::tr_noop!("顯示／隱藏 Bus 浮層")),
     ("task", termade_core::tr_noop!("<標題>  新增任務")),
     ("tasks", termade_core::tr_noop!("任務視圖：依狀態分組，Enter 跳到負責人")),
@@ -549,6 +550,24 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         },
         "queue" => queue_command(app, writer, rest)?,
         "unqueue" => unqueue(app, writer)?,
+        "remote" => {
+            let token_path = termade_daemon::default_token_path();
+            let token = if token_path.exists() {
+                termade_daemon::read_token_file(&token_path).ok()
+            } else {
+                termade_daemon::get_client_token()
+            };
+            let tailscale_ip = termade_daemon::detect_tailscale_ip()
+                .ok()
+                .map(|ip| ip.to_string());
+            let token_hint = token.as_deref().unwrap_or("");
+            let url = if let Some(ip) = &tailscale_ip {
+                format!("http://{ip}:7421/#token={token_hint}")
+            } else {
+                format!("http://127.0.0.1:7421/#token={token_hint}")
+            };
+            app.status = tr!("行動端隨身審核器網址：{url}", url = url);
+        }
         "host" => {
             let target = rest.trim();
             if target.is_empty() || target == "all" || target == "*" {

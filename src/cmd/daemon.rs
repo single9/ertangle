@@ -11,12 +11,14 @@ use super::roundtrip;
 
 pub(crate) fn cmd_daemon(
     listen: Option<String>,
+    web: Option<String>,
     token: Option<String>,
     token_file: Option<PathBuf>,
     insecure_listen_public: bool,
 ) -> Result<()> {
     termade_daemon::run_remote(RemoteOptions {
         listen,
+        web,
         token,
         token_file,
         insecure_listen_public,
@@ -43,6 +45,13 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
         .ok()
         .map(|ip| ip.to_string());
 
+    let token_hint = token.as_deref().unwrap_or("<token>");
+    let web_url = if let Some(ip) = &tailscale_ip {
+        format!("http://{ip}:7421/#token={token_hint}")
+    } else {
+        format!("http://127.0.0.1:7421/#token={token_hint}")
+    };
+
     if json {
         let val = serde_json::json!({
             "socket": sock.to_string_lossy(),
@@ -51,6 +60,7 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
             "token_exists": token_exists,
             "token": token,
             "tailscale_ip": tailscale_ip,
+            "web_url": web_url,
         });
         println!("{}", serde_json::to_string_pretty(&val)?);
         return Ok(());
@@ -115,6 +125,14 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
                 token = token_hint
             )
         );
+    }
+
+    println!();
+    println!("  {}", tr!("行動端隨身審核器：{url}", url = &web_url));
+    if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&web_url) {
+        println!();
+        println!("{}", tr!("行動端掃描 QR Code 連線："));
+        print!("{}", qr.render_terminal());
     }
     Ok(())
 }

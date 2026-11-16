@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <link rel="manifest" href="/manifest.json">
+  <title>termade companion</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card-bg: #1e1e1e;
+      --border: #333;
+      --text: #e0e0e0;
+      --dim: #888;
+      --cyan: #00e5ff;
+      --green: #00e676;
+      --yellow: #ffd600;
+      --red: #ff1744;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.4;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      background: #181818;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--dim);
+      margin-right: 6px;
+    }
+    .status-dot.connected { background: var(--green); }
+    .status-dot.connecting { background: var(--yellow); }
+    .status-dot.disconnected { background: var(--red); }
+    .header-stats {
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .header-stats span { margin-left: 8px; }
+
+    /* 核准橫幅 */
+    #approval-banner {
+      background: #2b1f00;
+      border-bottom: 2px solid var(--yellow);
+      padding: 10px 12px;
+      display: none;
+      flex-shrink: 0;
+      animation: pulse 1.5s infinite alternate;
+    }
+    @keyframes pulse { from { background: #2b1f00; } to { background: #3d2c00; } }
+    .approval-title {
+      font-weight: bold;
+      color: var(--yellow);
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .approval-detail {
+      font-size: 12px;
+      color: #fff;
+      word-break: break-all;
+      background: #111;
+      padding: 6px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .btn-group { display: flex; gap: 8px; }
+    button {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      touch-action: manipulation;
+    }
+    .btn-allow { background: var(--green); color: #000; flex: 1; }
+    .btn-always { background: var(--cyan); color: #000; }
+    .btn-deny { background: var(--red); color: #fff; flex: 1; }
+
+    /* Session 膠囊列 */
+    #session-bar {
+      display: flex;
+      overflow-x: auto;
+      white-space: nowrap;
+      background: #161616;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 8px;
+      gap: 6px;
+      flex-shrink: 0;
+      scrollbar-width: none;
+    }
+    #session-bar::-webkit-scrollbar { display: none; }
+    .session-chip {
+      padding: 4px 10px;
+      border-radius: 14px;
+      background: #252525;
+      color: var(--dim);
+      font-size: 12px;
+      border: 1px solid transparent;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    .session-chip.active {
+      background: #223;
+      color: var(--cyan);
+      border-color: var(--cyan);
+    }
+    .session-chip.waiting {
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+
+    /* 導覽分頁列 */
+    #tab-bar {
+      display: flex;
+      background: #1a1a1a;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1;
+      text-align: center;
+      padding: 8px 0;
+      color: var(--dim);
+      background: transparent;
+      border-radius: 0;
+      border-bottom: 2px solid transparent;
+    }
+    .tab-btn.active {
+      color: var(--cyan);
+      border-bottom-color: var(--cyan);
+    }
+
+    /* 主畫面視圖區 */
+    #content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      position: relative;
+    }
+    .view-pane { display: none; height: 100%; }
+    .view-pane.active { display: block; }
+
+    /* 逐字稿 */
+    #transcript {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+    }
+    .msg-row { margin-bottom: 8px; }
+    .msg-user { color: var(--cyan); font-weight: bold; }
+    .msg-agent { color: var(--text); }
+    .msg-system { color: var(--dim); font-style: italic; }
+    details {
+      background: #181818;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      margin: 4px 0;
+    }
+    summary { color: var(--dim); cursor: pointer; }
+
+    /* Diff 視圖 */
+    .diff-line-add { background: rgba(0, 230, 118, 0.15); color: #69f0ae; }
+    .diff-line-del { background: rgba(255, 23, 68, 0.15); color: #ff5252; }
+    .diff-line-hdr { color: var(--cyan); font-weight: bold; }
+    .diff-row { padding: 2px 4px; cursor: pointer; }
+
+    /* Tasks 視圖 */
+    .task-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+    }
+    .task-status-todo { color: var(--yellow); }
+    .task-status-in_progress { color: var(--green); }
+    .task-status-done { color: var(--dim); text-decoration: line-through; }
+
+    /* 底部輸入列 */
+    #input-bar {
+      background: #181818;
+      border-top: 1px solid var(--border);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .input-row { display: flex; gap: 8px; align-items: flex-end; }
+    #prompt-input {
+      flex: 1;
+      background: #101010;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      resize: none;
+      min-height: 38px;
+      max-height: 120px;
+      outline: none;
+    }
+    #prompt-input:focus { border-color: var(--cyan); }
+    .btn-send { background: var(--cyan); color: #000; height: 38px; }
+    .btn-cancel { background: #333; color: var(--red); height: 38px; }
+    .input-options {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .checkbox-label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <span id="conn-dot" class="status-dot"></span>
+      <span id="conn-text" style="font-weight:bold;">termade</span>
+    </div>
+    <div class="header-stats">
+      <span id="stat-cost">$0.00</span>
+      <span id="stat-live">0 live</span>
+    </div>
+  </header>
+
+  <div id="approval-banner">
+    <div class="approval-title">
+      <span>待核准操作 (Waiting Approval)</span>
+      <span id="approval-session"></span>
+    </div>
+    <div id="approval-detail" class="approval-detail"></div>
+    <div class="btn-group">
+      <button class="btn-allow" onclick="decide('allow')">Allow</button>
+      <button class="btn-always" onclick="decide('always')">Always</button>
+      <button class="btn-deny" onclick="decide('deny')">Deny</button>
+    </div>
+  </div>
+
+  <div id="session-bar"></div>
+
+  <div id="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('transcript')">逐字稿</button>
+    <button class="tab-btn" onclick="switchTab('diff')">Diff</button>
+    <button class="tab-btn" onclick="switchTab('tasks')">任務板</button>
+  </div>
+
+  <div id="content-area">
+    <div id="pane-transcript" class="view-pane active">
+      <div id="transcript"></div>
+    </div>
+    <div id="pane-diff" class="view-pane">
+      <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <span id="diff-info" style="color:var(--dim); font-size:12px;">無變更</span>
+        <button id="btn-merge" class="btn-always" style="padding:4px 10px; font-size:12px; display:none;" onclick="mergeDiff()">Merge</button>
+      </div>
+      <div id="diff-container" style="font-size:12px;"></div>
+    </div>
+    <div id="pane-tasks" class="view-pane">
+      <div id="tasks-container"></div>
+    </div>
+  </div>
+
+  <div id="input-bar">
+    <div class="input-options">
+      <label class="checkbox-label">
+        <input type="checkbox" id="queue-checkbox"> 忙碌時排入佇列
+      </label>
+      <span id="status-note" style="color:var(--yellow)"></span>
+    </div>
+    <div class="input-row">
+      <textarea id="prompt-input" rows="1" placeholder="輸入 prompt..."></textarea>
+      <button class="btn-cancel" onclick="cancelTurn()">中斷</button>
+      <button class="btn-send" onclick="sendPrompt()">送出</button>
+    </div>
+  </div>
+
+  <script>
+    let token = "";
+    const hash = window.location.hash.substring(1);
+    const hashParams = new URLSearchParams(hash);
+    if (hashParams.has("token")) {
+      token = hashParams.get("token");
+      localStorage.setItem("termade_token", token);
+      window.location.hash = "";
+    } else {
+      token = localStorage.getItem("termade_token") || "";
+    }
+
+    let ws = null;
+    let state = { sessions: {}, tasks: {}, pending_permissions: {}, seq: 0 };
+    let activeSession = null;
+    let currentTab = "transcript";
+    let daemonEpoch = null;
+    let pendingApprovalReq = null;
+
+    function connect() {
+      const dot = document.getElementById("conn-dot");
+      const text = document.getElementById("conn-text");
+      dot.className = "status-dot connecting";
+      text.innerText = "連線中…";
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+      ws.onopen = () => {
+        dot.className = "status-dot connected";
+        text.innerText = "termade";
+        ws.send(JSON.stringify({
+          Hello: {
+            client: "web",
+            since: state.seq > 0 ? state.seq : null,
+            token: token || null,
+            epoch: daemonEpoch
+          }
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const frame = JSON.parse(event.data);
+          handleFrame(frame);
+        } catch (e) {
+          console.error("Parse error", e);
+        }
+      };
+
+      ws.onclose = () => {
+        dot.className = "status-dot disconnected";
+        text.innerText = "已斷線，正在重試…";
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    function handleFrame(frame) {
+      if (frame.Ready) {
+        daemonEpoch = frame.Ready.epoch;
+      } else if (frame.Snapshot) {
+        state = frame.Snapshot.state;
+        updateUI();
+      } else if (frame.Record) {
+        applyRecord(frame.Record.record);
+      } else if (frame.Diff) {
+        renderDiff(frame.Diff.diff);
+      } else if (frame.Error) {
+        alert(frame.Error.message);
+      }
+    }
+
+    function applyRecord(record) {
+      state.seq = record.seq;
+      const ev = record.event;
+      if (ev.SessionStarted) {
+        state.sessions[ev.SessionStarted.session.id] = ev.SessionStarted.session;
+      } else if (ev.SessionStatusChanged) {
+        if (state.sessions[ev.SessionStatusChanged.session]) {
+          state.sessions[ev.SessionStatusChanged.session].status = ev.SessionStatusChanged.status;
+          state.sessions[ev.SessionStatusChanged.session].status_note = ev.SessionStatusChanged.note;
+        }
+      } else if (ev.PermissionRequested) {
+        state.pending_permissions[ev.PermissionRequested.request.req] = ev.PermissionRequested.request;
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      } else if (ev.PermissionResolved) {
+        delete state.pending_permissions[ev.PermissionResolved.req];
+      } else if (ev.SessionClosed) {
+        if (state.sessions[ev.SessionClosed.session]) {
+          state.sessions[ev.SessionClosed.session].status = "Closed";
+        }
+      }
+      updateUI();
+    }
+
+    function updateUI() {
+      // 1. 核准橫幅
+      const pendingKeys = Object.keys(state.pending_permissions || {});
+      const banner = document.getElementById("approval-banner");
+      if (pendingKeys.length > 0) {
+        const req = state.pending_permissions[pendingKeys[0]];
+        pendingApprovalReq = req;
+        document.getElementById("approval-session").innerText = req.session;
+        document.getElementById("approval-detail").innerText = `${req.title}: ${req.detail}`;
+        banner.style.display = "block";
+      } else {
+        banner.style.display = "none";
+        pendingApprovalReq = null;
+      }
+
+      // 2. 統計指標與配額狀態
+      let totalCost = 0;
+      let liveCount = 0;
+      for (const id in state.sessions) {
+        const s = state.sessions[id];
+        if (s.status !== "Closed" && s.status !== "Failed") liveCount++;
+        if (s.cost && s.cost.usd) totalCost += s.cost.usd;
+      }
+      document.getElementById("stat-cost").innerText = `$${totalCost.toFixed(3)}`;
+      document.getElementById("stat-live").innerText = `${liveCount} live`;
+
+      // 3. Session 膠囊列
+      const sbar = document.getElementById("session-bar");
+      sbar.innerHTML = "";
+      const sids = Object.keys(state.sessions);
+      if (!activeSession && sids.length > 0) activeSession = sids[0];
+
+      sids.forEach(id => {
+        const s = state.sessions[id];
+        const chip = document.createElement("div");
+        chip.className = `session-chip ${id === activeSession ? "active" : ""}`;
+        if (s.status === "WaitingApproval") chip.classList.add("waiting");
+        chip.innerText = `${s.label} (${s.kind})`;
+        chip.onclick = () => selectSession(id);
+        sbar.appendChild(chip);
+      });
+
+      // 4. 任務板
+      const tasksContainer = document.getElementById("tasks-container");
+      tasksContainer.innerHTML = "";
+      for (const tid in state.tasks || {}) {
+        const t = state.tasks[tid];
+        const card = document.createElement("div");
+        card.className = "task-card";
+        card.innerHTML = `<div style="display:flex; justify-content:space-between;">
+          <span style="font-weight:bold;">${t.title}</span>
+          <span class="task-status-${t.status.toLowerCase()}">${t.status}</span>
+        </div>
+        <div style="color:var(--dim); font-size:11px; margin-top:4px;">${t.assignee || "未指派"}</div>`;
+        tasksContainer.appendChild(card);
+      }
+    }
+
+    function selectSession(id) {
+      activeSession = id;
+      updateUI();
+      if (currentTab === "diff") requestDiff();
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".view-pane").forEach(p => p.classList.remove("active"));
+      event.target.classList.add("active");
+      document.getElementById(`pane-${tab}`).classList.add("active");
+      if (tab === "diff") requestDiff();
+    }
+
+    function decide(decision) {
+      if (!pendingApprovalReq || !ws) return;
+      const decMap = { allow: "Allow", always: "Always", deny: "Deny" };
+      ws.send(JSON.stringify({
+        Permission: {
+          session: pendingApprovalReq.session,
+          req: pendingApprovalReq.req,
+          decision: decMap[decision]
+        }
+      }));
+    }
+
+    function sendPrompt() {
+      const input = document.getElementById("prompt-input");
+      const text = input.value.trim();
+      if (!text || !activeSession || !ws) return;
+      const queue = document.getElementById("queue-checkbox").checked;
+      ws.send(JSON.stringify({
+        Prompt: {
+          session: activeSession,
+          text: text,
+          attachments: [],
+          queue: queue
+        }
+      }));
+      input.value = "";
+    }
+
+    function cancelTurn() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({ Cancel: { session: activeSession } }));
+    }
+
+    function requestDiff() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({ WorktreeDiff: { session: activeSession } }));
+    }
+
+    function renderDiff(diffText) {
+      const container = document.getElementById("diff-container");
+      container.innerHTML = "";
+      document.getElementById("btn-merge").style.display = diffText ? "block" : "none";
+      document.getElementById("diff-info").innerText = diffText ? "變更內容 (點擊行加入註解)" : "無未合併變更";
+
+      diffText.split("\n").forEach((line, idx) => {
+        const row = document.createElement("div");
+        row.className = "diff-row";
+        if (line.startsWith("+")) row.className += " diff-line-add";
+        else if (line.startsWith("-")) row.className += " diff-line-del";
+        else if (line.startsWith("diff") || line.startsWith("@@")) row.className += " diff-line-hdr";
+        row.innerText = line;
+        row.onclick = () => {
+          const comment = prompt(`對行 ${idx + 1} 留下審查註解：\n${line}`);
+          if (comment && activeSession && ws) {
+            ws.send(JSON.stringify({
+              ReviewComment: {
+                session: activeSession,
+                file: "diff",
+                line: idx + 1,
+                body: comment
+              }
+            }));
+          }
+        };
+        container.appendChild(row);
+      });
+    }
+
+    function mergeDiff() {
+      if (!activeSession || !ws) return;
+      if (confirm("確定合併此 Session 的變更到主分支？")) {
+        ws.send(JSON.stringify({ WorktreeMerge: { session: activeSession, message: null } }));
+      }
+    }
+
+    connect();
+  </script>
+</body>
+</html>
