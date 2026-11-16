@@ -1137,6 +1137,34 @@
       font-weight: 600;
       color: var(--text);
     }
+    .sheet-close {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: #1a1c26;
+      color: var(--text-dim);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      flex: none;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sheet-close:hover, .sheet-close:active {
+      background: #252838;
+      color: var(--text);
+      border-color: #3b4261;
+      transform: scale(0.95);
+    }
+    .sheet-close svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+      stroke: currentColor;
+    }
     .form-group {
       display: flex;
       flex-direction: column;
@@ -1476,7 +1504,15 @@
         <div class="sheet-handle"></div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div class="sheet-title">切換 Session 與專案</div>
-          <button class="btn-pill btn-allow" style="flex:none; padding:5px 12px; font-size:12px;" onclick="closeSheet('sheet-session-picker'); openNewSessionSheet();">+ 建立新 Session</button>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn-pill btn-allow" style="flex:none; padding:5px 12px; font-size:12px;" onclick="closeSheet('sheet-session-picker'); openNewSessionSheet();">+ 建立新 Session</button>
+            <button class="sheet-close" onclick="closeSheet('sheet-session-picker')" aria-label="關閉" title="關閉">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
         </div>
         <div id="picker-sessions-list" style="display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow-y:auto;"></div>
       </div>
@@ -1486,7 +1522,15 @@
     <div id="sheet-new-session" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
-        <div class="sheet-title">建立新 Agent Session</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">建立新 Agent Session</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-new-session')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
 
         <!-- 專案工作區選擇 -->
         <div class="form-group">
@@ -1571,7 +1615,15 @@
     <div id="sheet-session-manage" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
-        <div class="sheet-title" id="manage-session-title">Session 控制面板</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title" id="manage-session-title">Session 控制面板</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-session-manage')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
 
         <!-- 執行期切換模型 -->
         <div class="form-group">
@@ -1635,7 +1687,15 @@
     <div id="sheet-queue-manage" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
-        <div class="sheet-title">待送 Prompt 佇列</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">待送 Prompt 佇列</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-queue-manage')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
         <div id="queue-items-container" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto;"></div>
         <div class="sheet-btn-row">
           <button class="btn-action btn-secondary" onclick="closeSheet('sheet-queue-manage')">關閉</button>
@@ -1648,7 +1708,15 @@
     <div id="sheet-new-task" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
-        <div class="sheet-title">建立協作任務</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">建立協作任務</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-new-task')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
         <div class="form-group">
           <label class="form-label">任務標題</label>
           <input id="sheet-task-title" class="sheet-input" placeholder="例如：補齊單元測試、修正斷線重連…">
@@ -1668,7 +1736,15 @@
     <div id="sheet-review-comment" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
-        <div class="sheet-title">留下程式碼審查註解</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">留下程式碼審查註解</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-review-comment')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
         <div id="sheet-review-preview" style="font-family:var(--font-mono); font-size:11px; background:#000; padding:6px 8px; border-radius:6px; color:var(--text-dim); overflow-x:auto;"></div>
         <div class="form-group">
           <label class="form-label">審查意見</label>
@@ -1685,7 +1761,15 @@
     <div id="sheet-create-pr" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
       <div class="sheet-container">
         <div class="sheet-handle"></div>
-        <div class="sheet-title">為目前 Worktree 建立 Pull Request</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">為目前 Worktree 建立 Pull Request</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-create-pr')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
         <div class="form-group">
           <label class="form-label">PR 標題</label>
           <input id="pr-title" class="sheet-input" placeholder="例如：feat: 實作新功能">
@@ -1707,7 +1791,12 @@
         <div class="sheet-handle"></div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <div id="file-action-label" class="sheet-title" style="margin-bottom:0;">檔案資訊</div>
-          <button class="sheet-close" onclick="closeSheet('sheet-file-action')">✕</button>
+          <button class="sheet-close" onclick="closeSheet('sheet-file-action')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:14px;">
           <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px;">檔案路徑</div>
@@ -1719,6 +1808,9 @@
           </button>
           <button class="btn-pill btn-secondary" style="justify-content:center; padding:10px;" onclick="viewFileDiff()">
             <span>🔍 查看工作區 Diff</span>
+          </button>
+          <button class="btn-pill btn-secondary" style="justify-content:center; padding:9px; color:var(--text-dim);" onclick="closeSheet('sheet-file-action')">
+            關閉
           </button>
         </div>
       </div>
