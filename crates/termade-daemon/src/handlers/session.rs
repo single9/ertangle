@@ -975,12 +975,16 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
         let _ = reply.send(Frame::error(tr!("session 仍在執行，請先結束 (kill)")));
         return;
     }
-    if let Some(user) = shared.cwd_in_use_by_other(&s) {
-        let _ = reply.send(Frame::error(tr!(
-            "worktree 仍被 {user} 使用，不能移除",
-            user = user
-        )));
-        return;
+    // 共用 worktree 檢查只對有 branch 的 session 有意義：一般 session 共用主 repo 的
+    // cwd 是正常情況，移除紀錄不會動到任何檔案，不該因此被另一個執行中的 session 擋下。
+    if s.branch.is_some() {
+        if let Some(user) = shared.cwd_in_use_by_other(&s) {
+            let _ = reply.send(Frame::error(tr!(
+                "worktree 仍被 {user} 使用，不能移除",
+                user = user
+            )));
+            return;
+        }
     }
     // 共用 worktree (handoff)：還有其他 session 參照時只移除紀錄，worktree 與分支留給最後一個。
     let sharers = if s.branch.is_some() {

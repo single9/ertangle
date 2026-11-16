@@ -1572,6 +1572,32 @@ fn session_remove_only_ended() {
 }
 
 #[test]
+fn session_remove_branchless_allows_other_live_session_in_same_cwd() {
+    let shared = test_shared();
+    // 兩個一般 session 共用同一個 cwd (主 repo) 是常態：另一個還在執行時，
+    // 仍然可以移除已結束的那一個 (不會刪到任何檔案)。
+    shared.emit(Event::SessionStarted {
+        session: restart_session("ses-live", SessionStatus::Idle),
+    });
+    shared.emit(Event::SessionStarted {
+        session: restart_session("ses-dead", SessionStatus::Failed),
+    });
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::SessionRemove {
+            session: "ses-dead".into(),
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(matches!(frames[0], Frame::Ok { .. }), "{frames:?}");
+    let inner = lock(&shared.inner);
+    assert!(inner.state.sessions.contains_key("ses-live"));
+    assert!(!inner.state.sessions.contains_key("ses-dead"));
+}
+
+#[test]
 fn high_quota_leaves_a_handoff_hint_once_per_crossing() {
     let shared = test_shared();
     shared.emit(Event::SessionStarted {
