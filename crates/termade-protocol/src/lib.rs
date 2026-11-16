@@ -276,7 +276,7 @@ pub enum Request {
         location: String,
         comment: String,
     },
-    /// 控制或查詢行動端 Web 隨身審核器。
+    /// 控制或查詢 Web 版支援。
     WebControl {
         #[serde(default)]
         enabled: Option<bool>,

@@ -1,4 +1,4 @@
-//! 同步 HTTP 與 RFC 6455 WebSocket 端點 (Mobile Companion 隨身審核器)。
+//! 同步 HTTP 與 RFC 6455 WebSocket 端點 (Web 版支援 / Web Companion)。
 //! 零外部 async/HTTP 框架相依性，直接以 `std::net::TcpListener` 與純 Rust 實作。
 
 pub mod qr;
@@ -102,7 +102,7 @@ pub fn compute_ws_accept(key: &str) -> String {
     base64_encode(&hash)
 }
 
-/// 啟動行動端 Web Companion 服務。
+/// 啟動 Web 版 HTTP/WebSocket 服務。
 pub(crate) fn start_web_server(
     shared: Arc<Shared>,
     addr: &str,

@@ -33,7 +33,7 @@ pub(crate) enum Mode {
     Search,
     /// 設定面板 (`:settings`)。
     Settings,
-    /// 行動端隨身審核器 QR Code 彈窗。
+    /// Web 版 QR Code 彈窗。
     Qr,
 }
 

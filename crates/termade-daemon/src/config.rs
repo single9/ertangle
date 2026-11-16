@@ -232,7 +232,7 @@ impl RemoteHostCfg {
     }
 }
 
-/// 行動端 Web 隨身審核器設定 ([web])。
+/// Web 版支援設定 ([web])。
 /// 為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
@@ -270,7 +270,7 @@ pub struct Config {
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
     pub tui: TuiCfg,
-    /// 行動端 Web 隨身審核器設定；為安全起見僅讀取全域設定檔。
+    /// Web 版支援設定；為安全起見僅讀取全域設定檔。
     pub web: WebCfg,
     /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
     pub remotes: BTreeMap<String, RemoteHostCfg>,

@@ -179,9 +179,9 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - 發送 Prompt、審核權限或檢視 Diff 時，指令會自動透明路由至所屬的遠端主機。
   - 按 `:` 輸入 `:host <名稱>` (或 `:host all`) 可隨時切換聚焦單一主機或全域視圖。
 
-### 8. 行動端隨身審核器與 Web 介面 (Mobile Companion PWA, T30)
+### 8. Web 版支援與行動介面 (Web Interface & Mobile PWA, T30)
 
-- **隨身審核、買咖啡不中斷**：
+- **隨身攜帶、買咖啡不中斷**：
   - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。可在 TUI 設定面板 (`:settings` 或 `Space ,`) 中直接切換啟用，或輸入 `:web on [位址]` (亦可從 CLI 啟動 `termade daemon --web tailscale`)。
   - 終端機內建 **Unicode QR Code**，在 TUI 輸入 `:web qr` 或按 `Space w`，手機打開相機一掃即可在瀏覽器開啟專屬 PWA 介面。
 - **零相依原生 HTTP / WebSocket**：
@@ -219,8 +219,8 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | `j` / `k` 或 `↑` / `↓` | 移動選取 Session；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
 | `[` / `]` | 快速跳至上一個 / 下一個 Session |
 | `Ctrl-K` | **Jump-Anywhere**：依關鍵字模糊搜尋並跳轉 Session |
-| `Space ,` (或 `:settings`) | 開啟**設定面板** (即時切換預設 Agent、Model、Effort、Worktree、Web 伴侶服務等) |
-| `Space w` (或 `:web qr`) | 彈出**行動端隨身審核器網址與 QR Code** 彈窗 (手機掃描即開即用) |
+| `Space ,` (或 `:settings`) | 開啟**設定面板** (即時切換預設 Agent、Model、Effort、Worktree、Web 版支援等) |
+| `Space w` (或 `:web qr`) | 彈出**Web 版網址與 QR Code** 彈窗 (手機掃描即開即用) |
 | `q` / `Q` | `q` 關閉 TUI (Daemon 與 Agent 續跑)；`Q` 關閉 Daemon (等同 `:shutdown`) |
 
 #### 逐字稿、搜尋與複製
@@ -321,10 +321,10 @@ termade cost [--json]                             # 統計各 session 與整體 
 termade budget <session-or-label> <金額>          # 設定或調高預算上限
 termade replay [--since <seq>] [--json]           # 重播與審核 events.jsonl 事件記錄
 
-# 遠端 Daemon、多主機與行動端隨身審核器
+# 遠端 Daemon、多主機與 Web 版支援
 termade daemon --listen tailscale                 # 啟動 Daemon 並自動綁定 Tailscale 安全通道
 termade daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽 TCP (自動產生 token)
-termade daemon --web tailscale                    # 啟動行動端隨身審核器並印出終端機 QR Code
+termade daemon --web tailscale                    # 啟動 Web 版並印出終端機 QR Code
 termade daemon info                               # 查詢目前主機的 Tailscale 位址、Token 與連線指令
 termade --remote tailscale                        # 連線至本機 Tailscale Daemon
 termade --remote workstation:7420 --remote gpu:7420 # 同時連線多台主機並於單一 TUI 聚合呈現
@@ -348,7 +348,7 @@ notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # 短於此秒數的回合完成不觸發通知
 
 [web]
-# 行動端隨身審核器設定 (只認全域設定；亦可在 TUI :settings 中隨時切換)
+# Web 版支援設定 (只認全域設定；亦可在 TUI :settings 中隨時切換)
 enabled = true                    # 是否啟用
 addr = "tailscale"                # 監聽位址："tailscale" (自動偵測 IP:7421) | "127.0.0.1:7421" | "0.0.0.0:7421"
 

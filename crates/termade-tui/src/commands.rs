@@ -263,8 +263,8 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         termade_core::tr_noop!("[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出"),
     ),
     ("unqueue", termade_core::tr_noop!("取消最後一則排隊並放回輸入框")),
-    ("web", termade_core::tr_noop!("[on|off|status|qr|<addr>]  設定與啟動行動端 Web 隨身審核器")),
-    ("remote", termade_core::tr_noop!("顯示行動端隨身審核器網址與連線資訊")),
+    ("web", termade_core::tr_noop!("[on|off|status|qr|<addr>]  設定與啟動 Web 版")),
+    ("remote", termade_core::tr_noop!("顯示 Web 版網址與連線資訊")),
     ("bus", termade_core::tr_noop!("顯示／隱藏 Bus 浮層")),
     ("task", termade_core::tr_noop!("<標題>  新增任務")),
     ("tasks", termade_core::tr_noop!("任務視圖：依狀態分組，Enter 跳到負責人")),
@@ -569,7 +569,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                     Some(termade_daemon::config::TomlValue::Boolean(false)),
                 );
                 let _ = termade_daemon::config::Config::set_toml(&config_p, &["web"], "addr", None);
-                app.status = tr!("已關閉行動端隨身審核器並儲存至設定檔");
+                app.status = tr!("已關閉 Web 版並儲存至設定檔");
                 return Ok(());
             }
 
@@ -599,7 +599,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                     "addr",
                     Some(termade_daemon::config::TomlValue::String(addr)),
                 );
-                app.status = tr!("正在啟動行動端隨身審核器…");
+                app.status = tr!("正在啟動 Web 版…");
                 return Ok(());
             }
 
@@ -624,7 +624,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                     let rendered = qr.render_terminal();
                     let lines: Vec<String> = rendered.lines().map(|s| s.to_string()).collect();
                     app.qr_modal = Some(crate::app::QrModal {
-                        title: tr!("行動端隨身審核器 QR Code"),
+                        title: tr!("Web 版 QR Code"),
                         url: url.clone(),
                         qr_lines: lines,
                     });
@@ -634,7 +634,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             }
 
             app.status = tr!(
-                "行動端隨身審核器網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)",
+                "Web 版網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)",
                 url = url
             );
         }
@@ -1195,10 +1195,7 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                         ("permission".into(), tr!("預設權限 (ask／auto／bypass)")),
                         ("model".into(), tr!("選取 session 的 agent 的預設 model")),
                         ("effort".into(), tr!("選取 session 的 agent 的預設 effort")),
-                        (
-                            "web".into(),
-                            tr!("行動端 Web 隨身審核器 (off／tailscale／位址)"),
-                        ),
+                        ("web".into(), tr!("Web 版支援 (off／tailscale／位址)")),
                     ];
                     if !input.contains("--repo") {
                         v.push(("--repo".into(), tr!("寫到 .termade/config.toml")));

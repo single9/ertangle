@@ -179,7 +179,7 @@ Every structured agent session is automatically injected with a stdio MCP server
   - Sending prompts, reviewing diffs, and approving tool executions are automatically routed to the owning host.
   - Switch host views anytime using `:host <target>` or `:host all`.
 
-### 8. Mobile Companion Web Interface & Terminal QR Code (PWA, T30)
+### 8. Web Interface & Mobile PWA (T30)
 
 - **Mobile Review On The Go**:
   - Step away from your desk without losing review flow. Enable it directly from the TUI settings panel (`:settings` or `Space ,`) or by typing `:web on [addr]` (or via CLI `termade daemon --web tailscale`).
@@ -219,8 +219,8 @@ Every structured agent session is automatically injected with a stdio MCP server
 | `j` / `k` or `↑` / `↓` | Select previous/next session; move line cursor in Diff; select task in Tasks view |
 | `[` / `]` | Jump to previous / next session |
 | `Ctrl-K` | **Jump-Anywhere**: Fuzzy search and jump to any session |
-| `Space ,` (or `:settings`) | Open **Settings panel** (toggle default Agent, Model, Effort, Worktree, Web Companion, etc.) |
-| `Space w` (or `:web qr`) | Display **Mobile Companion URL & QR Code** popup (scan and connect instantly) |
+| `Space ,` (or `:settings`) | Open **Settings panel** (toggle default Agent, Model, Effort, Worktree, Web version support, etc.) |
+| `Space w` (or `:web qr`) | Display **Web version URL & QR Code** popup (scan and connect instantly) |
 | `q` / `Q` | `q` exit TUI (daemon and agents keep running); `Q` stop daemon (same as `:shutdown`) |
 
 #### Transcript, Search & Clipboard
@@ -275,7 +275,7 @@ Press `:` to open the command line with `Tab` completion:
 - `:task <title>` / `:tasks` — Create task / switch to Tasks board view
 - `:task-status <todo|doing|blocked|review|done>` — Update status of selected task
 - `:host <target|all>` — Filter sessions by host in multi-host mode (T29)
-- `:remote` — Display remote connection details, Tailscale IP, and Mobile Companion URL
+- `:remote` — Display remote connection details, Tailscale IP, and Web version URL
 - `:notify on|off|test` — Toggle desktop notifications or send a test alert
 - `:shutdown` — Shut down daemon and all running agents (requires `:shutdown!` to confirm)
 
@@ -321,10 +321,10 @@ termade cost [--json]                             # Breakdown token and USD spen
 termade budget <session-or-label> <amount>        # Set or raise budget cap
 termade replay [--since <seq>] [--json]           # Audit and replay events.jsonl
 
-# Remote Daemon, Multi-Host & Mobile Companion
+# Remote Daemon, Multi-Host & Web Version Support
 termade daemon --listen tailscale                 # Start daemon bound to Tailscale WireGuard IP
 termade daemon --listen 127.0.0.1:7420            # Start daemon listening on TCP (auto-generates token)
-termade daemon --web tailscale                    # Start mobile companion and print terminal QR code
+termade daemon --web tailscale                    # Start Web version and print terminal QR code
 termade daemon info                               # Print current Tailscale IP, token, and connection examples
 termade --remote tailscale                        # Connect to local Tailscale daemon
 termade --remote workstation:7420 --remote gpu:7420 # Aggregate multiple remote hosts into a single TUI
@@ -347,8 +347,8 @@ notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # Turns shorter than this threshold do not notify
 
 [web]
-# Mobile companion settings (global only; can also be toggled in TUI :settings)
-enabled = true                    # Enable mobile companion
+# Web version settings (global only; can also be toggled in TUI :settings)
+enabled = true                    # Enable Web version
 addr = "tailscale"                # Listen address: "tailscale" (auto-detect IP:7421) | "127.0.0.1:7421" | "0.0.0.0:7421"
 
 [remotes]

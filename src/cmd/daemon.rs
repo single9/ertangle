@@ -128,10 +128,10 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
     }
 
     println!();
-    println!("  {}", tr!("行動端隨身審核器：{url}", url = &web_url));
+    println!("  {}", tr!("Web 版網址：{url}", url = &web_url));
     if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&web_url) {
         println!();
-        println!("{}", tr!("行動端掃描 QR Code 連線："));
+        println!("{}", tr!("掃描 QR Code 連線 Web 版："));
         print!("{}", qr.render_terminal());
     }
     Ok(())

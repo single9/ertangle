@@ -52,7 +52,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 ),
                 it(
                     'w',
-                    termade_core::tr_noop!("行動端隨身審核器 (網址與 QR Code)"),
+                    termade_core::tr_noop!("Web 版 (網址與 QR Code)"),
                     Act::Cmd("web qr"),
                 ),
                 it(

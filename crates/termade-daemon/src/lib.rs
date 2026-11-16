@@ -829,7 +829,7 @@ impl Shared {
             running,
             addr: resolved.clone(),
         });
-        tracing::info!("termade 行動端隨身審核器已啟動：http://{resolved}");
+        tracing::info!("termade Web 版已啟動：http://{resolved}");
         let token_hint = token.as_deref().unwrap_or("");
         Ok(format!("http://{resolved}/#token={token_hint}"))
     }

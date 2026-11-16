@@ -133,7 +133,7 @@ impl Item {
             Item::SpawnConfirm => tr!("agent 建立高消耗 session 時"),
             Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
-            Item::WebCompanion => tr!("行動端 Web 隨身審核器 (Web Companion)"),
+            Item::WebCompanion => tr!("Web 版支援 (Web UI)"),
             Item::Language => tr!("介面語言"),
         }
     }
@@ -319,10 +319,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
                         addr: None,
                     },
                 );
-                app.status = tr!(
-                    "已關閉行動端隨身審核器並儲存至 {path}",
-                    path = path.display()
-                );
+                app.status = tr!("已關閉 Web 版並儲存至 {path}", path = path.display());
             } else {
                 let _ = crate::send(
                     w,
@@ -331,10 +328,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
                         addr: Some(value.clone()),
                     },
                 );
-                app.status = tr!(
-                    "已啟動行動端隨身審核器並儲存至 {path}",
-                    path = path.display()
-                );
+                app.status = tr!("已啟動 Web 版並儲存至 {path}", path = path.display());
             }
         } else {
             app.status = tr!("已儲存到 {path}", path = path.display());

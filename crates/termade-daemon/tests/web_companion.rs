@@ -1,4 +1,4 @@
-//! T30 行動端隨身審核器 (`--web` 零相依 HTTP/WebSocket) 整合測試：
+//! T30 Web 版支援 (`--web` 零相依 HTTP/WebSocket) 整合測試：
 //! 1. 驗證 HTTP GET `/` 回傳 200 OK 與 Mobile Companion HTML。
 //! 2. 驗證 HTTP GET `/manifest.json` 回傳 200 OK 與 PWA manifest。
 //! 3. 驗證 WebSocket `/ws` 握手、Token 認證閘門 (錯誤 token 被斷線、正確 token 完成 Hello 交握)。
@@ -400,7 +400,7 @@ fn test_web_companion_dynamic_control_and_config() {
             panic!("預期 Frame::Ok，實際為 {:?}", frame);
         }
 
-        // 2. 動態啟動 Web 隨身審核器
+        // 2. 動態啟動 Web 版
         let addr = format!("127.0.0.1:{web_port}");
         client
             .send(&Request::WebControl {
@@ -431,7 +431,7 @@ fn test_web_companion_dynamic_control_and_config() {
         reader.read_line(&mut status_line).unwrap();
         assert!(status_line.contains("200 OK"));
 
-        // 4. 動態停止 Web 隨身審核器
+        // 4. 動態停止 Web 版
         client
             .send(&Request::WebControl {
                 enabled: Some(false),

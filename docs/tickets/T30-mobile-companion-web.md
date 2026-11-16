@@ -1,4 +1,4 @@
-# T30 — 行動端隨身審核器 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code)
+# T30 — Web 版支援 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code)
 
 優先度：P2　範圍：`termade-daemon`、`termade-tui`、`src/`　相依：T28
 

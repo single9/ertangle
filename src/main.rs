@@ -41,7 +41,7 @@ enum Cmd {
         /// 同時綁定 TCP 位址供遠端連線 (例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token)
         #[arg(long)]
         listen: Option<String>,
-        /// 啟動行動端隨身審核器 Web/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)
+        /// 啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)
         #[arg(long)]
         web: Option<String>,
         /// 遠端連線認證用的 token (未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發)

@@ -190,7 +190,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             comment,
         } => worktree::handle_comment(shared, reply, session, location, comment),
 
-        // Web Companion
+        // Web Support
         Request::WebControl { enabled, addr } => match enabled {
             None => {
                 let info = shared.web_info();
@@ -200,23 +200,19 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
                 let addr_spec = addr.as_deref().unwrap_or("tailscale");
                 match shared.start_web(addr_spec, false) {
                     Ok(url) => {
-                        let _ = reply.send(Frame::ok_note(tr!(
-                            "行動端隨身審核器已啟動：{url}",
-                            url = url
-                        )));
+                        let _ = reply.send(Frame::ok_note(tr!("Web 版已啟動：{url}", url = url)));
                     }
                     Err(e) => {
-                        let _ =
-                            reply.send(Frame::error(tr!("啟動 Web 隨身審核器失敗：{e}", e = e)));
+                        let _ = reply.send(Frame::error(tr!("啟動 Web 版失敗：{e}", e = e)));
                     }
                 }
             }
             Some(false) => {
                 let stopped = shared.stop_web();
                 let msg = if stopped {
-                    tr!("已停止行動端隨身審核器")
+                    tr!("已停止 Web 版")
                 } else {
-                    tr!("行動端隨身審核器未在執行")
+                    tr!("Web 版未在執行")
                 };
                 let _ = reply.send(Frame::ok_note(msg));
             }

@@ -101,7 +101,7 @@ pub(crate) fn token_matches(given: Option<&str>, expected: &str) -> bool {
 pub struct RemoteOptions {
     /// `--listen host:port`
     pub listen: Option<String>,
-    /// `--web host:port` (行動端隨身審核器 Web/WebSocket)
+    /// `--web host:port` (Web 版支援 HTTP/WebSocket)
     pub web: Option<String>,
     /// 已棄用的 `--token`
     pub token: Option<String>,
@@ -537,14 +537,11 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
         });
     }
 
-    // 若指定了 `--web <host:port>` 或設定檔啟用了 [web]，啟動行動端隨身審核器 HTTP/WebSocket。
+    // 若指定了 `--web <host:port>` 或設定檔啟用了 [web]，啟動 Web 版 HTTP/WebSocket。
     if let Some(web_addr) = resolved_web {
         let url = shared.start_web(&web_addr, opts.insecure_listen_public)?;
-        tracing::info!("termade 行動端隨身審核器已啟動：{url}");
-        eprintln!(
-            "{}",
-            tr!("termade 行動端隨身審核器已啟動：{url}", url = url)
-        );
+        tracing::info!("termade Web 版已啟動：{url}");
+        eprintln!("{}", tr!("termade Web 版已啟動：{url}", url = url));
     }
 
     tracing::info!(

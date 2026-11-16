@@ -130,11 +130,11 @@ msgid "Tailscale 遠端連線：termade --remote {ip}:7420 --token {token}"
 msgstr ""
 
 #: src/cmd/daemon.rs
-msgid "行動端隨身審核器：{url}"
+msgid "Web 版網址：{url}"
 msgstr ""
 
 #: src/cmd/daemon.rs
-msgid "行動端掃描 QR Code 連線："
+msgid "掃描 QR Code 連線 Web 版："
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -222,11 +222,11 @@ msgid "啟動 TUI (預設行為)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "啟動後立刻送出的 prompt"
+msgid "啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "啟動行動端隨身審核器 Web/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"
+msgid "啟動後立刻送出的 prompt"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -1327,19 +1327,19 @@ msgid "daemon 關閉中"
 msgstr ""
 
 #: crates/termade-daemon/src/handlers/mod.rs
-msgid "行動端隨身審核器已啟動：{url}"
+msgid "Web 版已啟動：{url}"
 msgstr ""
 
 #: crates/termade-daemon/src/handlers/mod.rs
-msgid "啟動 Web 隨身審核器失敗：{e}"
+msgid "啟動 Web 版失敗：{e}"
 msgstr ""
 
 #: crates/termade-daemon/src/handlers/mod.rs
-msgid "已停止行動端隨身審核器"
+msgid "已停止 Web 版"
 msgstr ""
 
 #: crates/termade-daemon/src/handlers/mod.rs
-msgid "行動端隨身審核器未在執行"
+msgid "Web 版未在執行"
 msgstr ""
 
 #: crates/termade-daemon/src/quota_watch.rs
@@ -1483,7 +1483,7 @@ msgid "遠端認證 Token 檔案：{path}"
 msgstr ""
 
 #: crates/termade-daemon/src/server.rs
-msgid "termade 行動端隨身審核器已啟動：{url}"
+msgid "termade Web 版已啟動：{url}"
 msgstr ""
 
 #: crates/termade-daemon/src/web.rs
@@ -1771,11 +1771,11 @@ msgid "取消最後一則排隊並放回輸入框"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "[on|off|status|qr|<addr>]  設定與啟動行動端 Web 隨身審核器"
+msgid "[on|off|status|qr|<addr>]  設定與啟動 Web 版"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "顯示行動端隨身審核器網址與連線資訊"
+msgid "顯示 Web 版網址與連線資訊"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/help.rs
@@ -1887,19 +1887,19 @@ msgid "用法：:notify [on|off|test]"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "已關閉行動端隨身審核器並儲存至設定檔"
+msgid "已關閉 Web 版並儲存至設定檔"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "正在啟動行動端隨身審核器…"
+msgid "正在啟動 Web 版…"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "行動端隨身審核器 QR Code"
+msgid "Web 版 QR Code"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "行動端隨身審核器網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)"
+msgid "Web 版網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2047,7 +2047,7 @@ msgid "選取 session 的 agent 的預設 effort"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "行動端 Web 隨身審核器 (off／tailscale／位址)"
+msgid "Web 版支援 (off／tailscale／位址)"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2331,11 +2331,11 @@ msgid "這個說明面板"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
-msgid "開啟設定面板 (含 Web 隨身審核器)"
+msgid "開啟設定面板 (含 Web 版支援)"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
-msgid "顯示行動端隨身審核器網址與 QR Code"
+msgid "顯示 Web 版網址與 QR Code"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
@@ -2655,7 +2655,7 @@ msgid "設定 (預設 model／effort／權限…)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
-msgid "行動端隨身審核器 (網址與 QR Code)"
+msgid "Web 版 (網址與 QR Code)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
@@ -2948,7 +2948,7 @@ msgid "把協作說明注入每個 agent"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
-msgid "行動端 Web 隨身審核器 (Web Companion)"
+msgid "Web 版支援 (Web UI)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
@@ -3016,11 +3016,11 @@ msgid "自動 (依 LANG 環境變數)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
-msgid "已關閉行動端隨身審核器並儲存至 {path}"
+msgid "已關閉 Web 版並儲存至 {path}"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
-msgid "已啟動行動端隨身審核器並儲存至 {path}"
+msgid "已啟動 Web 版並儲存至 {path}"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs

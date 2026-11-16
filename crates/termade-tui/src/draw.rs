@@ -438,7 +438,7 @@ fn draw_settings_sub(
     );
 }
 
-/// 繪製行動端隨身審核器 QR Code 彈窗。
+/// 繪製 Web 版 QR Code 彈窗。
 pub(crate) fn draw_qr_modal(f: &mut TuiFrame, app: &App) {
     let Some(modal) = app.qr_modal.as_ref() else {
         return;
