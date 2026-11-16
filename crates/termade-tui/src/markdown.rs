@@ -27,6 +27,15 @@ pub const BULLET: Color = Color::Rgb(122, 202, 255);
 pub const QUOTE: Color = Color::Rgb(122, 182, 122);
 pub const RULE: Color = Color::Rgb(80, 84, 100);
 
+/// 逐字稿中的可點擊連結 (包含行索引、顯示欄位範圍與目標 URL)。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LinkTarget {
+    pub line: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+    pub url: String,
+}
+
 /// 逐行 Markdown 渲染器。
 #[derive(Default)]
 pub struct Renderer {
@@ -38,10 +47,25 @@ impl Renderer {
         Self { in_fence: false }
     }
 
-    /// 把來源行渲染成樣式化行。`width` 是可用顯示寬度 (不含邊框)。
-    pub fn render(&mut self, src: &[String], width: usize) -> Vec<Line<'static>> {
+    /// 渲染並切換換行，同時回傳所有精準欄位對齊的連結目標。
+    pub fn render_and_wrap(
+        &mut self,
+        src: &[String],
+        width: usize,
+        base_line_idx: usize,
+    ) -> (Vec<Line<'static>>, Vec<LinkTarget>) {
+        let lines_with_links = self.render_with_links(src, width);
+        wrap_lines_and_collect_links(lines_with_links, width, base_line_idx)
+    }
+
+    /// 渲染並包含每行內部的連結欄位區間。
+    pub fn render_with_links(
+        &mut self,
+        src: &[String],
+        width: usize,
+    ) -> Vec<(Line<'static>, Vec<(usize, usize, String)>)> {
         self.in_fence = false;
-        let mut out: Vec<Line<'static>> = Vec::with_capacity(src.len());
+        let mut out = Vec::with_capacity(src.len());
         let mut i = 0usize;
         while i < src.len() {
             let line = &src[i];
@@ -49,9 +73,11 @@ impl Renderer {
             if self.in_fence {
                 if fence(line).is_some() {
                     self.in_fence = false;
-                    out.push(Line::styled("  ▌ ```", Style::default().fg(CODE_BAR)));
+                    out.push((Line::styled("  ▌ ```", Style::default().fg(CODE_BAR)), Vec::new()));
                 } else {
-                    out.extend(code_line(line, width));
+                    for cl in code_line(line, width) {
+                        out.push((cl, Vec::new()));
+                    }
                 }
                 i += 1;
                 continue;
@@ -64,13 +90,16 @@ impl Renderer {
                 } else {
                     lang.as_str()
                 };
-                out.push(Line::from(vec![
-                    Span::styled("  ▌ ", Style::default().fg(CODE_BAR)),
-                    Span::styled(
-                        format!("``` {label}"),
-                        Style::default().fg(CODE_BAR).add_modifier(Modifier::BOLD),
-                    ),
-                ]));
+                out.push((
+                    Line::from(vec![
+                        Span::styled("  ▌ ", Style::default().fg(CODE_BAR)),
+                        Span::styled(
+                            format!("``` {label}"),
+                            Style::default().fg(CODE_BAR).add_modifier(Modifier::BOLD),
+                        ),
+                    ]),
+                    Vec::new(),
+                ));
                 i += 1;
                 continue;
             }
@@ -82,15 +111,26 @@ impl Renderer {
                     block.push(src[j].clone());
                     j += 1;
                 }
-                out.extend(render_table(&block, &src[i + 1], width));
+                for tl in render_table(&block, &src[i + 1], width) {
+                    out.push((tl, Vec::new()));
+                }
                 i = j;
                 continue;
             }
 
-            out.push(render_line(line, width));
+            out.push(render_line_with_links(line, width));
             i += 1;
         }
         out
+    }
+
+    /// 把來源行渲染成樣式化行。`width` 是可用顯示寬度 (不含邊框)。
+    #[allow(dead_code)]
+    pub fn render(&mut self, src: &[String], width: usize) -> Vec<Line<'static>> {
+        self.render_with_links(src, width)
+            .into_iter()
+            .map(|(l, _)| l)
+            .collect()
     }
 }
 
@@ -98,56 +138,82 @@ impl Renderer {
 // 行渲染
 // ---------------------------------------------------------------------------
 
-fn render_line(line: &str, width: usize) -> Line<'static> {
+fn render_line_with_links(
+    line: &str,
+    width: usize,
+) -> (Line<'static>, Vec<(usize, usize, String)>) {
     if line.trim().is_empty() {
-        return Line::raw(String::new());
+        return (Line::raw(String::new()), Vec::new());
     }
     if let Some(rest) = line.strip_prefix("❯ ") {
-        return prefixed("❯ ", rest, PROMPT, false);
+        return prefixed_with_links("❯ ", rest, PROMPT, false);
     }
     if let Some(rest) = line.strip_prefix("💭 ") {
-        return prefixed("💭 ", rest, THOUGHT, true);
+        return prefixed_with_links("💭 ", rest, THOUGHT, true);
     }
     if let Some(rest) = line.strip_prefix("▸ ") {
-        return tool_line(rest);
+        return (tool_line(rest), Vec::new());
     }
     if let Some(rest) = line.strip_prefix("💬 ") {
-        return prefixed("💬 ", rest, REVIEW, false);
+        return prefixed_with_links("💬 ", rest, REVIEW, false);
     }
     if let Some((level, rest)) = heading(line) {
-        return heading_line(level, rest);
+        return heading_line_with_links(level, rest);
     }
     if is_hr(line) {
-        return Line::styled("─".repeat(width.max(1)), Style::default().fg(RULE));
+        return (
+            Line::styled("─".repeat(width.max(1)), Style::default().fg(RULE)),
+            Vec::new(),
+        );
     }
     if let Some(rest) = line.strip_prefix("> ") {
-        let mut spans = vec![Span::styled("▏ ", Style::default().fg(QUOTE))];
-        spans.extend(inline(
+        let prefix_span = Span::styled("▏ ", Style::default().fg(QUOTE));
+        let prefix_w = prefix_span.content.width();
+        let (inline_spans, inline_links) = inline_with_links(
             rest,
             Style::default().fg(QUOTE).add_modifier(Modifier::ITALIC),
-        ));
-        return Line::from(spans);
+        );
+        let mut spans = vec![prefix_span];
+        spans.extend(inline_spans);
+        let shifted = inline_links
+            .into_iter()
+            .map(|(s, e, u)| (s + prefix_w, e + prefix_w, u))
+            .collect();
+        return (Line::from(spans), shifted);
     }
     if line.trim() == ">" {
-        return Line::styled("▏", Style::default().fg(QUOTE));
+        return (Line::styled("▏", Style::default().fg(QUOTE)), Vec::new());
     }
-    if let Some(l) = list_line(line) {
-        return l;
+    if let Some((l, links)) = list_line_with_links(line) {
+        return (l, links);
     }
-    Line::from(inline(line, Style::default()))
+    let (spans, links) = inline_with_links(line, Style::default());
+    (Line::from(spans), links)
 }
 
-fn prefixed(prefix: &str, rest: &str, color: Color, italic: bool) -> Line<'static> {
+fn prefixed_with_links(
+    prefix: &str,
+    rest: &str,
+    color: Color,
+    italic: bool,
+) -> (Line<'static>, Vec<(usize, usize, String)>) {
     let mut base = Style::default().fg(color);
     if italic {
         base = base.add_modifier(Modifier::ITALIC);
     }
-    let mut spans = vec![Span::styled(
+    let p_span = Span::styled(
         prefix.to_string(),
         Style::default().fg(color).add_modifier(Modifier::BOLD),
-    )];
-    spans.extend(inline(rest, base));
-    Line::from(spans)
+    );
+    let p_w = p_span.content.width();
+    let (inline_spans, inline_links) = inline_with_links(rest, base);
+    let mut spans = vec![p_span];
+    spans.extend(inline_spans);
+    let shifted = inline_links
+        .into_iter()
+        .map(|(s, e, u)| (s + p_w, e + p_w, u))
+        .collect();
+    (Line::from(spans), shifted)
 }
 
 fn tool_line(rest: &str) -> Line<'static> {
@@ -177,7 +243,10 @@ fn heading(line: &str) -> Option<(usize, &str)> {
     Some((hashes, rest.trim_start()))
 }
 
-fn heading_line(level: usize, rest: &str) -> Line<'static> {
+fn heading_line_with_links(
+    level: usize,
+    rest: &str,
+) -> (Line<'static>, Vec<(usize, usize, String)>) {
     let style = match level {
         1 => Style::default()
             .fg(HEADING)
@@ -187,9 +256,16 @@ fn heading_line(level: usize, rest: &str) -> Line<'static> {
             .fg(HEADING)
             .add_modifier(Modifier::BOLD | Modifier::DIM),
     };
-    let mut spans = vec![Span::styled("▎ ", Style::default().fg(HEADING))];
-    spans.extend(inline(rest, style));
-    Line::from(spans)
+    let p_span = Span::styled("▎ ", Style::default().fg(HEADING));
+    let p_w = p_span.content.width();
+    let (inline_spans, inline_links) = inline_with_links(rest, style);
+    let mut spans = vec![p_span];
+    spans.extend(inline_spans);
+    let shifted = inline_links
+        .into_iter()
+        .map(|(s, e, u)| (s + p_w, e + p_w, u))
+        .collect();
+    (Line::from(spans), shifted)
 }
 
 fn is_hr(line: &str) -> bool {
@@ -211,7 +287,7 @@ fn is_hr(line: &str) -> bool {
     ch.is_some()
 }
 
-fn list_line(line: &str) -> Option<Line<'static>> {
+fn list_line_with_links(line: &str) -> Option<(Line<'static>, Vec<(usize, usize, String)>)> {
     let indent_len = line.len() - line.trim_start().len();
     let indent = " ".repeat(indent_len);
     let t = line.trim_start();
@@ -219,12 +295,17 @@ fn list_line(line: &str) -> Option<Line<'static>> {
     for m in ["- ", "* ", "+ "] {
         if let Some(rest) = t.strip_prefix(m) {
             let (mark, body) = task_marker(rest);
-            let mut spans = vec![
-                Span::raw(indent),
-                Span::styled(format!("{mark} "), Style::default().fg(BULLET)),
-            ];
-            spans.extend(inline(body, Style::default()));
-            return Some(Line::from(spans));
+            let s1 = Span::raw(indent);
+            let s2 = Span::styled(format!("{mark} "), Style::default().fg(BULLET));
+            let prefix_w = s1.content.width() + s2.content.width();
+            let (inline_spans, inline_links) = inline_with_links(body, Style::default());
+            let mut spans = vec![s1, s2];
+            spans.extend(inline_spans);
+            let shifted = inline_links
+                .into_iter()
+                .map(|(s, e, u)| (s + prefix_w, e + prefix_w, u))
+                .collect();
+            return Some((Line::from(spans), shifted));
         }
     }
 
@@ -235,12 +316,17 @@ fn list_line(line: &str) -> Option<Line<'static>> {
             .strip_prefix(". ")
             .or_else(|| after.strip_prefix(") "))
         {
-            let mut spans = vec![
-                Span::raw(indent),
-                Span::styled(format!("{digits}. "), Style::default().fg(BULLET)),
-            ];
-            spans.extend(inline(body, Style::default()));
-            return Some(Line::from(spans));
+            let s1 = Span::raw(indent);
+            let s2 = Span::styled(format!("{digits}. "), Style::default().fg(BULLET));
+            let prefix_w = s1.content.width() + s2.content.width();
+            let (inline_spans, inline_links) = inline_with_links(body, Style::default());
+            let mut spans = vec![s1, s2];
+            spans.extend(inline_spans);
+            let shifted = inline_links
+                .into_iter()
+                .map(|(s, e, u)| (s + prefix_w, e + prefix_w, u))
+                .collect();
+            return Some((Line::from(spans), shifted));
         }
     }
     None
@@ -534,12 +620,26 @@ fn table_sep(widths: &[usize]) -> Line<'static> {
 // 行內樣式
 // ---------------------------------------------------------------------------
 
-/// 解析行內 Markdown (粗體、斜體、刪除線、程式碼、連結)。
-pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
+/// 解析行內 Markdown (粗體、斜體、刪除線、程式碼、連結)，並回傳 (樣式化 Spans, 連結欄位區間)。
+pub fn inline_with_links(
+    text: &str,
+    base: Style,
+) -> (Vec<Span<'static>>, Vec<(usize, usize, String)>) {
     let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut links: Vec<(usize, usize, String)> = Vec::new();
+    let mut cur_col = 0usize;
     let mut buf = String::new();
     let len = text.len();
     let mut i = 0usize;
+
+    macro_rules! flush_buf {
+        () => {
+            if !buf.is_empty() {
+                cur_col += buf.width();
+                spans.push(Span::styled(std::mem::take(&mut buf), base));
+            }
+        };
+    }
 
     while i < len {
         let rest = &text[i..];
@@ -554,9 +654,11 @@ pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
         if rest.starts_with("**") || rest.starts_with("__") {
             let m = &rest[..2];
             if let Some(end) = rest[2..].find(m) {
-                flush(&mut spans, &mut buf, base);
+                flush_buf!();
+                let content = &rest[2..2 + end];
+                cur_col += content.width();
                 spans.push(Span::styled(
-                    rest[2..2 + end].to_string(),
+                    content.to_string(),
                     base.add_modifier(Modifier::BOLD),
                 ));
                 i += 2 + end + 2;
@@ -566,9 +668,11 @@ pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
 
         if let Some(after) = rest.strip_prefix("~~") {
             if let Some(end) = after.find("~~") {
-                flush(&mut spans, &mut buf, base);
+                flush_buf!();
+                let content = &after[..end];
+                cur_col += content.width();
                 spans.push(Span::styled(
-                    after[..end].to_string(),
+                    content.to_string(),
                     base.add_modifier(Modifier::CROSSED_OUT),
                 ));
                 i += 2 + end + 2;
@@ -578,9 +682,11 @@ pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
 
         if let Some(after) = rest.strip_prefix('`') {
             if let Some(end) = after.find('`') {
-                flush(&mut spans, &mut buf, base);
+                flush_buf!();
+                let content = &after[..end];
+                cur_col += content.width();
                 spans.push(Span::styled(
-                    after[..end].to_string(),
+                    content.to_string(),
                     Style::default().fg(CODE_FG).bg(CODE_BG),
                 ));
                 i += 1 + end + 1;
@@ -591,16 +697,17 @@ pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
         if rest.starts_with('[') {
             if let Some(close) = rest.find("](") {
                 if let Some(paren) = rest[close + 2..].find(')') {
-                    flush(&mut spans, &mut buf, base);
+                    flush_buf!();
                     let label = &rest[1..close];
                     let url = &rest[close + 2..close + 2 + paren];
                     let link_style = Style::default().fg(LINK).add_modifier(Modifier::UNDERLINED);
-                    spans.push(Span::styled(label.to_string(), link_style));
-                    if !url.is_empty() && url != label {
-                        spans.push(Span::raw(" ("));
-                        spans.push(Span::styled(url.to_string(), link_style));
-                        spans.push(Span::raw(")"));
-                    }
+                    let display_text = if label.is_empty() { url } else { label };
+                    let w = display_text.width();
+                    let col_start = cur_col;
+                    let col_end = cur_col + w;
+                    cur_col += w;
+                    spans.push(Span::styled(display_text.to_string(), link_style));
+                    links.push((col_start, col_end, url.to_string()));
                     i += close + 2 + paren + 1;
                     continue;
                 }
@@ -611,9 +718,11 @@ pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
             let m = &rest[..1];
             if let Some(end) = rest[1..].find(m) {
                 if end > 0 {
-                    flush(&mut spans, &mut buf, base);
+                    flush_buf!();
+                    let content = &rest[1..1 + end];
+                    cur_col += content.width();
                     spans.push(Span::styled(
-                        rest[1..1 + end].to_string(),
+                        content.to_string(),
                         base.add_modifier(Modifier::ITALIC),
                     ));
                     i += 1 + end + 1;
@@ -627,37 +736,84 @@ pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
         i += ch.len_utf8();
     }
 
-    flush(&mut spans, &mut buf, base);
+    if !buf.is_empty() {
+        spans.push(Span::styled(buf, base));
+    }
     if spans.is_empty() {
         spans.push(Span::styled(String::new(), base));
     }
-    spans
+    (spans, links)
 }
 
-fn flush(spans: &mut Vec<Span<'static>>, buf: &mut String, base: Style) {
-    if !buf.is_empty() {
-        spans.push(Span::styled(std::mem::take(buf), base));
-    }
+/// 解析行內 Markdown (粗體、斜體、刪除線、程式碼、連結)。
+pub fn inline(text: &str, base: Style) -> Vec<Span<'static>> {
+    inline_with_links(text, base).0
 }
 
 // ---------------------------------------------------------------------------
 // 換行 (把已渲染的行依顯示寬度硬切)
 // ---------------------------------------------------------------------------
 
-/// 把單一樣式化行依顯示寬度切成多行，保留樣式。
-pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
+/// 把單一樣式化行依顯示寬度切成多行，保留樣式，並映射連結欄位位置。
+pub fn wrap_line_with_links(
+    line: Line<'static>,
+    line_links: &[(usize, usize, String)],
+    start_line_idx: usize,
+    width: usize,
+) -> (Vec<Line<'static>>, Vec<LinkTarget>) {
     if width == 0 {
-        return vec![line];
+        let targets = line_links
+            .iter()
+            .map(|(s, e, u)| LinkTarget {
+                line: start_line_idx,
+                col_start: *s,
+                col_end: *e,
+                url: u.clone(),
+            })
+            .collect();
+        return (vec![line], targets);
     }
     let mut out: Vec<Line<'static>> = Vec::new();
+    let mut targets: Vec<LinkTarget> = Vec::new();
     let mut cur: Vec<Span<'static>> = Vec::new();
     let mut cur_w = 0usize;
+    let mut orig_col = 0usize;
+
+    let mut active_link: Option<(usize, usize)> = None;
+
     for span in line.spans {
         let style = span.style;
         let mut buf = String::new();
         for ch in span.content.chars() {
             let cw = ch.width().unwrap_or(0);
+
+            let matching_link_idx = line_links
+                .iter()
+                .position(|(s, e, _)| orig_col >= *s && orig_col < *e);
+
+            if let Some(l_idx) = matching_link_idx {
+                if active_link.is_none() {
+                    active_link = Some((l_idx, cur_w));
+                }
+            } else if let Some((l_idx, w_start)) = active_link.take() {
+                targets.push(LinkTarget {
+                    line: start_line_idx + out.len(),
+                    col_start: w_start,
+                    col_end: cur_w,
+                    url: line_links[l_idx].2.clone(),
+                });
+            }
+
             if cur_w > 0 && cur_w + cw > width {
+                if let Some((l_idx, w_start)) = active_link.take() {
+                    targets.push(LinkTarget {
+                        line: start_line_idx + out.len(),
+                        col_start: w_start,
+                        col_end: cur_w,
+                        url: line_links[l_idx].2.clone(),
+                    });
+                    active_link = Some((l_idx, 0));
+                }
                 if !buf.is_empty() {
                     cur.push(Span::styled(std::mem::take(&mut buf), style));
                 }
@@ -666,13 +822,43 @@ pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
             }
             buf.push(ch);
             cur_w += cw;
+            orig_col += cw;
         }
         if !buf.is_empty() {
             cur.push(Span::styled(buf, style));
         }
     }
+    if let Some((l_idx, w_start)) = active_link.take() {
+        targets.push(LinkTarget {
+            line: start_line_idx + out.len(),
+            col_start: w_start,
+            col_end: cur_w,
+            url: line_links[l_idx].2.clone(),
+        });
+    }
     out.push(Line::from(cur));
-    out
+    (out, targets)
+}
+
+/// 把單一樣式化行依顯示寬度切成多行，保留樣式。
+pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
+    wrap_line_with_links(line, &[], 0, width).0
+}
+
+/// 對整段已渲染行做換行並收集連結。
+pub fn wrap_lines_and_collect_links(
+    lines_with_links: Vec<(Line<'static>, Vec<(usize, usize, String)>)>,
+    width: usize,
+    base_line_idx: usize,
+) -> (Vec<Line<'static>>, Vec<LinkTarget>) {
+    let mut out_lines = Vec::new();
+    let mut out_targets = Vec::new();
+    for (line, links) in lines_with_links {
+        let (wl, wt) = wrap_line_with_links(line, &links, base_line_idx + out_lines.len(), width);
+        out_lines.extend(wl);
+        out_targets.extend(wt);
+    }
+    (out_lines, out_targets)
 }
 
 /// 對整段已渲染行做換行。
@@ -698,9 +884,9 @@ mod tests {
 
     #[test]
     fn inline_bold_italic_code_link() {
-        let spans = inline("a **b** *c* `d` [e](http://x)", Style::default());
+        let (spans, links) = inline_with_links("a **b** *c* `d` [e](http://x)", Style::default());
         let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
-        assert_eq!(text, "a b c d e (http://x)");
+        assert_eq!(text, "a b c d e");
 
         let bold = spans.iter().find(|s| s.content == "b").expect("bold span");
         assert!(bold.style.add_modifier.contains(Modifier::BOLD));
@@ -713,11 +899,9 @@ mod tests {
         assert_eq!(code.style.bg, Some(CODE_BG));
         let link = spans.iter().find(|s| s.content == "e").expect("link span");
         assert_eq!(link.style.fg, Some(LINK));
-        let url = spans
-            .iter()
-            .find(|s| s.content == "http://x")
-            .expect("url span");
-        assert_eq!(url.style.fg, Some(LINK));
+        assert!(link.style.add_modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].2, "http://x");
     }
 
     #[test]
@@ -843,7 +1027,6 @@ mod tests {
         assert!(all.contains('b'));
         assert!(all.contains('c'));
         assert!(all.contains('x'));
-        assert!(all.contains("http://e"), "url should be shown: {all}");
     }
 
     #[test]
@@ -878,21 +1061,18 @@ mod tests {
     }
 
     #[test]
-    fn link_shows_label_and_url() {
-        let spans = inline("see [docs](https://example.com/x) now", Style::default());
+    fn link_shows_clean_label_and_tracks_target() {
+        let (spans, links) = inline_with_links("see [docs](https://example.com/x) now", Style::default());
         let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
-        assert_eq!(text, "see docs (https://example.com/x) now");
+        assert_eq!(text, "see docs now");
         let link = spans
             .iter()
             .find(|s| s.content == "docs")
             .expect("link span");
         assert_eq!(link.style.fg, Some(LINK));
         assert!(link.style.add_modifier.contains(Modifier::UNDERLINED));
-        let url = spans
-            .iter()
-            .find(|s| s.content == "https://example.com/x")
-            .expect("url span");
-        assert_eq!(url.style.fg, Some(LINK));
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].2, "https://example.com/x");
     }
 
     #[test]

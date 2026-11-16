@@ -993,23 +993,31 @@ pub(crate) fn build_transcript_lines(
     app: &App,
     id: &SessionId,
     width: usize,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Vec<markdown::LinkTarget>) {
     let buf = match app.state.transcripts.get(id) {
         Some(b) => b,
-        None => return Vec::new(),
+        None => return (Vec::new(), Vec::new()),
     };
     let src = crate::app::visible_transcript(buf.iter(), app.show_thoughts, app.show_tools);
-    let lines: Vec<Line<'static>> = if app.raw_md {
-        src.iter().map(|l| Line::raw(l.clone())).collect()
+    if app.raw_md {
+        let lines: Vec<Line<'static>> = src.iter().map(|l| Line::raw(l.clone())).collect();
+        (markdown::wrap_lines(lines, width), Vec::new())
     } else {
         // 工具呼叫／結果行是程式產生的摘要，不能當 Markdown：
         // `_`、`*`、反斜線會被吃掉 (例如 mcp__termade__termade_peers 變成 mcpadeadepeers)。
         let mut out: Vec<Line<'static>> = Vec::new();
+        let mut links: Vec<markdown::LinkTarget> = Vec::new();
         let mut batch: Vec<String> = Vec::new();
         for l in src {
             if let Some(line) = tool_line(&l) {
                 if !batch.is_empty() {
-                    out.extend(markdown::Renderer::new().render(&batch, width));
+                    let (b_lines, b_links) = markdown::Renderer::new().render_and_wrap(
+                        &batch,
+                        width,
+                        out.len(),
+                    );
+                    out.extend(b_lines);
+                    links.extend(b_links);
                     batch.clear();
                 }
                 out.push(line);
@@ -1018,11 +1026,16 @@ pub(crate) fn build_transcript_lines(
             }
         }
         if !batch.is_empty() {
-            out.extend(markdown::Renderer::new().render(&batch, width));
+            let (b_lines, b_links) = markdown::Renderer::new().render_and_wrap(
+                &batch,
+                width,
+                out.len(),
+            );
+            out.extend(b_lines);
+            links.extend(b_links);
         }
-        out
-    };
-    markdown::wrap_lines(lines, width)
+        (out, links)
+    }
 }
 
 pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
@@ -1054,7 +1067,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     app.transcript_scroll = None; // 換 session 時回到跟隨
                     app.selection = None;
                 }
-                let lines = build_transcript_lines(app, id, inner_w);
+                let (lines, links) = build_transcript_lines(app, id, inner_w);
                 app.last_rebuild = std::time::Instant::now();
                 app.rebuild_pending = false;
                 app.md_cache = Some(MdCache {
@@ -1063,6 +1076,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     raw: app.raw_md,
                     width: area.width,
                     lines,
+                    links,
                 });
             }
             None => app.md_cache = None,

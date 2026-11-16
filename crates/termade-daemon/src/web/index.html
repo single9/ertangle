@@ -435,6 +435,98 @@
       margin-bottom: 4px;
     }
 
+    /* 程式碼區塊外框與標題列 */
+    .code-block-wrap {
+      background: #090a0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    .code-block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+    }
+    .code-block-wrap pre {
+      margin: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+    }
+    .code-copy-btn {
+      background: none;
+      border: none;
+      color: var(--cyan);
+      font-size: 11px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .code-copy-btn:active {
+      background: rgba(6, 182, 212, 0.15);
+    }
+
+    /* 連結樣式：Web 外部超連結 vs 檔案引用膠囊 */
+    .chat-web-link {
+      color: var(--cyan);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      word-break: break-all;
+    }
+    .chat-file-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(96, 165, 250, 0.12);
+      border: 1px solid rgba(96, 165, 250, 0.28);
+      border-radius: 6px;
+      padding: 2px 7px;
+      color: #93c5fd;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      vertical-align: middle;
+      margin: 2px 2px;
+      text-decoration: none;
+      word-break: break-all;
+      transition: background 0.15s ease;
+    }
+    .chat-file-pill:active {
+      background: rgba(96, 165, 250, 0.25);
+    }
+    .file-icon {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      flex-shrink: 0;
+    }
+
+    /* 標題、引言與分隔線 */
+    .chat-h1 { font-size: 16px; font-weight: 700; margin: 12px 0 6px 0; color: var(--text); }
+    .chat-h2 { font-size: 15px; font-weight: 700; margin: 10px 0 5px 0; color: var(--text); }
+    .chat-h3 { font-size: 14px; font-weight: 600; margin: 8px 0 4px 0; color: var(--text); }
+    .chat-quote {
+      border-left: 3px solid var(--cyan);
+      padding-left: 10px;
+      margin: 6px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    .chat-hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+
     /* 思考過程折疊卡片 */
     .turn-collapse {
       width: 100%;
@@ -1608,6 +1700,29 @@
         </div>
       </div>
     </div>
+
+    <!-- 抽屜 7：檔案引用與路徑互動面板 -->
+    <div id="sheet-file-action" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div id="file-action-label" class="sheet-title" style="margin-bottom:0;">檔案資訊</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-file-action')">✕</button>
+        </div>
+        <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:14px;">
+          <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px;">檔案路徑</div>
+          <div id="file-action-path" style="font-family:var(--font-mono); font-size:12px; color:var(--text); word-break:break-all;"></div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button class="btn-pill btn-always" style="justify-content:center; padding:10px;" onclick="copyFileActionPath()">
+            <span>📋 複製完整路徑</span>
+          </button>
+          <button class="btn-pill btn-secondary" style="justify-content:center; padding:10px;" onclick="viewFileDiff()">
+            <span>🔍 查看工作區 Diff</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -2032,14 +2147,130 @@
       }
     }
 
-    function renderSimpleMarkdown(text) {
-      let safe = escapeHtml(text || "");
-      safe = safe.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => `<pre><code>${code}</code></pre>`);
-      safe = safe.replace(/`([^`]+)`/g, `<code class="inline-code">$1</code>`);
-      safe = safe.replace(/\*\*([^*]+)\*\*/g, `<strong>$1</strong>`);
-      safe = safe.replace(/\n\n+/g, `</p><p>`);
-      safe = safe.replace(/\n/g, `<br>`);
+    function renderMarkdown(text) {
+      if (!text) return "";
+      let src = String(text);
+
+      const codeBlocks = [];
+      const inlineCodes = [];
+
+      // 1. 抽離圍籬程式碼區塊
+      src = src.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push({ lang: lang || "text", code: code.replace(/\n$/, "") });
+        return `%%%CODE_BLOCK_${idx}%%%`;
+      });
+
+      // 2. 抽離行內程式碼
+      src = src.replace(/`([^`\n]+)`/g, (match, code) => {
+        const idx = inlineCodes.length;
+        inlineCodes.push(code);
+        return `%%%INLINE_CODE_${idx}%%%`;
+      });
+
+      // 3. HTML 特殊符號轉義
+      let safe = escapeHtml(src);
+
+      // 4. 解析 Markdown 連結 [label](url)
+      safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, url) => {
+        const trimmedUrl = url.trim();
+        if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+          return `<a href="${trimmedUrl}" target="_blank" rel="noopener" class="chat-web-link">${label} ↗</a>`;
+        } else if (trimmedUrl.startsWith("file://")) {
+          const rawPath = trimmedUrl.replace(/^file:\/\//, "");
+          return `<span class="chat-file-pill" onclick="openFileActionSheet('${escapeHtml(rawPath)}', '${escapeHtml(label)}')"><svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>${label}</span></span>`;
+        } else {
+          return `<a href="${trimmedUrl}" class="chat-web-link">${label}</a>`;
+        }
+      });
+
+      // 5. 自動識別獨立網址
+      safe = safe.replace(/(^|[^"=])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener" class="chat-web-link">$2 ↗</a>');
+
+      // 6. 標題與分隔線
+      safe = safe.replace(/^### (.*)$/gm, '<h3 class="chat-h3">$1</h3>');
+      safe = safe.replace(/^## (.*)$/gm, '<h2 class="chat-h2">$1</h2>');
+      safe = safe.replace(/^# (.*)$/gm, '<h1 class="chat-h1">$1</h1>');
+      safe = safe.replace(/^---+$/gm, '<hr class="chat-hr">');
+
+      // 7. 引言
+      safe = safe.replace(/^> (.*)$/gm, '<blockquote class="chat-quote">$1</blockquote>');
+
+      // 8. 粗體、斜體、刪除線
+      safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      safe = safe.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      safe = safe.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
+      // 9. 清單
+      safe = safe.replace(/^[\*\-] (.*)$/gm, '<li class="chat-li-bullet">$1</li>');
+      safe = safe.replace(/(<li class="chat-li-bullet">[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+      safe = safe.replace(/<\/ul>\s*<ul>/g, '');
+
+      safe = safe.replace(/^\d+\. (.*)$/gm, '<li class="chat-li-num">$1</li>');
+      safe = safe.replace(/(<li class="chat-li-num">[\s\S]*?<\/li>)/g, '<ol>$1</ol>');
+      safe = safe.replace(/<\/ol>\s*<ol>/g, '');
+
+      // 10. 段落與換行
+      safe = safe.replace(/\n\n+/g, '</p><p>');
+      safe = safe.replace(/\n/g, '<br>');
+
+      // 11. 還原行內程式碼
+      inlineCodes.forEach((code, i) => {
+        safe = safe.replace(`%%%INLINE_CODE_${i}%%%`, `<code class="inline-code">${escapeHtml(code)}</code>`);
+      });
+
+      // 12. 還原圍籬程式碼區塊
+      codeBlocks.forEach((b, i) => {
+        const blockHtml = `
+          <div class="code-block-wrap">
+            <div class="code-block-header">
+              <span class="code-lang-tag">${escapeHtml(b.lang)}</span>
+              <button class="code-copy-btn" onclick="copyCode(this)">複製</button>
+            </div>
+            <pre><code>${escapeHtml(b.code)}</code></pre>
+          </div>
+        `;
+        safe = safe.replace(`%%%CODE_BLOCK_${i}%%%`, blockHtml);
+      });
+
       return `<p>${safe}</p>`;
+    }
+
+    const renderSimpleMarkdown = renderMarkdown;
+
+    function copyCode(btn) {
+      const wrap = btn.closest(".code-block-wrap");
+      const codeEl = wrap ? wrap.querySelector("pre code") : null;
+      if (codeEl) {
+        navigator.clipboard.writeText(codeEl.innerText).then(() => {
+          showToast("已複製程式碼至剪貼簿");
+          btn.innerText = "已複製！";
+          setTimeout(() => { btn.innerText = "複製"; }, 2000);
+        });
+      }
+    }
+
+    let currentFileActionPath = "";
+    function openFileActionSheet(path, label) {
+      currentFileActionPath = path;
+      document.getElementById("file-action-label").innerText = label || "檔案資訊";
+      document.getElementById("file-action-path").innerText = path;
+      openSheet("sheet-file-action");
+    }
+
+    function copyFileActionPath() {
+      if (currentFileActionPath) {
+        navigator.clipboard.writeText(currentFileActionPath).then(() => {
+          showToast("已複製路徑至剪貼簿");
+          closeSheet("sheet-file-action");
+        });
+      }
+    }
+
+    function viewFileDiff() {
+      closeSheet("sheet-file-action");
+      switchNavTab("review");
+      showToast("已切換至審核視圖");
     }
 
     function escapeHtml(str) {

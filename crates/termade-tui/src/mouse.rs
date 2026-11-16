@@ -269,6 +269,25 @@ fn open_url_at(app: &mut App, line: usize, col: usize) -> bool {
     let Some(cache) = &app.md_cache else {
         return false;
     };
+    // 1. 優先精準比對 Markdown 連結 (標籤文字覆蓋範圍直接可點)
+    if let Some(target) = cache
+        .links
+        .iter()
+        .find(|l| l.line == line && col >= l.col_start && col < l.col_end)
+    {
+        return match open_external(&target.url) {
+            Ok(()) => {
+                app.status = tr!("已開啟連結：{url}", url = target.url);
+                true
+            }
+            Err(e) => {
+                app.status = tr!("無法開啟連結：{e}", e = e);
+                true
+            }
+        };
+    }
+
+    // 2. 備用語法掃描純文字中的網址
     let Some(rendered) = cache.lines.get(line) else {
         return false;
     };
@@ -288,14 +307,14 @@ fn open_url_at(app: &mut App, line: usize, col: usize) -> bool {
     }
 }
 
-/// 找出覆蓋 `col` (顯示欄位)的 http(s) URL。
+/// 找出覆蓋 `col` (顯示欄位)的 http(s) 或 file URL。
 fn url_at_display_col(text: &str, col: usize) -> Option<String> {
     let chars: Vec<char> = text.chars().collect();
     let mut starts = Vec::new();
     let mut i = 0usize;
     while i + 7 < chars.len() {
         let s: String = chars[i..].iter().take(8).collect();
-        if s.starts_with("https://") || s.starts_with("http://") {
+        if s.starts_with("https://") || s.starts_with("http://") || s.starts_with("file://") {
             starts.push(i);
         }
         i += 1;
@@ -369,6 +388,13 @@ fn url_at_display_col(text: &str, col: usize) -> Option<String> {
 }
 
 fn open_external(url: &str) -> std::io::Result<()> {
+    let clean_target = if let Some(stripped) = url.strip_prefix("file://") {
+        let path = stripped.split('#').next().unwrap_or(stripped);
+        path.to_string()
+    } else {
+        url.to_string()
+    };
+
     #[cfg(target_os = "macos")]
     let mut cmd = std::process::Command::new("open");
     #[cfg(target_os = "windows")]
@@ -380,7 +406,7 @@ fn open_external(url: &str) -> std::io::Result<()> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let mut cmd = std::process::Command::new("xdg-open");
 
-    cmd.arg(url);
+    cmd.arg(&clean_target);
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::null());

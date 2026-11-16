@@ -105,6 +105,7 @@ pub(crate) struct MdCache {
     pub(crate) raw: bool,
     pub(crate) width: u16,
     pub(crate) lines: Vec<Line<'static>>,
+    pub(crate) links: Vec<crate::markdown::LinkTarget>,
 }
 
 /// 單一主機的狀態與資料快照。

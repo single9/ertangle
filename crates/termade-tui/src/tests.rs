@@ -218,7 +218,7 @@ fn thinking_lines_are_hidden_by_default() {
     let mut app = sample_app(&["💭 planning", "answer", "💭 more", "done"]);
     let id: SessionId = "ses_test".into();
 
-    let lines = build_transcript_lines(&app, &id, 80);
+    let (lines, _) = build_transcript_lines(&app, &id, 80);
     let text: String = lines
         .iter()
         .map(|l| {
@@ -236,7 +236,7 @@ fn thinking_lines_are_hidden_by_default() {
     assert!(!main_pane_text(&app).contains("planning"));
 
     app.show_thoughts = true;
-    let lines = build_transcript_lines(&app, &id, 80);
+    let (lines, _) = build_transcript_lines(&app, &id, 80);
     let text: String = lines
         .iter()
         .map(|l| {
@@ -259,6 +259,7 @@ fn cache_lines(lines: Vec<Line<'static>>) -> MdCache {
         raw: false,
         width: 80,
         lines,
+        links: Vec::new(),
     }
 }
 
@@ -2022,4 +2023,21 @@ fn multi_host_router_routes_session_requests_to_owning_host() {
         loc_msg.contains("ses_loc"),
         "本機主機應收到 ses_loc: {loc_msg}"
     );
+}
+
+#[test]
+fn markdown_links_are_clickable_by_label_without_raw_url() {
+    let app = sample_app(&["check [index.html](file:///path/to/index.html) now"]);
+    let id: SessionId = "ses_test".into();
+    let (lines, links) = build_transcript_lines(&app, &id, 80);
+    let text = lines[0]
+        .spans
+        .iter()
+        .map(|s| s.content.as_ref())
+        .collect::<String>();
+    assert_eq!(text, "check index.html now", "不應把冗長 URL 塞入顯示文字");
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].url, "file:///path/to/index.html");
+    assert_eq!(links[0].col_start, 6);
+    assert_eq!(links[0].col_end, 16);
 }
