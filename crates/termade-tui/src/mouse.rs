@@ -57,7 +57,9 @@ pub(crate) fn handle_mouse(
                 && mouse.row < area.y + area.height - 1
                 && area.contains(pos)
             {
-                let idx = app.sessions_offset + mouse.row.saturating_sub(area.y + 1) as usize;
+                // 每一筆 session 佔兩行，`ListState.offset` 是「筆數」不是列數。
+                let rel_row = mouse.row.saturating_sub(area.y + 1);
+                let idx = app.sessions_offset + (rel_row / crate::SESSION_ITEM_ROWS) as usize;
                 if idx < app.session_ids().len() {
                     app.selected = idx;
                     app.sync_active_host_from_selection();

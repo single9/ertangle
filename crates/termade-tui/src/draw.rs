@@ -872,6 +872,10 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
     f.render_widget(Paragraph::new(vec![tabs, stats]), area);
 }
 
+/// Sessions 清單每一筆固定佔用的列數 (第一行標籤 + 第二行次要資訊)。
+/// 滑鼠點擊換算索引時必須用這個值，否則會把第二行算成下一筆。
+pub(crate) const SESSION_ITEM_ROWS: u16 = 2;
+
 pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.sessions_area = area;
     let vis = app.visible_sessions();

@@ -547,6 +547,40 @@ fn switching_layout_clears_stale_click_areas() {
 }
 
 #[test]
+fn clicking_each_line_of_two_line_session_row_selects_that_session() {
+    let mut app = sample_app(&["hi"]);
+    add_session(&mut app, "ses_b", "second", 5);
+    app.layout = LayoutMode::Two;
+    let _ = render_size(&mut app, 120, 40);
+    let x = app.sessions_area.x + 2;
+    let first_row = app.sessions_area.y + 1;
+    let (mut w, _peer) = pair_writer();
+
+    // 第一筆的兩行都應該選到第一個 session。
+    for row in [first_row, first_row + 1] {
+        app.selected = 1;
+        let ev = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: x,
+            row,
+            modifiers: KeyModifiers::NONE,
+        };
+        handle_mouse(&mut app, &mut w, ev).unwrap();
+        assert_eq!(app.selected, 0, "row {row} 應選到第一筆");
+    }
+
+    // 第二筆的第一行選到第二個 session。
+    let ev = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: x,
+        row: first_row + 2,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(&mut app, &mut w, ev).unwrap();
+    assert_eq!(app.selected, 1);
+}
+
+#[test]
 fn three_degrades_on_narrow_terminal() {
     assert_eq!(effective_layout(LayoutMode::Three, 120), LayoutMode::Three);
     assert_eq!(effective_layout(LayoutMode::Three, 70), LayoutMode::Two);
