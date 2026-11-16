@@ -921,11 +921,17 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             // 第一行：階層 + 狀態 + 標籤 (精簡)，子 session/agent 可一眼看出。
             let mut line1: Vec<Span> = Vec::new();
             if !indent.is_empty() {
-                line1.push(Span::styled(indent.clone(), Style::default().fg(Color::DarkGray)));
+                line1.push(Span::styled(
+                    indent.clone(),
+                    Style::default().fg(Color::DarkGray),
+                ));
             }
             if show_project && depth == 0 {
                 line1.push(Span::styled(
-                    format!(" {} ", truncate(&project_name(s.project_root(), &roots), 10)),
+                    format!(
+                        " {} ",
+                        truncate(&project_name(s.project_root(), &roots), 10)
+                    ),
                     Style::default()
                         .fg(Color::Black)
                         .bg(project_color(s.project_root())),
@@ -933,7 +939,10 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 line1.push(Span::raw(" "));
             }
             if depth > 0 {
-                line1.push(Span::styled(child_prefix, Style::default().fg(Color::DarkGray)));
+                line1.push(Span::styled(
+                    child_prefix,
+                    Style::default().fg(Color::DarkGray),
+                ));
             }
             line1.push(Span::styled(
                 format!("{} ", s.status.glyph()),
@@ -959,13 +968,10 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 ));
             }
 
-            // 第二行：次要資訊 (kind/model/branch/context/budget)，避免主列過擠。
+            // 第二行：次要資訊 (kind/branch/context/budget)，避免主列過擠。
+            // 模型與 effort 改顯示在 transcript 下方，這裡不再重複。
             let mut meta: Vec<String> = Vec::new();
             let mut km = s.kind.id().to_string();
-            if let Some(m) = &s.model {
-                km.push(':');
-                km.push_str(&truncate(m, 16));
-            }
             if s.permission == PermissionPolicy::Bypass {
                 km.push_str("!bypass");
             }
@@ -977,7 +983,10 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 let pct = c.percent();
                 meta.push(format!(
                     "ctx {}",
-                    pct.map_or_else(|| termade_core::human_tokens(c.used), |p| format!("{p:.0}%"))
+                    pct.map_or_else(
+                        || termade_core::human_tokens(c.used),
+                        |p| format!("{p:.0}%")
+                    )
                 ));
             }
             if let Some(bstr) = s.format_budget() {
@@ -994,8 +1003,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             let meta_text = meta.join(" · ");
             // context/budget 警示色以整段標示簡化，仍保留可讀性。
             let meta_color = if s.over_budget
-                || s
-                    .budget_usd
+                || s.budget_usd
                     .zip(Some(s.cost.usd))
                     .is_some_and(|(l, u)| u >= l)
             {
@@ -1191,29 +1199,63 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         Some(id) => {
             let s = &app.state.sessions[id];
             format!(
-                " Transcript: {}{} · {} · {}{} ({}) · {}% · {} ",
+                " Transcript: {}{} · {} · {}% · {} ",
                 if multi_project_state(app) || !app.scope_here {
                     format!("[{}] ", project_name(s.project_root(), &all_roots(app)))
                 } else {
                     String::new()
                 },
                 s.label,
-                s.kind.id(),
                 if s.transport.is_empty() {
                     "-"
                 } else {
                     &s.transport
                 },
-                s.context
-                    .map(|c| format!(" · ctx {}", c.short()))
-                    .unwrap_or_default(),
-                s.format_budget()
-                    .unwrap_or_else(|| format!("${:.4}", s.cost.usd)),
                 pct,
                 if app.raw_md { "raw" } else { "md" },
             )
         }
         None => tr!(" (尚無 session：按 n 建立) "),
+    };
+
+    // 畫面下方顯示這個 session 的執行參數 (模型、effort、權限、context、成本)，
+    // 左側清單只留辨識用的資訊，避免過擠。
+    let footer = match &selected {
+        Some(id) => {
+            let s = &app.state.sessions[id];
+            let mut parts: Vec<String> = Vec::new();
+            let mut model = s.kind.id().to_string();
+            if let Some(m) = s.model.as_deref().filter(|m| !m.is_empty()) {
+                model.push(':');
+                model.push_str(m);
+            }
+            parts.push(model);
+            if let Some(e) = s.effort.as_deref().filter(|e| !e.is_empty()) {
+                parts.push(format!("effort {e}"));
+            }
+            if s.role != termade_core::Role::Worker || s.parent.is_some() {
+                parts.push(format!("role {}", s.role.id()));
+            }
+            if s.permission != PermissionPolicy::Auto {
+                parts.push(format!("perm {}", s.permission.id()));
+            }
+            if let Some(c) = s.context {
+                parts.push(format!("ctx {}", c.short()));
+            }
+            parts.push(
+                s.format_budget()
+                    .unwrap_or_else(|| format!("${:.4}", s.cost.usd)),
+            );
+            if let Some(branch) = s.branch.as_deref() {
+                parts.push(format!("@{branch}"));
+            }
+            let text = format!(" {} ", parts.join(" · "));
+            Line::from(Span::styled(
+                truncate(&text, inner_w.max(8)),
+                Style::default().fg(Color::DarkGray),
+            ))
+        }
+        None => Line::default(),
     };
 
     let selection = app.selection;
@@ -1238,7 +1280,12 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         ));
     }
 
-    let para = Paragraph::new(visible).block(Block::default().borders(Borders::ALL).title(title));
+    let para = Paragraph::new(visible).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .title_bottom(footer),
+    );
     f.render_widget(para, area);
     app.transcript_offset = off;
 

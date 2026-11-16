@@ -78,6 +78,21 @@ fn transcript_renders_markdown_and_toggles_raw() {
 }
 
 #[test]
+fn transcript_footer_shows_model_and_effort() {
+    let mut app = sample_app(&["hi"]);
+    {
+        let s = app.state.sessions.get_mut("ses_test").unwrap();
+        s.model = Some("opus-4.5".into());
+        s.effort = Some("high".into());
+        s.permission = PermissionPolicy::Bypass;
+    }
+    let text = render(&mut app);
+    assert!(text.contains("opencode:opus-4.5"), "model missing: {text}");
+    assert!(text.contains("effort high"), "effort missing");
+    assert!(text.contains("perm bypass"), "permission missing");
+}
+
+#[test]
 fn diff_view_shows_gutter_and_stats() {
     let mut app = sample_app(&[]);
     app.view = CenterView::Diff;

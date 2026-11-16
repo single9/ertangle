@@ -71,7 +71,11 @@ pub(crate) fn copy_main_pane(app: &mut App, message: Option<usize>) {
         }
         match message {
             Some(n) if n == 0 || n > msgs.len() => {
-                app.status = tr!("沒有第 {n} 則訊息 (共 {total} 則)", n = n, total = msgs.len());
+                app.status = tr!(
+                    "沒有第 {n} 則訊息 (共 {total} 則)",
+                    n = n,
+                    total = msgs.len()
+                );
                 return;
             }
             Some(n) => (msgs[n - 1].join("\n"), tr!("第 {n} 則訊息", n = n)),
