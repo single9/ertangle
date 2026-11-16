@@ -273,7 +273,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         termade_core::tr_noop!("<todo|doing|blocked|review|done>  改任務視圖選取任務的狀態"),
     ),
     ("broadcast", termade_core::tr_noop!("<訊息>  廣播給所有 session")),
-    ("copy", termade_core::tr_noop!("複製目前畫面內容")),
+    (
+        "copy",
+        termade_core::tr_noop!("[編號]  複製主要區塊；Transcript 可指定第幾則訊息 (預設最新)"),
+    ),
     ("quit", termade_core::tr_noop!("離開 (保留 daemon)")),
     (
         "stop",
@@ -445,12 +448,16 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             }
         }
         "clean" => {
-            // 清除所有已結束且沒有 worktree 分支的 session。
+            // 清除所有已結束且沒有 worktree 分支的 session；scope_here 時只清目前專案。
             let ids: Vec<String> = app
                 .state
                 .sessions
                 .values()
-                .filter(|s| !s.status.is_live() && s.branch.is_none())
+                .filter(|s| {
+                    !s.status.is_live()
+                        && s.branch.is_none()
+                        && (!app.scope_here || s.project_root() == app.home_project)
+                })
                 .map(|s| s.id.clone())
                 .collect();
             let n = ids.len();
@@ -738,7 +745,20 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 },
             )?;
         }
-        "copy" | "yank" => copy_main_pane(app),
+        "copy" | "yank" => {
+            let msg = if rest.is_empty() {
+                None
+            } else {
+                match rest.trim().parse::<usize>() {
+                    Ok(n) => Some(n),
+                    Err(_) => {
+                        app.status = tr!("用法：copy [訊息編號]",);
+                        return Ok(());
+                    }
+                }
+            };
+            copy_main_pane(app, msg);
+        }
         "shutdown" | "shutdown!" => {
             // daemon 是所有專案共用的：關掉它會結束每個專案的 agent。有人在跑就先確認。
             let live: Vec<&termade_core::Session> = app.state.live_sessions().collect();

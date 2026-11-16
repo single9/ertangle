@@ -301,7 +301,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             app.bus_overlay = false;
             app.status = tr!("已清除選取");
         }
-        KeyCode::Char('Y') => copy_main_pane(app),
+        KeyCode::Char('Y') => copy_main_pane(app, None),
         KeyCode::PageUp => scroll_transcript(app, -1),
         KeyCode::PageDown => scroll_transcript(app, 1),
         KeyCode::Home => {

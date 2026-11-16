@@ -57,7 +57,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 ),
                 it(
                     'y',
-                    termade_core::tr_noop!("複製目前畫面"),
+                    termade_core::tr_noop!("複製內容 (Transcript 預設最新訊息)"),
                     Act::Cmd("copy"),
                 ),
                 it(

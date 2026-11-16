@@ -79,7 +79,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 tr_noop!("f 的範圍"),
                 tr_noop!("只找畫面上顯示的內容：摺疊的工具、隱藏的思考、超過 4000 行的舊內容找不到"),
             ),
-            (tr_noop!("拖曳 / Y / F2"), tr_noop!("選取複製；複製目前畫面；切換滑鼠擷取")),
+            (
+                tr_noop!("拖曳 / Y / F2"),
+                tr_noop!("選取複製；複製內容 (Transcript 預設最新訊息，可用 :copy N 指定)；切換滑鼠擷取"),
+            ),
         ],
     ),
     (
@@ -104,6 +107,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 tr_noop!("接續已結束的 session (處理程序死掉或 daemon 重啟後)；可接 prompt"),
             ),
             (":rm :clean", tr_noop!("移除已結束的 session／全部清除")),
+            (":copy [N]", tr_noop!("複製內容；Transcript 可指定第 N 則訊息 (預設最新)")),
             (":kill :cancel", tr_noop!("結束／中斷選取的 session")),
             (
                 ":queue :unqueue",

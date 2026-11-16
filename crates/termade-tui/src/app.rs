@@ -444,6 +444,11 @@ impl App {
             self.worktrees = entry.worktrees.clone();
             self.transcript_scroll = None;
             self.rebuild_pending = true;
+            self.bus_seen = if self.bus_visible {
+                self.state.messages.len()
+            } else {
+                self.bus_seen.min(self.state.messages.len())
+            };
             crate::search::refresh(self);
         }
     }
