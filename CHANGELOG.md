@@ -1,12 +1,13 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-## [unreleased]
+## [0.4.0] - 2026-11-16
 
 ### 🚀 Features
 
 - *(tui,daemon)* Allow configuring and launching web companion from TUI
 - *(ui,daemon)* Allow user to customize web version port
+- *(release)* Integrate git-cliff for changelog generation and automated releases
 
 ### 🚜 Refactor
 
