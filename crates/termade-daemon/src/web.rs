@@ -694,10 +694,22 @@ mod tests {
     fn test_mime_type_for_path() {
         assert_eq!(mime_type_for_path(Path::new("photo.png")), "image/png");
         assert_eq!(mime_type_for_path(Path::new("pic.jpg")), "image/jpeg");
-        assert_eq!(mime_type_for_path(Path::new("src/main.rs")), "text/plain; charset=utf-8");
-        assert_eq!(mime_type_for_path(Path::new("Cargo.toml")), "text/plain; charset=utf-8");
-        assert_eq!(mime_type_for_path(Path::new("data.json")), "application/json; charset=utf-8");
-        assert_eq!(mime_type_for_path(Path::new("bin/app")), "application/octet-stream");
+        assert_eq!(
+            mime_type_for_path(Path::new("src/main.rs")),
+            "text/plain; charset=utf-8"
+        );
+        assert_eq!(
+            mime_type_for_path(Path::new("Cargo.toml")),
+            "text/plain; charset=utf-8"
+        );
+        assert_eq!(
+            mime_type_for_path(Path::new("data.json")),
+            "application/json; charset=utf-8"
+        );
+        assert_eq!(
+            mime_type_for_path(Path::new("bin/app")),
+            "application/octet-stream"
+        );
     }
 
     mod hex {

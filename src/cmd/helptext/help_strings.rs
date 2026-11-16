@@ -25,6 +25,7 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     termade_core::tr_noop!("同步問答：送出 question 訊息並阻塞等待對方回覆 answer"),
     termade_core::tr_noop!("啟動 TUI (預設行為)"),
     termade_core::tr_noop!("啟動後立刻送出的 prompt"),
+    termade_core::tr_noop!("啟動行動端隨身審核器 Web/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"),
     termade_core::tr_noop!("喚醒已休眠的 session"),
     termade_core::tr_noop!("回覆的訊息 id (形成對話串)"),
     termade_core::tr_noop!("在獨立的 git worktree 中執行 (M3)"),
@@ -94,4 +95,5 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     termade_core::tr_noop!("頻道名稱 (例如 backend；會廣播給所有同角色或訂閱者)"),
     termade_core::tr_noop!("顯示各 agent 帳號的額度 (5 小時／7 天視窗與重置時間)"),
     termade_core::tr_noop!("顯示目前環境變數指定的 session 資訊"),
+    termade_core::tr_noop!("顯示遠端連線資訊 (Tailscale 位址、Token 路徑與連線指令)"),
 ];

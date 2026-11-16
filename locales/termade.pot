@@ -89,6 +89,54 @@ msgstr ""
 msgid "已要求 daemon 關閉"
 msgstr ""
 
+#: src/cmd/daemon.rs
+msgid "termade 遠端連線資訊："
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "Daemon 狀態：執行中 (socket: {sock})"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "Daemon 狀態：未執行"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "遠端 Token 路徑：{path} (已就緒)"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "遠端 Token 路徑：{path} (尚未建立，啟動 --listen 時將自動產生)"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "Tailscale IP：{ip} (已連線)"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "Tailscale IP：未偵測到 (請確認 Tailscale 已啟動並登入)"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "連線範例："
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "本機連線：termade --remote 127.0.0.1:7420 --token {token}"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "Tailscale 遠端連線：termade --remote {ip}:7420 --token {token}"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "行動端隨身審核器：{url}"
+msgstr ""
+
+#: src/cmd/daemon.rs
+msgid "行動端掃描 QR Code 連線："
+msgstr ""
+
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)"
 msgstr ""
@@ -175,6 +223,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "啟動後立刻送出的 prompt"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "啟動行動端隨身審核器 Web/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -451,6 +503,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "顯示目前環境變數指定的 session 資訊"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "顯示遠端連線資訊 (Tailscale 位址、Token 路徑與連線指令)"
 msgstr ""
 
 #: src/cmd/session.rs
@@ -845,6 +901,10 @@ msgstr ""
 
 #: crates/termade-daemon/src/client.rs
 msgid "無法連線 daemon ({path})"
+msgstr ""
+
+#: crates/termade-daemon/src/client.rs
+msgid "無法連線遠端 daemon ({addr})"
 msgstr ""
 
 #: crates/termade-daemon/src/client.rs
@@ -1299,6 +1359,38 @@ msgid "無法解析請求：{e}"
 msgstr ""
 
 #: crates/termade-daemon/src/server.rs
+msgid "TERMADE_TEST_TAILSCALE_IP 位址無效：{ip}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "無法執行 tailscale 指令，請確認已安裝並加入 PATH"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "取得 Tailscale IP 失敗：{stderr}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "tailscale ip -4 未輸出有效 IP"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "Tailscale 輸出的 IP 無效：{ip_str}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs crates/termade-daemon/src/server.rs
+msgid "無效的 port 設定：{port_str}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs crates/termade-daemon/src/server.rs
+msgid "無法解析監聽位址 {spec}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs crates/termade-daemon/src/server.rs
+msgid "無法解析 Web 監聽位址 {spec}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
 msgid "讀取 token 檔 {path} 失敗"
 msgstr ""
 
@@ -1308,6 +1400,14 @@ msgstr ""
 
 #: crates/termade-daemon/src/server.rs
 msgid "token 檔 {path} 是空的"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "已自動產生遠端 Token 並儲存至 {path}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "建立 token 檔 {path} 失敗"
 msgstr ""
 
 #: crates/termade-daemon/src/server.rs
@@ -1323,11 +1423,11 @@ msgid "無法解析監聽位址 {addr}"
 msgstr ""
 
 #: crates/termade-daemon/src/server.rs
-msgid "--listen {addr} 不是 loopback 位址；TCP 為明文傳輸。建議綁 127.0.0.1 並用 SSH 轉發；若確定要公開，加上 --insecure-listen-public"
+msgid "--listen {addr} 不是 loopback 或 Tailscale 位址；TCP 為明文傳輸。建議綁 127.0.0.1、Tailscale 或搭配 SSH 轉發；若確定要公開，加上 --insecure-listen-public"
 msgstr ""
 
 #: crates/termade-daemon/src/server.rs
-msgid "警告：daemon 以明文 TCP 對非 loopback 位址 {addr} 開放，token 與內容可被側錄"
+msgid "警告：daemon 以明文 TCP 對非 loopback/Tailscale 位址 {addr} 開放，token 與內容可被側錄"
 msgstr ""
 
 #: crates/termade-daemon/src/server.rs
@@ -1358,6 +1458,34 @@ msgstr ""
 msgid "綁定 TCP {addr} 失敗"
 msgstr ""
 
+#: crates/termade-daemon/src/server.rs
+msgid "termade daemon 遠端監聽已啟動：tcp={addr}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "遠端認證 Token 檔案：{path}"
+msgstr ""
+
+#: crates/termade-daemon/src/server.rs
+msgid "termade 行動端隨身審核器已啟動：http://{web_addr}"
+msgstr ""
+
+#: crates/termade-daemon/src/web.rs
+msgid "綁定 Web 伴侶服務位址 {addr} 失敗"
+msgstr ""
+
+#: crates/termade-daemon/src/web.rs
+msgid "遠端認證失敗：請提供正確的 Token"
+msgstr ""
+
+#: crates/termade-daemon/src/web.rs
+msgid "未認證的連線：請先發送 Hello 帶 token"
+msgstr ""
+
+#: crates/termade-daemon/src/web.rs
+msgid "無法解析 JSON：{e}"
+msgstr ""
+
 #: crates/termade-daemon/src/lib.rs
 msgid "開啟 {path} 失敗"
 msgstr ""
@@ -1376,6 +1504,22 @@ msgstr ""
 
 #: crates/termade-tui/src/app.rs
 msgid "已連線 daemon"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs
+msgid "主機篩選：{h}"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs crates/termade-tui/src/commands.rs
+msgid "主機篩選：全部主機"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs
+msgid "[{host}] 錯誤：{message}"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs
+msgid "錯誤：{message}"
 msgstr ""
 
 #: crates/termade-tui/src/app.rs
@@ -1610,6 +1754,10 @@ msgstr ""
 msgid "取消最後一則排隊並放回輸入框"
 msgstr ""
 
+#: crates/termade-tui/src/commands.rs
+msgid "顯示行動端隨身審核器網址與連線資訊"
+msgstr ""
+
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/help.rs
 msgid "顯示／隱藏 Bus 浮層"
 msgstr ""
@@ -1716,6 +1864,18 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "用法：:notify [on|off|test]"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "行動端隨身審核器網址：{url}"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "主機篩選：{target}"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "未知的主機：{target}，可用主機：{avail}"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2578,6 +2738,14 @@ msgstr ""
 msgid "已複製選取 {n} 行 (OSC 52；Shift+拖曳可原生選取)"
 msgstr ""
 
+#: crates/termade-tui/src/mouse.rs crates/termade-tui/src/mouse.rs
+msgid "已開啟連結：{url}"
+msgstr ""
+
+#: crates/termade-tui/src/mouse.rs crates/termade-tui/src/mouse.rs
+msgid "無法開啟連結：{e}"
+msgstr ""
+
 #: crates/termade-tui/src/notify.rs
 msgid "做完了"
 msgstr ""
@@ -2819,14 +2987,26 @@ msgstr ""
 msgid " 任務說明 (Enter 跳到負責人 · :task-status <狀態>) "
 msgstr ""
 
+#: crates/termade-tui/src/hosts.rs
+msgid "找不到主機 {host} 的連線"
+msgstr ""
+
+#: crates/termade-tui/src/lib.rs
+msgid "重連中"
+msgstr ""
+
+#: crates/termade-tui/src/lib.rs
+msgid "與 {host} 連線中斷，正在重連…"
+msgstr ""
+
+#: crates/termade-tui/src/lib.rs
+msgid "已重新連線至 {host}"
+msgstr ""
+
 #: crates/termade-tui/src/lib.rs
 msgid "daemon 連線已中斷 (可能被關閉了)。畫面是最後的狀態，按 q 離開後重新啟動"
 msgstr ""
 
 #: crates/termade-tui/src/lib.rs
-msgid "daemon 已斷線，無法送出；按 q 離開"
-msgstr ""
-
-#: crates/termade-tui/src/lib.rs
-msgid "錯誤：{message}"
+msgid "連線中斷中，正在重連；請稍候"
 msgstr ""

@@ -1011,11 +1011,8 @@ pub(crate) fn build_transcript_lines(
         for l in src {
             if let Some(line) = tool_line(&l) {
                 if !batch.is_empty() {
-                    let (b_lines, b_links) = markdown::Renderer::new().render_and_wrap(
-                        &batch,
-                        width,
-                        out.len(),
-                    );
+                    let (b_lines, b_links) =
+                        markdown::Renderer::new().render_and_wrap(&batch, width, out.len());
                     out.extend(b_lines);
                     links.extend(b_links);
                     batch.clear();
@@ -1026,11 +1023,8 @@ pub(crate) fn build_transcript_lines(
             }
         }
         if !batch.is_empty() {
-            let (b_lines, b_links) = markdown::Renderer::new().render_and_wrap(
-                &batch,
-                width,
-                out.len(),
-            );
+            let (b_lines, b_links) =
+                markdown::Renderer::new().render_and_wrap(&batch, width, out.len());
             out.extend(b_lines);
             links.extend(b_links);
         }

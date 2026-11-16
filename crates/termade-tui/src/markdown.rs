@@ -36,6 +36,9 @@ pub struct LinkTarget {
     pub url: String,
 }
 
+pub type RawLink = (usize, usize, String);
+pub type LineWithLinks = (Line<'static>, Vec<RawLink>);
+
 /// 逐行 Markdown 渲染器。
 #[derive(Default)]
 pub struct Renderer {
@@ -59,11 +62,7 @@ impl Renderer {
     }
 
     /// 渲染並包含每行內部的連結欄位區間。
-    pub fn render_with_links(
-        &mut self,
-        src: &[String],
-        width: usize,
-    ) -> Vec<(Line<'static>, Vec<(usize, usize, String)>)> {
+    pub fn render_with_links(&mut self, src: &[String], width: usize) -> Vec<LineWithLinks> {
         self.in_fence = false;
         let mut out = Vec::with_capacity(src.len());
         let mut i = 0usize;
@@ -73,7 +72,10 @@ impl Renderer {
             if self.in_fence {
                 if fence(line).is_some() {
                     self.in_fence = false;
-                    out.push((Line::styled("  ▌ ```", Style::default().fg(CODE_BAR)), Vec::new()));
+                    out.push((
+                        Line::styled("  ▌ ```", Style::default().fg(CODE_BAR)),
+                        Vec::new(),
+                    ));
                 } else {
                     for cl in code_line(line, width) {
                         out.push((cl, Vec::new()));
@@ -287,7 +289,7 @@ fn is_hr(line: &str) -> bool {
     ch.is_some()
 }
 
-fn list_line_with_links(line: &str) -> Option<(Line<'static>, Vec<(usize, usize, String)>)> {
+fn list_line_with_links(line: &str) -> Option<LineWithLinks> {
     let indent_len = line.len() - line.trim_start().len();
     let indent = " ".repeat(indent_len);
     let t = line.trim_start();
@@ -847,7 +849,7 @@ pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
 
 /// 對整段已渲染行做換行並收集連結。
 pub fn wrap_lines_and_collect_links(
-    lines_with_links: Vec<(Line<'static>, Vec<(usize, usize, String)>)>,
+    lines_with_links: Vec<LineWithLinks>,
     width: usize,
     base_line_idx: usize,
 ) -> (Vec<Line<'static>>, Vec<LinkTarget>) {
@@ -1062,7 +1064,8 @@ mod tests {
 
     #[test]
     fn link_shows_clean_label_and_tracks_target() {
-        let (spans, links) = inline_with_links("see [docs](https://example.com/x) now", Style::default());
+        let (spans, links) =
+            inline_with_links("see [docs](https://example.com/x) now", Style::default());
         let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
         assert_eq!(text, "see docs now");
         let link = spans
