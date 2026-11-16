@@ -1341,7 +1341,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         },
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => tr!(
-                " spawn → {target} · worktree={worktree} · 權限={permission} ",
+                " spawn → {target} · worktree={worktree} · 權限={permission} · Ctrl-F effort ",
                 target = format!(
                     "{}{}{}",
                     kind.id(),
@@ -1359,7 +1359,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
                     .spawn_permission
                     .map_or_else(|| tr!("預設"), |p| p.id().to_string()),
             ),
-            None => tr!(" spawn：<agent[:model]> <prompt> "),
+            None => tr!(" spawn：<agent[:model]> <prompt> · Ctrl-F effort "),
         },
         Mode::Menu => tr!(" 選單 "),
         Mode::Pick => tr!(" 選擇 (Enter 確認 · Esc 取消) "),

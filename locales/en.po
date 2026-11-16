@@ -2032,12 +2032,12 @@ msgid " prompt (排隊 {n} 則 · Alt-Enter 再排) "
 msgstr " prompt ({n} queued · Alt-Enter to queue more) "
 
 #: crates/termade-tui/src/draw.rs
-msgid " spawn → {target} · worktree={worktree} · 權限={permission} "
-msgstr " spawn → {target} · worktree={worktree} · permission={permission} "
+msgid " spawn → {target} · worktree={worktree} · 權限={permission} · Ctrl-F effort "
+msgstr " spawn → {target} · worktree={worktree} · permission={permission} · Ctrl-F effort "
 
 #: crates/termade-tui/src/draw.rs
-msgid " spawn：<agent[:model]> <prompt> "
-msgstr " spawn: <agent[:model]> <prompt> "
+msgid " spawn：<agent[:model]> <prompt> · Ctrl-F effort "
+msgstr " spawn: <agent[:model]> <prompt> · Ctrl-F effort "
 
 #: crates/termade-tui/src/draw.rs
 msgid " 選單 "
@@ -2560,8 +2560,8 @@ msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同�
 msgstr "Handoff to {target} requested (the old session stops; the new agent uses the same working directory)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)"
-msgstr "spawn → {target}: type a prompt and press Enter (may be empty)"
+msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-F 切換 effort"
+msgstr "spawn → {target}: type a prompt and press Enter (may be empty), Ctrl-F to cycle effort"
 
 #: crates/termade-tui/src/menu.rs
 msgid "沒有符合的 agent"

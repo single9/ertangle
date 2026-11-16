@@ -2027,11 +2027,11 @@ msgid " prompt (排隊 {n} 則 · Alt-Enter 再排) "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " spawn → {target} · worktree={worktree} · 權限={permission} "
+msgid " spawn → {target} · worktree={worktree} · 權限={permission} · Ctrl-F effort "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " spawn：<agent[:model]> <prompt> "
+msgid " spawn：<agent[:model]> <prompt> · Ctrl-F effort "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2555,7 +2555,7 @@ msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同�
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
-msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)"
+msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-F 切換 effort"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
