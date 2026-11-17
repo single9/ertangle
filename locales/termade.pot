@@ -2427,6 +2427,10 @@ msgid "(spawn 時)切換是否使用獨立 git worktree"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
+msgid "(spawn 時)切換角色 worker／coordinator／reviewer"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
 msgid "(spawn 時)切換權限 ask／auto／bypass"
 msgstr ""
 
@@ -2559,7 +2563,7 @@ msgid "命令 (: 開頭)"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
-msgid "啟動 agent，如 :spawn claude:opus 做某事；不帶參數開選擇器"
+msgid "啟動 agent，如 :spawn --role coord claude:opus 做某事；不帶參數開選擇器"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
@@ -2859,7 +2863,7 @@ msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同�
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
-msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-F 切換 effort"
+msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs

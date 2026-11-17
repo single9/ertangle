@@ -2432,6 +2432,10 @@ msgid "(spawn 時)切換是否使用獨立 git worktree"
 msgstr "(when spawning) toggle using a separate git worktree"
 
 #: crates/termade-tui/src/help.rs
+msgid "(spawn 時)切換角色 worker／coordinator／reviewer"
+msgstr "(when spawning) cycle role worker/coordinator/reviewer"
+
+#: crates/termade-tui/src/help.rs
 msgid "(spawn 時)切換權限 ask／auto／bypass"
 msgstr "(when spawning) cycle permission ask/auto/bypass"
 
@@ -2564,8 +2568,8 @@ msgid "命令 (: 開頭)"
 msgstr "Commands (start with :)"
 
 #: crates/termade-tui/src/help.rs
-msgid "啟動 agent，如 :spawn claude:opus 做某事；不帶參數開選擇器"
-msgstr "Start an agent, e.g. :spawn claude:opus do something; without arguments opens the picker"
+msgid "啟動 agent，如 :spawn --role coord claude:opus 做某事；不帶參數開選擇器"
+msgstr "Start an agent, e.g. :spawn --role coord claude:opus do something; without arguments opens the picker"
 
 #: crates/termade-tui/src/help.rs
 msgid "交接給另一個 agent，如 :handoff codex 補充說明"
@@ -2864,8 +2868,8 @@ msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同�
 msgstr "Handoff to {target} requested (the old session stops; the new agent uses the same working directory)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-F 切換 effort"
-msgstr "spawn → {target}: type a prompt and press Enter (may be empty), Ctrl-F to cycle effort"
+msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort"
+msgstr "spawn → {target}: type a prompt and press Enter (may be empty), Ctrl-R to cycle role, Ctrl-F to cycle effort"
 
 #: crates/termade-tui/src/menu.rs
 msgid "沒有符合的 agent"
@@ -3195,6 +3199,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "啟動 agent，如 :spawn claude:opus 做某事；不帶參數開選擇器"
+#~ msgstr "Start an agent, e.g. :spawn claude:opus do something; without arguments opens the picker"
+
+#~ msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-F 切換 effort"
+#~ msgstr "spawn → {target}: type a prompt and press Enter (may be empty), Ctrl-F to cycle effort"
 
 #~ msgid " spawn → {target} · worktree={worktree} · 權限={permission} · Ctrl-F effort "
 #~ msgstr " spawn → {target} · worktree={worktree} · permission={permission} · Ctrl-F effort "

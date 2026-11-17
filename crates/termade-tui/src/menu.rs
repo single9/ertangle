@@ -622,7 +622,7 @@ fn finish_picker(
         return Ok(());
     }
     app.status = tr!(
-        "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-F 切換 effort",
+        "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort",
         target = format!(
             "{}{}{}",
             kind.id(),

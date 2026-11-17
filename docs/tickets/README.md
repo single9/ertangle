@@ -36,6 +36,7 @@
 | [T28](T28-remote-tailscale-and-reconnect.md) | 遠端連線韌性與 Tailscale 整合：自動偵測 Tailscale 位址、Token 持久化與 TUI 自動斷線重連 (已完成) | P1 | T05 |
 | [T29](T29-multi-host-tui.md) | TUI 多主機聚合視圖 (`[remotes]` 設定與跨機 Session 操控) (已完成) | P2 | T28 |
 | [T30](T30-mobile-companion-web.md) | Web 版支援 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code) (已完成) | P2 | T28 |
+| [T31](T31-role-selection-and-collab-scope.md) | TUI 支援指定 Role 與協作指引英文化分流 (已完成) | P2 | T20, T27 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

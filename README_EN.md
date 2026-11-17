@@ -214,7 +214,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 | --- | --- |
 | `Space` | Open **Which-key menu** (`s` session, `g` git, `v` view, `m` message, `?` help) |
 | `:` or `/` | Open **Command-line** (supports `Tab` completion) |
-| `n` | Create new session (select Agent, Model, input Prompt; `Ctrl-W` toggles Worktree) |
+| `n` | Create new session (select Agent, Model, input Prompt; supports `Ctrl-R` for Role, `Ctrl-W` for Worktree, `Ctrl-F` for Effort) |
 | `i` / `Enter` | Focus input box to send prompt (supports `@peer` and `#channel` routing) |
 | `j` / `k` or `↑` / `↓` | Select previous/next session; move line cursor in Diff; select task in Tasks view |
 | `[` / `]` | Jump to previous / next session |
@@ -249,6 +249,15 @@ Every structured agent session is automatically injected with a stdio MCP server
 | `Alt-Enter` | **Queue prompt**: If session is busy, queues in daemon to send automatically when idle |
 | `↑` / `↓` | Cycle command and prompt input history (persisted across restarts) |
 
+#### Spawn Mode Shortcuts (Creating Sessions)
+
+| Key | Description |
+| --- | --- |
+| `Ctrl-R` | Cycle role: `worker` ↔ `coordinator` ↔ `reviewer` (customizes injected prompt per role) |
+| `Ctrl-W` | Toggle dedicated Git Worktree branch |
+| `Ctrl-E` | Cycle permission policy: default (config) ↔ `ask` ↔ `auto` ↔ `bypass` |
+| `Ctrl-F` | Cycle reasoning effort: default ↔ `low` ↔ `medium` ↔ `high` ↔ `max` |
+
 #### Review, Git & Session Lifecycle
 
 | Key | Action |
@@ -265,7 +274,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 
 Press `:` to open the command line with `Tab` completion:
 
-- `:spawn <agent>[:model] <prompt>` — Spawn a new agent session (e.g., `:spawn claude:opus fix connection timeout`)
+- `:spawn [--role <role>] <agent>[:model] <prompt>` — Spawn a new agent session (e.g., `:spawn --role coordinator claude:opus "plan architecture"`)
 - `:handoff <agent> [note]` — Hand over current session to another agent
 - `:resume [prompt]` — Reconnect to an exited session and continue dialogue
 - `:queue` / `:unqueue` / `:queue clear` — View, pop, or clear prompt queue
@@ -390,12 +399,23 @@ extra = "Follow guidelines in CONTRIBUTING.md closely"
 
 ---
 
+## Development & Pre-commit Verification
+
+To ensure local changes pass CI reliably, install the pre-commit hook or run one-command verification:
+
+```bash
+make setup-hooks   # Automatically installs .git/hooks/pre-commit
+make pre-commit    # Auto-formats (fmt), runs clippy, and checks i18n catalogs
+```
+
+---
+
 ## Architecture & Reference Documents
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — Architectural design, event synchronization protocols, state machines, and MCP specifications.
 - [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — Verification results, test suites, and real-world agent compatibility logs.
 - [`docs/MAINTAINING.md`](docs/MAINTAINING.md) — Maintenance checklist for synchronizing keys, CLI commands, and protocols.
-- [`docs/tickets/`](docs/tickets/) — Improvement tickets, refactoring, and architectural evolution (T01–T25 completed).
+- [`docs/tickets/`](docs/tickets/) — Improvement tickets, refactoring, and architectural evolution.
 
 ---
 

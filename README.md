@@ -214,7 +214,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | --- | --- |
 | `Space` | 開啟 **Which-key 選單** (`s` session、`g` git、`v` 檢視、`m` 訊息、`?` 說明) |
 | `:` 或 `/` | 開啟**命令列** (支援 `Tab` 自動補齊) |
-| `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；`Ctrl-W` 切換 Worktree) |
+| `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；支援 `Ctrl-R` 切換角色、`Ctrl-W` 切換 Worktree、`Ctrl-F` 切換 Effort) |
 | `i` / `Enter` | 聚焦輸入框，對選取的 Session 發送 prompt (亦支援 `@peer` 或 `#channel` 傳訊) |
 | `j` / `k` 或 `↑` / `↓` | 移動選取 Session；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
 | `[` / `]` | 快速跳至上一個 / 下一個 Session |
@@ -249,6 +249,15 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | `Alt-Enter` | **將 Prompt 排入佇列** (Session 忙碌時排入 Daemon 佇列，閒置時依序自動送出) |
 | `↑` / `↓` | 在空輸入框時切換歷史輸入指令 (持久化儲存於本機) |
 
+#### 建立 Session (Spawn 模式快速鍵)
+
+| 按鍵 | 功能說明 |
+| --- | --- |
+| `Ctrl-R` | 循環切換角色：`worker` ↔ `coordinator` ↔ `reviewer` (依角色自動調整協作提示詞) |
+| `Ctrl-W` | 切換是否啟用獨立 Git Worktree 分支 |
+| `Ctrl-E` | 循環切換權限政策：預設 (config) ↔ `ask` ↔ `auto` ↔ `bypass` |
+| `Ctrl-F` | 循環切換推論強度 Effort：預設 ↔ `low` ↔ `medium` ↔ `high` ↔ `max` |
+
 #### 審查、Git 與生命週期控制
 
 | 按鍵 | 動作 |
@@ -265,7 +274,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 按 `:` 進入命令列，支援 `Tab` 自動補齊：
 
-- `:spawn <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn claude:opus 修復連線逾時`)
+- `:spawn [--role <角色>] <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn --role coordinator claude:opus "規劃架構"`)
 - `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
 - `:resume [prompt]` — 接續已結束或中斷的 Session 對話
 - `:queue` / `:unqueue` / `:queue clear` — 檢視、取出或清空待送佇列
@@ -394,12 +403,23 @@ extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
 
 ---
 
+## 開發與貢獻前檢查
+
+為確保本地提交能穩定通過 CI 檢查，提交程式碼前可安裝 pre-commit hook 或執行一鍵驗證：
+
+```bash
+make setup-hooks   # 自動安裝 .git/hooks/pre-commit
+make pre-commit    # 一鍵自動排版 (fmt)、跑 clippy 與檢查多國語系 (i18n)
+```
+
+---
+
 ## 進階架構與相關文件
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — 系統架構、事件同步協定、狀態機與 MCP 規格定義。
 - [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — 實機驗證成果、各家 Agent 相容性測試紀錄。
 - [`docs/MAINTAINING.md`](docs/MAINTAINING.md) — 開發者維護指南與修改同步檢查清單。
-- [`docs/tickets/`](docs/tickets/) — 系統重構、功能擴充與改善計畫票紀錄 (T01–T25 全數完成)。
+- [`docs/tickets/`](docs/tickets/) — 系統重構、功能擴充與改善計畫票紀錄。
 
 ---
 

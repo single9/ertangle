@@ -34,6 +34,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("Ctrl-V", tr_noop!("貼上剪貼簿圖片 (需 wl-paste 或 xclip)")),
             (tr_noop!("拖曳檔案"), tr_noop!("把檔案拖進終端機會自動轉成 @路徑")),
             ("Ctrl-W", tr_noop!("(spawn 時)切換是否使用獨立 git worktree")),
+            ("Ctrl-R", tr_noop!("(spawn 時)切換角色 worker／coordinator／reviewer")),
             ("Ctrl-E", tr_noop!("(spawn 時)切換權限 ask／auto／bypass")),
             ("Ctrl-F", tr_noop!("(spawn 時)切換 effort；預設不指定")),
         ],
@@ -103,7 +104,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
         &[
             (
                 ":spawn",
-                tr_noop!("啟動 agent，如 :spawn claude:opus 做某事；不帶參數開選擇器"),
+                tr_noop!("啟動 agent，如 :spawn --role coord claude:opus 做某事；不帶參數開選擇器"),
             ),
             (":handoff", tr_noop!("交接給另一個 agent，如 :handoff codex 補充說明")),
             (
