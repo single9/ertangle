@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-daemon`、`termade-protocol`、`termade-tui`、`src/`　相依：T02, T18
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 

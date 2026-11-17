@@ -38,10 +38,10 @@
 | [T30](T30-mobile-companion-web.md) | Web 版支援 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code) (已完成) | P2 | T28 |
 | [T31](T31-role-selection-and-collab-scope.md) | TUI 支援指定 Role 與協作指引英文化分流 (已完成) | P2 | T20, T27 |
 | [T32](T32-subagent-and-bg-process-visibility.md) | Subagent 與背景執行程式／長耗時指令的 TUI 即時可觀測性與處理程序群組控管 (已完成) | P1 | — |
-| [T33](T33-claude-permission-forwarding-and-mcp-redaction.md) | Claude Code 逐項權限核准轉發與 MCP 回傳全面秘密遮罩 | P1 | T04 |
-| [T34](T34-conflict-resolution-and-review-loop.md) | 智慧合併衝突解決迴圈、合併前驗證與自動審查守門員 | P2 | T02, T18 |
-| [T35](T35-diff-file-tree-and-hunk-actions.md) | Diff 視圖檔案清單導覽、單檔摺疊與局部 Hunk 退回 | P2 | — |
-| [T36](T36-playbooks-and-session-export.md) | 多 Agent 團隊範本 (Playbooks) 與 Session 協作報告匯出 (`:export`) | P3 | T11, T31 |
+| [T33](T33-claude-permission-forwarding-and-mcp-redaction.md) | Claude Code 逐項權限核准轉發與 MCP 回傳全面秘密遮罩 (已完成) | P1 | T04 |
+| [T34](T34-conflict-resolution-and-review-loop.md) | 智慧合併衝突解決迴圈、合併前驗證與自動審查守門員 (已完成) | P2 | T02, T18 |
+| [T35](T35-diff-file-tree-and-hunk-actions.md) | Diff 視圖檔案清單導覽、單檔摺疊與局部 Hunk 退回 (已完成) | P2 | — |
+| [T36](T36-playbooks-and-session-export.md) | 多 Agent 團隊範本 (Playbooks) 與 Session 協作報告匯出 (`:export`) (已完成) | P3 | T11, T31 |
 | [T37](T37-token-efficient-agent-communication.md) | 跨 Agent 極簡英文通訊協定與禁止客套往返迴圈 (已完成) | P2 | T20, T31 |
 | [T38](T38-quota-aware-spawn-and-ade-skill.md) | 額度感知的 spawn、即時額度警告與可安裝的 termade-ade skill (已完成) | P2 | T20, T37 |
 | [T39](T39-kill-pgid-misparse-logout.md) | `kill -SIG -<pgid>` 被誤解析成 `kill -1`，結束 session 時整個桌面被登出 (已完成) | P0 | T32 |
