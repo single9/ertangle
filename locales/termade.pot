@@ -911,16 +911,16 @@ msgstr ""
 msgid "未知的 effort `{e}`；可用：{list}"
 msgstr ""
 
-#: crates/termade-adapter/src/lib.rs crates/termade-adapter/src/lib.rs
+#: crates/termade-adapter/src/lib.rs
 msgid "執行 kill 失敗"
 msgstr ""
 
 #: crates/termade-adapter/src/lib.rs
-msgid "kill {sig} {pid} 失敗"
+msgid "kill {args} 失敗"
 msgstr ""
 
-#: crates/termade-adapter/src/lib.rs
-msgid "kill {sig} -{pgid} 失敗"
+#: crates/termade-adapter/src/lib.rs crates/termade-adapter/src/lib.rs
+msgid "拒絕對 PID {pid} 送訊號"
 msgstr ""
 
 #: crates/termade-adapter/src/lib.rs
