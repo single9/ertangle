@@ -161,6 +161,21 @@ pub fn run() -> Result<()> {
     result
 }
 
+/// `termade - <專案根目錄名稱>`；取不到名稱時只用 `termade`。
+fn window_title() -> String {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let root = crate::app::home_project(&cwd);
+    let name = std::path::Path::new(&root)
+        .file_name()
+        .map(|n| n.to_string_lossy().replace(|c: char| c.is_control(), ""))
+        .unwrap_or_default();
+    if name.is_empty() {
+        "termade".to_string()
+    } else {
+        format!("termade - {name}")
+    }
+}
+
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -176,6 +191,9 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
         EnableFocusChange
     )?;
     write!(stdout, "\x1b[?1007h")?;
+    // 視窗標題帶上專案名，在有 window manager 的環境可辨識是哪個專案。
+    // 先 push (XTWINOPS 22) 原標題，離開時 pop 還原。
+    write!(stdout, "\x1b[22;0t\x1b]0;{}\x07", window_title())?;
     stdout.flush()?;
     let backend = CrosstermBackend::new(stdout);
     Ok(Terminal::new(backend)?)
@@ -183,7 +201,7 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let backend = terminal.backend_mut();
-    write!(backend, "\x1b[?1007l")?;
+    write!(backend, "\x1b[?1007l\x1b[23;0t")?;
     execute!(
         backend,
         DisableBracketedPaste,

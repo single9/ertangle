@@ -1078,7 +1078,7 @@ pub(crate) fn short(id: &str) -> String {
 }
 
 /// 專案根目錄：cwd 所在 git repo 的頂層，不在 repo 內就用 cwd 本身。
-fn home_project(cwd: &std::path::Path) -> String {
+pub(crate) fn home_project(cwd: &std::path::Path) -> String {
     let top = std::process::Command::new("git")
         .arg("-C")
         .arg(cwd)
