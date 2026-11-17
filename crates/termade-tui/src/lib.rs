@@ -24,6 +24,7 @@ mod mouse;
 mod notify;
 mod project;
 mod ps;
+mod quota;
 mod search;
 mod settings;
 mod tasks;

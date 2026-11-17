@@ -2975,3 +2975,84 @@ fn inject_skill_is_a_settings_toggle() {
     assert!(ITEMS.contains(&Item::InjectSkill));
     assert!(Item::InjectSkill.is_toggle());
 }
+
+#[test]
+fn quota_bar_fills_proportionally_and_clamps() {
+    let (f, e) = crate::quota::bar(56.0, 20);
+    assert_eq!((f.chars().count(), e.chars().count()), (11, 9));
+    assert_eq!(crate::quota::bar(150.0, 10).0.chars().count(), 10);
+    assert_eq!(crate::quota::bar(-5.0, 10).1.chars().count(), 10);
+}
+
+#[test]
+fn quota_popup_lines_show_bars_resets_and_missing_data() {
+    use termade_core::{Quota, QuotaWindow};
+    let now = 10 * 3_600_000;
+    let q = Quota {
+        agent: "claude".into(),
+        windows: vec![
+            QuotaWindow {
+                name: "5h".into(),
+                used_percent: 56.0,
+                resets_at_ms: Some(now + 2 * 3_600_000),
+            },
+            QuotaWindow {
+                name: "7d".into(),
+                used_percent: 80.0,
+                resets_at_ms: Some(now - 1),
+            },
+        ],
+        reached: false,
+        updated_ms: now,
+    };
+    let text = |lines: Vec<ratatui::text::Line<'static>>| {
+        lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+    };
+    let l = text(crate::quota::agent_lines("claude", Some(&q), now));
+    assert_eq!(l.len(), 3, "{l:?}");
+    assert!(
+        l[1].contains("5h") && l[1].contains("█") && l[1].contains("56%"),
+        "{l:?}"
+    );
+    // 已過重置時間的視窗歸零。
+    assert!(l[2].contains("7d") && l[2].contains("  0%"), "{l:?}");
+    let none = text(crate::quota::agent_lines("opencode", None, now));
+    assert_eq!(none.len(), 1);
+    assert!(none[0].starts_with("opencode"));
+}
+
+#[test]
+fn quota_popup_renders_and_header_click_area_is_set() {
+    use termade_core::{Quota, QuotaWindow};
+    let mut app = sample_app(&[]);
+    let now = termade_core::now_millis();
+    app.state.quotas.insert(
+        "claude".into(),
+        Quota {
+            agent: "claude".into(),
+            windows: vec![QuotaWindow {
+                name: "5h".into(),
+                used_percent: 42.0,
+                resets_at_ms: Some(now + 3_600_000),
+            }],
+            reached: false,
+            updated_ms: now,
+        },
+    );
+    app.quota_agents = vec!["claude".into(), "codex".into()];
+    app.mode = Mode::Quota;
+    let out = render(&mut app);
+    assert!(
+        out.contains("claude") && out.contains("codex") && out.contains("42%"),
+        "{out}"
+    );
+    assert!(app.quota_area.width > 0, "標題列額度摘要應可點擊");
+}

@@ -216,7 +216,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         termade_core::tr_noop!("[路徑]  匯出目前 session 樹為 Markdown，寫檔並複製到剪貼簿"),
     ),
     ("help", termade_core::tr_noop!("說明面板：所有按鍵與命令")),
-    ("quota", termade_core::tr_noop!("顯示各 agent 帳號的額度與重置時間")),
+    ("quota", termade_core::tr_noop!("開啟額度面板：已安裝 agent 的各視窗用量與重置時間")),
     (
         "budget",
         termade_core::tr_noop!("<金額>  設定或調高選取 session 的成本上限 (美元)"),
@@ -359,19 +359,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
     match verb.as_str() {
         "help" | "h" | "?" => crate::help::open_help(app),
         "find" => crate::search::open(app, (!rest.is_empty()).then_some(rest)),
-        "quota" => {
-            let now = termade_core::now_millis();
-            app.status = if app.state.quotas.is_empty() {
-                tr!("尚無額度資料 (agent 執行過一個回合後才會有)")
-            } else {
-                app.state
-                    .quotas
-                    .values()
-                    .map(|q| q.summary(now))
-                    .collect::<Vec<_>>()
-                    .join("   |   ")
-            };
-        }
+        "quota" => crate::quota::open(app),
         "model" | "effort" => session_config_command(app, writer, &verb, rest)?,
         "settings" => crate::settings::open(app),
         "set" if rest.is_empty() => crate::settings::open(app),

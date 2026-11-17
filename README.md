@@ -212,7 +212,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 - **額度監視**：
   - 即時解析 Agent 回報的額度狀態 (Claude 的 5 小時／7 天視窗與重置倒數；Codex 的 rateLimits)。
-  - 標題列即時標示最吃緊視窗 (`≥ 70%` 黃色、`≥ 90%` 紅色)；輸入 `:quota` 可查看完整視窗資訊。
+  - 標題列即時標示最吃緊視窗 (`≥ 70%` 黃色、`≥ 90%` 紅色)；輸入 `:quota`、按 `Space s q` 或點擊標題列的額度摘要，會彈出額度面板，以 progress bar 列出本機已安裝 agent 的各視窗用量與重置倒數。
 - **智慧交接 (Handoff)**：
   - 當 Agent 回報額度用完、被限流，或使用者手動要求 (`:handoff <agent> [備註]`)：
   - 舊 Agent 停止執行，工作區未 commit 變更自動 commit；
@@ -371,7 +371,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 - `:queue` / `:unqueue` / `:queue clear` — 檢視、取出或清空待送佇列
 - `:rm` / `:clean` — 移除已結束的 Session / 清除所有已結束項目
 - `:budget <金額>` — 查看或調高當前 Session 的美元預算上限
-- `:quota` — 查詢所有 Agent 帳號的額度視窗與重置倒數
+- `:quota` — 彈出額度面板：已安裝 agent 的各視窗用量 (progress bar) 與重置倒數
 - `:task <標題>` / `:tasks` — 建立新任務 / 切換到任務看板視圖
 - `:task-status <todo|doing|blocked|review|done>` — 修改選取任務的狀態
 - `:host <目標|all>` — 切換多主機視圖篩選 (T29)

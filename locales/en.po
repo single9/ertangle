@@ -1159,7 +1159,7 @@ msgstr "{name} reset"
 msgid "{name} {pct}% (重置 {remaining})"
 msgstr "{name} {pct}% (resets in {remaining})"
 
-#: crates/termade-core/src/lib.rs
+#: crates/termade-core/src/lib.rs crates/termade-tui/src/quota.rs
 msgid "✗額度已滿"
 msgstr "✗quota full"
 
@@ -2143,8 +2143,8 @@ msgid "說明面板：所有按鍵與命令"
 msgstr "Help panel: all keys and commands"
 
 #: crates/termade-tui/src/commands.rs
-msgid "顯示各 agent 帳號的額度與重置時間"
-msgstr "Show quota and reset time for each agent account"
+msgid "開啟額度面板：已安裝 agent 的各視窗用量與重置時間"
+msgstr "Open the quota panel: usage and reset time per window for installed agents"
 
 #: crates/termade-tui/src/commands.rs
 msgid "<金額>  設定或調高選取 session 的成本上限 (美元)"
@@ -2305,10 +2305,6 @@ msgstr "Stop all running sessions of this project (daemon and other projects unt
 #: crates/termade-tui/src/commands.rs
 msgid "關閉共用 daemon (結束所有專案的 session)並離開；有 session 在跑時需 :shutdown! 確認"
 msgstr "Shut down the shared daemon (ending sessions of all projects) and quit; requires :shutdown! while sessions are running"
-
-#: crates/termade-tui/src/commands.rs
-msgid "尚無額度資料 (agent 執行過一個回合後才會有)"
-msgstr "No quota data yet (available after an agent completes a turn)"
 
 #: crates/termade-tui/src/commands.rs
 msgid "用法：:budget <金額> (或 :budget <session> <金額>)"
@@ -2742,7 +2738,7 @@ msgstr " (loading…)"
 msgid "連線網址："
 msgstr "URL: "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/termade-tui/src/draw.rs crates/termade-tui/src/quota.rs
 msgid "按 Esc、Enter、Space 或 q 關閉"
 msgstr "Press Esc, Enter, Space or q to close"
 
@@ -2865,6 +2861,10 @@ msgstr " Settings "
 #: crates/termade-tui/src/draw.rs
 msgid " QR Code "
 msgstr " QR Code "
+
+#: crates/termade-tui/src/draw.rs
+msgid " 額度 "
+msgstr " Quota "
 
 #: crates/termade-tui/src/draw.rs
 msgid " 處理程序 "
@@ -3371,6 +3371,10 @@ msgid "處理程序與 Subagent"
 msgstr "Processes & Subagents"
 
 #: crates/termade-tui/src/menu.rs
+msgid "各 agent 額度 (用量與重置時間)"
+msgstr "Agent quotas (usage and reset times)"
+
+#: crates/termade-tui/src/menu.rs
 msgid "喚醒"
 msgstr "Wake"
 
@@ -3606,6 +3610,30 @@ msgstr " ↑↓/j/k Move · x Terminate (repeat to force) · X Clean all · Esc/
 #: crates/termade-tui/src/ps.rs
 msgid " 處理程序與 Subagent 監控 ({label}) "
 msgstr " Process & Subagent Monitor ({label}) "
+
+#: crates/termade-tui/src/quota.rs
+msgid "尚無額度資料 (只有 claude、codex 會回報，執行過一個回合後才有)"
+msgstr "No quota data yet (only claude and codex report it, after one turn)"
+
+#: crates/termade-tui/src/quota.rs
+msgid "{ago} 前更新"
+msgstr "updated {ago} ago"
+
+#: crates/termade-tui/src/quota.rs
+msgid "已重置"
+msgstr "reset"
+
+#: crates/termade-tui/src/quota.rs
+msgid "{t} 後重置"
+msgstr "resets in {t}"
+
+#: crates/termade-tui/src/quota.rs
+msgid "找不到已安裝的 agent"
+msgstr "No installed agents found"
+
+#: crates/termade-tui/src/quota.rs
+msgid "Agent 額度"
+msgstr "Agent quotas"
 
 #: crates/termade-tui/src/search.rs
 msgid "這個視圖不支援搜尋 (逐字稿與 Diff 才有)"
@@ -3854,6 +3882,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "顯示各 agent 帳號的額度與重置時間"
+#~ msgstr "Show quota and reset time for each agent account"
+
+#~ msgid "尚無額度資料 (agent 執行過一個回合後才會有)"
+#~ msgstr "No quota data yet (available after an agent completes a turn)"
 
 #~ msgid "kill {sig} {pid} 失敗"
 #~ msgstr "kill {sig} {pid} failed"

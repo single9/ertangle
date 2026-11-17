@@ -1157,7 +1157,7 @@ msgstr ""
 msgid "{name} {pct}% (重置 {remaining})"
 msgstr ""
 
-#: crates/termade-core/src/lib.rs
+#: crates/termade-core/src/lib.rs crates/termade-tui/src/quota.rs
 msgid "✗額度已滿"
 msgstr ""
 
@@ -2130,7 +2130,7 @@ msgid "說明面板：所有按鍵與命令"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "顯示各 agent 帳號的額度與重置時間"
+msgid "開啟額度面板：已安裝 agent 的各視窗用量與重置時間"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2291,10 +2291,6 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "關閉共用 daemon (結束所有專案的 session)並離開；有 session 在跑時需 :shutdown! 確認"
-msgstr ""
-
-#: crates/termade-tui/src/commands.rs
-msgid "尚無額度資料 (agent 執行過一個回合後才會有)"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2729,7 +2725,7 @@ msgstr ""
 msgid "連線網址："
 msgstr ""
 
-#: crates/termade-tui/src/draw.rs
+#: crates/termade-tui/src/draw.rs crates/termade-tui/src/quota.rs
 msgid "按 Esc、Enter、Space 或 q 關閉"
 msgstr ""
 
@@ -2851,6 +2847,10 @@ msgstr ""
 
 #: crates/termade-tui/src/draw.rs
 msgid " QR Code "
+msgstr ""
+
+#: crates/termade-tui/src/draw.rs
+msgid " 額度 "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -3358,6 +3358,10 @@ msgid "處理程序與 Subagent"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
+msgid "各 agent 額度 (用量與重置時間)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
 msgid "喚醒"
 msgstr ""
 
@@ -3592,6 +3596,30 @@ msgstr ""
 
 #: crates/termade-tui/src/ps.rs
 msgid " 處理程序與 Subagent 監控 ({label}) "
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "尚無額度資料 (只有 claude、codex 會回報，執行過一個回合後才有)"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "{ago} 前更新"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "已重置"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "{t} 後重置"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "找不到已安裝的 agent"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "Agent 額度"
 msgstr ""
 
 #: crates/termade-tui/src/search.rs

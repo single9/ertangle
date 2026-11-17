@@ -40,6 +40,10 @@ pub(crate) fn handle_mouse(
         MouseEventKind::Down(MouseButton::Left) => {
             let area = app.sessions_area;
             let pos = ratatui::layout::Position::new(mouse.column, mouse.row);
+            if app.quota_area.contains(pos) {
+                crate::quota::open(app);
+                return Ok(());
+            }
             if let Some(&(_, idx)) = app.tab_areas.iter().find(|(r, _)| r.contains(pos)) {
                 if idx < app.session_ids().len() {
                     app.selected = idx;

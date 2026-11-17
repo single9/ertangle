@@ -117,6 +117,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         Mode::Help => draw_help(f, app),
         Mode::Settings => draw_settings(f, app),
         Mode::Qr => draw_qr_modal(f, app),
+        Mode::Quota => crate::quota::draw(f, app),
         Mode::Ps => crate::ps::draw(f, app),
         _ => {}
     }
@@ -774,7 +775,7 @@ fn quota_span(app: &App) -> Span<'static> {
     Span::styled(text, Style::default().fg(color))
 }
 
-pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
+pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let live = app.state.live_sessions().count();
     let cost = app.state.total_cost();
 
@@ -880,6 +881,19 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
         ),
     ]);
 
+    // 額度摘要 (第 4 段) 的位置，給滑鼠點擊開啟 `:quota` 浮層。
+    let before: usize = stats.spans[..3].iter().map(|s| s.width()).sum();
+    let qw = stats.spans[3].width();
+    app.quota_area = if qw > 0 && area.height > 1 {
+        Rect::new(
+            area.x + before as u16,
+            area.y + 1,
+            (qw as u16).min(area.width.saturating_sub(before as u16)),
+            1,
+        )
+    } else {
+        Rect::default()
+    };
     f.render_widget(Paragraph::new(vec![tabs, stats]), area);
 }
 
@@ -1612,6 +1626,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         Mode::Help => tr!(" 說明 "),
         Mode::Settings => tr!(" 設定 "),
         Mode::Qr => tr!(" QR Code "),
+        Mode::Quota => tr!(" 額度 "),
         Mode::Ps => tr!(" 處理程序 "),
         Mode::Prompt => match app
             .selected_id()

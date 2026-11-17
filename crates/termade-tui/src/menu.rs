@@ -126,6 +126,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     Act::Cmd("ps"),
                 ),
                 it(
+                    'q',
+                    termade_core::tr_noop!("各 agent 額度 (用量與重置時間)"),
+                    Act::Cmd("quota"),
+                ),
+                it(
                     'k',
                     termade_core::tr_noop!("結束 session"),
                     Act::Cmd("kill"),

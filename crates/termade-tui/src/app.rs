@@ -38,6 +38,8 @@ pub(crate) enum Mode {
     Settings,
     /// Web 版 QR Code 彈窗。
     Qr,
+    /// `:quota` 額度浮層。
+    Quota,
     /// 背景處理程序與 Subagent 監控浮層 (`:ps` 或 `Space s p`)。
     Ps,
 }
@@ -281,6 +283,10 @@ pub(crate) struct App {
     pub(crate) last_search: String,
     pub(crate) qr_modal: Option<QrModal>,
     pub(crate) ps_modal: Option<crate::ps::PsModal>,
+    /// `:quota` 浮層要列出的 agent (開啟時偵測)。
+    pub(crate) quota_agents: Vec<String>,
+    /// 標題列額度摘要的位置 (點擊開啟 `:quota`)。
+    pub(crate) quota_area: Rect,
     pub(crate) should_quit: bool,
 }
 
@@ -376,6 +382,8 @@ impl App {
             last_search: String::new(),
             qr_modal: None,
             ps_modal: None,
+            quota_agents: Vec::new(),
+            quota_area: Rect::default(),
             should_quit: false,
         }
     }
