@@ -281,6 +281,8 @@ Every structured agent session is automatically injected with a stdio MCP server
 Press `:` to open the command line with `Tab` completion:
 
 - `:spawn [--role <role>] <agent>[:model] <prompt>` — Spawn a new agent session (e.g., `:spawn --role coordinator claude:opus "plan architecture"`)
+- `:playbook [<name> <goal>]` — Launch a multi-agent team playbook (e.g., `:playbook tdd-pair implement login`); no args opens the picker (also `Space s b`)
+- `:export [path]` — Export the selected session (and its sub-session tree) as Markdown to `.termade/exports/<label>-<timestamp>.md` and copy it via OSC 52
 - `:handoff <agent> [note]` — Hand over current session to another agent
 - `:resume [prompt]` — Reconnect to an exited session and continue dialogue
 - `:discard` / `:discard!` — (Diff view) Revert the hunk or entire file at cursor
@@ -311,6 +313,10 @@ termade handoff <session-or-label> --to <agent> [--note "Handoff notes"]
 termade sleep <session> ; termade wake <session>  # Suspend / wake agent processes
 termade cancel <session> ; termade kill <session> # Interrupt turn / kill process
 termade rm <session> [--force]                    # Remove exited session record
+
+# Multi-Agent Playbooks & Collaboration Reports
+termade playbook <name> "<goal>"                  # Launch a whole team from a built-in or custom playbook
+termade export <session> [--tree] [--diff] [-o <path>] # Export a Markdown report (-o omitted prints to stdout)
 
 # Prompts & Queue
 termade prompt [--queue] <session-or-label> "prompt text"
@@ -389,6 +395,22 @@ fallback = ["codex", "claude:sonnet"]
 [collab]
 instructions = true               # Inject termade collaboration rules into agent system prompt
 extra = "Follow guidelines in CONTRIBUTING.md closely"
+
+[playbooks.tdd]
+# Built-in playbooks: coord-review, tdd-pair, dual-review. Same-name settings override built-ins,
+# and enabled = false hides a built-in playbook.
+description = "TDD team (Coordinator + Test Worker + Impl Worker)"
+enabled = true
+[[playbooks.tdd.sessions]]
+label = "coord"
+kind = "claude"
+role = "coordinator"
+prompt = "Coordinate the team to achieve: {{goal}}"
+[[playbooks.tdd.sessions]]
+label = "reviewer"
+kind = "opencode"
+role = "reviewer"
+worktree = true
 
 [git]
 # Git & worktree settings (read only from global config for security)

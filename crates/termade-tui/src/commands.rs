@@ -207,6 +207,14 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         termade_core::tr_noop!("[agent[:model] prompt]  新增 agent；不帶參數開選擇器"),
     ),
     ("new", termade_core::tr_noop!("開選擇器：agent → model → prompt")),
+    (
+        "playbook",
+        termade_core::tr_noop!("[名稱 [目標需求]]  啟動多 Agent 團隊範本；不帶參數開選擇器"),
+    ),
+    (
+        "export",
+        termade_core::tr_noop!("[路徑]  匯出目前 session 樹為 Markdown，寫檔並複製到剪貼簿"),
+    ),
     ("help", termade_core::tr_noop!("說明面板：所有按鍵與命令")),
     ("quota", termade_core::tr_noop!("顯示各 agent 帳號的額度與重置時間")),
     (
@@ -433,6 +441,21 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         "spawn" if rest.is_empty() => crate::menu::start_spawn_picker(app),
         "new" => crate::menu::start_spawn_picker(app),
         "spawn" => submit_spawn(app, writer, rest)?,
+        "playbook" if rest.is_empty() => crate::menu::start_playbook_picker(app),
+        "playbook" => {
+            let mut parts = rest.splitn(2, char::is_whitespace);
+            let name = parts.next().unwrap_or("").to_string();
+            let goal = parts.next().unwrap_or("").trim().to_string();
+            if goal.is_empty() {
+                app.input = format!("playbook {name} ");
+                app.input_cursor = app.input.chars().count();
+                app.mode = Mode::Command;
+                app.status = tr!("輸入目標需求後按 Enter 啟動 playbook {name}", name = name);
+            } else {
+                launch_playbook(app, writer, &name, &goal)?;
+            }
+        }
+        "export" => export_session(app, (!rest.is_empty()).then_some(rest)),
         "kill" => {
             if let Some(id) = app.selected_id() {
                 send(writer, &Request::Kill { session: id })?;
@@ -926,6 +949,128 @@ pub(crate) fn hints_with_native(app: &App) -> Vec<(String, String)> {
         }
     }
     out
+}
+
+/// agent 的可執行檔是否存在於 PATH (啟動前的檢查，避免留下建立到一半的團隊)。
+fn agent_available(kind: &AgentKind) -> bool {
+    let (bin, _) = kind.pty_command();
+    if bin.contains('/') {
+        return std::path::Path::new(bin).is_file();
+    }
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(bin).is_file()))
+}
+
+/// 展開並啟動一個多 Agent 團隊。主 session 先建立，其餘成員用主 session 的標籤當 `parent`
+/// (daemon 會按請求順序處理，因此標籤在子 session 建立前已可解析)。
+pub(crate) fn launch_playbook(
+    app: &mut App,
+    writer: &mut HostRouter,
+    name: &str,
+    goal: &str,
+) -> Result<()> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cfg = termade_daemon::config::Config::load(&termade_daemon::config_dir(), &cwd);
+    let Ok(mut spawns) = cfg.playbook_spawns(name, goal) else {
+        app.status = tr!("未知的 playbook：{name}", name = name);
+        return Ok(());
+    };
+    if spawns.is_empty() {
+        app.status = tr!("playbook {name} 沒有成員", name = name);
+        return Ok(());
+    }
+    for req in &spawns {
+        if !agent_available(&req.kind) {
+            app.status = tr!(
+                "agent {kind} 未安裝；無法啟動 playbook {name}",
+                kind = req.kind.id(),
+                name = name
+            );
+            return Ok(());
+        }
+    }
+    let main_label = spawns[0].label.clone().unwrap_or_default();
+    let count = spawns.len();
+    for (i, mut req) in spawns.drain(..).enumerate() {
+        if i > 0 {
+            req.parent = Some(main_label.clone());
+        }
+        send(writer, &Request::Spawn(req))?;
+    }
+    app.status = tr!(
+        "已從 playbook {name} 啟動 {count} 個 session",
+        name = name,
+        count = count
+    );
+    Ok(())
+}
+
+/// `:export [path]`：把目前選取的 session 樹匯出成 Markdown，寫檔並透過 OSC 52 複製到剪貼簿。
+pub(crate) fn export_session(app: &mut App, path: Option<&str>) {
+    let Some(id) = app.selected_id() else {
+        app.status = tr!("沒有選取的 session");
+        return;
+    };
+    let diff = if app.view == CenterView::Diff
+        && app.diff_session.as_deref() == Some(id.as_str())
+        && !app.diff_raw_lines.is_empty()
+    {
+        Some(app.diff_raw_lines.join("\n"))
+    } else {
+        None
+    };
+    let md = match app.state.export_markdown(&id, true, diff.as_deref()) {
+        Ok(md) => md,
+        Err(e) => {
+            app.status = e;
+            return;
+        }
+    };
+    let target = match path {
+        Some(p) if !p.trim().is_empty() => std::path::PathBuf::from(p.trim()),
+        _ => {
+            let label = app
+                .state
+                .sessions
+                .get(&id)
+                .map(|s| {
+                    s.label
+                        .chars()
+                        .map(|c| {
+                            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                                c
+                            } else {
+                                '-'
+                            }
+                        })
+                        .collect::<String>()
+                })
+                .unwrap_or_else(|| "session".to_string());
+            let ts = termade_core::now_millis() / 1000;
+            std::path::Path::new(".termade")
+                .join("exports")
+                .join(format!("{label}-{ts}.md"))
+        }
+    };
+    if let Some(parent) = target.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            app.status = tr!("建立匯出目錄失敗：{e}", e = e);
+            return;
+        }
+    }
+    if let Err(e) = std::fs::write(&target, &md) {
+        app.status = tr!("寫入匯出檔失敗：{e}", e = e);
+        return;
+    }
+    let path = target.display().to_string();
+    match crate::clipboard::write_clipboard(&md) {
+        Ok(()) => {
+            app.status = tr!("已匯出至 {path} 並複製到剪貼簿", path = path);
+        }
+        Err(e) => {
+            app.status = tr!("已匯出至 {path} (剪貼簿失敗：{e})", path = path, e = e);
+        }
+    }
 }
 
 pub(crate) fn execute_jump(app: &mut App, writer: &mut HostRouter, query: &str) -> Result<()> {

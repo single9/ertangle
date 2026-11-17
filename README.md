@@ -281,6 +281,8 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 按 `:` 進入命令列，支援 `Tab` 自動補齊：
 
 - `:spawn [--role <角色>] <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn --role coordinator claude:opus "規劃架構"`)
+- `:playbook [<名稱> <目標需求>]` — 啟動多 Agent 團隊範本 (如 `:playbook tdd-pair 完成登入功能`)；不帶參數開選擇器 (也可按 `Space s b`)
+- `:export [路徑]` — 匯出目前 Session (含子 Session 樹)為 Markdown 至 `.termade/exports/<label>-<timestamp>.md`，並透過 OSC 52 複製到剪貼簿
 - `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
 - `:resume [prompt]` — 接續已結束或中斷的 Session 對話
 - `:merge [--dry-run] [--resolve]` — 合併選取 Session 的 Worktree 回主分支 (支援自動委派解衝突)
@@ -312,6 +314,10 @@ termade handoff <session-or-label> --to <agent> [--note "交接補充"]
 termade sleep <session> ; termade wake <session>  # 暫停 / 喚醒 Agent 處理程序
 termade cancel <session> ; termade kill <session> # 中斷回合 / 強制中止處理程序
 termade rm <session> [--force]                    # 移除已結束的 session 紀錄
+
+# 多 Agent 團隊範本與協作報告
+termade playbook <name> "<goal>"                  # 展開內建或自訂 playbook，一次啟動整個團隊
+termade export <session> [--tree] [--diff] [-o <path>] # 匯出 Markdown 報告 (-o 省略則印到 stdout)
 
 # 提示詞與佇列
 termade prompt [--queue] <session-or-label> "提示詞"
@@ -391,6 +397,21 @@ fallback = ["codex", "claude:sonnet"]
 [collab]
 instructions = true               # 是否自動向 Agent 注入 termade 協作工具使用規範
 extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
+
+[playbooks.tdd]
+# 內建範本：coord-review、tdd-pair、dual-review；同名設定會覆寫內建範本，enabled = false 可停用
+description = "TDD 協作團隊 (Coordinator + Test Worker + Impl Worker)"
+enabled = true
+[[playbooks.tdd.sessions]]
+label = "coord"
+kind = "claude"
+role = "coordinator"
+prompt = "請協調團隊完成以下目標：{{goal}}"
+[[playbooks.tdd.sessions]]
+label = "reviewer"
+kind = "opencode"
+role = "reviewer"
+worktree = true
 
 [git]
 # Git 與 worktree 設定 (安全起見只認全域設定，專案層不可覆寫)

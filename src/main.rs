@@ -5,7 +5,7 @@
 //! * `termade mcp`：stdio MCP server (供 agent 子處理程序呼叫協作原語)。
 //! * M2 協作：`whoami`、`peers`/`sessions`、`spawn`、`prompt`、`send`、`inbox`、`wait`、`ask`、`tasks`、`task`、`task-update`、`status`、`artifact`
 //! * M3 工作區與審查：`worktrees`、`diff`、`review`、`merge`、`pr`、`gc`
-//! * M4 打磨：`sleep`、`wake`、`cost`、`replay`
+//! * M4 打磨：`sleep`、`wake`、`cost`、`replay`、`export`、`playbook`
 //! * Shell 補全：`completions <bash|zsh|fish>` (隱藏的 `__complete sessions` 供補全腳本查 session)
 
 use anyhow::Result;
@@ -13,7 +13,9 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod cmd;
-use cmd::{bus::*, completions::*, cost::*, daemon::*, session::*, task::*, worktree::*};
+use cmd::{
+    bus::*, completions::*, cost::*, daemon::*, export::*, session::*, task::*, worktree::*,
+};
 
 #[derive(Parser)]
 #[command(
@@ -385,6 +387,27 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// 依照內建或自訂的團隊範本一次啟動多 Agent 協作團隊
+    Playbook {
+        /// 範本名稱：coord-review / tdd-pair / dual-review，或 config.toml 自訂的名稱
+        name: String,
+        /// 寫入各成員 prompt 中 `{{goal}}` 的目標需求
+        goal: Vec<String>,
+    },
+    /// 把 session (與其子 Session 樹)匯出為 Markdown 協作報告
+    Export {
+        /// Session id 或標籤
+        session: String,
+        /// 包含整個子 Session 階層
+        #[arg(long)]
+        tree: bool,
+        /// 在報告末尾附上該 session worktree 的 git diff
+        #[arg(long)]
+        diff: bool,
+        /// 輸出檔案路徑 (省略則印到 stdout)
+        #[arg(short = 'o', long)]
+        output: Option<PathBuf>,
+    },
     /// 關閉常駐的 daemon 與所有受管 agent 子處理程序
     Shutdown,
     /// 產生 shell 補全腳本並印到 stdout (bash / zsh / fish)
@@ -574,6 +597,13 @@ fn main() -> Result<()> {
             all,
             json,
         } => cmd_replay(since, file, all, json),
+        Cmd::Playbook { name, goal } => cmd_playbook(name, goal),
+        Cmd::Export {
+            session,
+            tree,
+            diff,
+            output,
+        } => cmd_export(session, tree, diff, output),
         Cmd::Shutdown => cmd_shutdown(),
         Cmd::Completions { shell } => cmd_completions(shell),
         Cmd::Complete { .. } => cmd_complete_sessions(),

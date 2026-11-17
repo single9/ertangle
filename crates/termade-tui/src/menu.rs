@@ -91,6 +91,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     Act::Spawn,
                 ),
                 it(
+                    'b',
+                    termade_core::tr_noop!("啟動多 Agent 團隊範本 (playbook)"),
+                    Act::Cmd("playbook"),
+                ),
+                it(
                     'h',
                     termade_core::tr_noop!("交接給其他 agent (額度用完時)"),
                     Act::Handoff,
@@ -290,6 +295,8 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
 pub(crate) enum PickStage {
     Agent,
     Model(AgentKind),
+    /// 選擇多 Agent 團隊範本。
+    Playbook,
 }
 
 pub(crate) struct Picker {
@@ -600,6 +607,33 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
     app.mode = Mode::Pick;
 }
 
+/// `Space s b`／`:playbook`：列出內建與自訂團隊範本，選中後再輸入目標需求。
+pub(crate) fn start_playbook_picker(app: &mut App) {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cfg = termade_daemon::config::Config::load(&termade_daemon::config_dir(), &cwd);
+    let items: Vec<(String, String)> = cfg
+        .playbooks()
+        .into_iter()
+        .map(|(name, pb)| (format!("{name}  ({})", pb.description), name))
+        .collect();
+    if items.is_empty() {
+        app.status = tr!("沒有可用的 playbook");
+        return;
+    }
+    app.picker = Some(Picker {
+        stage: PickStage::Playbook,
+        title: tr!("選擇團隊範本 (選完輸入目標需求)"),
+        items,
+        filter: String::new(),
+        cursor: 0,
+        pending: None,
+        loading: false,
+        group_effort: false,
+        variants: Default::default(),
+    });
+    app.mode = Mode::Pick;
+}
+
 fn finish_picker(
     app: &mut App,
     writer: &mut HostRouter,
@@ -746,6 +780,17 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         .and_then(|m| p.variants.get(m).cloned())
                         .unwrap_or_default();
                     finish_picker(app, writer, kind, model, None)?;
+                }
+                PickStage::Playbook => {
+                    let Some(name) = chosen.filter(|n| !n.is_empty()) else {
+                        app.status = tr!("沒有符合的 playbook");
+                        return Ok(());
+                    };
+                    app.picker = None;
+                    app.mode = Mode::Command;
+                    app.input = format!("playbook {name} ");
+                    app.input_cursor = app.input.chars().count();
+                    app.status = tr!("輸入目標需求後按 Enter 啟動 playbook {name}", name = name);
                 }
             }
         }

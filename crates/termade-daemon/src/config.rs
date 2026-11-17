@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use termade_core::{AgentKind, PermissionPolicy, Role};
+use termade_protocol::SpawnRequest;
 pub use toml::Value as TomlValue;
 use tr::tr;
 
@@ -192,6 +193,120 @@ fn default_true() -> bool {
     true
 }
 
+/// 一個 Playbook 成員：展開後就是一個 `SpawnRequest`。
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PlaybookMember {
+    /// 成員標籤；省略時用 `playbook 名稱/角色`。
+    pub label: String,
+    /// agent id：`opencode` / `claude` / `codex` / `antigravity`。
+    pub kind: String,
+    /// `coordinator` / `worker` / `reviewer`。
+    pub role: String,
+    /// 是否用獨立 worktree。
+    pub worktree: bool,
+    /// 開場 prompt；`{{goal}}` 會被替換成使用者輸入的目標。
+    pub prompt: Option<String>,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+}
+
+/// 一個多 Agent 團隊範本 ([playbooks.<name>])。
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PlaybookConfig {
+    pub description: String,
+    /// TOML 裡寫成 `[[playbooks.<name>.sessions]]`。
+    pub sessions: Vec<PlaybookMember>,
+    /// `false` 時從可用清單中移除 (可用來隱藏內建範本)。
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+/// 開箱即用的 3 個團隊範本。使用者可用同名 `[playbooks.<name>]` 覆寫。
+pub fn builtin_playbooks() -> BTreeMap<String, PlaybookConfig> {
+    let member = |label: &str, kind: &str, role: &str, prompt: &str| PlaybookMember {
+        label: label.to_string(),
+        kind: kind.to_string(),
+        role: role.to_string(),
+        worktree: false,
+        prompt: Some(prompt.to_string()),
+        model: None,
+        effort: None,
+    };
+    BTreeMap::from([
+        (
+            "coord-review".to_string(),
+            PlaybookConfig {
+                description: tr!("協調者拆解任務，完成後由審查者把關"),
+                enabled: true,
+                sessions: vec![
+                    member(
+                        "coord",
+                        "claude",
+                        "coordinator",
+                        "請協調團隊完成以下目標：{{goal}}",
+                    ),
+                    member(
+                        "reviewer",
+                        "codex",
+                        "reviewer",
+                        "請審查以下目標的實作成果並列出問題：{{goal}}",
+                    ),
+                ],
+            },
+        ),
+        (
+            "tdd-pair".to_string(),
+            PlaybookConfig {
+                description: tr!("測試與實作配對協作：先寫失敗測試，再讓它通過"),
+                enabled: true,
+                sessions: vec![
+                    member(
+                        "coord",
+                        "claude",
+                        "coordinator",
+                        "請協調測試與實作工程師完成以下目標：{{goal}}",
+                    ),
+                    member(
+                        "test",
+                        "opencode",
+                        "worker",
+                        "先針對以下目標撰寫會失敗的測試：{{goal}}",
+                    ),
+                    member(
+                        "impl",
+                        "claude",
+                        "worker",
+                        "請實作以下目標並讓所有測試通過：{{goal}}",
+                    ),
+                ],
+            },
+        ),
+        (
+            "dual-review".to_string(),
+            PlaybookConfig {
+                description: tr!("兩個不同 agent 平行審查同一份變更"),
+                enabled: true,
+                sessions: vec![
+                    member(
+                        "reviewer-a",
+                        "claude",
+                        "reviewer",
+                        "請審查以下變更的正確性與邊界情況：{{goal}}",
+                    ),
+                    member(
+                        "reviewer-b",
+                        "codex",
+                        "reviewer",
+                        "請從安全、效能與可維護性角度審查以下變更：{{goal}}",
+                    ),
+                ],
+            },
+        ),
+    ])
+}
+
 /// 遠端主機連線設定 ([remotes.<name>])。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteHostCfg {
@@ -334,6 +449,8 @@ pub struct Config {
     pub web: WebCfg,
     /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
     pub remotes: BTreeMap<String, RemoteHostCfg>,
+    /// 使用者自訂的多 Agent 團隊範本；與內建範本合併，同名者覆寫。
+    pub playbooks: BTreeMap<String, PlaybookConfig>,
 }
 
 /// 解析後、可直接餵給 `SessionSpec` 的結果。
@@ -493,7 +610,94 @@ impl Config {
         if local.tui.notify_min_turn_secs.is_some() {
             out.tui.notify_min_turn_secs = local.tui.notify_min_turn_secs;
         }
+        for (name, pb) in local.playbooks {
+            out.playbooks.insert(name, pb);
+        }
         out
+    }
+
+    /// 內建範本與使用者自訂範本的合併結果；`enabled = false` 的範本會被移除。
+    pub fn playbooks(&self) -> BTreeMap<String, PlaybookConfig> {
+        let mut out = builtin_playbooks();
+        for (name, pb) in &self.playbooks {
+            if pb.enabled {
+                out.insert(name.clone(), pb.clone());
+            } else {
+                out.remove(name);
+            }
+        }
+        out
+    }
+
+    /// 把 `name` 範本展開成一串 `SpawnRequest`：第一個是主 Session (coordinator，
+    /// 或清單中第一個 `role == coordinator` 的成員)，呼叫端需把其餘成員的 `parent`
+    /// 指向主 Session。`{{goal}}` 會代入 `goal`。
+    pub fn playbook_spawns(&self, name: &str, goal: &str) -> Result<Vec<SpawnRequest>, String> {
+        let goal = goal.trim();
+        if goal.is_empty() {
+            return Err(tr!("目標需求不可為空"));
+        }
+        let pbs = self.playbooks();
+        let pb = pbs.get(name).ok_or_else(|| {
+            let list = pbs.keys().cloned().collect::<Vec<_>>().join(", ");
+            tr!(
+                "未知的 playbook：{name} (可用：{list})",
+                name = name,
+                list = list
+            )
+        })?;
+        if pb.sessions.is_empty() {
+            return Err(tr!("playbook {name} 沒有成員", name = name));
+        }
+        let coordinator = pb
+            .sessions
+            .iter()
+            .position(|m| Role::parse(&m.role) == Role::Coordinator)
+            .unwrap_or(0);
+        let mut ordered: Vec<&PlaybookMember> = vec![&pb.sessions[coordinator]];
+        ordered.extend(
+            pb.sessions
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != coordinator)
+                .map(|(_, m)| m),
+        );
+
+        ordered
+            .into_iter()
+            .map(|m| {
+                let kind = AgentKind::parse(&m.kind)
+                    .ok_or_else(|| tr!("未知的 agent：{k}", k = m.kind))?;
+                let role = Role::parse(&m.role);
+                let label = if m.label.is_empty() {
+                    format!("{name}/{}", role.id())
+                } else {
+                    format!("{name}/{}", m.label)
+                };
+                let prompt = m
+                    .prompt
+                    .as_deref()
+                    .unwrap_or("{{goal}}")
+                    .replace("{{goal}}", goal);
+                Ok(SpawnRequest {
+                    kind,
+                    cwd: None,
+                    label: Some(label),
+                    role,
+                    prompt: Some(prompt),
+                    worktree: m.worktree,
+                    transport: Default::default(),
+                    permission: None,
+                    parent: None,
+                    model: m.model.clone(),
+                    effort: m.effort.clone(),
+                    attachments: Vec::new(),
+                    inherit_from: None,
+                    args: Vec::new(),
+                    budget_usd: None,
+                })
+            })
+            .collect()
     }
 
     /// 把單一設定值寫進 `path` (不存在就建立)：`table` 是表格路徑 (如 `["agents","claude"]`)，
@@ -1053,5 +1257,59 @@ pre_merge_command = "rm -rf /"
         let local = Config::parse(local_src).unwrap();
         let merged = Config::layered(global, local);
         assert_eq!(merged.git.pre_merge_command.as_deref(), Some("cargo test"));
+    }
+
+    #[test]
+    fn playbooks_merge_builtins_and_expand_goal_into_spawn_requests() {
+        let src = r#"
+[playbooks.tdd]
+description = "自訂 TDD 團隊"
+[[playbooks.tdd.sessions]]
+label = "coord"
+kind = "claude"
+role = "coordinator"
+prompt = "協調：{{goal}}"
+[[playbooks.tdd.sessions]]
+label = "reviewer"
+kind = "opencode"
+role = "reviewer"
+worktree = true
+
+[playbooks.coord-review]
+enabled = false
+"#;
+        let cfg = Config::parse(src).unwrap();
+        let merged = Config::layered(Config::default(), cfg);
+        let pbs = merged.playbooks();
+        assert_eq!(pbs.len(), 3); // 3 個內建，其中 coord-review 被停用，tdd 為新增
+        assert!(pbs.contains_key("tdd"));
+        assert!(!pbs.contains_key("coord-review"));
+        assert!(pbs.contains_key("dual-review"));
+        assert_eq!(pbs["tdd"].description, "自訂 TDD 團隊");
+
+        let spawns = merged.playbook_spawns("tdd", "  修好登入功能  ").unwrap();
+        assert_eq!(spawns.len(), 2);
+        assert_eq!(spawns[0].role, Role::Coordinator);
+        assert_eq!(spawns[0].label.as_deref(), Some("tdd/coord"));
+        assert_eq!(spawns[0].prompt.as_deref(), Some("協調：修好登入功能"));
+        assert_eq!(spawns[1].role, Role::Reviewer);
+        assert_eq!(spawns[1].label.as_deref(), Some("tdd/reviewer"));
+        assert!(spawns[1].worktree);
+        // 沒有 prompt 的成員直接以目標需求開場。
+        assert_eq!(spawns[1].prompt.as_deref(), Some("修好登入功能"));
+
+        // 內建範本依角色排序：coordinator 永遠是第一個。
+        let builtin = Config::default()
+            .playbook_spawns("tdd-pair", "寫功能")
+            .unwrap();
+        assert_eq!(builtin.len(), 3);
+        assert_eq!(builtin[0].role, Role::Coordinator);
+        assert!(builtin[0].prompt.as_deref().unwrap().contains("寫功能"));
+        assert!(builtin
+            .iter()
+            .all(|s| !s.prompt.as_deref().unwrap().contains("{{goal}}")));
+
+        assert!(merged.playbook_spawns("nope", "x").is_err());
+        assert!(merged.playbook_spawns("tdd", "  ").is_err());
     }
 }

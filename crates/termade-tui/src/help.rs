@@ -115,6 +115,14 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 ":spawn",
                 tr_noop!("啟動 agent，如 :spawn --role coord claude:opus 做某事；不帶參數開選擇器"),
             ),
+            (
+                ":playbook",
+                tr_noop!("啟動多 Agent 團隊範本，如 :playbook tdd-pair 完成登入功能；不帶參數開選擇器 (Space s b)"),
+            ),
+            (
+                ":export",
+                tr_noop!("匯出目前 session 樹為 Markdown 至 .termade/exports/ 並複製到剪貼簿；可指定路徑"),
+            ),
             (":handoff", tr_noop!("交接給另一個 agent，如 :handoff codex 補充說明")),
             (
                 ":resume",

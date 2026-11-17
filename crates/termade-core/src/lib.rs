@@ -1307,6 +1307,201 @@ impl State {
             .cloned()
             .collect()
     }
+
+    /// 把 session (以及選擇性的整棵子 session 樹)匯出成可直接貼到 PR／Issue 的 Markdown 報告。
+    ///
+    /// 包含元資料、子 session 階層、關聯任務、逐字稿與選填的 git diff；
+    /// 整份輸出都會經過 [`redact_secrets`] 遮罩，避免貼到外部服務時外洩金鑰。
+    pub fn export_markdown(
+        &self,
+        root_id: &str,
+        include_tree: bool,
+        diff: Option<&str>,
+    ) -> Result<String, String> {
+        let root = self
+            .resolve_session_id(root_id)
+            .ok_or_else(|| tr!("找不到 session：{id}", id = root_id))?;
+        let root_session = self
+            .sessions
+            .get(&root)
+            .ok_or_else(|| tr!("找不到 session：{id}", id = root))?;
+
+        let mut members: Vec<&Session> = if include_tree {
+            let mut v: Vec<&Session> = self
+                .tree_sessions(&root)
+                .iter()
+                .filter_map(|id| self.sessions.get(id))
+                .collect();
+            v.sort_by_key(|s| (self.session_depth(&s.id), s.created_ms, s.id.clone()));
+            v
+        } else {
+            vec![root_session]
+        };
+        // 根 session 永遠排第一，即使子 session 的建立時間較早。
+        if let Some(pos) = members.iter().position(|s| s.id == root) {
+            let root_ref = members.remove(pos);
+            members.insert(0, root_ref);
+        }
+
+        let member_ids: Vec<&str> = members.iter().map(|s| s.id.as_str()).collect();
+        let total_usd: f64 = members.iter().map(|s| s.cost.usd).sum();
+        let total_in: u64 = members.iter().map(|s| s.cost.input_tokens).sum();
+        let total_out: u64 = members.iter().map(|s| s.cost.output_tokens).sum();
+
+        let mut out = String::new();
+        out.push_str(&tr!("# 協作報告：{label}\n\n", label = root_session.label));
+
+        out.push_str(&format!("## {}\n\n", tr!("元資料")));
+        out.push_str(&format!("| {} | {} |\n", tr!("項目"), tr!("值")));
+        out.push_str("| --- | --- |\n");
+        let row = |k: String, v: String| format!("| {k} | {v} |\n");
+        out.push_str(&row(tr!("標籤"), root_session.label.clone()));
+        out.push_str(&row(
+            tr!("Agent / Model"),
+            format!(
+                "{}{}{}",
+                root_session.kind.id(),
+                root_session
+                    .model
+                    .as_deref()
+                    .map(|m| format!(" / {m}"))
+                    .unwrap_or_default(),
+                root_session
+                    .effort
+                    .as_deref()
+                    .map(|e| format!(" (effort: {e})"))
+                    .unwrap_or_default()
+            ),
+        ));
+        out.push_str(&row(tr!("角色"), root_session.role.id().to_string()));
+        out.push_str(&row(
+            tr!("分支"),
+            root_session.branch.clone().unwrap_or_else(|| "-".into()),
+        ));
+        out.push_str(&row(
+            tr!("狀態"),
+            format!(
+                "{} {}",
+                root_session.status.glyph(),
+                status_text(root_session.status)
+            ),
+        ));
+        out.push_str(&row(
+            tr!("總花費"),
+            format!(
+                "${total_usd:.4} ({} in / {} out tokens)",
+                total_in, total_out
+            ),
+        ));
+        out.push('\n');
+
+        if include_tree && members.len() > 1 {
+            out.push_str(&format!("## {}\n\n", tr!("子 Session 階層")));
+            out.push_str(&format!(
+                "| {} | {} | {} | {} | {} |\n",
+                tr!("標籤"),
+                tr!("角色"),
+                tr!("Agent / Model"),
+                tr!("狀態"),
+                tr!("花費")
+            ));
+            out.push_str("| --- | --- | --- | --- | --- |\n");
+            for s in &members {
+                let indent = "  ".repeat(self.session_depth(&s.id));
+                out.push_str(&format!(
+                    "| {indent}{} | {} | {}{} | {} {} | ${:.4} |\n",
+                    s.label,
+                    s.role.id(),
+                    s.kind.id(),
+                    s.model
+                        .as_deref()
+                        .map(|m| format!(" / {m}"))
+                        .unwrap_or_default(),
+                    s.status.glyph(),
+                    status_text(s.status),
+                    s.cost.usd,
+                ));
+            }
+            out.push('\n');
+        }
+
+        let related: Vec<&Task> = self
+            .tasks
+            .values()
+            .filter(|t| {
+                t.assignee
+                    .as_deref()
+                    .is_some_and(|id| member_ids.contains(&id))
+                    || t.created_by
+                        .as_deref()
+                        .is_some_and(|id| member_ids.contains(&id))
+            })
+            .collect();
+        if !related.is_empty() {
+            out.push_str(&format!("## {}\n\n", tr!("關聯任務")));
+            out.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                tr!("編號"),
+                tr!("標題"),
+                tr!("狀態"),
+                tr!("負責人")
+            ));
+            out.push_str("| --- | --- | --- | --- |\n");
+            for t in related {
+                let assignee = t.assignee.as_deref().and_then(|id| self.sessions.get(id));
+                out.push_str(&format!(
+                    "| {} | {} | {} | {} |\n",
+                    t.id,
+                    t.title,
+                    t.status.id(),
+                    assignee.map(|s| s.label.as_str()).unwrap_or("-")
+                ));
+            }
+            out.push('\n');
+        }
+
+        out.push_str(&format!("## {}\n\n", tr!("對話與執行紀錄")));
+        for s in &members {
+            out.push_str(&format!("### {} ({})\n\n", s.label, s.role.id()));
+            let lines = self.transcripts.get(&s.id);
+            match lines {
+                Some(lines) if !lines.is_empty() => {
+                    out.push_str("```text\n");
+                    // 成功的工具結果在逐字稿裡只是噪音；失敗 (`✗`) 與使用者提示 (`❯`) 保留。
+                    for line in lines.iter().filter(|l| !l.starts_with("  ✓")) {
+                        out.push_str(line);
+                        out.push('\n');
+                    }
+                    out.push_str("```\n\n");
+                }
+                _ => {
+                    out.push_str(&format!("_{}_\n\n", tr!("(尚無逐字稿)")));
+                }
+            }
+        }
+
+        if let Some(diff) = diff.filter(|d| !d.trim().is_empty()) {
+            out.push_str(&format!(
+                "## Git Diff\n\n```diff\n{}\n```\n",
+                diff.trim_end()
+            ));
+        }
+
+        Ok(redact_secrets(&out))
+    }
+}
+
+/// `SessionStatus` 的人類可讀文字 (報告用)。
+fn status_text(status: SessionStatus) -> String {
+    match status {
+        SessionStatus::Starting => tr!("啟動中"),
+        SessionStatus::Idle => tr!("閒置"),
+        SessionStatus::Busy => tr!("執行中"),
+        SessionStatus::WaitingApproval => tr!("等待核准"),
+        SessionStatus::Sleeping => tr!("休眠"),
+        SessionStatus::Exited => tr!("已結束"),
+        SessionStatus::Failed => tr!("失敗"),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2205,6 +2400,93 @@ pub(crate) mod tests {
         ));
         assert_eq!(st.sessions["s1"].bg_procs.len(), 1);
         assert_eq!(st.sessions["s1"].bg_procs[0].pid, 1234);
+    }
+
+    #[test]
+    fn export_markdown_includes_tree_tasks_cost_diff_and_redacts_secrets() {
+        let mut st = State::new();
+        let mut root = sample_session("root");
+        root.label = "coord/main".into();
+        root.role = Role::Coordinator;
+        root.branch = Some("termade/main".into());
+        root.status = SessionStatus::Exited;
+        root.cost = Cost {
+            usd: 1.25,
+            input_tokens: 1000,
+            output_tokens: 200,
+        };
+        st.apply(&rec(1, Event::SessionStarted { session: root }));
+
+        for (id, label, usd) in [("c1", "worker/impl", 0.5), ("c2", "reviewer/code", 0.25)] {
+            let mut child = sample_session(id);
+            child.label = label.into();
+            child.parent = Some("root".into());
+            child.role = if id == "c2" {
+                Role::Reviewer
+            } else {
+                Role::Worker
+            };
+            child.status = SessionStatus::Exited;
+            child.cost = Cost {
+                usd,
+                input_tokens: 100,
+                output_tokens: 20,
+            };
+            st.apply(&rec(2, Event::SessionStarted { session: child }));
+        }
+        st.apply(&rec(
+            3,
+            Event::TaskChanged {
+                task: Task {
+                    id: "task_1".into(),
+                    title: "完成匯出功能".into(),
+                    detail: String::new(),
+                    status: TaskStatus::Done,
+                    assignee: Some("c1".into()),
+                    created_by: Some("root".into()),
+                    depends_on: vec![],
+                    updated_ms: 0,
+                },
+            },
+        ));
+        st.apply(&rec(
+            4,
+            Event::UserPrompt {
+                session: "root".into(),
+                text: "API key: sk-1234567890abcdefghijklmnop".into(),
+            },
+        ));
+        st.apply(&rec(
+            5,
+            Event::Output {
+                session: "c1".into(),
+                text: "done".into(),
+            },
+        ));
+
+        let md = st
+            .export_markdown("coord/main", true, Some("diff --git a/x b/x\n+new"))
+            .unwrap();
+        assert!(md.starts_with("# 協作報告：coord/main"));
+        assert!(md.contains("子 Session 階層"), "{md}");
+        assert!(
+            md.contains("worker/impl") && md.contains("reviewer/code"),
+            "{md}"
+        );
+        assert!(md.contains("$2.0000"), "{md}"); // 1.25 + 0.5 + 0.25
+        assert!(md.contains("1200 in / 240 out"), "{md}");
+        assert!(md.contains("task_1") && md.contains("完成匯出功能"), "{md}");
+        assert!(md.contains("```diff") && md.contains("+new"), "{md}");
+        assert!(md.contains("sk-<REDACTED>"), "{md}");
+        assert!(!md.contains("sk-1234567890abcdefghijklmnop"), "{md}");
+
+        // 不含子樹時只有根 session 的任務與花費。
+        let md_flat = st.export_markdown("root", false, None).unwrap();
+        assert!(!md_flat.contains("子 Session 階層"), "{md_flat}");
+        assert!(!md_flat.contains("### worker/impl"), "{md_flat}");
+        assert!(md_flat.contains("$1.2500"), "{md_flat}");
+
+        assert!(st.export_markdown("nope", true, None).is_err());
     }
 }
 

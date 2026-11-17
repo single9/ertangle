@@ -61,7 +61,7 @@ msgid "未知的 agent：{kind} (opencode/claude/codex/antigravity，可加 `:mo
 ""
 msgstr ""
 
-#: src/cmd/cost.rs src/cmd/cost.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/task.rs
+#: src/cmd/cost.rs src/cmd/cost.rs src/cmd/export.rs src/cmd/export.rs src/cmd/export.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/task.rs
 msgid "未取得快照"
 msgstr ""
 
@@ -137,8 +137,40 @@ msgstr ""
 msgid "掃描 QR Code 連線 Web 版："
 msgstr ""
 
+#: src/cmd/export.rs crates/termade-daemon/src/config.rs crates/termade-tui/src/commands.rs
+msgid "playbook {name} 沒有成員"
+msgstr ""
+
+#: src/cmd/export.rs crates/termade-tui/src/commands.rs
+msgid "agent {kind} 未安裝；無法啟動 playbook {name}"
+msgstr ""
+
+#: src/cmd/export.rs
+msgid "無法取得新建立的 session id"
+msgstr ""
+
+#: src/cmd/export.rs
+msgid "已建立 {id} ({label})"
+msgstr ""
+
+#: src/cmd/export.rs
+msgid "已從 playbook {name} 啟動 {count} 個 session (主 session：{id})"
+msgstr ""
+
+#: src/cmd/export.rs
+msgid "找不到 session：{session}"
+msgstr ""
+
+#: src/cmd/export.rs
+msgid "已匯出至 {path}"
+msgstr ""
+
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "Session id 或標籤"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -159,6 +191,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "以前景方式執行 daemon"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "依照內建或自訂的團隊範本一次啟動多 Agent 協作團隊"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -195,6 +231,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "包含已輪替的舊紀錄檔 (events.jsonl.1 等；預設只讀目前活躍檔)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "包含整個子 Session 階層"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -242,6 +282,10 @@ msgid "回覆的訊息 id (形成對話串)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "在報告末尾附上該 session worktree 的 git diff"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "在獨立的 git worktree 中執行 (M3)"
 msgstr ""
 
@@ -251,6 +295,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "寄件者 session id (預設讀 TERMADE_SESSION 環境變數)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "寫入各成員 prompt 中 `{{goal}}` 的目標需求"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -303,6 +351,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "從清單移除已結束的 session (有 worktree 分支時需已合併，或加 --force)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "把 session (與其子 Session 樹)匯出為 Markdown 協作報告"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -430,6 +482,10 @@ msgid "種類：code / pr / doc / test / run (預設 code)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "範本名稱：coord-review / tdd-pair / dual-review，或 config.toml 自訂的名稱"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "終止指定 session 的背景子處理程序 (不影響 agent 本體)"
 msgstr ""
 
@@ -475,6 +531,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "讓 session 休眠 (停止處理程序但保留對話紀錄，可隨時喚醒)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "輸出檔案路徑 (省略則印到 stdout)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -911,8 +971,110 @@ msgstr ""
 msgid " …(+{extra} 行)"
 msgstr ""
 
-#: crates/termade-core/src/lib.rs crates/termade-tui/src/notify.rs
+#: crates/termade-core/src/lib.rs crates/termade-core/src/lib.rs crates/termade-tui/src/notify.rs
 msgid "失敗"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-core/src/lib.rs
+msgid "找不到 session：{id}"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "# 協作報告：{label}\n"
+"\n"
+""
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "元資料"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "項目"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "值"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-core/src/lib.rs
+msgid "標籤"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-core/src/lib.rs
+msgid "Agent / Model"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-core/src/lib.rs
+msgid "角色"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "分支"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-core/src/lib.rs crates/termade-core/src/lib.rs
+msgid "狀態"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "總花費"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "子 Session 階層"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "花費"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "關聯任務"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "編號"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "標題"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "負責人"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "對話與執行紀錄"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "(尚無逐字稿)"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "啟動中"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "閒置"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-tui/src/app.rs
+msgid "執行中"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-tui/src/notify.rs
+msgid "等待核准"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs crates/termade-tui/src/menu.rs
+msgid "休眠"
+msgstr ""
+
+#: crates/termade-core/src/lib.rs
+msgid "已結束"
 msgstr ""
 
 #: crates/termade-core/src/lib.rs
@@ -1017,6 +1179,30 @@ msgstr ""
 
 #: crates/termade-daemon/src/config.rs
 msgid "model {m} 不在免確認清單 ({list})"
+msgstr ""
+
+#: crates/termade-daemon/src/config.rs
+msgid "協調者拆解任務，完成後由審查者把關"
+msgstr ""
+
+#: crates/termade-daemon/src/config.rs
+msgid "測試與實作配對協作：先寫失敗測試，再讓它通過"
+msgstr ""
+
+#: crates/termade-daemon/src/config.rs
+msgid "兩個不同 agent 平行審查同一份變更"
+msgstr ""
+
+#: crates/termade-daemon/src/config.rs
+msgid "目標需求不可為空"
+msgstr ""
+
+#: crates/termade-daemon/src/config.rs
+msgid "未知的 playbook：{name} (可用：{list})"
+msgstr ""
+
+#: crates/termade-daemon/src/config.rs
+msgid "未知的 agent：{k}"
 msgstr ""
 
 #: crates/termade-daemon/src/config.rs
@@ -1716,10 +1902,6 @@ msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr ""
 
 #: crates/termade-tui/src/app.rs
-msgid "執行中"
-msgstr ""
-
-#: crates/termade-tui/src/app.rs
 msgid "工具：展開 (每筆呼叫都顯示，按 O 摺疊)"
 msgstr ""
 
@@ -1807,7 +1989,7 @@ msgstr ""
 msgid "已送出 prompt"
 msgstr ""
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs crates/termade-tui/src/ps.rs
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs crates/termade-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr ""
 
@@ -1845,6 +2027,14 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "開選擇器：agent → model → prompt"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "[名稱 [目標需求]]  啟動多 Agent 團隊範本；不帶參數開選擇器"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "[路徑]  匯出目前 session 樹為 Markdown，寫檔並複製到剪貼簿"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2035,6 +2225,10 @@ msgstr ""
 msgid "已要求交接給 {kind}"
 msgstr ""
 
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
+msgid "輸入目標需求後按 Enter 啟動 playbook {name}"
+msgstr ""
+
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
 msgid "已送出結束"
 msgstr ""
@@ -2157,6 +2351,30 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "(agent 原生指令，原樣轉發)"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "未知的 playbook：{name}"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "已從 playbook {name} 啟動 {count} 個 session"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "建立匯出目錄失敗：{e}"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "寫入匯出檔失敗：{e}"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "已匯出至 {path} 並複製到剪貼簿"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "已匯出至 {path} (剪貼簿失敗：{e})"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2808,6 +3026,14 @@ msgid "啟動 agent，如 :spawn --role coord claude:opus 做某事；不帶參�
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
+msgid "啟動多 Agent 團隊範本，如 :playbook tdd-pair 完成登入功能；不帶參數開選擇器 (Space s b)"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "匯出目前 session 樹為 Markdown 至 .termade/exports/ 並複製到剪貼簿；可指定路徑"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
 msgid "交接給另一個 agent，如 :handoff codex 補充說明"
 msgstr ""
 
@@ -2992,6 +3218,10 @@ msgid "新增 agent… (選 agent 與 model)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
+msgid "啟動多 Agent 團隊範本 (playbook)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
 msgid "接續已結束的 session (接回原對話)"
 msgstr ""
 
@@ -3005,10 +3235,6 @@ msgstr ""
 
 #: crates/termade-tui/src/menu.rs
 msgid "處理程序與 Subagent"
-msgstr ""
-
-#: crates/termade-tui/src/menu.rs
-msgid "休眠"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
@@ -3108,6 +3334,14 @@ msgid "選擇 agent"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
+msgid "沒有可用的 playbook"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
+msgid "選擇團隊範本 (選完輸入目標需求)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
 msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同一個工作目錄)"
 msgstr ""
 
@@ -3121,6 +3355,10 @@ msgstr ""
 
 #: crates/termade-tui/src/menu.rs
 msgid "{agent} 的 model (輸入可過濾；無符合時 Enter 使用輸入值)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
+msgid "沒有符合的 playbook"
 msgstr ""
 
 #: crates/termade-tui/src/mouse.rs
@@ -3149,10 +3387,6 @@ msgstr ""
 
 #: crates/termade-tui/src/notify.rs
 msgid "等待核准 {tool}"
-msgstr ""
-
-#: crates/termade-tui/src/notify.rs
-msgid "等待核准"
 msgstr ""
 
 #: crates/termade-tui/src/notify.rs
