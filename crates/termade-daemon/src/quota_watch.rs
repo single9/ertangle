@@ -24,6 +24,65 @@ pub(crate) fn live_pressure(q: &Quota, now_ms: u64) -> f32 {
         .fold(0.0, f32::max)
 }
 
+/// 送給 agent 的額度警告 (固定英文協定格式)。
+pub(crate) fn quota_warn_body(agent: &str, used: f32) -> String {
+    format!(
+        "QUOTA_WARN {agent} {used:.0}%: stop spawning new workers, checkpoint/commit work now, report status."
+    )
+}
+
+/// 子 agent spawn 前的額度檢查結果。
+#[derive(Debug, PartialEq)]
+pub(crate) enum SpawnQuota {
+    /// 沒問題；附簡短摘要 (查不到額度時為 `None`)。
+    Ok(Option<String>),
+    /// 改用其他 agent。
+    Fallback(AgentKind, Option<String>, String),
+    /// 拒絕，附英文原因。
+    Reject(String),
+}
+
+/// 決定 agent 自己 spawn 時該用哪個 agent：額度吃緊就換 `fallback`，沒得換就拒絕。
+pub(crate) fn check_spawn_quota(
+    kind: &AgentKind,
+    quotas: &std::collections::BTreeMap<String, Quota>,
+    fallback: &[String],
+    warn_percent: f32,
+    now_ms: u64,
+) -> SpawnQuota {
+    let Some(q) = quotas.get(kind.id()) else {
+        return SpawnQuota::Ok(None);
+    };
+    let used = live_pressure(q, now_ms);
+    let window = q
+        .windows
+        .iter()
+        .filter(|w| w.resets_at_ms.is_none_or(|r| r > now_ms))
+        .max_by(|a, b| a.used_percent.total_cmp(&b.used_percent))
+        .map(|w| w.name.clone());
+    let summary = match &window {
+        Some(w) => format!("quota {} {used:.0}% ({w} window)", q.agent),
+        None => format!("quota {} {used:.0}%", q.agent),
+    };
+    if !q.reached && used < warn_percent {
+        return SpawnQuota::Ok(Some(summary));
+    }
+    if let Some((k, m)) = pick_fallback(fallback, kind, quotas, now_ms) {
+        let note = format!("{summary}; switched to {}", k.id());
+        return SpawnQuota::Fallback(k, m, note);
+    }
+    let reset = q
+        .windows
+        .iter()
+        .filter_map(|w| w.resets_at_ms.filter(|r| *r > now_ms))
+        .min()
+        .map(|r| format!(" Resets in {}.", termade_core::format_remaining(r - now_ms)))
+        .unwrap_or_default();
+    SpawnQuota::Reject(format!(
+        "{summary} is at/over the warn threshold ({warn_percent:.0}%) and no fallback agent is available. Do not spawn more workers: finish the work inline or wait for the quota reset.{reset}"
+    ))
+}
+
 /// 從 `fallback`(`kind[:model]`)挑第一個可接手的：agent 不同於來源，且它的額度沒滿。
 pub(crate) fn pick_fallback(
     fallback: &[String],
@@ -205,6 +264,27 @@ impl Shared {
             .filter(|s| s.kind.id() == quota.agent && s.status.is_live())
             .map(|s| s.id.clone())
             .collect();
+        // 即時通知：該 agent 的 session 與所有執行中的 coordinator (透過匯流排，能喚醒 termade_wait)。
+        let recipients: Vec<SessionId> = lock(&self.inner)
+            .state
+            .sessions
+            .values()
+            .filter(|s| {
+                s.status.is_live()
+                    && (s.kind.id() == quota.agent || s.role == termade_core::Role::Coordinator)
+            })
+            .map(|s| s.id.clone())
+            .collect();
+        let body = quota_warn_body(&quota.agent, used);
+        for rid in recipients {
+            let _ = self.deliver_message(
+                Some("termade".into()),
+                termade_core::Target::Direct(rid),
+                termade_core::MsgKind::Chat,
+                body.clone(),
+                None,
+            );
+        }
         for sid in live {
             self.emit(Event::SessionNote {
                 session: sid,
@@ -311,5 +391,47 @@ mod tests {
         );
         assert!(pick_fallback(&["claude".to_string()], &src, &quotas, 0).is_none());
         assert!(pick_fallback(&["bogus".to_string()], &src, &quotas, 0).is_none());
+    }
+
+    #[test]
+    fn spawn_quota_ok_fallback_reject() {
+        let claude = AgentKind::ClaudeCode;
+        let mut quotas = BTreeMap::new();
+        // 沒有額度資料：放行、無摘要。
+        assert_eq!(
+            check_spawn_quota(&claude, &quotas, &[], 90.0, 0),
+            SpawnQuota::Ok(None)
+        );
+        quotas.insert("claude".into(), q("claude", 72.0, false, None));
+        match check_spawn_quota(&claude, &quotas, &[], 90.0, 0) {
+            SpawnQuota::Ok(Some(n)) => assert_eq!(n, "quota claude 72% (5h window)"),
+            o => panic!("{o:?}"),
+        }
+        // 吃緊且有 fallback：換 agent。
+        quotas.insert("claude".into(), q("claude", 95.0, false, None));
+        let fb = vec!["codex".to_string()];
+        match check_spawn_quota(&claude, &quotas, &fb, 90.0, 0) {
+            SpawnQuota::Fallback(k, _, n) => {
+                assert_eq!(k.id(), "codex");
+                assert!(n.contains("switched to codex"), "{n}");
+            }
+            o => panic!("{o:?}"),
+        }
+        // 沒有 fallback：拒絕並附重置時間。
+        quotas.insert("claude".into(), q("claude", 100.0, true, Some(3_600_000)));
+        match check_spawn_quota(&claude, &quotas, &[], 90.0, 0) {
+            SpawnQuota::Reject(e) => {
+                assert!(e.contains("inline") && e.contains("Resets in 1h00m"), "{e}")
+            }
+            o => panic!("{o:?}"),
+        }
+    }
+
+    #[test]
+    fn quota_warn_body_format() {
+        assert_eq!(
+            quota_warn_body("claude", 91.4),
+            "QUOTA_WARN claude 91%: stop spawning new workers, checkpoint/commit work now, report status."
+        );
     }
 }

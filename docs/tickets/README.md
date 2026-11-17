@@ -42,6 +42,7 @@
 | [T34](T34-conflict-resolution-and-review-loop.md) | 智慧合併衝突解決迴圈、合併前驗證與自動審查守門員 | P2 | T02, T18 |
 | [T35](T35-diff-file-tree-and-hunk-actions.md) | Diff 視圖檔案清單導覽、單檔摺疊與局部 Hunk 退回 | P2 | — |
 | [T36](T36-playbooks-and-session-export.md) | 多 Agent 團隊範本 (Playbooks) 與 Session 協作報告匯出 (`:export`) | P3 | T11, T31 |
+| [T38](T38-quota-aware-spawn-and-ade-skill.md) | 額度感知的 spawn、即時額度警告與可安裝的 termade-ade skill | P2 | T20, T37 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

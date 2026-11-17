@@ -159,7 +159,7 @@ pub fn tool_definitions() -> Vec<Value> {
     vec![
         json!({
             "name": "termade_whoami",
-            "description": "Return your own session info (id, label, role, cwd, branch, status).",
+            "description": "Return your own session info (id, label, role, cwd, branch, status) plus a `quotas` array (per-agent used %, reached) to check before spawning.",
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -316,7 +316,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "termade_spawn",
-            "description": "Spawn a new child agent session (e.g. a coordinator spawning a worker into its own git worktree to implement in parallel).",
+            "description": "Spawn a new child agent session (e.g. a coordinator spawning a worker into its own git worktree to implement in parallel). Costs tokens and quota: spawn only when parallelism is worth it, give a self-contained prompt, and check quota via termade_whoami first.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -479,7 +479,27 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .resolve_session_id(session)
                 .unwrap_or_else(|| session.to_string());
             if let Some(s) = state.sessions.get(&resolved) {
-                Ok(serde_json::to_value(s)?)
+                let mut v = serde_json::to_value(s)?;
+                let now = termade_core::now_millis();
+                let quotas: Vec<Value> = state
+                    .quotas
+                    .values()
+                    .map(|q| {
+                        json!({
+                            "agent": q.agent,
+                            "used_percent": q.windows.iter()
+                                .filter(|w| w.resets_at_ms.is_none_or(|r| r > now))
+                                .map(|w| w.used_percent)
+                                .fold(0.0_f32, f32::max),
+                            "reached": q.reached,
+                            "summary": q.summary(now),
+                        })
+                    })
+                    .collect();
+                if let Some(o) = v.as_object_mut() {
+                    o.insert("quotas".into(), Value::Array(quotas));
+                }
+                Ok(v)
             } else {
                 Ok(json!({ "id": session, "role": "human" }))
             }
