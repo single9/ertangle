@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use termade_core::{Decision, MsgKind, PermissionPolicy, SessionStatus, Target};
+use termade_core::{Decision, MsgKind, PermissionPolicy, Role, SessionStatus, Target};
 use termade_protocol::Request;
 use tr::tr;
 
@@ -427,6 +427,19 @@ pub(crate) fn handle_input_mode(
             app.status = tr!(
                 "effort = {effort}",
                 effort = app.spawn_effort.clone().unwrap_or_else(|| tr!("預設"))
+            );
+        }
+        KeyCode::Char('r')
+            if key.modifiers.contains(KeyModifiers::CONTROL) && app.mode == Mode::Spawn =>
+        {
+            app.spawn_role = match app.spawn_role {
+                Role::Worker => Role::Coordinator,
+                Role::Coordinator => Role::Reviewer,
+                _ => Role::Worker,
+            };
+            app.status = tr!(
+                "角色 = {role}",
+                role = app.spawn_role.id()
             );
         }
         KeyCode::Tab if app.mode == Mode::Command => complete_command(app),

@@ -2048,7 +2048,7 @@ done
     let first: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
     let first_text = first["params"]["prompt"][0]["text"].as_str().unwrap();
     assert!(
-        first_text.contains("[termade 協作說明]") && first_text.contains("worker/acp-t20"),
+        first_text.contains("[termade collaboration instructions]") && first_text.contains("worker/acp-t20"),
         "{first_text}"
     );
     assert!(first_text.ends_with("只做第一件事"), "{first_text}");

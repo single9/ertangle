@@ -7,7 +7,7 @@ use tr::tr;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 use termade_core::{
-    now_millis, AgentKind, BusMessage, PermissionPolicy, SessionId, State, Target, WorktreeInfo,
+    now_millis, AgentKind, BusMessage, PermissionPolicy, Role, SessionId, State, Target, WorktreeInfo,
 };
 use termade_protocol::Frame;
 
@@ -170,6 +170,8 @@ pub(crate) struct App {
     pub(crate) input_cursor: usize,
     pub(crate) status: String,
     pub(crate) spawn_worktree: bool,
+    /// 建立 session 的角色 (worker / coordinator / reviewer)；預設為 worker。
+    pub(crate) spawn_role: Role,
     /// 建立 session 的權限；`None` 依 config.toml。
     pub(crate) spawn_permission: Option<PermissionPolicy>,
     pub(crate) spawn_bypass_armed: bool,
@@ -294,6 +296,7 @@ impl App {
             input_cursor: 0,
             status: tr!("已連線 daemon"),
             spawn_worktree: false,
+            spawn_role: Role::Worker,
             spawn_permission: None,
             spawn_bypass_armed: false,
             spawn_target: None,

@@ -16,14 +16,14 @@ use crate::config::Config;
 /// `.termade/instructions.md` 最多取用的位元組數，避免把整份文件塞進每個 agent 的 context。
 const MAX_REPO_INSTRUCTIONS: usize = 8 * 1024;
 
-const HEADER: &str = "[termade 協作說明]";
+const HEADER: &str = "[termade collaboration instructions]";
 
 /// 對所有 session 都一樣的通則 (查不到 session 時只給這一段)。
 fn general_rules(out: &mut String) {
     out.push_str(
-        "- 進度：工作進行中，用 termade_status 更新一句話的進度。\n\
-         - 任務：被指派任務時，先用 termade_task_update 把狀態改為 doing，完成後改為 done。\n\
-         - 提問：需要別人的答案才能繼續時用 termade_ask；termade_peers 可以查有哪些 session。\n",
+        "- Progress: While working, keep a one-line progress update via termade_status.\n\
+         - Tasks: When assigned a task, change its status to doing via termade_task_update, and to done upon completion.\n\
+         - Questions: Use termade_ask when blocked waiting for peer answers; use termade_peers to query active sessions.\n",
     );
 }
 
@@ -41,35 +41,45 @@ fn push_extra(out: &mut String, extra: &str) {
 pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) -> String {
     let mut out = format!("{HEADER}\n");
     let spawned_by = match (parent, me.parent.as_deref()) {
-        (Some(p), _) => format!("session「{}」({})", p.label, p.id),
+        (Some(p), _) => format!("session \"{}\" ({})", p.label, p.id),
         (None, Some(pid)) => format!("session {pid}"),
-        (None, None) => "使用者".to_string(),
+        (None, None) => "the user".to_string(),
     };
     out.push_str(&format!(
-        "你是 termade 管理的 agent session「{}」(id {}，角色 {})，由{spawned_by}產生。\n",
+        "You are agent session \"{}\" (id {}, role {}), spawned by {spawned_by}.\n",
         me.label,
         me.id,
         me.role.id()
     ));
     match parent.map(|p| p.id.as_str()).or(me.parent.as_deref()) {
         Some(pid) => out.push_str(&format!(
-            "- 回報：完成或卡住時，用 termade_send (to=\"{pid}\")把結果告訴父 session；不要做完就停住不回報。\n"
+            "- Reporting: When finished or blocked, use termade_send (to=\"{pid}\") to report results back to parent session; do not stop silently without reporting.\n"
         )),
         None => out.push_str(
-            "- 回報：你是使用者直接產生的；完成或卡住時直接在回覆裡說明，不需要另外傳訊息。\n",
+            "- Reporting: You were directly spawned by the user; answer directly in your response.\n",
         ),
     }
     general_rules(&mut out);
     if let Some(branch) = &me.branch {
         out.push_str(&format!(
-            "- worktree：你在獨立的 git worktree (分支 {branch})工作。成果留在這個分支；不要自己合併回主分支，除非被明確要求。\n"
+            "- Worktree: You are working in an isolated git worktree (branch {branch}). Keep your commits on this branch; do not merge into the main branch unless explicitly requested.\n"
         ));
     }
+    let has_parent = parent.is_some() || me.parent.is_some();
     if me.role == Role::Coordinator {
         out.push_str(
-            "- 協調：用 termade_spawn 產生 worker，用 termade_task_create 與 depends_on 安排順序；等回覆用 termade_wait，不要輪詢。\n\
-             - 成本：termade_spawn 出的 session 預設各自獨立工作區。不要自己挑高消耗的 model 或 effort；沒有特別需要就不指定 (用設定的預設)，需要較強的 model 時先問使用者。超出使用者設定的範圍時，系統會彈出確認。\n",
+            "- Coordination: Spawn workers using termade_spawn and schedule dependencies with termade_task_create (via depends_on); use termade_wait to await replies, do not poll.\n\
+             - Budget & Models: Sessions spawned via termade_spawn get independent workspaces by default. Do not self-select expensive models or effort; use defaults unless needed. Ask the user before using high-tier models. If usage exceeds configured limits, the system will prompt for confirmation.\n",
         );
+    } else {
+        let report_target = if has_parent {
+            "via termade_send"
+        } else {
+            "directly in your response"
+        };
+        out.push_str(&format!(
+            "- Scope: Focus strictly on your assigned task. Do not call termade_spawn to create new sessions unless explicitly instructed by the user or coordinator. If blocked or if a task requires decomposition, report back {report_target}.\n"
+        ));
     }
     push_extra(&mut out, extra);
     out
@@ -90,7 +100,7 @@ fn truncate_text(mut t: String, name: &str) -> String {
             cut -= 1;
         }
         t.truncate(cut);
-        t.push_str(&format!("\n… ({name} 過長，已截斷)"));
+        t.push_str(&format!("\n… ({name} truncated because it was too long)"));
     }
     t.trim().to_string()
 }
@@ -199,14 +209,15 @@ mod tests {
     fn human_spawned_worker_without_worktree() {
         let me = sess("ses_w", "worker/a", Role::Worker);
         let t = collab_instructions(&me, None, "");
-        assert!(t.contains("worker/a") && t.contains("ses_w") && t.contains("角色 worker"));
-        assert!(t.contains("由使用者產生"));
-        assert!(t.contains("直接在回覆裡說明"));
+        assert!(t.contains("worker/a") && t.contains("ses_w") && t.contains("role worker"));
+        assert!(t.contains("spawned by the user"));
+        assert!(t.contains("answer directly in your response"));
         assert!(t.contains("termade_status") && t.contains("termade_task_update"));
         assert!(t.contains("termade_ask"));
+        assert!(t.contains("Do not call termade_spawn"));
         // 不相關的段落不出現。
         assert!(!t.contains("termade_send"), "{t}");
-        assert!(!t.contains("worktree"), "{t}");
+        assert!(!t.contains("Worktree"), "{t}");
         assert!(
             !t.contains("termade_task_create") && !t.contains("termade_wait"),
             "{t}"
@@ -221,11 +232,12 @@ mod tests {
         me.parent = Some("ses_p".into());
         me.branch = Some("termade/ses_w".into());
         let t = collab_instructions(&me, Some(&parent), "");
-        assert!(t.contains("由session「coord」(ses_p)產生"), "{t}");
+        assert!(t.contains("spawned by session \"coord\" (ses_p)"), "{t}");
         assert!(t.contains("termade_send (to=\"ses_p\")"), "{t}");
-        assert!(t.contains("分支 termade/ses_w") && t.contains("不要自己合併"));
-        assert!(!t.contains("直接在回覆裡說明"), "{t}");
+        assert!(t.contains("branch termade/ses_w") && t.contains("do not merge"));
+        assert!(!t.contains("answer directly in your response"), "{t}");
         assert!(!t.contains("termade_task_create"), "{t}");
+        assert!(t.contains("Do not call termade_spawn"), "{t}");
     }
 
     #[test]
@@ -234,7 +246,7 @@ mod tests {
         me.parent = Some("ses_gone".into());
         let t = collab_instructions(&me, None, "");
         assert!(t.contains("termade_send (to=\"ses_gone\")"), "{t}");
-        assert!(!t.contains("直接在回覆裡說明"));
+        assert!(!t.contains("answer directly in your response"));
     }
 
     #[test]
@@ -242,16 +254,17 @@ mod tests {
         let me = sess("ses_c", "coord", Role::Coordinator);
         let t = collab_instructions(&me, None, "");
         assert!(t.contains("termade_task_create") && t.contains("depends_on"));
-        assert!(t.contains("termade_wait") && t.contains("不要輪詢"));
+        assert!(t.contains("termade_wait") && t.contains("do not poll"));
         assert!(t.contains("termade_spawn"));
-        assert!(!t.contains("worktree"), "{t}");
+        assert!(!t.contains("Do not call termade_spawn"), "{t}");
+        assert!(!t.contains("Worktree"), "{t}");
         // 協調者自己也在 worktree 且由 agent 產生：所有段落都在，仍在 30 行內。
         let top = sess("ses_top", "top", Role::Coordinator);
         let mut sub = sess("ses_c", "coord", Role::Coordinator);
         sub.parent = Some("ses_top".into());
         sub.branch = Some("termade/ses_c".into());
         let t = collab_instructions(&sub, Some(&top), "");
-        assert!(t.contains("不要自己合併") && t.contains("termade_send") && t.contains("不要輪詢"));
+        assert!(t.contains("do not merge") && t.contains("termade_send") && t.contains("do not poll"));
         assert!(t.lines().count() <= 30);
     }
 
@@ -306,8 +319,8 @@ mod tests {
         let cwd = temp_dir("collab-c");
         let t = for_session(&State::new(), "human", &global, &cwd).unwrap();
         assert!(t.contains("termade_status") && t.contains("termade_ask"));
-        assert!(!t.contains("你是 termade 管理的"), "{t}");
-        assert!(!t.contains("回報："), "{t}");
+        assert!(!t.contains("You are agent session"), "{t}");
+        assert!(!t.contains("Reporting:"), "{t}");
     }
 
     #[test]
@@ -341,7 +354,7 @@ mod tests {
         std::fs::write(cwd.join(".termade/instructions.md"), "字".repeat(10_000)).unwrap();
         let t = for_session(&State::new(), "x", &global, &cwd).unwrap();
         assert!(t.len() < MAX_REPO_INSTRUCTIONS + 2048);
-        assert!(t.contains("已截斷"));
+        assert!(t.contains("truncated"));
     }
 
     #[test]

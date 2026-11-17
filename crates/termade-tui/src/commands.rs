@@ -908,6 +908,27 @@ pub(crate) fn execute_jump(app: &mut App, writer: &mut HostRouter, query: &str) 
     Ok(())
 }
 
+fn extract_named_flag(text: &str, flag: &str) -> (Option<String>, String) {
+    for (idx, _) in text.match_indices(flag) {
+        let before_ok = idx == 0 || text[..idx].ends_with(char::is_whitespace);
+        let after_idx = idx + flag.len();
+        let after_ok = after_idx == text.len() || text[after_idx..].starts_with(char::is_whitespace);
+        if before_ok && after_ok {
+            let after = &text[after_idx..];
+            let mut parts = after.split_whitespace();
+            if let Some(val) = parts.next() {
+                let before = &text[..idx];
+                if let Some(val_start) = after.find(val) {
+                    let remainder = &after[val_start + val.len()..];
+                    let rest_text = format!("{}{}", before, remainder).trim().to_string();
+                    return (Some(val.to_string()), rest_text);
+                }
+            }
+        }
+    }
+    (None, text.to_string())
+}
+
 pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -> Result<()> {
     // 支援指定主機：--host <名稱>
     let (target_host, clean_text) = if let Some(idx) = text.find("--host") {
@@ -929,6 +950,19 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
     if let Some(h) = &target_host {
         writer.set_active(h);
     }
+    // 支援指定角色：--role <角色> 或 -r <角色>
+    let (target_role, clean_text) = {
+        let (r, t) = extract_named_flag(&clean_text, "--role");
+        if r.is_some() {
+            (r, t)
+        } else {
+            extract_named_flag(&clean_text, "-r")
+        }
+    };
+    let role = match target_role {
+        Some(r) => Role::parse(&r),
+        None => app.spawn_role.clone(),
+    };
     let text = clean_text.as_str();
     // 由選擇器選好 agent／model 時，輸入框的內容就是 prompt；
     // 否則維持舊格式 `<agent[:model]> <prompt>`(`:spawn claude:opus …`)。
@@ -987,7 +1021,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
                 .ok()
                 .map(|p| p.to_string_lossy().to_string()),
             label: None,
-            role: Role::Worker,
+            role,
             prompt,
             worktree: app.spawn_worktree,
             transport: Transport::Auto,

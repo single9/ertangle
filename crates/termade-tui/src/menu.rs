@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use termade_core::AgentKind;
+use termade_core::{AgentKind, Role};
 use tr::tr;
 
 use crate::app::{App, Mode};
@@ -642,6 +642,7 @@ fn finish_picker(
     app.input.clear();
     app.input_cursor = 0;
     app.spawn_worktree = false;
+    app.spawn_role = Role::Worker;
     app.spawn_permission = None;
     app.spawn_bypass_armed = false;
     Ok(())

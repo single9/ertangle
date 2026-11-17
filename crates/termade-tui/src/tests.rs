@@ -2291,3 +2291,65 @@ fn markdown_links_are_clickable_by_label_without_raw_url() {
     assert_eq!(links[0].col_start, 6);
     assert_eq!(links[0].col_end, 16);
 }
+
+#[test]
+fn submit_spawn_parses_role_flag_coordinator_and_short_flag() {
+    use std::io::BufRead;
+    let mut app = test_app();
+    let (mut w, peer) = pair_writer();
+    let mut reader = std::io::BufReader::new(peer);
+
+    // 1. --role coordinator
+    crate::commands::submit_spawn(&mut app, &mut w, "--role coordinator claude:opus plan the work").unwrap();
+    let mut line1 = String::new();
+    reader.read_line(&mut line1).unwrap();
+    let req1: Request = termade_protocol::decode_line(&line1).unwrap();
+    match req1 {
+        Request::Spawn(spawn) => {
+            assert_eq!(spawn.role, Role::Coordinator);
+            assert_eq!(spawn.kind, AgentKind::ClaudeCode);
+            assert_eq!(spawn.model.as_deref(), Some("opus"));
+            assert_eq!(spawn.prompt.as_deref(), Some("plan the work"));
+        }
+        other => panic!("unexpected req: {other:?}"),
+    }
+
+    // 2. -r reviewer
+    crate::commands::submit_spawn(&mut app, &mut w, "-r reviewer opencode review the diff").unwrap();
+    let mut line2 = String::new();
+    reader.read_line(&mut line2).unwrap();
+    let req2: Request = termade_protocol::decode_line(&line2).unwrap();
+    match req2 {
+        Request::Spawn(spawn) => {
+            assert_eq!(spawn.role, Role::Reviewer);
+            assert_eq!(spawn.kind, AgentKind::OpenCode);
+            assert_eq!(spawn.prompt.as_deref(), Some("review the diff"));
+        }
+        other => panic!("unexpected req: {other:?}"),
+    }
+}
+
+#[test]
+fn spawn_mode_ctrl_r_cycles_role() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = test_app();
+    let (mut w, _) = pair_writer();
+    app.mode = Mode::Spawn;
+    app.spawn_role = Role::Worker;
+
+    // 按 Ctrl-R: Worker -> Coordinator
+    let ctrl_r = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
+    crate::input::handle_key(&mut app, &mut w, ctrl_r).unwrap();
+    assert_eq!(app.spawn_role, Role::Coordinator);
+    assert!(app.status.contains("coordinator"));
+
+    // 按 Ctrl-R: Coordinator -> Reviewer
+    crate::input::handle_key(&mut app, &mut w, ctrl_r).unwrap();
+    assert_eq!(app.spawn_role, Role::Reviewer);
+    assert!(app.status.contains("reviewer"));
+
+    // 按 Ctrl-R: Reviewer -> Worker
+    crate::input::handle_key(&mut app, &mut w, ctrl_r).unwrap();
+    assert_eq!(app.spawn_role, Role::Worker);
+    assert!(app.status.contains("worker"));
+}
