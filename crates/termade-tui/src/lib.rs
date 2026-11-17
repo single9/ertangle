@@ -176,6 +176,27 @@ fn window_title() -> String {
     }
 }
 
+/// 標題前綴：本專案有待核准顯示 `⏸ `，否則有執行中顯示 `● `，全閒置則為空。
+fn status_prefix(app: &App) -> &'static str {
+    use termade_core::SessionStatus as S;
+    let mut busy = false;
+    for sess in app.state.sessions.values() {
+        if sess.project_root() != app.home_project {
+            continue;
+        }
+        match sess.status {
+            S::WaitingApproval => return "⏸ ",
+            S::Busy | S::Starting => busy = true,
+            _ => {}
+        }
+    }
+    if busy {
+        "● "
+    } else {
+        ""
+    }
+}
+
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -242,6 +263,8 @@ fn event_loop(
     app.command_history = history::History::load(Some(history::history_path("command")));
     let mut dirty = true;
     let mut last_draw = std::time::Instant::now();
+    let base_title = window_title();
+    let mut last_title = String::new();
 
     loop {
         loop {
@@ -297,6 +320,13 @@ fn event_loop(
             if let Some(err) = app.notify.flush(&mut io::stdout().lock()) {
                 app.status = err;
             }
+        }
+
+        let title = format!("{}{base_title}", status_prefix(&app));
+        if title != last_title {
+            let _ = write!(io::stdout(), "\x1b]0;{title}\x07");
+            let _ = io::stdout().flush();
+            last_title = title;
         }
 
         dirty |= app.rebuild_pending;
