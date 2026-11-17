@@ -37,7 +37,7 @@
 | [T29](T29-multi-host-tui.md) | TUI 多主機聚合視圖 (`[remotes]` 設定與跨機 Session 操控) (已完成) | P2 | T28 |
 | [T30](T30-mobile-companion-web.md) | Web 版支援 (`--web` 零相依 HTTP/WebSocket 與內嵌 Mobile PWA + 終端機 QR Code) (已完成) | P2 | T28 |
 | [T31](T31-role-selection-and-collab-scope.md) | TUI 支援指定 Role 與協作指引英文化分流 (已完成) | P2 | T20, T27 |
-| [T32](T32-subagent-and-bg-process-visibility.md) | Subagent 與背景執行程式／長耗時指令的 TUI 即時可觀測性與處理程序群組控管 | P1 | — |
+| [T32](T32-subagent-and-bg-process-visibility.md) | Subagent 與背景執行程式／長耗時指令的 TUI 即時可觀測性與處理程序群組控管 (已完成) | P1 | — |
 | [T33](T33-claude-permission-forwarding-and-mcp-redaction.md) | Claude Code 逐項權限核准轉發與 MCP 回傳全面秘密遮罩 | P1 | T04 |
 | [T34](T34-conflict-resolution-and-review-loop.md) | 智慧合併衝突解決迴圈、合併前驗證與自動審查守門員 | P2 | T02, T18 |
 | [T35](T35-diff-file-tree-and-hunk-actions.md) | Diff 視圖檔案清單導覽、單檔摺疊與局部 Hunk 退回 | P2 | — |

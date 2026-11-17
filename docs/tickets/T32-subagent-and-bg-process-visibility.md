@@ -2,7 +2,7 @@
 
 優先度：P1　範圍：`termade-core`、`termade-protocol`、`termade-adapter`、`termade-daemon`、`termade-tui`、`src/`　相依：—
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 
@@ -93,3 +93,7 @@ Status: ready-for-agent
 - 在 TUI 按 `Space s p` 或輸入 `:ps` 可開啟處理程序檢視浮層，列出背景處理程序的 PID 與命令列；按 `x` 能單獨終止該背景處理程序，且 Agent Session 本體維持存活可繼續對話。
 - 對含有背景子處理程序的 Session 執行 `termade kill` 或 `termade sleep`，其衍生的子處理程序能一併被終止或暫停。
 - `make pre-commit` (`cargo fmt`、`cargo clippy`、`make i18n-check`) 與 `cargo test` 全數通過。
+
+## Comments
+
+- 2026-11-17：已於 `f53e4cb` 實作。該 commit 的 `signal_pgid` 以 `kill <sig> -<pgid>` 送訊號，在 procps-ng 4.0.4 下被解析成 `kill -1`，結束 session 時會把整個桌面登出；已於 T39 (`79d9029`) 修正。
