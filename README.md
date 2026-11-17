@@ -450,7 +450,13 @@ termade skill show
 
 在 TUI 裡也可以用 `:skill install [claude|agents|codex] [global]` 安裝 (`:skill show` 查看狀態)。
 
-不想安裝時，可在 `:settings` 開啟「把 termade-ade skill 注入協作說明」，或在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。
+不想安裝時，可在 `:settings` 開啟「把 termade-ade skill 注入協作說明」，或在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。Claude 回報 `allowed_warning` (例如 7 天視窗超過 75%) 時，coordinator 會先收到較溫和的 `QUOTA_NOTICE`，標題列與 `:quota` 也會標示「⚠ 接近上限」。
+
+### 中斷復原與編譯資源
+
+- `[agent_spawn] auto_resume` (預設 `true`)：daemon 重啟時，自動接續當下正在執行回合的 session，並提示 agent 先用 `git status`／`git diff` 找回進度，不要重新探索整個專案。額度已滿、或上次自動接續後沒有任何進展的 session 不會再自動接續。
+- `[agent_spawn] shared_cargo_target` (預設 `true`)：Cargo 專案裡，所有 worktree 的 agent 共用 `<repo>/.termade/target` 當 `CARGO_TARGET_DIR`。不用每個 worktree 各編一份，cargo 的目錄鎖也讓多個 worker 的編譯與測試自動排隊。已自行設定 `CARGO_TARGET_DIR` 時不覆寫。
+- 兩者都可在 `:settings` 切換。
 
 ## 設定檔與環境變數
 

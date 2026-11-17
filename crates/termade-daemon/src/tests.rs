@@ -1979,6 +1979,7 @@ fn high_quota_leaves_a_handoff_hint_once_per_crossing() {
             resets_at_ms: None,
         }],
         reached: false,
+        warning: false,
         updated_ms: 0,
     };
     // restart_session 的 kind 是 ClaudeCode；agent id 要和 kind.id() 一致。
@@ -3408,4 +3409,65 @@ fn discard_worktree_change_reverts_single_hunk_and_whole_file() {
 
     assert!(crate::git::discard_worktree_change(wt, "../evil.txt", None).is_err());
     assert!(crate::git::discard_worktree_change(wt, ".termade/secret", None).is_err());
+}
+
+#[test]
+fn auto_resume_only_for_busy_resumable_sessions_with_quota_and_progress() {
+    use std::collections::BTreeMap;
+    let mut s = restart_session("ses-a", SessionStatus::Busy);
+    let none = BTreeMap::new();
+    assert!(
+        !crate::auto_resume_eligible(&s, &none),
+        "沒有原生 id 不能接續"
+    );
+    s.native_id = Some("nat".into());
+    assert!(crate::auto_resume_eligible(&s, &none));
+    s.status = SessionStatus::Idle;
+    assert!(!crate::auto_resume_eligible(&s, &none), "閒置的不自動接續");
+    s.status = SessionStatus::WaitingApproval;
+    assert!(crate::auto_resume_eligible(&s, &none));
+    // 上次自動接續後沒有任何進展 (說明沒被覆寫) → 不再接續，避免崩潰迴圈。
+    s.status_note = Some(crate::auto_resumed_note());
+    assert!(!crate::auto_resume_eligible(&s, &none));
+    s.status_note = Some("running tests".into());
+    assert!(crate::auto_resume_eligible(&s, &none));
+    // 額度已滿不接續。
+    let mut quotas = BTreeMap::new();
+    quotas.insert(
+        "claude".to_string(),
+        termade_core::Quota {
+            agent: "claude".into(),
+            windows: vec![],
+            reached: true,
+            warning: false,
+            updated_ms: 0,
+        },
+    );
+    assert!(!crate::auto_resume_eligible(&s, &quotas));
+}
+
+#[test]
+fn worktree_sessions_share_one_cargo_target_only_in_cargo_repos() {
+    let repo = std::env::temp_dir().join(new_id("cargo-repo"));
+    std::fs::create_dir_all(&repo).unwrap();
+    let mut s = restart_session("ses-wt", SessionStatus::Busy);
+    s.repo_root = Some(repo.to_string_lossy().to_string());
+    s.cwd = repo
+        .join(".termade/wt/ses-wt")
+        .to_string_lossy()
+        .to_string();
+    s.branch = Some("termade/ses-wt".into());
+    let f = crate::handlers::session::shared_cargo_target_dir;
+    assert_eq!(f(&s), None, "不是 Cargo 專案");
+    std::fs::write(repo.join("Cargo.toml"), "[workspace]\n").unwrap();
+    assert_eq!(
+        f(&s).as_deref(),
+        Some(repo.join(".termade/target").to_string_lossy().as_ref())
+    );
+    let mut main = s.clone();
+    main.cwd = repo.to_string_lossy().to_string();
+    assert_eq!(f(&main), None, "主工作目錄沿用自己的 target");
+    s.branch = None;
+    assert_eq!(f(&s), None, "沒有 worktree 分支");
+    let _ = std::fs::remove_dir_all(&repo);
 }

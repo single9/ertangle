@@ -397,28 +397,52 @@ impl Shared {
         });
 
         // 重啟後子處理程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
-        // 有原生對話 id 的可以接續，但不自動做 (會在使用者沒注意時動用額度)，只留一則說明。
-        let orphans: Vec<(SessionId, bool)> = {
+        // 重啟當下正在跑回合的 session 會自動接續 (`[agent_spawn] auto_resume`)，其餘只留說明。
+        let orphans: Vec<(SessionId, bool, bool)> = {
+            // 先讀設定再上鎖：default_cwd() 本身也會鎖 inner。
+            let cfg = config::Config::load(&config_dir(), &shared.default_cwd());
             let inner = lock(&shared.inner);
             inner
                 .state
                 .sessions
                 .values()
                 .filter(|s| s.status.is_live())
-                .map(|s| (s.id.clone(), s.native_id.is_some()))
+                .map(|s| {
+                    let auto = cfg.agent_spawn.auto_resume()
+                        && auto_resume_eligible(s, &inner.state.quotas);
+                    (s.id.clone(), s.native_id.is_some(), auto)
+                })
                 .collect()
         };
-        for (sid, resumable) in orphans {
+        let mut to_resume = Vec::new();
+        for (sid, resumable, auto) in orphans {
             shared.emit(Event::SessionStatus {
                 session: sid.clone(),
                 status: SessionStatus::Failed,
             });
-            if resumable {
+            if auto {
+                to_resume.push(sid);
+            } else if resumable {
                 shared.emit(Event::SessionNote {
                     session: sid,
                     note: tr!("daemon 重啟，可用 :resume 接續"),
                 });
             }
+        }
+        if !to_resume.is_empty() {
+            let sh = shared.clone();
+            std::thread::spawn(move || {
+                // 等 socket 開始 listen，agent 的 MCP 子處理程序才連得上。
+                std::thread::sleep(Duration::from_secs(1));
+                for sid in to_resume {
+                    let prompt = Some(AUTO_RESUME_PROMPT.to_string());
+                    let note = match handlers::session::resume_session(&sh, &sid, prompt) {
+                        Ok(_) => auto_resumed_note(),
+                        Err(e) => tr!("daemon 重啟後自動接續失敗：{e}", e = e),
+                    };
+                    sh.emit(Event::SessionNote { session: sid, note });
+                }
+            });
         }
         // daemon 重啟時記憶體內的 QueuedPrompt 已不在，清掉舊 log 殘留的排隊狀態。
         let stale_queues: Vec<SessionId> = {
@@ -948,3 +972,25 @@ impl Shared {
 
 #[cfg(test)]
 mod tests;
+
+/// daemon 重啟後自動接續時送給 agent 的提示 (英文，省 token)。
+pub(crate) const AUTO_RESUME_PROMPT: &str = "The termade daemon restarted and interrupted your turn. Your work so far is intact in your working directory. Recover context with `git status` / `git diff` instead of re-exploring the repository, then continue the task you were working on and report as instructed.";
+
+/// 自動接續後留在 session 上的說明；下次重啟時看到它代表上次接續後沒有任何進展。
+pub(crate) fn auto_resumed_note() -> String {
+    tr!("daemon 重啟，已自動接續")
+}
+
+/// 重啟當下這個 session 是否該自動接續：正在跑回合、有原生對話 id、該 agent 額度沒滿，
+/// 且上次自動接續後有過進展 (避免 daemon 一再崩潰時無限接續)。
+pub(crate) fn auto_resume_eligible(
+    s: &Session,
+    quotas: &std::collections::BTreeMap<String, termade_core::Quota>,
+) -> bool {
+    matches!(
+        s.status,
+        SessionStatus::Busy | SessionStatus::WaitingApproval | SessionStatus::Starting
+    ) && s.native_id.is_some()
+        && !quotas.get(s.kind.id()).is_some_and(|q| q.reached)
+        && s.status_note.as_deref() != Some(auto_resumed_note().as_str())
+}

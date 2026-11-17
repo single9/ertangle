@@ -1958,12 +1958,20 @@ msgid "daemon 重啟，可用 :resume 接續"
 msgstr "daemon restarted; use :resume to continue"
 
 #: crates/termade-daemon/src/lib.rs
+msgid "daemon 重啟後自動接續失敗：{e}"
+msgstr "Auto-resume after daemon restart failed: {e}"
+
+#: crates/termade-daemon/src/lib.rs
 msgid "排隊 prompt 送出失敗：{e}"
 msgstr "Failed to send queued prompt: {e}"
 
 #: crates/termade-daemon/src/lib.rs
 msgid "session 已結束，丟棄 {dropped} 則排隊 prompt"
 msgstr "session ended; dropped {dropped} queued prompt(s)"
+
+#: crates/termade-daemon/src/lib.rs
+msgid "daemon 重啟，已自動接續"
+msgstr "daemon restarted; resumed automatically"
 
 #: crates/termade-tui/src/app.rs
 msgid "已連線 daemon"
@@ -3616,6 +3624,10 @@ msgid "尚無額度資料 (只有 claude、codex 會回報，執行過一個回�
 msgstr "No quota data yet (only claude and codex report it, after one turn)"
 
 #: crates/termade-tui/src/quota.rs
+msgid "⚠ 接近上限"
+msgstr "⚠ near limit"
+
+#: crates/termade-tui/src/quota.rs
 msgid "{ago} 前更新"
 msgstr "updated {ago} ago"
 
@@ -3698,6 +3710,14 @@ msgstr "When an agent spawns a costly session"
 #: crates/termade-tui/src/settings.rs
 msgid "agent 建立 session 免確認的 effort 上限"
 msgstr "Max effort for agent spawns without confirmation"
+
+#: crates/termade-tui/src/settings.rs
+msgid "daemon 重啟時自動接續執行中的 session"
+msgstr "Auto-resume running sessions when the daemon restarts"
+
+#: crates/termade-tui/src/settings.rs
+msgid "worktree 共用 cargo target (編譯排隊、不重複)"
+msgstr "Share one cargo target across worktrees (builds queue, no duplicates)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "把協作說明注入每個 agent"

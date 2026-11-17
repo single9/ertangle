@@ -21,6 +21,8 @@ pub(crate) enum Item {
     SpawnWorktree,
     SpawnConfirm,
     SpawnMaxEffort,
+    AutoResume,
+    SharedCargoTarget,
     CollabInstructions,
     InjectSkill,
     WebCompanion,
@@ -28,7 +30,7 @@ pub(crate) enum Item {
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 13] = [
+pub(crate) const ITEMS: [Item; 15] = [
     Item::DefaultAgent,
     Item::DefaultPermission,
     Item::TargetAgent,
@@ -37,6 +39,8 @@ pub(crate) const ITEMS: [Item; 13] = [
     Item::SpawnWorktree,
     Item::SpawnConfirm,
     Item::SpawnMaxEffort,
+    Item::AutoResume,
+    Item::SharedCargoTarget,
     Item::CollabInstructions,
     Item::InjectSkill,
     Item::WebCompanion,
@@ -136,6 +140,8 @@ impl Item {
             Item::SpawnWorktree => tr!("agent 自己建立的 session 用獨立 worktree"),
             Item::SpawnConfirm => tr!("agent 建立高消耗 session 時"),
             Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
+            Item::AutoResume => tr!("daemon 重啟時自動接續執行中的 session"),
+            Item::SharedCargoTarget => tr!("worktree 共用 cargo target (編譯排隊、不重複)"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
             Item::InjectSkill => tr!("把 termade-ade skill 注入協作說明"),
             Item::WebCompanion => tr!("Web 版支援 (Web UI)"),
@@ -157,6 +163,8 @@ impl Item {
             Item::SpawnWorktree => on_off(c.agent_spawn.worktree()),
             Item::SpawnConfirm => c.agent_spawn.confirm().to_string(),
             Item::SpawnMaxEffort => c.agent_spawn.max_effort().to_string(),
+            Item::AutoResume => on_off(c.agent_spawn.auto_resume()),
+            Item::SharedCargoTarget => on_off(c.agent_spawn.shared_cargo_target()),
             Item::CollabInstructions => on_off(c.collab.instructions != Some(false)),
             Item::InjectSkill => on_off(c.collab.inject_skill == Some(true)),
             Item::WebCompanion => {
@@ -222,7 +230,11 @@ impl Item {
                 v.extend(termade_adapter::EFFORT_LEVELS.iter().map(|l| pair(l, l)));
                 v
             }
-            Item::SpawnWorktree | Item::CollabInstructions | Item::InjectSkill => {
+            Item::SpawnWorktree
+            | Item::CollabInstructions
+            | Item::InjectSkill
+            | Item::AutoResume
+            | Item::SharedCargoTarget => {
                 vec![pair("on", &tr!("開")), pair("off", &tr!("關"))]
             }
             Item::SpawnConfirm => vec![
@@ -288,7 +300,11 @@ impl Item {
     pub(crate) fn is_toggle(self) -> bool {
         matches!(
             self,
-            Item::SpawnWorktree | Item::CollabInstructions | Item::InjectSkill
+            Item::SpawnWorktree
+                | Item::CollabInstructions
+                | Item::InjectSkill
+                | Item::AutoResume
+                | Item::SharedCargoTarget
         )
     }
 }
@@ -397,6 +413,8 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::SpawnMaxEffort => (&["agent_spawn"], "max_effort"),
         Item::CollabInstructions => (&["collab"], "instructions"),
         Item::InjectSkill => (&["collab"], "inject_skill"),
+        Item::AutoResume => (&["agent_spawn"], "auto_resume"),
+        Item::SharedCargoTarget => (&["agent_spawn"], "shared_cargo_target"),
         Item::WebCompanion | Item::WebPort => return,
         Item::Language => (&["tui"], "language"),
         Item::Model => (&["agents", ""], "model"),

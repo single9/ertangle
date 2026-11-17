@@ -3003,6 +3003,7 @@ fn quota_popup_lines_show_bars_resets_and_missing_data() {
             },
         ],
         reached: false,
+        warning: false,
         updated_ms: now,
     };
     let text = |lines: Vec<ratatui::text::Line<'static>>| {
@@ -3024,6 +3025,9 @@ fn quota_popup_lines_show_bars_resets_and_missing_data() {
     );
     // 已過重置時間的視窗歸零。
     assert!(l[2].contains("7d") && l[2].contains("  0%"), "{l:?}");
+    let mut w = q.clone();
+    w.warning = true;
+    assert!(text(crate::quota::agent_lines("claude", Some(&w), now))[0].contains("⚠"));
     let none = text(crate::quota::agent_lines("opencode", None, now));
     assert_eq!(none.len(), 1);
     assert!(none[0].starts_with("opencode"));
@@ -3044,6 +3048,7 @@ fn quota_popup_renders_and_header_click_area_is_set() {
                 resets_at_ms: Some(now + 3_600_000),
             }],
             reached: false,
+            warning: false,
             updated_ms: now,
         },
     );

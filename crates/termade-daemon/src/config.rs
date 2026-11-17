@@ -63,6 +63,10 @@ pub struct AgentSpawnCfg {
     pub confirm: Option<String>,
     /// 單一父 session 同時最多幾個執行中的子 session (預設 3；`[limits] max_children` 有設時以它為準)。
     pub max_live_children: Option<usize>,
+    /// daemon 重啟時自動接續當下正在執行中的 session (預設 true)。
+    pub auto_resume: Option<bool>,
+    /// worktree 裡的 agent 共用 `<repo>/.termade/target` 當 `CARGO_TARGET_DIR` (預設 true，只對 Cargo 專案)。
+    pub shared_cargo_target: Option<bool>,
 }
 
 /// 一次 agent spawn 的檢查結果。
@@ -81,6 +85,12 @@ pub enum SpawnCheck {
 impl AgentSpawnCfg {
     pub fn worktree(&self) -> bool {
         self.worktree.unwrap_or(true)
+    }
+    pub fn auto_resume(&self) -> bool {
+        self.auto_resume.unwrap_or(true)
+    }
+    pub fn shared_cargo_target(&self) -> bool {
+        self.shared_cargo_target.unwrap_or(true)
     }
     pub fn max_live_children(&self) -> usize {
         self.max_live_children.unwrap_or(3)

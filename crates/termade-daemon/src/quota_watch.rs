@@ -25,6 +25,13 @@ pub(crate) fn live_pressure(q: &Quota, now_ms: u64) -> f32 {
 }
 
 /// 送給 agent 的額度警告 (固定英文協定格式)。
+/// agent 自己回報「接近上限」(Claude `allowed_warning`) 時的提早提醒：比 `QUOTA_WARN` 溫和。
+pub(crate) fn quota_notice_body(agent: &str, used: f32) -> String {
+    format!(
+        "QUOTA_NOTICE {agent} {used:.0}% (provider warning): avoid spawning new workers unless necessary; finish current tasks and commit progress."
+    )
+}
+
 pub(crate) fn quota_warn_body(agent: &str, used: f32) -> String {
     format!(
         "QUOTA_WARN {agent} {used:.0}%: stop spawning new workers, checkpoint/commit work now, report status."
@@ -250,8 +257,34 @@ impl Shared {
             .warn_percent
             .unwrap_or(DEFAULT_WARN_PERCENT);
         let used = live_pressure(quota, now);
+        let notice_key = format!("{}:notice", quota.agent);
         if used < threshold && !quota.reached {
             lock_set(&self.quota_warned).remove(&quota.agent);
+            if !quota.warning {
+                lock_set(&self.quota_warned).remove(&notice_key);
+                return;
+            }
+            // 還沒到門檻，但 agent 自己說快到上限了：只提醒 coordinator 一次，不動其他 session。
+            if !lock_set(&self.quota_warned).insert(notice_key) {
+                return;
+            }
+            let coordinators: Vec<SessionId> = lock(&self.inner)
+                .state
+                .sessions
+                .values()
+                .filter(|s| s.status.is_live() && s.role == termade_core::Role::Coordinator)
+                .map(|s| s.id.clone())
+                .collect();
+            let body = quota_notice_body(&quota.agent, used);
+            for rid in coordinators {
+                let _ = self.deliver_message(
+                    Some("termade".into()),
+                    termade_core::Target::Direct(rid),
+                    termade_core::MsgKind::Chat,
+                    body.clone(),
+                    None,
+                );
+            }
             return;
         }
         if !lock_set(&self.quota_warned).insert(quota.agent.clone()) {
@@ -361,6 +394,7 @@ mod tests {
                 resets_at_ms: resets,
             }],
             reached,
+            warning: false,
             updated_ms: 0,
         }
     }
@@ -425,6 +459,13 @@ mod tests {
             }
             o => panic!("{o:?}"),
         }
+    }
+
+    #[test]
+    fn quota_notice_body_is_softer_than_warn() {
+        let b = quota_notice_body("claude", 77.0);
+        assert!(b.starts_with("QUOTA_NOTICE claude 77%"), "{b}");
+        assert!(!b.contains("stop spawning"));
     }
 
     #[test]

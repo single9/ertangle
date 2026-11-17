@@ -439,6 +439,22 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
         }
     }
 
+    // worktree 裡的 agent 共用一個 cargo target：不必各編一份，cargo 的目錄鎖也讓多個 worker 的
+    // 編譯／測試自動排隊，不會同時吃滿 CPU。放在 resolved.env 之前，設定檔可以覆寫。
+    if config::Config::load(&config_dir(), &cwd)
+        .agent_spawn
+        .shared_cargo_target()
+        && std::env::var_os("CARGO_TARGET_DIR").is_none()
+    {
+        let target = lock(&shared.inner)
+            .state
+            .sessions
+            .get(&id)
+            .and_then(shared_cargo_target_dir);
+        if let Some(t) = target {
+            env.push(("CARGO_TARGET_DIR".to_string(), t));
+        }
+    }
     env.extend(resolved.env.iter().cloned());
     let (tx, rx) = mpsc::channel();
     let spec = SessionSpec {
@@ -1424,4 +1440,19 @@ pub(crate) fn handle_artifact(
     };
     shared.emit(Event::BusMessage { message });
     let _ = reply.send(Frame::ok_note(tr!("已分享產出 {id}", id = id)));
+}
+
+/// worktree session 共用的 cargo target 目錄 (`<repo>/.termade/target`)；不在 worktree 或不是 Cargo 專案時為 `None`。
+pub(crate) fn shared_cargo_target_dir(s: &termade_core::Session) -> Option<String> {
+    s.branch.as_ref()?;
+    let root = std::path::Path::new(s.repo_root.as_deref()?);
+    if root == std::path::Path::new(&s.cwd) || !root.join("Cargo.toml").is_file() {
+        return None;
+    }
+    Some(
+        root.join(".termade")
+            .join("target")
+            .to_string_lossy()
+            .to_string(),
+    )
 }

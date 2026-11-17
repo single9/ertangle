@@ -1708,6 +1708,9 @@ pub struct Quota {
     pub windows: Vec<QuotaWindow>,
     /// 已達上限／被限流。
     pub reached: bool,
+    /// agent 回報「接近上限」(例如 Claude 的 `allowed_warning`)，仍可使用。
+    #[serde(default)]
+    pub warning: bool,
     pub updated_ms: u64,
 }
 
@@ -2522,6 +2525,7 @@ mod attachment_tests {
                 },
             ],
             reached: false,
+            warning: false,
             updated_ms: 0,
         };
         let s = q.summary(10_000_000);

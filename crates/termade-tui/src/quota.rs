@@ -80,6 +80,13 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
             format!("  {}", tr!("✗額度已滿")),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ));
+    } else if q.warning {
+        head.push(Span::styled(
+            format!("  {}", tr!("⚠ 接近上限")),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ));
     }
     head.push(Span::styled(
         format!(

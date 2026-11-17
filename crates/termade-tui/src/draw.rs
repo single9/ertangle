@@ -746,6 +746,7 @@ fn quota_span(app: &App) -> Span<'static> {
     let mut text = String::new();
     let mut worst = 0.0f32;
     let mut reached = false;
+    let mut warning = false;
     for q in app.state.quotas.values() {
         // 已過重置時間的視窗不再算數。
         let live: Vec<_> = q
@@ -759,6 +760,7 @@ fn quota_span(app: &App) -> Span<'static> {
         let used = live.iter().map(|w| w.used_percent).fold(0.0, f32::max);
         worst = worst.max(used);
         reached |= q.reached;
+        warning |= q.warning;
         let w = live
             .iter()
             .max_by(|a, b| a.used_percent.total_cmp(&b.used_percent))
@@ -767,7 +769,7 @@ fn quota_span(app: &App) -> Span<'static> {
     }
     let color = if reached || worst >= 90.0 {
         Color::Red
-    } else if worst >= 70.0 {
+    } else if worst >= 70.0 || warning {
         Color::Yellow
     } else {
         Color::DarkGray

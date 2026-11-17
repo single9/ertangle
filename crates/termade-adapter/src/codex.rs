@@ -598,6 +598,7 @@ pub(crate) fn parse_rate_limits(snap: &Value) -> Option<termade_core::Quota> {
         agent: "codex".into(),
         windows,
         reached,
+        warning: false,
         updated_ms: termade_core::now_millis(),
     })
 }

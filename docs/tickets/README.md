@@ -51,6 +51,7 @@
 | [T43](T43-web-model-catalog.md) | Web 版模型清單過時，與 TUI 不一致 (已完成) | P2 | T30 |
 | [T44](T44-web-list-models.md) | 網頁版透過 daemon 取得與 TUI 同源的 model 清單 (`list_models`) (已完成) | P2 | T43 |
 | [T45](T45-tui-quota-popup.md) | `:quota` 改為額度浮層，列出已安裝 agent 並以 progress bar 呈現 (已完成) | P3 | — |
+| [T46](T46-auto-resume-shared-target-quota-notice.md) | daemon 重啟自動接續、worktree 共用 cargo target、額度提早提醒 (已完成) | P2 | T01, T14, T38 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

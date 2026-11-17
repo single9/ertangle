@@ -1946,11 +1946,19 @@ msgid "daemon 重啟，可用 :resume 接續"
 msgstr ""
 
 #: crates/termade-daemon/src/lib.rs
+msgid "daemon 重啟後自動接續失敗：{e}"
+msgstr ""
+
+#: crates/termade-daemon/src/lib.rs
 msgid "排隊 prompt 送出失敗：{e}"
 msgstr ""
 
 #: crates/termade-daemon/src/lib.rs
 msgid "session 已結束，丟棄 {dropped} 則排隊 prompt"
+msgstr ""
+
+#: crates/termade-daemon/src/lib.rs
+msgid "daemon 重啟，已自動接續"
 msgstr ""
 
 #: crates/termade-tui/src/app.rs
@@ -3603,6 +3611,10 @@ msgid "尚無額度資料 (只有 claude、codex 會回報，執行過一個回�
 msgstr ""
 
 #: crates/termade-tui/src/quota.rs
+msgid "⚠ 接近上限"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
 msgid "{ago} 前更新"
 msgstr ""
 
@@ -3684,6 +3696,14 @@ msgstr ""
 
 #: crates/termade-tui/src/settings.rs
 msgid "agent 建立 session 免確認的 effort 上限"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "daemon 重啟時自動接續執行中的 session"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "worktree 共用 cargo target (編譯排隊、不重複)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs

@@ -249,6 +249,8 @@ pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<termade_core::Quota>
     // `allowed_warning` (接近上限的提醒) 仍可使用，只有 `rejected` 之類非 `allowed*` 的狀態才算用完。
     let blocked = |v: &Value| v.as_str().is_some_and(|s| !s.starts_with("allowed"));
     let mut reached = blocked(&info["status"]);
+    let warns = |v: &Value| v.as_str() == Some("allowed_warning");
+    let mut warning = warns(&info["status"]);
     if let Some(map) = info["unifiedWindows"].as_object() {
         for (key, w) in map {
             let name = match key.as_str() {
@@ -260,6 +262,7 @@ pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<termade_core::Quota>
             if blocked(&w["status"]) {
                 reached = true;
             }
+            warning |= warns(&w["status"]);
             windows.push(termade_core::QuotaWindow {
                 name,
                 used_percent: used,
@@ -275,6 +278,7 @@ pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<termade_core::Quota>
         agent: "claude".into(),
         windows,
         reached,
+        warning,
         updated_ms: termade_core::now_millis(),
     })
 }
@@ -669,7 +673,9 @@ mod tests {
         let blocked = serde_json::json!({"rate_limit_info":{"status":"rejected","unifiedWindows":{"five_hour":{"utilization":1.0,"resetsAt":1,"status":"rejected"}}}});
         assert!(parse_rate_limit_event(&blocked).unwrap().reached);
         let warning = serde_json::json!({"rate_limit_info":{"status":"allowed_warning","unifiedWindows":{"seven_day":{"utilization":0.76,"resetsAt":1,"status":"allowed_warning"}}}});
-        assert!(!parse_rate_limit_event(&warning).unwrap().reached);
+        let wq = parse_rate_limit_event(&warning).unwrap();
+        assert!(!wq.reached && wq.warning);
+        assert!(!q.warning);
     }
 
     #[test]
