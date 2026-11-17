@@ -64,7 +64,7 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
     general_rules(&mut out);
     if let Some(branch) = &me.branch {
         out.push_str(&format!(
-            "- Worktree: You are working in an isolated git worktree (branch {branch}). Keep your commits on this branch; do not merge into the main branch unless explicitly requested.\n"
+            "- Worktree: You are working in an isolated git worktree (branch {branch}). Keep your commits on this branch; do not merge into the main branch unless explicitly requested. Never use `git stash`: the stash stack is shared with every other worktree, so a pop can apply another session's changes; set work aside with a WIP commit instead.\n"
         ));
     }
     let has_parent = parent.is_some() || me.parent.is_some();

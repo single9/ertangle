@@ -42,5 +42,5 @@ After sending `TASK_DONE`, stop your turn immediately.
 
 1. Set your task to `doing` with `termade_task_update`; keep a one-line `termade_status`.
 2. Stay inside the assigned scope; do not spawn sessions unless told to.
-3. Commit on your worktree branch (do not merge into main yourself).
+3. Commit on your worktree branch (do not merge into main yourself). Never use `git stash` in a worktree: the stash stack is shared across all worktrees; use a WIP commit instead.
 4. Mark the task `done`, send `TASK_DONE <task_id> <summary>` to the parent, stop.
