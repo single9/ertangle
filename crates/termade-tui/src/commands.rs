@@ -553,14 +553,8 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 tr!("逐字稿顯示：Markdown 渲染")
             };
         }
-        "bus" => {
-            app.bus_overlay = !app.bus_overlay;
-            app.status = if app.bus_overlay {
-                tr!("Bus：顯示")
-            } else {
-                tr!("Bus：隱藏")
-            };
-        }
+        "bus" => app.toggle_bus(),
+        "grid" => crate::project::toggle_grid(app),
         "merge" => {
             let parts = rest.split_whitespace();
             let mut dry_run = false;

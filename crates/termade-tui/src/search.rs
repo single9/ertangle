@@ -64,7 +64,7 @@ fn compute(app: &App, query: &str) -> Vec<usize> {
             find_matches(texts.iter().map(String::as_str), query)
         }
         CenterView::Diff => find_matches(app.diff_lines.iter().map(String::as_str), query),
-        CenterView::Worktrees | CenterView::Tasks => Vec::new(),
+        CenterView::Worktrees | CenterView::Tasks | CenterView::Grid => Vec::new(),
     }
 }
 
@@ -73,7 +73,7 @@ pub(crate) fn open(app: &mut App, prefill: Option<&str>) {
     let anchor = match app.view {
         CenterView::Transcript => app.transcript_offset,
         CenterView::Diff => app.diff_cursor,
-        CenterView::Worktrees | CenterView::Tasks => {
+        CenterView::Worktrees | CenterView::Tasks | CenterView::Grid => {
             app.status = tr!("這個視圖不支援搜尋 (逐字稿與 Diff 才有)");
             return;
         }
@@ -141,7 +141,7 @@ fn jump(app: &mut App) {
         // 等同手動捲動，會暫停跟隨最新。
         CenterView::Transcript => app.transcript_scroll = Some(line),
         CenterView::Diff => app.diff_cursor = line,
-        CenterView::Worktrees | CenterView::Tasks => {}
+        CenterView::Worktrees | CenterView::Tasks | CenterView::Grid => {}
     }
 }
 

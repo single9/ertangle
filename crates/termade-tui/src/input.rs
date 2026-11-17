@@ -110,7 +110,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
                     CenterView::Worktrees
                 }
                 CenterView::Worktrees => CenterView::Tasks,
-                CenterView::Tasks => CenterView::Transcript,
+                CenterView::Tasks | CenterView::Grid => CenterView::Transcript,
             };
         }
         KeyCode::Char('g') => {
@@ -131,7 +131,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             }
             CenterView::Transcript => scroll_transcript_lines(app, 1),
             CenterView::Tasks => crate::tasks::move_task_cursor(app, 1),
-            CenterView::Worktrees => {}
+            CenterView::Worktrees | CenterView::Grid => {}
         },
         KeyCode::Up => match app.view {
             CenterView::Diff => {
@@ -140,7 +140,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             }
             CenterView::Transcript => scroll_transcript_lines(app, -1),
             CenterView::Tasks => crate::tasks::move_task_cursor(app, -1),
-            CenterView::Worktrees => {}
+            CenterView::Worktrees | CenterView::Grid => {}
         },
         KeyCode::Char('j') => {
             if app.view == CenterView::Diff {
@@ -236,6 +236,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             app.input_cursor = 0;
             app.status = tr!("命令 (Tab 補全)：spawn rm clean kill merge diff gc task …");
         }
+        KeyCode::Enter if app.view == CenterView::Grid => app.view = CenterView::Transcript,
         KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
         KeyCode::Enter | KeyCode::Char('v') if app.view == CenterView::Diff => {
             toggle_collapse_current_file(app)
@@ -301,14 +302,8 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         KeyCode::Char('P') => crate::app::toggle_scope(app, None),
         KeyCode::Char('O') => toggle_tools(app),
         KeyCode::Char('L') => app.cycle_layout(),
-        KeyCode::Char('b') => {
-            app.bus_overlay = !app.bus_overlay;
-            app.status = if app.bus_overlay {
-                tr!("Bus：顯示 (b 或 Esc 關閉；僅在兩欄／分頁模式有浮層)")
-            } else {
-                tr!("Bus：隱藏")
-            };
-        }
+        KeyCode::Char('b') => app.toggle_bus(),
+        KeyCode::Char('V') => crate::project::toggle_grid(app),
         KeyCode::Esc => {
             app.selection = None;
             app.bus_overlay = false;

@@ -178,6 +178,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 it('k', termade_core::tr_noop!("任務視圖"), Act::Cmd("tasks")),
                 it('l', termade_core::tr_noop!("切換版面"), Act::Cmd("layout")),
                 it(
+                    'g',
+                    termade_core::tr_noop!("網格檢視 (一次看 4 個 session)"),
+                    Act::Cmd("grid"),
+                ),
+                it(
                     'r',
                     termade_core::tr_noop!("原始文字／Markdown"),
                     Act::Cmd("raw"),

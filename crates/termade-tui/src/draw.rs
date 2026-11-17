@@ -20,7 +20,8 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     // 依終端機寬度調整三欄比例：寬螢幕給側欄多一點，窄螢幕留給中央。
     let w = f.area().width;
     let layout = effective_layout(app.layout, w);
-    app.bus_visible = layout == LayoutMode::Three || app.bus_overlay;
+    let right_bus = layout == LayoutMode::Three && app.right_bus;
+    app.bus_visible = right_bus || app.bus_overlay;
     if app.bus_visible {
         app.bus_seen = app.state.messages.len();
     }
@@ -76,7 +77,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     };
 
     // Bus 被隱藏時，待核准請求必須在別處看得到。
-    let center = if layout != LayoutMode::Three && !app.state.pending_permissions.is_empty() {
+    let center = if !right_bus && !app.state.pending_permissions.is_empty() {
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(1)])
@@ -92,9 +93,14 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         CenterView::Diff => draw_diff(f, center, app),
         CenterView::Worktrees => draw_worktrees(f, center, app),
         CenterView::Tasks => crate::tasks::draw_tasks(f, center, app),
+        CenterView::Grid => crate::project::draw_grid(f, center, app),
     }
     if let Some(a) = bus_area {
-        draw_bus(f, a, app);
+        if right_bus {
+            draw_bus(f, a, app);
+        } else {
+            crate::project::draw_project(f, a, app);
+        }
     } else if app.bus_overlay {
         let ow = (main.width * 2 / 5).max(30).min(main.width);
         let r = Rect::new(main.x + main.width - ow, main.y, ow, main.height);
@@ -800,6 +806,10 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &App) {
             Style::default().fg(Color::Gray),
         ),
     ];
+
+    if app.view == CenterView::Grid {
+        tab_spans.insert(5, tab("Grid", true));
+    }
 
     if app.has_multiple_hosts() {
         tab_spans.push(Span::raw("  "));
@@ -1686,6 +1696,7 @@ pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
         CenterView::Diff => tr!("  ? 說明  c 註解  M 合併  q 離開"),
         CenterView::Worktrees => tr!("  ? 說明  M 合併  G 清理  q 離開"),
         CenterView::Tasks => tr!("  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"),
+        CenterView::Grid => tr!("  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"),
     };
     let text = Line::from(vec![
         Span::styled(

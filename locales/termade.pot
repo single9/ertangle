@@ -1061,7 +1061,7 @@ msgstr ""
 msgid "閒置"
 msgstr ""
 
-#: crates/termade-core/src/lib.rs crates/termade-tui/src/app.rs
+#: crates/termade-core/src/lib.rs crates/termade-tui/src/app.rs crates/termade-tui/src/project.rs
 msgid "執行中"
 msgstr ""
 
@@ -1894,6 +1894,14 @@ msgid "錯誤：{message}"
 msgstr ""
 
 #: crates/termade-tui/src/app.rs
+msgid "Bus：顯示 (b 或 Esc 關閉)"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs
+msgid "Bus：隱藏"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs
 msgid "版面：{layout}"
 msgstr ""
 
@@ -2165,7 +2173,7 @@ msgstr ""
 msgid "顯示 Web 版網址與連線資訊"
 msgstr ""
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/help.rs
+#: crates/termade-tui/src/commands.rs
 msgid "顯示／隱藏 Bus 浮層"
 msgstr ""
 
@@ -2271,14 +2279,6 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
 msgid "逐字稿顯示：Markdown 渲染"
-msgstr ""
-
-#: crates/termade-tui/src/commands.rs
-msgid "Bus：顯示"
-msgstr ""
-
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
-msgid "Bus：隱藏"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2801,6 +2801,10 @@ msgstr ""
 msgid "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"
 msgstr ""
 
+#: crates/termade-tui/src/draw.rs
+msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
+msgstr ""
+
 #: crates/termade-tui/src/help.rs
 msgid "常用"
 msgstr ""
@@ -2934,7 +2938,15 @@ msgid "Diff 檢視"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
-msgid "切換版面：三欄／兩欄／分頁"
+msgid "切換版面：三欄 (Sessions／中央／Project)／兩欄／分頁"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "網格檢視：一次看 4 個 session (Enter 返回)"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "顯示／隱藏 Bus (三欄時取代右欄的 Project)"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
@@ -3066,7 +3078,7 @@ msgid "設定或調高選取 session 的成本上限，如 :budget 10"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
-msgid "切換版面；:raw、:thoughts、:bus 切換顯示"
+msgid "切換版面；:raw、:thoughts、:bus、:grid 切換顯示"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
@@ -3143,10 +3155,6 @@ msgstr ""
 
 #: crates/termade-tui/src/input.rs
 msgid "滑鼠擷取：關 (可直接拖曳選取複製；滾輪用終端機 alternate scroll)"
-msgstr ""
-
-#: crates/termade-tui/src/input.rs
-msgid "Bus：顯示 (b 或 Esc 關閉；僅在兩欄／分頁模式有浮層)"
 msgstr ""
 
 #: crates/termade-tui/src/input.rs
@@ -3271,6 +3279,10 @@ msgstr ""
 
 #: crates/termade-tui/src/menu.rs
 msgid "切換版面"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
+msgid "網格檢視 (一次看 4 個 session)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
@@ -3432,6 +3444,26 @@ msgstr ""
 
 #: crates/termade-tui/src/notify.rs
 msgid "通知命令執行失敗：{e}"
+msgstr ""
+
+#: crates/termade-tui/src/project.rs
+msgid "協作"
+msgstr ""
+
+#: crates/termade-tui/src/project.rs
+msgid "最新訊息"
+msgstr ""
+
+#: crates/termade-tui/src/project.rs
+msgid "目前沒有協作或執行中的項目。b 切換 Bus。"
+msgstr ""
+
+#: crates/termade-tui/src/project.rs
+msgid " Project · 全部專案 "
+msgstr ""
+
+#: crates/termade-tui/src/project.rs
+msgid "尚無 session：按 n 建立"
 msgstr ""
 
 #: crates/termade-tui/src/ps.rs
