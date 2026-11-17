@@ -48,6 +48,8 @@ fn reed_solomon_compute(data: &[u8], ec_count: usize) -> Vec<u8> {
         }
         gen = next;
     }
+    // 轉為由最高次項開始排列 (首項恆為 1，略過)
+    gen.reverse();
 
     let mut rem = vec![0u8; ec_count];
     for &byte in data {
@@ -55,7 +57,7 @@ fn reed_solomon_compute(data: &[u8], ec_count: usize) -> Vec<u8> {
         rem.copy_within(1..ec_count, 0);
         rem[ec_count - 1] = 0;
         for j in 0..ec_count {
-            rem[j] ^= gf_mul(gen[j], factor);
+            rem[j] ^= gf_mul(gen[j + 1], factor);
         }
     }
     rem
@@ -116,7 +118,7 @@ const VERSIONS: [QrVersion; 6] = [
         total_codewords: 134,
         data_codewords: 108,
         ec_codewords: 26,
-        blocks: 2,
+        blocks: 1,
         alignment_pos: &[6, 30],
     },
     QrVersion {
@@ -371,24 +373,24 @@ impl QrCode {
         // 預先計算好的 ECC L, Mask 0 遮罩後格式字元 15 bits：
         let format_bits: u16 = 0b111011111000100;
         for i in 0..15 {
-            let b = (format_bits >> (14 - i)) & 1 == 1;
-            // 左上部分
+            let b = (format_bits >> i) & 1 == 1;
+            // 左上部分 (row, col)
             let (r, c) = if i < 6 {
-                (8, i)
+                (i, 8)
             } else if i < 8 {
-                (8, i + 1)
+                (i + 1, 8)
             } else if i == 8 {
-                (7, 8)
+                (8, 7)
             } else {
-                (14 - i, 8)
+                (8, 14 - i)
             };
             matrix[r * size + c] = Some(b);
 
             // 右上與左下部分
             let (r2, c2) = if i < 8 {
-                (size - 1 - i, 8)
+                (8, size - 1 - i)
             } else {
-                (8, size - 15 + i)
+                (size - 15 + i, 8)
             };
             matrix[r2 * size + c2] = Some(b);
         }
@@ -500,5 +502,14 @@ mod tests {
         let rendered = qr.render_terminal();
         assert!(!rendered.is_empty());
         assert!(rendered.contains('█') || rendered.contains('▀') || rendered.contains('▄'));
+    }
+
+    #[test]
+    fn test_reed_solomon_known_vector() {
+        let data = [
+            32, 91, 11, 120, 209, 114, 220, 77, 67, 64, 236, 17, 236, 17, 236, 17,
+        ];
+        let ec = reed_solomon_compute(&data, 10);
+        assert_eq!(ec, [196, 35, 39, 119, 235, 215, 231, 226, 93, 23]);
     }
 }
