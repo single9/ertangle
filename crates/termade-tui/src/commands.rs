@@ -722,11 +722,12 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 .map(|ip| ip.to_string());
             let token_hint = token.as_deref().unwrap_or("");
             let web_port = cfg.web.resolved_port();
-            let url = if let Some(ip) = &tailscale_ip {
-                format!("http://{ip}:{web_port}/?token={token_hint}")
-            } else {
-                format!("http://127.0.0.1:{web_port}/?token={token_hint}")
-            };
+            let host = tailscale_ip.as_deref().unwrap_or("127.0.0.1");
+            let mut url = format!("http://{host}:{web_port}/?token={token_hint}");
+            if app.scope_here && !app.home_project.is_empty() {
+                url.push_str("&project=");
+                url.push_str(&percent_encode(&app.home_project));
+            }
 
             // 狀態 / QR 一律以彈出視窗顯示網址與 QR Code。
             if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&url) {
@@ -1591,4 +1592,17 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
         .filter(|(v, _)| v.starts_with(cur))
         .collect();
     Some((cur.to_string(), out))
+}
+
+/// URL query 值的百分比編碼 (只保留 unreserved 字元)。
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }

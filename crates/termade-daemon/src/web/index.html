@@ -1067,6 +1067,28 @@
       cursor: pointer;
     }
 
+    /* 總覽 (Overview) */
+    .ov-wrap { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+    .ov-sum { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--text-dim); align-items: center; }
+    .ov-sum b { color: var(--text); font-size: 15px; }
+    .ov-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; font-size: 12px; }
+    .ov-card.active { border-color: var(--cyan); }
+    .ov-child { margin-left: 14px; border-left: 2px solid var(--border); padding-left: 8px; }
+    .ov-head { display: flex; align-items: center; gap: 6px; }
+    .ov-title { font-weight: 600; font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ov-role { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #182333; color: var(--cyan); }
+    .ov-dim { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+    .ov-tool { color: var(--yellow); font-family: var(--font-mono); }
+    .ov-minis { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; }
+    .ov-mini { flex: 0 0 86%; scroll-snap-align: start; background: #000; border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; min-width: 0; }
+    .ov-mini-h { padding: 5px 10px; font-size: 11px; color: var(--cyan); border-bottom: 1px solid var(--border); cursor: pointer; }
+    .ov-mini pre { margin: 0; padding: 6px 10px; height: 180px; overflow: auto; font-family: var(--font-mono); font-size: 10.5px; white-space: pre-wrap; word-break: break-all; color: var(--text-dim); }
+    @media (min-width: 900px) {
+      .ov-minis { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
+      .ov-mini { flex: none; }
+      .ov-mini pre { height: 240px; }
+    }
+
     /* 底部導覽列 (Bottom Navigation Bar) */
     nav {
       background: rgba(14, 16, 24, 0.95);
@@ -1356,7 +1378,7 @@
       <div class="header-left" onclick="openSessionPickerSheet()">
         <div class="session-title-wrap">
           <div class="header-breadcrumb">
-            <span id="header-project" class="header-project-text">專案</span>
+            <span id="header-project" class="header-project-text" onclick="event.stopPropagation(); openProjectSheet()" style="text-decoration:underline dotted; cursor:pointer;">專案 ▾</span>
             <span class="header-breadcrumb-dot">•</span>
             <span id="header-model" class="header-model-text">模型</span>
           </div>
@@ -1389,7 +1411,17 @@
     <!-- 主要內容區 -->
     <main>
       <!-- TAB 1: 對話 (Chat) -->
-      <div id="view-chat" class="tab-view active">
+      <!-- TAB 0: 總覽 (Overview) -->
+      <div id="view-overview" class="tab-view active">
+        <div class="ov-wrap">
+          <div id="ov-summary" class="ov-sum"></div>
+          <div id="ov-tree" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <div id="ov-minis" class="ov-minis"></div>
+        </div>
+      </div>
+
+      <!-- TAB 1: 對話 (Chat) -->
+      <div id="view-chat" class="tab-view">
         <!-- 待核准置頂橫幅 -->
         <div id="urgent-approval-banner" class="urgent-banner" style="display:none;">
           <div class="urgent-title">
@@ -1505,7 +1537,11 @@
 
     <!-- 底部導覽列 -->
     <nav>
-      <button class="nav-btn active" onclick="switchNavTab('chat')">
+      <button class="nav-btn active" onclick="switchNavTab('overview')">
+        <svg class="nav-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+        <span>總覽</span>
+      </button>
+      <button class="nav-btn" onclick="switchNavTab('chat')">
         <svg class="nav-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         <span>對話</span>
       </button>
@@ -1526,6 +1562,15 @@
 
     <!-- 懸浮提示 Toast -->
     <div id="toast"></div>
+
+    <!-- 抽屜 P：專案切換 -->
+    <div id="sheet-project" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">切換專案</div>
+        <div id="project-list" style="display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow-y:auto;"></div>
+      </div>
+    </div>
 
     <!-- 抽屜 0：頂部點選快速切換 Session (含專案識別) -->
     <div id="sheet-session-picker" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
@@ -1933,6 +1978,18 @@
       token = "";
     }
 
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const pj = q.get("project") || h.get("project");
+      if (pj) {
+        pendingProjectParam = pj;
+        q.delete("project"); h.delete("project");
+        const qs = q.toString(), hs = h.toString();
+        history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
+      }
+    } catch (_) {}
+
     let ws = null;
     let state = {
       sessions: {},
@@ -1944,12 +2001,14 @@
       seq: 0
     };
     let activeSession = null;
-    let currentTab = "chat";
+    let currentTab = "overview";
     let daemonEpoch = null;
     let pendingApprovalReq = null;
     let queueMode = false;
     let taskFilter = "all";
-    let sessionProjectFilter = "all";
+    let projectScope = "all";
+    try { projectScope = localStorage.getItem("termade_project") || "all"; } catch (_) {}
+    let pendingProjectParam = null;
     let pendingReviewLine = null;
 
     let newSessionState = {
@@ -2005,21 +2064,84 @@
       setTimeout(() => { t.className = ""; }, 2500);
     }
 
-    // 專案名稱解析輔助
-    function getProjectName(session) {
-      if (!session) return "預設專案";
-      const p = session.repo_root || session.cwd || "";
-      const parts = p.split("/").filter(Boolean);
-      return parts.length > 0 ? parts[parts.length - 1] : "專案";
-    }
+    // 專案識別 = 專案根目錄完整路徑 (repo_root ?? cwd)；顯示用 basename，重名時加上層目錄
+    function projectRoot(s) { return (s && (s.repo_root || s.cwd)) || ""; }
+    function pathParts(p) { return p.split("/").filter(Boolean); }
+    function isLive(s) { return !["exited", "failed"].includes((s && s.status) || ""); }
 
     function getAllProjects() {
-      const projects = new Set();
+      const m = new Map();
       for (const id in state.sessions) {
         const s = state.sessions[id];
-        projects.add(getProjectName(s));
+        const r = projectRoot(s);
+        const e = m.get(r) || { root: r, count: 0, live: 0 };
+        e.count++;
+        if (isLive(s)) e.live++;
+        m.set(r, e);
       }
-      return Array.from(projects);
+      const list = Array.from(m.values());
+      const seen = {};
+      list.forEach(e => { const b = pathParts(e.root).pop() || "專案"; seen[b] = (seen[b] || 0) + 1; });
+      list.forEach(e => {
+        const parts = pathParts(e.root);
+        const b = parts.pop() || "專案";
+        e.name = seen[b] > 1 && parts.length ? `${parts[parts.length - 1]}/${b}` : b;
+      });
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function getProjectName(session) {
+      if (!session) return "預設專案";
+      const r = projectRoot(session);
+      const e = getAllProjects().find(x => x.root === r);
+      return e ? e.name : (pathParts(r).pop() || "專案");
+    }
+
+    // 目前有效的專案範圍 (已不存在的專案視為「全部」)
+    function curScope() {
+      if (projectScope === "all") return "all";
+      for (const id in state.sessions) if (projectRoot(state.sessions[id]) === projectScope) return projectScope;
+      return "all";
+    }
+    function inScope(s) { const c = curScope(); return !!s && (c === "all" || projectRoot(s) === c); }
+    function scopedIds() { return Object.keys(state.sessions).filter(id => inScope(state.sessions[id])); }
+
+    // 選出專案內第一個存活 session (優先 coordinator)
+    function pickSession(scopeRoot) {
+      const ids = Object.keys(state.sessions).filter(id => scopeRoot === "all" || projectRoot(state.sessions[id]) === scopeRoot);
+      const live = ids.filter(id => isLive(state.sessions[id]));
+      const pool = live.length ? live : ids;
+      return pool.find(id => state.sessions[id].role === "coordinator") || pool[0] || null;
+    }
+
+    function setProjectScope(root, pick = true) {
+      projectScope = root || "all";
+      try { localStorage.setItem("termade_project", projectScope); } catch (_) {}
+      if (pick) {
+        const a = state.sessions[activeSession];
+        if (!a || !inScope(a)) activeSession = pickSession(curScope());
+      }
+      updateAllViews();
+    }
+
+    function openProjectSheet() {
+      const box = document.getElementById("project-list");
+      const cur = curScope();
+      const total = Object.keys(state.sessions).length;
+      let html = `<div class="session-card ${cur === "all" ? "active" : ""}" data-root="all"><div class="session-card-body"><span class="session-card-title">全部專案 (${total})</span></div></div>`;
+      getAllProjects().forEach(e => {
+        html += `<div class="session-card ${cur === e.root ? "active" : ""}" data-root="${escapeHtml(e.root)}">
+          <div class="session-card-body"><span class="session-card-title">${escapeHtml(e.name)} (${e.count})</span></div>
+          <div class="ov-dim" style="font-size:11px;">${escapeHtml(e.root)} • 存活 ${e.live}</div></div>`;
+      });
+      box.innerHTML = html;
+      box.onclick = ev => {
+        const el = ev.target.closest("[data-root]");
+        if (!el) return;
+        closeSheet("sheet-project");
+        setProjectScope(el.dataset.root);
+      };
+      openSheet("sheet-project");
     }
 
     function shortenModelName(model) {
@@ -2030,10 +2152,16 @@
 
     function formatStatus(status) {
       const map = {
+        starting: "啟動中",
+        busy: "執行中",
         running: "執行中",
         working: "執行中",
         idle: "閒置",
+        waiting_approval: "待核准",
         waiting: "待核准",
+        sleeping: "休眠",
+        exited: "已結束",
+        failed: "失敗",
         done: "已完成",
         error: "錯誤",
         stopped: "已停止"
@@ -2132,6 +2260,13 @@
         state = frame.state;
         if (!state.transcripts) state.transcripts = {};
         if (!state.queues) state.queues = {};
+        if (!state.messages) state.messages = [];
+        if (pendingProjectParam && Object.keys(state.sessions).length) {
+          projectScope = pendingProjectParam;
+          pendingProjectParam = null;
+          try { localStorage.setItem("termade_project", projectScope); } catch (_) {}
+          activeSession = pickSession(curScope());
+        }
         updateAllViews();
       } else if (op === "record") {
         applyRecord(frame.record);
@@ -2157,9 +2292,41 @@
         state.sessions[event.session.id] = event.session;
         if (!state.transcripts[event.session.id]) state.transcripts[event.session.id] = [];
       } else if (kind === "session_status") {
-        if (state.sessions[event.session]) {
-          state.sessions[event.session].status = event.status;
+        const x = state.sessions[event.session];
+        if (x) {
+          x.status = event.status;
+          if (event.status !== "busy" && event.status !== "waiting_approval") x.active_tools = [];
         }
+      } else if (kind === "session_bg_procs") {
+        if (state.sessions[event.session]) state.sessions[event.session].bg_procs = event.procs || [];
+      } else if (kind === "session_context") {
+        const x = state.sessions[event.session];
+        if (x) {
+          const old = x.context || {};
+          x.context = { used: event.used === 0 ? (old.used || 0) : event.used, window: event.window != null ? event.window : old.window };
+        }
+      } else if (kind === "session_limited") {
+        const x = state.sessions[event.session];
+        if (x) { x.status = "failed"; x.status_note = `額度用完：${(event.detail || "").slice(0, 80)} (可用 handoff 交接)`; }
+      } else if (kind === "session_exited") {
+        const x = state.sessions[event.session];
+        if (x && isLive(x)) x.status = "exited";
+      } else if (kind === "session_over_budget") {
+        if (state.sessions[event.session]) state.sessions[event.session].over_budget = true;
+      } else if (kind === "session_budget") {
+        const x = state.sessions[event.session];
+        if (x) { x.budget_usd = event.budget_usd; x.over_budget = false; }
+      } else if (kind === "session_label") {
+        if (state.sessions[event.session]) state.sessions[event.session].label = event.label;
+      } else if (kind === "session_handed_off") {
+        if (state.sessions[event.from]) state.sessions[event.from].handed_off_to = event.to;
+      } else if (kind === "queue_changed") {
+        if (event.items && event.items.length) state.queues[event.session] = event.items;
+        else delete state.queues[event.session];
+      } else if (kind === "bus_message") {
+        if (!state.messages) state.messages = [];
+        state.messages.push(event.message);
+        while (state.messages.length > 200) state.messages.shift();
       } else if (kind === "session_model") {
         if (state.sessions[event.session]) {
           state.sessions[event.session].model = event.model;
@@ -2177,7 +2344,7 @@
         delete state.transcripts[event.session];
         delete state.queues[event.session];
         if (activeSession === event.session) {
-          activeSession = Object.keys(state.sessions)[0] || null;
+          activeSession = pickSession(curScope()) || Object.keys(state.sessions)[0] || null;
         }
       } else if (kind === "permission_requested") {
         state.pending_permissions[event.request.req] = event.request;
@@ -2199,9 +2366,22 @@
         if (event.session === activeSession) renderCurrentChatTranscript();
       } else if (kind === "output") {
         if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
-        state.transcripts[event.session].push(event.text);
+        const parts = String(event.text).split("\n");
+        if (parts[parts.length - 1] === "") parts.pop();
+        parts.forEach(l => state.transcripts[event.session].push(l));
+        if (state.transcripts[event.session].length > 2000) state.transcripts[event.session].splice(0, state.transcripts[event.session].length - 2000);
         if (event.session === activeSession) renderCurrentChatTranscript();
       } else if (kind === "tool_call") {
+        const x = state.sessions[event.session];
+        if (x) {
+          if (!x.active_tools) x.active_tools = [];
+          if (event.ok == null && event.name) {
+            x.active_tools.push({ name: event.name, summary: String(event.input || "").slice(0, 80), started_ms: Date.now(), is_subagent: /^(task|agent|dispatch_agent|invoke_subagent|spawn_agent|subagent)$/i.test(event.name) });
+          } else if (event.ok != null) {
+            const i = event.name ? x.active_tools.findIndex(t => t.name === event.name) : -1;
+            if (i >= 0) x.active_tools.splice(i, 1); else if (x.active_tools.length) x.active_tools.shift();
+          }
+        }
         const icon = event.ok === true ? "✓" : (event.ok === false ? "✗" : "…");
         const summary = `▸ ${event.name} ${event.input || ""}`;
         if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
@@ -2637,8 +2817,9 @@
     }
 
     function updateAllViews() {
-      const sids = Object.keys(state.sessions);
-      if (!activeSession && sids.length > 0) activeSession = sids[0];
+      if (!state.sessions[activeSession] || (!inScope(state.sessions[activeSession]) && pickSession(curScope()))) {
+        activeSession = pickSession(curScope());
+      }
 
       // 1. 頂部狀態列 (含專案識別與模型資訊)
       const current = activeSession ? state.sessions[activeSession] : null;
@@ -2648,7 +2829,11 @@
       const statusBadge = document.getElementById("header-status-badge");
 
       if (labelEl) labelEl.innerText = current ? (current.label || activeSession) : "termade";
-      if (projectEl) projectEl.innerText = current ? getProjectName(current) : "專案";
+      if (projectEl) {
+        const sc = curScope();
+        const pe = getAllProjects().find(x => x.root === sc);
+        projectEl.innerText = (sc === "all" ? "全部專案" : (pe ? pe.name : "專案")) + " ▾";
+      }
 
       if (current) {
         const shortModel = shortenModelName(current.model);
@@ -2657,9 +2842,9 @@
         const st = current.status || "idle";
         if (statusBadge) {
           statusBadge.innerText = formatStatus(st);
-          if (st === "running" || st === "working") {
+          if (st === "busy" || st === "running" || st === "working") {
             statusBadge.className = "header-status-tag running";
-          } else if (st === "waiting") {
+          } else if (st === "waiting_approval" || st === "waiting") {
             statusBadge.className = "header-status-tag waiting";
           } else {
             statusBadge.className = "header-status-tag";
@@ -2689,7 +2874,11 @@
       }
 
       // 2. 審查橫幅
-      const pendingKeys = Object.keys(state.pending_permissions || {});
+      const pendingKeys = Object.keys(state.pending_permissions || {}).sort((a, b) => {
+        const sa = inScope(state.sessions[state.pending_permissions[a].session]) ? 0 : 1;
+        const sb = inScope(state.sessions[state.pending_permissions[b].session]) ? 0 : 1;
+        return sa - sb;
+      });
       const urgentBanner = document.getElementById("urgent-approval-banner");
       const navBadge = document.getElementById("nav-review-badge");
       const reviewSlot = document.getElementById("review-approval-slot");
@@ -2761,6 +2950,9 @@
 
       // 7. 額度資訊
       renderQuota();
+
+      // 8. 總覽
+      if (currentTab === "overview") renderOverview();
     }
 
     function filterTranscript() {
@@ -2789,8 +2981,16 @@
 
     function renderTasksList() {
       const container = document.getElementById("tasks-list");
+      container.onclick = ev => {
+        const el = ev.target.closest("[data-task]");
+        if (el) cycleTaskStatus(el.dataset.task, el.dataset.st);
+      };
       container.innerHTML = "";
-      const taskKeys = Object.keys(state.tasks || {});
+      const taskKeys = Object.keys(state.tasks || {}).filter(id => {
+        if (curScope() === "all") return true;
+        const t = state.tasks[id];
+        return inScope(state.sessions[t.assignee]) || inScope(state.sessions[t.created_by]);
+      });
       if (taskKeys.length === 0) {
         container.innerHTML = `<div style="text-align:center; color:var(--text-dim); margin-top:20px;">目前尚無協作任務</div>`;
         return;
@@ -2807,10 +3007,10 @@
         card.innerHTML = `
           <div class="task-top">
             <span class="task-title">${escapeHtml(t.title)}</span>
-            <span class="task-badge ${badgeClass}" onclick="cycleTaskStatus('${t.id}', '${t.status}')">${t.status}</span>
+            <span class="task-badge ${badgeClass}" data-task="${escapeHtml(t.id)}" data-st="${escapeHtml(t.status)}">${escapeHtml(t.status)}</span>
           </div>
           ${t.detail ? `<div style="font-size:12px; color:var(--text-dim);">${escapeHtml(t.detail)}</div>` : ""}
-          <div style="font-size:10px; color:#666;">指派：${t.assignee || "未指派"}</div>
+          <div style="font-size:10px; color:#666;">指派：${escapeHtml(t.assignee ? ((state.sessions[t.assignee] || {}).label || t.assignee) : "未指派")}</div>
         `;
         container.appendChild(card);
       });
@@ -2829,21 +3029,23 @@
 
       const sids = Object.keys(state.sessions);
       const projects = getAllProjects();
+      const cur = curScope();
 
-      // 計算各專案 session 數量
-      const projectCounts = { all: sids.length };
-      sids.forEach(id => {
-        const p = getProjectName(state.sessions[id]);
-        projectCounts[p] = (projectCounts[p] || 0) + 1;
-      });
-
-      // 專案篩選列
+      // 專案篩選列 (即全域專案範圍)
       const pFilterBar = document.getElementById("session-project-filter-bar");
-      pFilterBar.innerHTML = `<div class="filter-chip ${sessionProjectFilter === 'all' ? 'active' : ''}" onclick="setSessionProjectFilter('all', this)">全部專案 (${projectCounts.all || 0})</div>`;
-      projects.forEach(p => {
-        const count = projectCounts[p] || 0;
-        pFilterBar.innerHTML += `<div class="filter-chip ${sessionProjectFilter === p ? 'active' : ''}" onclick="setSessionProjectFilter('${p}', this)">${escapeHtml(p)} (${count})</div>`;
-      });
+      pFilterBar.innerHTML = `<div class="filter-chip ${cur === "all" ? "active" : ""}" data-root="all">全部專案 (${sids.length})</div>` +
+        projects.map(p => `<div class="filter-chip ${cur === p.root ? "active" : ""}" data-root="${escapeHtml(p.root)}">${escapeHtml(p.name)} (${p.count})</div>`).join("");
+      pFilterBar.onclick = ev => {
+        const el = ev.target.closest("[data-root]");
+        if (el) setProjectScope(el.dataset.root);
+      };
+      container.onclick = ev => {
+        const act = ev.target.closest("[data-act]");
+        const card = ev.target.closest("[data-sid]");
+        if (!card) return;
+        if (act && act.dataset.act === "settings") openSessionSettings(card.dataset.sid);
+        else selectSession(card.dataset.sid);
+      };
 
       // 更新副標題計數
       const countSub = document.getElementById("sessions-count-sub");
@@ -2864,20 +3066,21 @@
       sids.forEach(id => {
         const s = state.sessions[id];
         const pName = getProjectName(s);
-        if (sessionProjectFilter !== "all" && pName !== sessionProjectFilter) return;
+        if (!inScope(s)) return;
 
         const isActive = (id === activeSession);
         const shortModel = shortenModelName(s.model) || s.kind || "agent";
         const st = s.status || "idle";
         const statusText = formatStatus(st);
         let statusClass = "header-status-tag";
-        if (st === "running" || st === "working") statusClass = "header-status-tag running";
-        else if (st === "waiting") statusClass = "header-status-tag waiting";
+        if (st === "busy" || st === "running" || st === "working") statusClass = "header-status-tag running";
+        else if (st === "waiting_approval" || st === "waiting") statusClass = "header-status-tag waiting";
 
         const costStr = s.cost && s.cost.usd ? `$${s.cost.usd.toFixed(2)}` : "$0.00";
 
         const item = document.createElement("div");
         item.className = `session-card ${isActive ? "active" : ""}`;
+        item.dataset.sid = id;
         item.innerHTML = `
           <div class="session-card-header">
             <div class="session-card-context">
@@ -2897,27 +3100,19 @@
               ${isActive ? `<span class="session-active-indicator">● 目前使用中</span>` : ""}
             </div>
             <div class="session-card-actions" onclick="event.stopPropagation()">
-              <button class="session-settings-btn" onclick="openSessionSettings('${id}')" title="Session 設定">
+              <button class="session-settings-btn" data-act="settings" title="Session 設定">
                 <svg class="nav-svg" style="width:13px; height:13px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                 <span>設定</span>
               </button>
-              <button class="session-open-btn" onclick="selectSession('${id}')">
+              <button class="session-open-btn" data-act="open">
                 <span>進入對話</span>
                 <svg class="nav-svg" style="width:12px; height:12px;" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
               </button>
             </div>
           </div>
         `;
-        item.onclick = () => selectSession(id);
         container.appendChild(item);
       });
-    }
-
-    function setSessionProjectFilter(p, el) {
-      sessionProjectFilter = p;
-      document.querySelectorAll("#session-project-filter-bar .filter-chip").forEach(c => c.classList.remove("active"));
-      el.classList.add("active");
-      renderSessionsList();
     }
 
     function renderQuota() {
@@ -2958,7 +3153,7 @@
     function openSessionPickerSheet() {
       const container = document.getElementById("picker-sessions-list");
       container.innerHTML = "";
-      const sids = Object.keys(state.sessions);
+      const sids = scopedIds();
 
       if (sids.length === 0) {
         container.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:24px 16px;">目前無任何可用 Session</div>`;
@@ -2971,8 +3166,8 @@
           const st = s.status || "idle";
           const statusText = formatStatus(st);
           let statusClass = "header-status-tag";
-          if (st === "running" || st === "working") statusClass = "header-status-tag running";
-          else if (st === "waiting") statusClass = "header-status-tag waiting";
+          if (st === "busy" || st === "running" || st === "working") statusClass = "header-status-tag running";
+          else if (st === "waiting_approval" || st === "waiting") statusClass = "header-status-tag waiting";
 
           const card = document.createElement("div");
           card.className = `session-card ${isActive ? "active" : ""}`;
@@ -3001,6 +3196,87 @@
       openSheet("sheet-session-picker");
     }
 
+    function fmtElapsed(ms) {
+      const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+      return sec >= 60 ? `${Math.floor(sec / 60)}m${sec % 60}s` : `${sec}s`;
+    }
+    function targetText(to) {
+      if (!to) return "?";
+      if (typeof to === "string") return "全體";
+      if (to.direct != null) return (state.sessions[to.direct] || {}).label || to.direct;
+      if (to.channel != null) return "#" + to.channel;
+      return "?";
+    }
+    function lastMessageFor(id) {
+      const lab = (state.sessions[id] || {}).label;
+      const ms = state.messages || [];
+      for (let i = ms.length - 1; i >= 0; i--) {
+        const m = ms[i];
+        const d = m.to && typeof m.to === "object" ? m.to.direct : null;
+        if (m.from === id || (d != null && (d === id || d === lab))) return m;
+      }
+      return null;
+    }
+    function ovCard(id, depth, kids) {
+      const s = state.sessions[id];
+      const st = s.status || "idle";
+      const role = typeof s.role === "string" ? s.role : (s.role ? Object.keys(s.role)[0] : "worker");
+      const stCls = (st === "busy") ? " running" : (st === "waiting_approval" ? " waiting" : "");
+      let h = `<div class="ov-card ${id === activeSession ? "active" : ""}" data-sid="${escapeHtml(id)}">
+        <div class="ov-head"><span class="ov-title">${escapeHtml(s.label || id)}</span><span class="ov-role">${escapeHtml(role)}</span><span class="header-status-tag${stCls}">${escapeHtml(formatStatus(st))}</span></div>`;
+      if (s.status_note) h += `<div class="ov-dim">${escapeHtml(s.status_note)}</div>`;
+      (s.active_tools || []).forEach(t => {
+        h += `<div class="ov-tool">${t.is_subagent ? "🤖 子代理" : "⚙"} ${escapeHtml(t.name)} • ${fmtElapsed(t.started_ms)}${t.summary ? ` <span class="ov-dim">${escapeHtml(t.summary)}</span>` : ""}</div>`;
+      });
+      const bg = s.bg_procs || [];
+      if (bg.length) h += `<div class="ov-dim">背景處理程序 ${bg.length}：${escapeHtml(bg.slice(0, 3).map(b => b.name).join("、"))}</div>`;
+      Object.values(state.tasks || {}).filter(t => t.assignee === id && (t.status === "doing" || t.status === "blocked")).forEach(t => {
+        h += `<div>${t.status === "blocked" ? "⛔" : "▶"} ${escapeHtml(t.title)}</div>`;
+      });
+      const m = lastMessageFor(id);
+      if (m) h += `<div class="ov-dim">✉ ${escapeHtml((state.sessions[m.from] || {}).label || m.from)} → ${escapeHtml(targetText(m.to))}：${escapeHtml(String(m.body).slice(0, 80))}</div>`;
+      h += `</div>`;
+      if (kids.length) h = h + kids.join("");
+      return depth ? `<div class="ov-child">${h}</div>` : h;
+    }
+    function renderOverview() {
+      const ids = scopedIds();
+      const idset = new Set(ids);
+      const kidsOf = {};
+      ids.forEach(id => { const p = state.sessions[id].parent; if (p && idset.has(p)) (kidsOf[p] = kidsOf[p] || []).push(id); });
+      const build = (id, depth, seen) => {
+        if (seen.has(id)) return "";
+        seen.add(id);
+        return ovCard(id, depth, (kidsOf[id] || []).map(k => build(k, depth + 1, seen)));
+      };
+      const roots = ids.filter(id => { const p = state.sessions[id].parent; return !(p && idset.has(p)); });
+      const seen = new Set();
+      const tree = document.getElementById("ov-tree");
+      tree.innerHTML = roots.map(r => build(r, 0, seen)).join("") ||
+        `<div style="text-align:center; color:var(--text-dim); padding:24px;">此專案目前沒有 Session</div>`;
+      tree.onclick = ev => { const el = ev.target.closest("[data-sid]"); if (el) selectSession(el.dataset.sid); };
+
+      const sc = curScope();
+      const pe = getAllProjects().find(x => x.root === sc);
+      const tasks = Object.values(state.tasks || {}).filter(t => inScope(state.sessions[t.assignee]) || inScope(state.sessions[t.created_by]));
+      const pend = Object.values(state.pending_permissions || {}).filter(r => inScope(state.sessions[r.session])).length;
+      document.getElementById("ov-summary").innerHTML =
+        `<b>${escapeHtml(sc === "all" ? "全部專案" : (pe ? pe.name : "專案"))}</b>` +
+        `<span>${ids.length} 個 Session</span><span>存活 ${ids.filter(i => isLive(state.sessions[i])).length}</span>` +
+        `<span>進行中任務 ${tasks.filter(t => t.status === "doing").length}</span>` +
+        (pend ? `<span style="color:var(--yellow);">待核准 ${pend}</span>` : "");
+
+      const minis = ids.filter(i => isLive(state.sessions[i])).slice(0, 4);
+      const mbox = document.getElementById("ov-minis");
+      mbox.innerHTML = minis.map(id => {
+        const lines = (state.transcripts[id] || []).slice(-30).map(l => escapeHtml(String(l))).join("\n");
+        return `<div class="ov-mini"><div class="ov-mini-h" data-sid="${escapeHtml(id)}">${escapeHtml(state.sessions[id].label || id)}</div><pre>${lines}</pre></div>`;
+      }).join("");
+      mbox.onclick = ev => { const el = ev.target.closest("[data-sid]"); if (el) selectSession(el.dataset.sid); };
+      mbox.querySelectorAll("pre").forEach(p => { p.scrollTop = p.scrollHeight; });
+    }
+    setInterval(() => { if (currentTab === "overview") renderOverview(); }, 5000);
+
     function switchNavTab(tabName) {
       currentTab = tabName;
       document.querySelectorAll(".tab-view").forEach(v => v.classList.remove("active"));
@@ -3009,11 +3285,13 @@
       const targetView = document.getElementById(`view-${tabName}`);
       if (targetView) targetView.classList.add("active");
 
-      const navIndices = { chat: 0, review: 1, tasks: 2, sessions: 3 };
+      const navIndices = { overview: 0, chat: 1, review: 2, tasks: 3, sessions: 4 };
       const navBtns = document.querySelectorAll(".nav-btn");
       if (navBtns[navIndices[tabName]]) navBtns[navIndices[tabName]].classList.add("active");
 
-      if (tabName === "chat") {
+      if (tabName === "overview") {
+        renderOverview();
+      } else if (tabName === "chat") {
         renderCurrentChatTranscript();
       } else if (tabName === "review") {
         requestDiff();
@@ -3207,10 +3485,17 @@
       // 渲染專案選擇分段按鈕
       const projectSegs = document.getElementById("new-project-segments");
       const projects = getAllProjects();
-      projectSegs.innerHTML = `<button class="seg-btn active" onclick="setNewProject('', this)">預設目錄</button>`;
-      projects.forEach(p => {
-        projectSegs.innerHTML += `<button class="seg-btn" onclick="setNewProject('${p}', this)">${escapeHtml(p)}</button>`;
-      });
+      projectSegs.innerHTML = `<button class="seg-btn active" data-root="">預設目錄</button>` +
+        projects.map(p => `<button class="seg-btn" data-root="${escapeHtml(p.root)}">${escapeHtml(p.name)}</button>`).join("");
+      projectSegs.onclick = ev => {
+        const b = ev.target.closest("[data-root]");
+        if (b) setNewProject(b.dataset.root, b);
+      };
+      const sc = curScope();
+      if (sc !== "all") {
+        const b = Array.from(projectSegs.children).find(x => x.dataset.root === sc);
+        if (b) setNewProject(sc, b);
+      }
 
       const segs = document.querySelectorAll("#new-kind-segments .seg-btn");
       segs.forEach(b => b.classList.remove("active"));
@@ -3220,21 +3505,10 @@
       openSheet("sheet-new-session");
     }
 
-    function setNewProject(pName, btnEl) {
+    function setNewProject(root, btnEl) {
       document.querySelectorAll("#new-project-segments .seg-btn").forEach(b => b.classList.remove("active"));
       btnEl.classList.add("active");
-      if (!pName) {
-        newSessionState.cwd = "";
-      } else {
-        // 從既有 session 中找出該專案的路徑
-        for (const id in state.sessions) {
-          const s = state.sessions[id];
-          if (getProjectName(s) === pName) {
-            newSessionState.cwd = s.repo_root || s.cwd;
-            break;
-          }
-        }
-      }
+      newSessionState.cwd = root || "";
     }
 
     function submitDetailedSession() {
