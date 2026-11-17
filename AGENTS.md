@@ -4,6 +4,22 @@
 
 All git commit messages **MUST** be written in **English** following standard Conventional Commits format (e.g. `feat(scope): description`, `fix(scope): description`, `refactor(scope): description`, `chore: description`, etc.). Do **NOT** write git commit messages in Chinese.
 
+## Inter-Agent Communication Protocol
+
+All inter-agent messages sent via `termade send` / `termade_send` or `termade ask` / `termade_ask` **MUST** use a concise, structured **English** protocol to minimize token consumption and prevent unproductive turn wakeups:
+
+1. **Structured Message Formats**:
+   - Task completion: `TASK_DONE <task_id> <commit_or_short_summary>`
+   - Task blocked: `TASK_BLOCKED <task_id> <reason>`
+   - Question / query: `QUERY: <concise_question>`
+   - Direct answer: `ANSWER: <direct_answer>`
+   - Optional acknowledgment (omit unless required): `ACK`
+
+2. **Zero Pleasantries Policy & Terminal State**:
+   - Strictly forbid pleasantries, courtesy ping-pong, and polite sign-offs (e.g. `"Thank you"`, `"You're welcome"`, `"Goodbye"`, `"辛苦了"`, `"合作愉快"`, `"祝一切順利"`).
+   - Every message sent to another session wakes that agent for a full turn and re-injects its entire conversation context. Never reply merely to say thanks or goodbye.
+   - **Terminal State**: Once a worker sends `TASK_DONE`, it **MUST** terminate its turn immediately. Once a coordinator receives `TASK_DONE`, it should proceed directly with verification, merging, or task board updates without sending a courtesy reply.
+
 ## Pre-commit Verification Checklist (Commit 前檢查清單)
 
 Before committing changes or pushing to git, all agents and contributors **MUST** verify the following checks locally to ensure CI will not fail:
