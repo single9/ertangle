@@ -20,3 +20,7 @@ agent 自行 spawn 子 session 會快速消耗 token，也可能在額度用盡�
 
 - `check_spawn_quota` 的放行、改用 fallback、拒絕三種情形有單元測試。
 - skill 安裝與移除路徑 (claude／agents／codex) 以暫存目錄測試。
+
+## Comments
+
+- 2026-11-17：實機發現 Claude 在 7 天視窗超過 75% 時，`rate_limit_event` 回報 `"status":"allowed_warning"` (附 `surpassedThreshold: 0.75`)。原本 `parse_rate_limit_event` 把所有非 `allowed` 的狀態都當成 `reached`，導致 76% 就顯示「額度已滿」、送出 `QUOTA_WARN`，額度感知 spawn 也會誤拒。改為只有非 `allowed*` 的狀態 (如 `rejected`) 才算用完。
