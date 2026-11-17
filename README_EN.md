@@ -96,6 +96,85 @@ termade
 
 ---
 
+## Walkthrough: Coordinator + Worker Multi-Agent Collaboration
+
+For medium-to-large features spanning multiple modules, you do not need to manually juggle multiple terminal windows. In `termade`, you can spawn a **Coordinator** session that decomposes requirements, schedules tasks with dependencies on the shared board, and spawns multiple isolated **Worker** sessions in dedicated Git Worktrees—while you review and merge everything from a single TUI.
+
+### Scenario: Building JWT Authentication (Backend API + Frontend UI + Integration Tests)
+
+#### Step 1: Launch the Coordinator (Choose Any Method)
+
+**Method A: Interactive TUI Spawn (Recommended)**
+1. Press **`n`** in the TUI and select an agent (e.g., `claude` or `opencode`).
+2. In the prompt input step, press **`Ctrl-R`** to switch the role to **`coordinator`** (leave Worktree off via `Ctrl-W` so the coordinator stays on the main checkout).
+3. Enter the goal prompt:
+   ```text
+   Act as Coordinator to deliver the "JWT Login Authentication" feature:
+   1. Use termade_task_create to create three tasks:
+      - T1: Implement /api/login endpoint and JWT middleware in backend
+      - T2: Build login form and error handling in frontend
+      - T3: Write end-to-end integration tests (set depends_on to wait for T1 and T2)
+   2. Use termade_spawn to launch two worktree-isolated workers (worker-backend and worker-frontend) in parallel for T1 and T2.
+   3. Call termade_wait to await their TASK_DONE reports, then assign or wake a worker to complete T3.
+   ```
+
+**Method B: One-Line TUI Command**
+```text
+:spawn --role coordinator claude:sonnet "Decompose the JWT login feature, create tasks on the board, and spawn two worktree workers for backend and frontend in parallel."
+```
+
+**Method C: Launch a Built-in Playbook**
+```text
+:playbook coord-review Implement JWT login authentication across backend and frontend
+```
+(Or press `Space s b` to pick from `coord-review`, `tdd-pair`, `dual-review`, or your custom playbooks).
+
+---
+
+#### Step 2: Watch Autonomous Multi-Agent Execution in the TUI
+
+Once submitted, the agents coordinate over the MCP bus automatically:
+
+```
+[Coordinator: coord] (main checkout, planning & orchestration)
+   ├── 1. Calls termade_task_create (T1, T2 = todo; T3 = blocked via depends_on)
+   ├── 2. Calls termade_spawn to launch isolated workers
+   │
+   ├─► ↳ [worker-backend]  (branch @termade/ses_a1 · .termade/wt/ses_a1)
+   │      ├── Calls termade_task_update(T1, status="doing")
+   │      ├── Edits src/auth.rs and runs unit tests
+   │      ├── Calls termade_task_update(T1, status="done")
+   │      └── Calls termade_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") and stops immediately
+   │
+   └─► ↳ [worker-frontend] (branch @termade/ses_b2 · .termade/wt/ses_b2)
+          ├── Calls termade_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
+          ├── Edits web/login.ts and form validation
+          ├── Calls termade_task_update(T2, status="done")
+          └── Calls termade_send(to="coord", "TASK_DONE task_2 Added login form and error handling") and stops immediately
+```
+
+What you see in the TUI:
+- **Left Sessions Pane**: Displays the parent-child hierarchy (`↳ worker-backend [worker]`), worktree branch names, and active tool indicators.
+- **Center Tasks View (press `Tab`)**: Shows T1 and T2 in `doing`. As soon as both T1 and T2 reach `done`, the daemon automatically unlocks T3 from `blocked` (`⧗`) to `todo` and wakes its assignee.
+- **Token-Efficient Protocol**: Inter-agent messages follow a strict English protocol (`TASK_DONE`, `TASK_BLOCKED`, `QUERY:`, `ANSWER:`) with zero pleasantries—once a worker sends `TASK_DONE`, it terminates its turn immediately without wasting tokens on courtesy replies.
+
+---
+
+#### Step 3: Review Diffs, Resolve Conflicts & Merge Safely
+
+1. **Inspect & Comment on Diffs**: Select `worker-backend` with `j` / `k` and press **`Tab`** to open the **Diff View**.
+   - Jump between files with `(` / `)` and fold reviewed files with `Enter`.
+   - Press **`c`** on any line to leave an inline review comment (e.g., "Read token expiration from config")—the comment is routed back to the worker to fix.
+   - Press **`X`** (`:discard`) on any unwanted debug hunk to revert it directly without spending another agent turn.
+2. **Merge & Delegate Conflicts**:
+   - Press **`M`** (`:merge`) on `worker-backend` to auto-commit and merge into `main`.
+   - Select `worker-frontend` and press **`M`**. If both workers touched a shared config file causing a conflict, run **`:merge --resolve`** (or press `Space g r`): `main` stays clean while conflict markers are placed inside `worker-frontend`'s isolated worktree, prompting the worker to resolve the conflict and re-verify tests.
+3. **Clean Up & Export Report**:
+   - Press **`G`** (`:gc`) to clean up completed and merged worktrees.
+   - Run **`:export`** on the coordinator session to export a full Markdown report (hierarchy, task summary, costs, and transcripts) to `.termade/exports/` and copy it to your system clipboard via OSC 52, ready to paste into a GitHub PR.
+
+---
+
 ## Core Features & Workflow
 
 ### 1. Worktree Isolation & Review Loop

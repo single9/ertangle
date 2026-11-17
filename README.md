@@ -96,6 +96,87 @@ termade
 
 ---
 
+## 實戰案例：Coordinator + Worker 多 Agent 協同開發
+
+當遇到跨模組的中大型需求時，你不需要自己手動開好幾個終端機視窗分別複製貼上。在 `termade` 中，你可以啟動一位 **Coordinator (協調者)**，讓它自動拆解任務、建立相依性看板、派生多個各自擁有獨立 Git Worktree 的 **Worker (實作者)** 平行開發，最後由你在 TUI 統一審查與合併。
+
+### 情境範例：同時開發後端 API 認證、前端登入表單與整合測試
+
+#### 第一步：啟動 Coordinator (三種方式擇一)
+
+**方式 A：在 TUI 互動啟動 (最常用)**
+1. 在 TUI 按下 **`n`**，選擇主力模型 (例如 `claude` 或 `opencode`)。
+2. 在輸入提示詞畫面，按 **`Ctrl-R`** 將角色切換為 **`coordinator`** (按 `Ctrl-W` 保持關閉 Worktree，讓 Coordinator 留在主目錄綜觀全局)。
+3. 輸入需求提示詞：
+   ```text
+   請擔任 Coordinator 完成「JWT 登入認證功能」：
+   1. 先用 termade_task_create 建立三個任務：
+      - T1：後端實作 /api/login 與 JWT middleware
+      - T2：前端實作登入表單與錯誤提示
+      - T3：撰寫端到端整合測試 (設定 depends_on 等待 T1 與 T2 完成)
+   2. 用 termade_spawn 派生兩個開啟 worktree 的 worker (worker-backend 與 worker-frontend) 平行執行 T1 與 T2。
+   3. 用 termade_wait 等待它們回報 TASK_DONE，檢查無誤後再派或喚醒 worker 執行 T3。
+   ```
+
+**方式 B：使用 TUI 命令列單行啟動**
+```text
+:spawn --role coordinator claude:sonnet "請拆解 JWT 登入認證功能，建立任務看板並派生兩個 worktree worker 分頭實作前後端，完成後彙整向我回報"
+```
+
+**方式 C：使用內建 Playbook 團隊範本一鍵啟動**
+```text
+:playbook coord-review 實作 JWT 登入認證與前後端整合
+```
+(或按 `Space s b` 從選單挑選 `coord-review`、`tdd-pair`、`dual-review` 等範本)。
+
+---
+
+#### 第二步：觀察 Coordinator 與 Worker 的自動協作過程
+
+一旦送出提示詞，`termade` 會在幕後自動完成以下協同流程，你只需在 TUI 旁觀或隨時介入：
+
+```
+[Coordinator: coord] (主分支，負責規劃與調度)
+   ├── 1. 呼叫 termade_task_create 建立任務看板 (T1, T2 為 todo；T3 因 depends_on 自動設為 blocked)
+   ├── 2. 呼叫 termade_spawn 派生子 Agent
+   │
+   ├─► ↳ [worker-backend]  (獨立分支 @termade/ses_a1 · .termade/wt/ses_a1)
+   │      ├── 呼叫 termade_task_update(T1, status="doing")
+   │      ├── 修改 src/auth.rs、執行單元測試
+   │      ├── 呼叫 termade_task_update(T1, status="done")
+   │      └── 呼叫 termade_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") 後立即結束回合
+   │
+   └─► ↳ [worker-frontend] (獨立分支 @termade/ses_b2 · .termade/wt/ses_b2)
+          ├── 呼叫 termade_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
+          ├── 修改 web/login.ts、完成表單驗證
+          ├── 呼叫 termade_task_update(T2, status="done")
+          └── 呼叫 termade_send(to="coord", "TASK_DONE task_2 Added login form and error handling") 後立即結束回合
+```
+
+在 TUI 畫面上你會看到：
+- **左側 Sessions 欄**：自動呈現父子縮排階層 (`↳ worker-backend [worker]`)、各自所在的分支名稱，以及目前正在執行的工具摘要。
+- **中央 Tasks 視圖 (按 `Tab` 切換)**：即時看到 T1、T2 進入 `doing`；當 T1 與 T2 都標記為 `done` 的瞬間，原本處於 `blocked` (`⧗`) 的 T3 會**自動解鎖為 `todo` 並主動發信喚醒負責人**開工。
+- **零寒暄協定 (Zero Pleasantries)**：Agent 之間強制使用精簡英文結構化格式 (`TASK_DONE`、`TASK_BLOCKED`、`QUERY:`、`ANSWER:`) 溝通，Worker 送出 `TASK_DONE` 後立即終止回合，絕不互相客套說「Thank you」而消耗額外 Token。
+
+---
+
+#### 第三步：審查 Diff、處理衝突與安全合併
+
+當 Worker 們完成實作後，你可以逐一檢視成果並合入主分支：
+
+1. **檢視變更**：用 `j` / `k` 選取 `worker-backend`，按 **`Tab`** 切到 **Diff 視圖**。
+   - 按 `(` / `)` 在不同修改檔案間跳轉，按 `Enter` 將檢查完的檔案摺疊收起。
+   - 若某一行需要微調，直接將游標移到該行按 **`c`** 輸入審查意見 (如「Token 過期時間請改為由設定檔讀取」)，Worker 會自動被喚醒並針對該行修正。
+   - 若發現某個多餘的 debug 區塊，直接按 **`X`** (`:discard`) 將該 hunk 退回，不必再花一輪 Token。
+2. **安全合併回主分支**：
+   - 確認 `worker-backend` 的 Diff 無誤後，按 **`M`** (`:merge`) 將其自動 commit 並合併回 `main`。
+   - 接著選取 `worker-frontend` 按 **`M`**。若兩個 Worker 剛好改到同一個共用設定檔而發生 Git 衝突，只需執行 **`:merge --resolve`** (或按 `Space g r`)：`main` 主分支會保持乾淨，衝突標記會留在 `worker-frontend` 自己的 Worktree 中，並自動喚醒該 Worker 解完衝突與重跑測試。
+3. **清理與匯出報告**：
+   - 按 **`G`** (`:gc`) 一鍵清除已結束且已合併的 Worktree 分支。
+   - 在 Coordinator Session 上輸入 **`:export`**，即可將整棵父子協作樹的對話重點、各 Worker 花費與任務清單匯出為 Markdown 報告並自動複製到剪貼簿，直接貼上 GitHub PR 描述。
+
+---
+
 ## 核心功能與工作流程
 
 ### 1. 工作區隔離與審查迴圈 (Review Loop)
