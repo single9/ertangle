@@ -16,7 +16,7 @@ BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/termade
 
 .PHONY: check-zigbuild all build dev run tui daemon shutdown test clippy lint fmt \
         macos macos-arm64 macos-x86_64 macos-universal dist install install-completions clean help \
-        i18n-extract i18n-check setup-hooks \
+        i18n-extract i18n-check setup-hooks pre-commit \
         changelog changelog-unreleased release-bump
 
 all: build
@@ -72,6 +72,17 @@ i18n-check:
 ## 安裝 git pre-commit hook (自動檢查 fmt、clippy 與 i18n)
 setup-hooks:
 	PATH="$(BUILD_PATH)" sh scripts/setup-hooks.sh
+
+## 一鍵執行 commit 前所有檢查與自動排版 (fmt、clippy 與 i18n)
+pre-commit:
+	@echo "==> 執行 commit 前檢查..."
+	@echo "--> 自動格式化程式碼 (cargo fmt)..."
+	@PATH="$(BUILD_PATH)" $(CARGO) fmt
+	@echo "--> 檢查 Clippy 警告 (cargo clippy)..."
+	@PATH="$(BUILD_PATH)" $(CARGO) clippy --all-targets -- -D warnings
+	@echo "--> 檢查多國語系目錄 (i18n-check)..."
+	@PATH="$(BUILD_PATH)" sh scripts/i18n-check.sh
+	@echo "✅ 所有 commit 前檢查順利通過！"
 
 ## 使用 git-cliff 產生完整 CHANGELOG.md
 changelog:
@@ -157,6 +168,7 @@ help:
 	@echo "  make i18n-extract     更新 locales/termade.pot 與各語言 .po"
 	@echo "  make i18n-check       檢查翻譯檔 (CI 也會跑)"
 	@echo "  make setup-hooks      安裝 git pre-commit hook (自動檢查 fmt、clippy 與 i18n)"
+	@echo "  make pre-commit       一鍵執行 commit 前檢查 (自動 fmt、跑 clippy 與 i18n)"
 	@echo ""
 	@echo "版本與發布目標:"
 	@echo "  make changelog        使用 git-cliff 產生完整 CHANGELOG.md"

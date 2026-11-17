@@ -17,6 +17,8 @@ Before committing changes or pushing to git, all agents and contributors **MUST*
      - Verify with `make i18n-check`.
 4. **Automated pre-commit hook**:
    - Developers can run `make setup-hooks` to automatically install `.git/hooks/pre-commit`, which enforces formatting, clippy, and i18n checks on every `git commit`.
+5. **One-command verification**:
+   - Run `make pre-commit` to automatically format code, check clippy warnings, and verify i18n catalogs in a single step.
 
 ## Traditional Chinese Documentation & Copywriting Rules (台灣繁體中文規範)
 
