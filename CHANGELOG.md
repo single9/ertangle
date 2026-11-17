@@ -1,6 +1,29 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.5.0] - 2026-11-17
+
+### 🚀 Features
+
+- *(tui)* Show session model and effort below transcript
+- *(tui)* Scope bus messages and tasks to the current project
+
+### 🐛 Bug Fixes
+
+- *(tui)* Copy transcript message by index and improve clean/bus behavior
+- *(tui)* Show sub-agent sessions and reduce sidebar crowding
+- *(tui)* Make clean remove all ended sessions and honor force
+- *(daemon)* Allow removing ended sessions sharing cwd with live ones
+- *(tui)* Map session clicks by two-line row height
+- *(tui)* Do not count restored bus history as unread
+- *(daemon,i18n)* Restore blocking web sockets on macOS and sync translations
+- *(daemon)* Use mock agent binary in integration tests
+
+### ⚙️ Miscellaneous Tasks
+
+- *(tui)* Simplify session meta warning color
+- Set job timeouts to prevent runner hangs
+
 ## [0.4.0] - 2026-11-16
 
 ### 🚀 Features

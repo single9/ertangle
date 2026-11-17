@@ -1642,7 +1642,7 @@ dependencies = [
 
 [[package]]
 name = "termade"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1660,7 +1660,7 @@ dependencies = [
 
 [[package]]
 name = "termade-adapter"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "portable-pty",
@@ -1674,7 +1674,7 @@ dependencies = [
 
 [[package]]
 name = "termade-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rspolib",
  "serde",
@@ -1685,7 +1685,7 @@ dependencies = [
 
 [[package]]
 name = "termade-daemon"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -1701,7 +1701,7 @@ dependencies = [
 
 [[package]]
 name = "termade-protocol"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1710,7 +1710,7 @@ dependencies = [
 
 [[package]]
 name = "termade-tui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "crossterm",
