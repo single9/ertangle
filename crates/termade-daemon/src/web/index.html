@@ -2025,36 +2025,34 @@
       handoffKind: "claude"
     };
 
+    // Claude 清單需與 crates/termade-tui/src/menu.rs 的 CLAUDE_MODELS 同步。
+    // 其他 agent 的模型由各自 CLI 查詢，網頁版不寫死，請用自訂模型輸入。
+    const DEFAULT_MODEL = { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 的預設模型" };
+    const OTHER_MODEL_HINT = { id: "", label: "預設 (依設定檔)", desc: "其他模型請用「自訂模型」輸入 id" };
     const MODEL_CATALOG = {
       claude: [
-        { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 或環境變數預設" },
-        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet", desc: "最新頂級推理與複雜程式碼生成" },
-        { id: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet", desc: "穩定高水準軟體工程模型" },
-        { id: "claude-3-5-haiku", label: "Claude 3.5 Haiku", desc: "極速輕量、低延遲快速回應" },
-        { id: "claude-3-opus", label: "Claude 3 Opus", desc: "深度文字與脈絡理解" },
-        { id: "fable", label: "最新 Fable", desc: "指向最新 Fable 系列別名" }
+        DEFAULT_MODEL,
+        { id: "fable", label: "最新 Fable", desc: "別名，永遠指向最新 Fable" },
+        { id: "opus", label: "最新 Opus", desc: "別名，永遠指向最新 Opus" },
+        { id: "sonnet", label: "最新 Sonnet", desc: "別名，永遠指向最新 Sonnet" },
+        { id: "haiku", label: "最新 Haiku", desc: "別名，永遠指向最新 Haiku" },
+        { id: "claude-fable-5-2", label: "Claude Fable 5.2", desc: "固定版本 claude-fable-5-2" },
+        { id: "claude-fable-5-1", label: "Claude Fable 5.1", desc: "固定版本 claude-fable-5-1" },
+        { id: "claude-fable-5", label: "Claude Fable 5", desc: "固定版本 claude-fable-5" },
+        { id: "claude-opus-5-5", label: "Claude Opus 5.5", desc: "固定版本 claude-opus-5-5" },
+        { id: "claude-opus-5", label: "Claude Opus 5", desc: "固定版本 claude-opus-5" },
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", desc: "固定版本 claude-opus-4-8" },
+        { id: "claude-opus-4-7", label: "Claude Opus 4.7", desc: "固定版本 claude-opus-4-7" },
+        { id: "claude-opus-4-6", label: "Claude Opus 4.6", desc: "固定版本 claude-opus-4-6" },
+        { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", desc: "固定版本 claude-sonnet-5-5" },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", desc: "固定版本 claude-sonnet-5" },
+        { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", desc: "固定版本 claude-sonnet-4-6" },
+        { id: "claude-haiku-5-5", label: "Claude Haiku 5.5", desc: "固定版本 claude-haiku-5-5" },
+        { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", desc: "固定版本 claude-haiku-4-5" }
       ],
-      antigravity: [
-        { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 預設模型" },
-        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "超大百萬 Context 視窗與深層推理" },
-        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", desc: "極速回應兼顧多視窗分析" },
-        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet (AGY)", desc: "透過 Antigravity 代理呼叫" },
-        { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", desc: "次世代輕量多模態模型" }
-      ],
-      codex: [
-        { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 預設" },
-        { id: "o3-mini", label: "o3-mini", desc: "針對數學與編程專用推理模型" },
-        { id: "o1", label: "o1", desc: "通用高智慧複雜問題拆解模型" },
-        { id: "gpt-4o", label: "GPT-4o", desc: "全能多模態旗艦模型" },
-        { id: "gpt-4o-mini", label: "GPT-4o mini", desc: "經濟型快速輕量模型" }
-      ],
-      opencode: [
-        { id: "", label: "預設 (依設定檔)", desc: "使用系統或環境變數預設" },
-        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet", desc: "頂級 Anthropic 模型" },
-        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "Google 旗艦長上下文模型" },
-        { id: "deepseek-chat", label: "DeepSeek V3", desc: "高性價比通用開源模型" },
-        { id: "deepseek-reasoner", label: "DeepSeek R1", desc: "深度長鏈條思維推理模型" }
-      ]
+      antigravity: [OTHER_MODEL_HINT],
+      codex: [OTHER_MODEL_HINT],
+      opencode: [OTHER_MODEL_HINT]
     };
 
     function showToast(msg, isError = false) {

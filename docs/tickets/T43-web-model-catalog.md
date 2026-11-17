@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-daemon` (`web/index.html`)　相依：T30
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 

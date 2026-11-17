@@ -409,7 +409,8 @@ impl Picker {
 }
 
 /// Claude Code 可用的 model。`claude` CLI 沒有列出 model 的子命令，只能內建：
-/// 前段是別名 (永遠指向該系列最新版)，後段是完整 id (固定版本)。新模型推出時要更新這裡。
+/// 前段是別名 (永遠指向該系列最新版)，後段是完整 id (固定版本)。新模型推出時要更新這裡，
+/// 並同步更新 `termade-daemon/src/web/index.html` 的 `MODEL_CATALOG.claude`。
 const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("fable", termade_core::tr_noop!("最新 Fable")),
     ("opus", termade_core::tr_noop!("最新 Opus")),
