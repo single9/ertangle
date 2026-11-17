@@ -247,6 +247,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ),
     ("merge", termade_core::tr_noop!("[session] [--dry-run] [--resolve]  合併 worktree 回主工作區")),
     ("diff", termade_core::tr_noop!("顯示選取 session 的 diff")),
+    (
+        "discard",
+        termade_core::tr_noop!("(Diff 視圖) 退回游標所在的 hunk 或整個檔案；:discard! 直接執行"),
+    ),
     ("gc", termade_core::tr_noop!("[session]  清理已合併的 worktree")),
     ("worktrees", termade_core::tr_noop!("顯示 worktree 清單")),
     ("overview", termade_core::tr_noop!("回到 transcript 視圖")),
@@ -564,6 +568,12 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             app.view = CenterView::Diff;
             app.selection = None;
             request_selected_diff(app, writer)?;
+        }
+        "discard" | "discard!" => {
+            let force = verb == "discard!"
+                || rest == "!"
+                || rest.split_whitespace().any(|w| w == "--force" || w == "-f");
+            discard_diff(app, writer, force)?;
         }
         "transcript" | "overview" => {
             app.view = CenterView::Transcript;
@@ -1074,6 +1084,48 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
         }),
     )?;
     app.status = tr!("已要求啟動 {kind}", kind = kind);
+    Ok(())
+}
+
+/// 在 Diff 視圖退回目前游標所在的 Hunk 或整個檔案 (`force = false` 時需二次確認)。
+pub(crate) fn discard_diff(app: &mut App, writer: &mut HostRouter, force: bool) -> Result<()> {
+    if app.view != CenterView::Diff {
+        app.status = tr!("請先切換到 Diff 視圖再執行退回");
+        return Ok(());
+    }
+    let Some(session) = app.selected_id() else {
+        app.status = tr!("沒有選取的 session");
+        return Ok(());
+    };
+    let Some((file, patch)) = crate::diff::extract_current_hunk_patch(app) else {
+        app.status = tr!("目前位置沒有可退回的變更");
+        return Ok(());
+    };
+    let target = (session.clone(), file.clone(), patch.clone());
+    if force || app.diff_discard_armed.as_ref() == Some(&target) {
+        app.diff_discard_armed = None;
+        send(
+            writer,
+            &Request::WorktreeDiscard {
+                session,
+                file,
+                patch,
+            },
+        )?;
+    } else {
+        app.diff_discard_armed = Some(target);
+        app.status = if patch.is_some() {
+            tr!(
+                "⚠ 將退回 {file} 的目前 hunk；再按一次 X 或輸入 :discard! 確認",
+                file = file
+            )
+        } else {
+            tr!(
+                "⚠ 將還原整個檔案 {file} 的變更；再按一次 X 或輸入 :discard! 確認",
+                file = file
+            )
+        };
+    }
     Ok(())
 }
 

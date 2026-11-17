@@ -12,9 +12,10 @@ use crate::app::{
 };
 use crate::clipboard::copy_main_pane;
 use crate::commands::{
-    execute_command, execute_jump, respond_permission, submit_prompt_or_route, submit_spawn,
+    discard_diff, execute_command, execute_jump, respond_permission, submit_prompt_or_route,
+    submit_spawn,
 };
-use crate::diff::jump_hunk;
+use crate::diff::{jump_file, jump_hunk, toggle_collapse_current_file};
 use crate::hosts::HostRouter;
 use crate::{request_selected_diff, send, set_mouse_capture};
 
@@ -123,6 +124,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         }
         KeyCode::Down => match app.view {
             CenterView::Diff => {
+                app.diff_discard_armed = None;
                 if app.diff_cursor + 1 < app.diff_lines.len() {
                     app.diff_cursor += 1;
                 }
@@ -132,13 +134,17 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             CenterView::Worktrees => {}
         },
         KeyCode::Up => match app.view {
-            CenterView::Diff => app.diff_cursor = app.diff_cursor.saturating_sub(1),
+            CenterView::Diff => {
+                app.diff_discard_armed = None;
+                app.diff_cursor = app.diff_cursor.saturating_sub(1);
+            }
             CenterView::Transcript => scroll_transcript_lines(app, -1),
             CenterView::Tasks => crate::tasks::move_task_cursor(app, -1),
             CenterView::Worktrees => {}
         },
         KeyCode::Char('j') => {
             if app.view == CenterView::Diff {
+                app.diff_discard_armed = None;
                 if app.diff_cursor + 1 < app.diff_lines.len() {
                     app.diff_cursor += 1;
                 }
@@ -152,6 +158,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         }
         KeyCode::Char('k') => {
             if app.view == CenterView::Diff {
+                app.diff_discard_armed = None;
                 app.diff_cursor = app.diff_cursor.saturating_sub(1);
             } else if app.view == CenterView::Tasks {
                 crate::tasks::move_task_cursor(app, -1);
@@ -230,6 +237,10 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             app.status = tr!("命令 (Tab 補全)：spawn rm clean kill merge diff gc task …");
         }
         KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
+        KeyCode::Enter | KeyCode::Char('v') if app.view == CenterView::Diff => {
+            toggle_collapse_current_file(app)
+        }
+        KeyCode::Char('X') if app.view == CenterView::Diff => discard_diff(app, writer, false)?,
         KeyCode::Enter | KeyCode::Char('i') => {
             app.mode = Mode::Prompt;
             app.input.clear();
@@ -301,6 +312,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         KeyCode::Esc => {
             app.selection = None;
             app.bus_overlay = false;
+            app.diff_discard_armed = None;
             app.status = tr!("已清除選取");
         }
         KeyCode::Char('Y') => copy_main_pane(app, None),
@@ -308,6 +320,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         KeyCode::PageDown => scroll_transcript(app, 1),
         KeyCode::Home => {
             if app.view == CenterView::Diff {
+                app.diff_discard_armed = None;
                 app.diff_cursor = 0;
             } else if app.view == CenterView::Tasks {
                 app.task_cursor = 0;
@@ -318,6 +331,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         }
         KeyCode::End => {
             if app.view == CenterView::Diff {
+                app.diff_discard_armed = None;
                 app.diff_cursor = app.diff_lines.len().saturating_sub(1);
             } else if app.view == CenterView::Tasks {
                 crate::tasks::move_task_cursor(app, i32::MAX);
@@ -328,6 +342,8 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         }
         KeyCode::Char('{') => jump_hunk(app, false),
         KeyCode::Char('}') => jump_hunk(app, true),
+        KeyCode::Char('(') | KeyCode::Char('<') => jump_file(app, false),
+        KeyCode::Char(')') | KeyCode::Char('>') => jump_file(app, true),
         _ => {}
     }
     Ok(())

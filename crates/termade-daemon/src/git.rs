@@ -570,3 +570,87 @@ pub(crate) fn remove_worktree(main_repo: &Path, session: &Session, force: bool) 
     }
     Ok(())
 }
+
+/// 退回 (捨棄) `wt_dir` 中某個檔案的單一 Hunk (`patch` 為 `Some`) 或整個檔案變更 (`patch` 為 `None`)。
+pub(crate) fn discard_worktree_change(
+    wt_dir: &Path,
+    file: &str,
+    patch: Option<&str>,
+) -> Result<String> {
+    if !wt_dir.is_dir() {
+        bail!(
+            "{}",
+            tr!("工作目錄不存在：{cwd}", cwd = format!("{wt_dir:?}"))
+        );
+    }
+    let file = file.trim();
+    let rel_path = Path::new(file);
+    let is_safe = !file.is_empty()
+        && !rel_path.is_absolute()
+        && file != ".termade"
+        && !file.starts_with(".termade/")
+        && rel_path
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)));
+    if !is_safe {
+        bail!("{}", tr!("不安全的檔案路徑：{file}", file = file));
+    }
+
+    if let Some(patch_str) = patch {
+        let mut child = Command::new("git")
+            .arg("-C")
+            .arg(wt_dir)
+            .args(["apply", "-R", "--unidiff-zero", "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .with_context(|| tr!("執行 git apply 失敗"))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(patch_str.as_bytes())?;
+            if !patch_str.ends_with('\n') {
+                stdin.write_all(b"\n")?;
+            }
+        }
+        let out = child
+            .wait_with_output()
+            .with_context(|| tr!("等待 git apply 失敗"))?;
+        if !out.status.success() {
+            bail!(
+                "{}",
+                tr!(
+                    "退回 hunk 失敗：{detail}",
+                    detail = String::from_utf8_lossy(&out.stderr).trim()
+                )
+            );
+        }
+        return Ok(tr!("已退回 {file} 的選取區塊", file = file));
+    }
+
+    let untracked = git_output(
+        wt_dir,
+        &["ls-files", "--others", "--exclude-standard", "--", file],
+    )?;
+    let is_untracked = String::from_utf8_lossy(&untracked.stdout)
+        .lines()
+        .any(|l| l.trim() == file);
+    if is_untracked {
+        let full = wt_dir.join(rel_path);
+        if full.exists() {
+            fs::remove_file(&full)
+                .with_context(|| tr!("刪除未追蹤檔案失敗：{file}", file = file))?;
+        }
+    } else {
+        let out = git_output(wt_dir, &["checkout", "HEAD", "--", file])?;
+        if !out.status.success() {
+            bail!(
+                "{}",
+                tr!(
+                    "還原檔案失敗：{detail}",
+                    detail = String::from_utf8_lossy(&out.stderr).trim()
+                )
+            );
+        }
+    }
+    Ok(tr!("已還原檔案 {file}", file = file))
+}

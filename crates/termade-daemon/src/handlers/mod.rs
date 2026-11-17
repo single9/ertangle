@@ -183,6 +183,11 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         // Worktree & Review
         Request::WorktreeList => worktree::handle_list(shared, reply),
         Request::WorktreeDiff { session } => worktree::handle_diff(shared, reply, session),
+        Request::WorktreeDiscard {
+            session,
+            file,
+            patch,
+        } => worktree::handle_discard(shared, reply, session, file, patch),
         Request::WorktreeMerge {
             session,
             dry_run,

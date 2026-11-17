@@ -94,6 +94,12 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
         tr_noop!("Diff 與 git"),
         &[
             ("j k { }", tr_noop!("移動游標／跳到上一個、下一個 hunk")),
+            ("( ) / < >", tr_noop!("跳到上一個、下一個檔案 (diff --git)")),
+            ("Enter / v", tr_noop!("(Diff 視圖)摺疊／展開目前游標所在的檔案")),
+            (
+                "X / :discard",
+                tr_noop!("(Diff 視圖)退回游標所在的 hunk 或整個檔案；再按一次 X 或 :discard! 確認"),
+            ),
             ("c", tr_noop!("對游標所在行寫審查註解，送回該 agent")),
             (
                 "M",

@@ -101,7 +101,7 @@ termade
 ### 1. 工作區隔離與審查迴圈 (Review Loop)
 
 - **Worktree 獨立分支**：每個 session 使用專屬 `git worktree` 與 `termade/<session>` 分支，互不干擾。
-- **即時彩色 Diff**：在 TUI 按 `Tab` 切換至 Diff 視圖，按 `{` / `}` 跳轉 hunk。
+- **即時彩色 Diff**：在 TUI 按 `Tab` 切換至 Diff 視圖，按 `{` / `}` 跳轉 hunk，`(` / `)` 跳轉上／下一個檔案，`Enter` (或 `v`) 摺疊／展開單一檔案，按 `X` (或 `:discard`) 安全退回選取的 hunk 或整個檔案變更。
 - **行內註解審查 (Review Comment)**：在 Diff 視圖按 `c`，直接對該行留下修改建議 (例如：「請補上邊界條件檢查」)，系統會自動將註解送回該 Agent 要求修正。
 - **安全合併與衝突解決 (Merge & Conflict Resolution)**：按 `M` 或執行 `termade merge`，系統會先執行 pre-check (支援全域 `pre_merge_command` 守門驗證)，自動 commit worktree 變更並合併回主分支。若發生衝突，可透過 `:merge --resolve` (或 Which-key `Space g r`) 將衝突標記保留於隔離 Worktree，主分支保持乾淨，並自動委派該 Agent 進行解衝突與重新驗證。
 - **清理 (GC)**：按 `G` 或執行 `termade gc`，自動清除已結束且已合併的 Worktree，絕不誤刪未合併成果。
@@ -264,6 +264,10 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 | 按鍵 | 動作 |
 | --- | --- |
+| `{` / `}` | (Diff 視圖) 跳至上一個 / 下一個 hunk (`@@`) |
+| `(` / `)` (或 `<` / `>`) | (Diff 視圖) 跳至上一個 / 下一個檔案 (`diff --git`) |
+| `Enter` / `v` | (Diff 視圖) 摺疊 / 展開目前游標所在的檔案 |
+| `X` (或 `:discard`) | (Diff 視圖) 退回游標所在的 hunk 或整個檔案變更 (再按一次 `X` 或 `:discard!` 確認) |
 | `c` | (Diff 視圖) 針對當前選取的行留下 Review 審查註解並送回 Agent 修改 |
 | `M` | 將選取 Session 的 Worktree 分支安全合併回主分支 (可先用 `:merge --dry-run` 預覽，或 `:merge --resolve` 委派解衝突) |
 | `G` | 清理 (GC) 已結束且已合併的 Worktree |
@@ -280,6 +284,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 - `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
 - `:resume [prompt]` — 接續已結束或中斷的 Session 對話
 - `:merge [--dry-run] [--resolve]` — 合併選取 Session 的 Worktree 回主分支 (支援自動委派解衝突)
+- `:discard` / `:discard!` — (Diff 視圖) 退回游標所在的 hunk 或整個檔案變更
 - `:queue` / `:unqueue` / `:queue clear` — 檢視、取出或清空待送佇列
 - `:rm` / `:clean` — 移除已結束的 Session / 清除所有已結束項目
 - `:budget <金額>` — 查看或調高當前 Session 的美元預算上限

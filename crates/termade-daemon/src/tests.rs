@@ -3338,3 +3338,74 @@ fn kill_bg_proc_refuses_non_descendant_and_terminates_real_child() {
     let status = child.wait().expect("wait child failed");
     assert!(!status.success());
 }
+
+#[test]
+fn discard_worktree_change_reverts_single_hunk_and_whole_file() {
+    let repo = temp_repo("t35_discard");
+    let initial: String = (1..=20).map(|i| format!("line {i}\n")).collect();
+    fs::write(repo.join("multi.txt"), &initial).unwrap();
+    git(&repo, &["add", "multi.txt"]);
+    git(&repo, &["commit", "-m", "add multi.txt"]);
+
+    let s = wt_session(&repo, "s_t35");
+    let wt = Path::new(&s.cwd);
+
+    // 修改第 2 行與第 19 行，產生兩個獨立的 Hunk
+    let modified: String = (1..=20)
+        .map(|i| {
+            if i == 2 {
+                "line 2 modified\n".to_string()
+            } else if i == 19 {
+                "line 19 modified\n".to_string()
+            } else {
+                format!("line {i}\n")
+            }
+        })
+        .collect();
+    fs::write(wt.join("multi.txt"), &modified).unwrap();
+
+    let diff = compute_worktree_diff(wt).unwrap();
+    let lines: Vec<&str> = diff.lines().collect();
+    let hunk_indices: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(i, l)| l.starts_with("@@").then_some(i))
+        .collect();
+    assert_eq!(hunk_indices.len(), 2, "應產生 2 個 hunk：\n{diff}");
+
+    // 組合第 1 個 Hunk 的 patch 並呼叫 discard_worktree_change
+    let mut patch_lines: Vec<&str> = Vec::new();
+    for l in &lines[..hunk_indices[0]] {
+        if l.starts_with("diff --git ") || l.starts_with("--- ") || l.starts_with("+++ ") {
+            patch_lines.push(*l);
+        }
+    }
+    patch_lines.extend_from_slice(&lines[hunk_indices[0]..hunk_indices[1]]);
+    let hunk1_patch = format!("{}\n", patch_lines.join("\n"));
+
+    crate::git::discard_worktree_change(wt, "multi.txt", Some(&hunk1_patch)).unwrap();
+
+    let after_hunk1 = fs::read_to_string(wt.join("multi.txt")).unwrap();
+    assert!(
+        after_hunk1.contains("line 2\n") && !after_hunk1.contains("line 2 modified"),
+        "第 1 個 hunk 應被還原：\n{after_hunk1}"
+    );
+    assert!(
+        after_hunk1.contains("line 19 modified\n"),
+        "第 2 個 hunk 應完整保留：\n{after_hunk1}"
+    );
+
+    // 測試整檔還原 (已追蹤檔案)
+    crate::git::discard_worktree_change(wt, "multi.txt", None).unwrap();
+    let after_whole = fs::read_to_string(wt.join("multi.txt")).unwrap();
+    assert_eq!(after_whole, initial);
+
+    // 測試未追蹤新檔整檔退回與不安全路徑攔截
+    fs::write(wt.join("untracked.txt"), "new content\n").unwrap();
+    assert!(wt.join("untracked.txt").exists());
+    crate::git::discard_worktree_change(wt, "untracked.txt", None).unwrap();
+    assert!(!wt.join("untracked.txt").exists());
+
+    assert!(crate::git::discard_worktree_change(wt, "../evil.txt", None).is_err());
+    assert!(crate::git::discard_worktree_change(wt, ".termade/secret", None).is_err());
+}

@@ -573,7 +573,7 @@ msgstr ""
 msgid "已清空排隊"
 msgstr ""
 
-#: src/cmd/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/worktree.rs crates/termade-daemon/src/handlers/worktree.rs crates/termade-daemon/src/handlers/worktree.rs
+#: src/cmd/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/session.rs crates/termade-daemon/src/handlers/worktree.rs crates/termade-daemon/src/handlers/worktree.rs crates/termade-daemon/src/handlers/worktree.rs crates/termade-daemon/src/handlers/worktree.rs
 msgid "找不到 session {session}"
 msgstr ""
 
@@ -1027,7 +1027,7 @@ msgstr ""
 msgid "執行 git worktree 失敗"
 msgstr ""
 
-#: crates/termade-daemon/src/git.rs
+#: crates/termade-daemon/src/git.rs crates/termade-daemon/src/git.rs
 msgid "工作目錄不存在：{cwd}"
 msgstr ""
 
@@ -1158,6 +1158,38 @@ msgstr ""
 
 #: crates/termade-daemon/src/git.rs
 msgid "無法檢查合併狀態：{e}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "不安全的檔案路徑：{file}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "執行 git apply 失敗"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "等待 git apply 失敗"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "退回 hunk 失敗：{detail}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "已退回 {file} 的選取區塊"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "刪除未追蹤檔案失敗：{file}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "還原檔案失敗：{detail}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "已還原檔案 {file}"
 msgstr ""
 
 #: crates/termade-daemon/src/handlers/session.rs
@@ -1397,6 +1429,10 @@ msgstr ""
 
 #: crates/termade-daemon/src/handlers/worktree.rs
 msgid "取得 diff 失敗：{e}"
+msgstr ""
+
+#: crates/termade-daemon/src/handlers/worktree.rs
+msgid "退回變更失敗：{e}"
 msgstr ""
 
 #: crates/termade-daemon/src/handlers/worktree.rs
@@ -1771,7 +1807,7 @@ msgstr ""
 msgid "已送出 prompt"
 msgstr ""
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs crates/termade-tui/src/ps.rs
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs crates/termade-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr ""
 
@@ -1877,6 +1913,10 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "顯示選取 session 的 diff"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "(Diff 視圖) 退回游標所在的 hunk 或整個檔案；:discard! 直接執行"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -2136,6 +2176,22 @@ msgid "已要求啟動 {kind}"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
+msgid "請先切換到 Diff 視圖再執行退回"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "目前位置沒有可退回的變更"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "⚠ 將退回 {file} 的目前 hunk；再按一次 X 或輸入 :discard! 確認"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "⚠ 將還原整個檔案 {file} 的變更；再按一次 X 或輸入 :discard! 確認"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
 msgid "此 session 沒有待核准請求"
 msgstr ""
 
@@ -2280,6 +2336,26 @@ msgid "常用連接埠"
 msgstr ""
 
 #: crates/termade-tui/src/diff.rs
+msgid "▸ [已摺疊] {path} (+{added} -{removed}) — 按 Enter 展開"
+msgstr ""
+
+#: crates/termade-tui/src/diff.rs crates/termade-tui/src/diff.rs
+msgid "沒有更多檔案"
+msgstr ""
+
+#: crates/termade-tui/src/diff.rs
+msgid "[{idx}/{total}] {path} (+{added} -{removed})"
+msgstr ""
+
+#: crates/termade-tui/src/diff.rs
+msgid "已摺疊 {path}"
+msgstr ""
+
+#: crates/termade-tui/src/diff.rs
+msgid "已展開 {path}"
+msgstr ""
+
+#: crates/termade-tui/src/diff.rs
 msgid "沒有更多 hunk"
 msgstr ""
 
@@ -2396,7 +2472,7 @@ msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session�
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session "
+msgid " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k 選行 · {{/}} hunk · (/) 檔案 · Enter 摺疊 · X 退回 · c 註解 · M 合併 "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2697,6 +2773,18 @@ msgstr ""
 
 #: crates/termade-tui/src/help.rs
 msgid "移動游標／跳到上一個、下一個 hunk"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "跳到上一個、下一個檔案 (diff --git)"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "(Diff 視圖)摺疊／展開目前游標所在的檔案"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "(Diff 視圖)退回游標所在的 hunk 或整個檔案；再按一次 X 或 :discard! 確認"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs

@@ -101,7 +101,7 @@ termade
 ### 1. Worktree Isolation & Review Loop
 
 - **Dedicated Worktree & Branch**: Each session operates inside an independent `git worktree` and `termade/<session>` branch, eliminating file conflicts.
-- **Real-Time Color Diff**: Press `Tab` in the TUI to switch to the Diff view; navigate hunks with `{` / `}`.
+- **Real-Time Color Diff**: Press `Tab` in the TUI to switch to the Diff view; navigate hunks with `{` / `}`, jump between files with `(` / `)`, fold/unfold individual files with `Enter` (or `v`), and revert a single hunk or entire file with `X` (or `:discard`).
 - **Inline Review Comments**: Press `c` on any diff line to submit inline feedback (e.g., "Add boundary checks here"). The comment is routed back to the agent for automated revision.
 - **Safe Merge & Conflict Resolution**: Press `M` or run `termade merge`. The system runs pre-flight safety checks (supports global `pre_merge_command` gate verification), commits uncommitted worktree changes automatically, and merges into the main branch. On conflicts, use `:merge --resolve` (or Which-key `Space g r`) to keep conflict markers isolated in the worktree while keeping `main` clean, delegating conflict resolution to the agent.
 - **Garbage Collection (GC)**: Press `G` or run `termade gc` to clean up merged and completed worktrees safely without deleting unmerged work.
@@ -264,6 +264,10 @@ Every structured agent session is automatically injected with a stdio MCP server
 
 | Key | Action |
 | --- | --- |
+| `{` / `}` | (Diff view) Jump to previous / next hunk (`@@`) |
+| `(` / `)` (or `<` / `>`) | (Diff view) Jump to previous / next file (`diff --git`) |
+| `Enter` / `v` | (Diff view) Fold / unfold the file at cursor |
+| `X` (or `:discard`) | (Diff view) Revert the hunk or entire file at cursor (press `X` again or `:discard!` to confirm) |
 | `c` | (Diff view) Leave review comment on cursor line and route back to agent |
 | `M` | Safely merge selected session's worktree branch into main (`:merge --dry-run` to preview, `:merge --resolve` to delegate conflicts) |
 | `G` | Clean up (GC) completed and merged worktrees |
@@ -279,6 +283,7 @@ Press `:` to open the command line with `Tab` completion:
 - `:spawn [--role <role>] <agent>[:model] <prompt>` — Spawn a new agent session (e.g., `:spawn --role coordinator claude:opus "plan architecture"`)
 - `:handoff <agent> [note]` — Hand over current session to another agent
 - `:resume [prompt]` — Reconnect to an exited session and continue dialogue
+- `:discard` / `:discard!` — (Diff view) Revert the hunk or entire file at cursor
 - `:queue` / `:unqueue` / `:queue clear` — View, pop, or clear prompt queue
 - `:rm` / `:clean` — Remove an exited session / purge all finished sessions
 - `:budget <amount>` — View or increase session USD budget cap

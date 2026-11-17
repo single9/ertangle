@@ -124,6 +124,7 @@ impl HostRouter {
             | Request::SessionRemove { session, .. }
             | Request::SessionConfig { session, .. }
             | Request::WorktreeDiff { session }
+            | Request::WorktreeDiscard { session, .. }
             | Request::WorktreeMerge { session, .. }
             | Request::WorktreePr { session, .. }
             | Request::QueuePop { session }
