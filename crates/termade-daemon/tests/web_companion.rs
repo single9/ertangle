@@ -533,3 +533,23 @@ fn test_web_companion_custom_port() {
 
     let _ = fs::remove_dir_all(&root);
 }
+
+/// 網頁版必須把 core/TUI 的 `❯ ` 與舊版 web 的 `> ` 都當成使用者 prompt 標記，
+/// 並在使用者氣泡顯示「你」標籤，否則歷史訊息會被併進 agent 回覆而難以區分。
+#[test]
+fn test_web_transcript_marks_user_prompts() {
+    const HTML: &str = include_str!("../src/web/index.html");
+
+    assert!(
+        HTML.contains("line.startsWith(\"❯ \") || line.startsWith(\"> \")"),
+        "分組邏輯必須同時辨識 ❯ 與 > 標記"
+    );
+    assert!(
+        HTML.contains("class=\"user-tag\">你<"),
+        "使用者氣泡必須有「你」標籤"
+    );
+    assert!(
+        HTML.contains("flushUser()"),
+        "分組邏輯必須在 agent 回合前 flush 使用者訊息"
+    );
+}

@@ -340,6 +340,7 @@
     }
     .turn-user {
       align-items: flex-end;
+      gap: 6px;
     }
     .turn-agent {
       align-items: flex-start;
@@ -369,6 +370,15 @@
       font-size: 12px;
       font-weight: 600;
       color: var(--text);
+    }
+    .user-tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f8fafc;
+      background: #1d3557;
+      border: 1px solid rgba(147, 197, 253, 0.35);
+      padding: 1px 8px;
+      border-radius: 4px;
     }
     .model-tag {
       font-size: 11px;
@@ -2364,7 +2374,10 @@
         }
       } else if (kind === "user_prompt") {
         if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
-        state.transcripts[event.session].push(`> ${event.text}`);
+        // 與 core/TUI 一致：第一行 `❯ `，後續行兩個空格縮排，讓分組邏輯可正確辨識多行 prompt。
+        const parts = String(event.text).split("\n");
+        if (parts[parts.length - 1] === "") parts.pop();
+        parts.forEach((l, i) => state.transcripts[event.session].push(`${i === 0 ? "❯" : " "} ${l}`));
         if (event.session === activeSession) renderCurrentChatTranscript();
       } else if (kind === "output") {
         if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
@@ -2400,6 +2413,7 @@
     function groupTranscriptIntoTurns(lines) {
       const turns = [];
       let currentAgentTurn = null;
+      let currentUserTurn = null;
 
       function flushAgent() {
         if (currentAgentTurn) {
@@ -2409,24 +2423,37 @@
           currentAgentTurn = null;
         }
       }
+      function flushUser() {
+        if (currentUserTurn) {
+          if (currentUserTurn.parts.length > 0) {
+            turns.push({ type: "user", text: currentUserTurn.parts.join("\n") });
+          }
+          currentUserTurn = null;
+        }
+      }
 
       for (let i = 0; i < lines.length; i++) {
         const raw = lines[i];
         if (raw == null) continue;
         const line = String(raw);
 
-        if (line.startsWith("> ")) {
+        // core/TUI 以 `❯ ` 標記使用者 prompt；舊版 web 即時事件用 `> `，兩者都要辨識，
+        // 否則從 snapshot 載入的歷史 prompt 會被當成 agent 文字，與回覆混在一起。
+        if (line.startsWith("❯ ") || line.startsWith("> ")) {
           flushAgent();
-          turns.push({
-            type: "user",
-            text: line.substring(2)
-          });
+          flushUser();
+          currentUserTurn = { parts: [line.substring(2)] };
+        } else if (currentUserTurn && line.startsWith("  ") && !line.startsWith("  ✓") && !line.startsWith("  ✗")) {
+          // 多行 prompt 的後續行：core 以兩個空格縮排對齊。
+          currentUserTurn.parts.push(line.substring(2));
         } else if (line.startsWith("💭 ")) {
+          flushUser();
           if (!currentAgentTurn) {
             currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
           }
           currentAgentTurn.thoughts.push(line.substring(2));
         } else if (line.startsWith("▸ ") || line.startsWith("[工具 ")) {
+          flushUser();
           if (!currentAgentTurn) {
             currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
           }
@@ -2435,24 +2462,28 @@
           if (currentAgentTurn && currentAgentTurn.tools.length > 0) {
             currentAgentTurn.tools[currentAgentTurn.tools.length - 1].result = line.trim();
           } else {
+            flushUser();
             if (!currentAgentTurn) {
               currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
             }
             currentAgentTurn.textParts.push(line);
           }
         } else if (line.startsWith("[系統]") || line.startsWith("termade:")) {
+          flushUser();
           flushAgent();
           turns.push({
             type: "system",
             text: line
           });
         } else {
+          flushUser();
           if (!currentAgentTurn) {
             currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
           }
           currentAgentTurn.textParts.push(line);
         }
       }
+      flushUser();
       flushAgent();
       return turns;
     }
@@ -2483,6 +2514,9 @@
           const row = document.createElement("div");
           row.className = "chat-turn turn-user";
           row.innerHTML = `
+            <div class="turn-header">
+              <span class="user-tag">你</span>
+            </div>
             <div class="turn-bubble bubble-user">
               <div class="bubble-content">${renderSimpleMarkdown(turn.text)}</div>
             </div>
