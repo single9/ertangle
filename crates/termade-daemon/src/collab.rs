@@ -23,7 +23,9 @@ fn general_rules(out: &mut String) {
     out.push_str(
         "- Progress: While working, keep a one-line progress update via termade_status.\n\
          - Tasks: When assigned a task, change its status to doing via termade_task_update, and to done upon completion.\n\
-         - Questions: Use termade_ask when blocked waiting for peer answers; use termade_peers to query active sessions.\n",
+         - Questions: Use termade_ask when blocked waiting for peer answers; use termade_peers to query active sessions.\n\
+         - Communication Protocol: All inter-agent messages MUST use concise English format (`TASK_DONE <id> <summary>`, `TASK_BLOCKED <id> <reason>`, `QUERY: <question>`, `ANSWER: <reply>`, `ACK`) to minimize token usage.\n\
+         - Zero Pleasantries Policy: Strictly forbid pleasantries, courtesy ping-pong, and polite sign-offs (e.g. \"Thank you\", \"Goodbye\", \"辛苦了\", \"合作愉快\"). Once `TASK_DONE` is sent, terminate your turn immediately without further replies.\n",
     );
 }
 
@@ -53,7 +55,7 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
     ));
     match parent.map(|p| p.id.as_str()).or(me.parent.as_deref()) {
         Some(pid) => out.push_str(&format!(
-            "- Reporting: When finished or blocked, use termade_send (to=\"{pid}\") to report results back to parent session; do not stop silently without reporting.\n"
+            "- Reporting: When finished or blocked, use termade_send (to=\"{pid}\") with concise English protocol (`TASK_DONE <task_id> <summary>` or `TASK_BLOCKED <task_id> <reason>`) to report results back to parent session, then stop your turn immediately; do not stop silently without reporting.\n"
         )),
         None => out.push_str(
             "- Reporting: You were directly spawned by the user; answer directly in your response.\n",
@@ -216,6 +218,10 @@ mod tests {
         assert!(t.contains("answer directly in your response"));
         assert!(t.contains("termade_status") && t.contains("termade_task_update"));
         assert!(t.contains("termade_ask"));
+        assert!(t.contains("Communication Protocol") && t.contains("TASK_DONE"));
+        assert!(
+            t.contains("Zero Pleasantries Policy") && t.contains("terminate your turn immediately")
+        );
         assert!(t.contains("Do not call termade_spawn"));
         // 不相關的段落不出現。
         assert!(!t.contains("termade_send"), "{t}");
@@ -236,6 +242,8 @@ mod tests {
         let t = collab_instructions(&me, Some(&parent), "");
         assert!(t.contains("spawned by session \"coord\" (ses_p)"), "{t}");
         assert!(t.contains("termade_send (to=\"ses_p\")"), "{t}");
+        assert!(t.contains("TASK_DONE") && t.contains("TASK_BLOCKED"), "{t}");
+        assert!(t.contains("Zero Pleasantries Policy"), "{t}");
         assert!(t.contains("branch termade/ses_w") && t.contains("do not merge"));
         assert!(!t.contains("answer directly in your response"), "{t}");
         assert!(!t.contains("termade_task_create"), "{t}");
