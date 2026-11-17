@@ -21,6 +21,7 @@ mod handoff;
 mod logwriter;
 mod quota_watch;
 mod server;
+pub mod skill;
 use logwriter::*;
 pub use logwriter::{rotated_log_path, LogConfig};
 use server::*;

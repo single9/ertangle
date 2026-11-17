@@ -7,6 +7,7 @@ pub(crate) mod daemon;
 pub(crate) mod export;
 pub(crate) mod helptext;
 pub(crate) mod session;
+pub(crate) mod skill;
 pub(crate) mod task;
 pub(crate) mod worktree;
 

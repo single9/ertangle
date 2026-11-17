@@ -14,7 +14,8 @@ use std::path::PathBuf;
 
 mod cmd;
 use cmd::{
-    bus::*, completions::*, cost::*, daemon::*, export::*, session::*, task::*, worktree::*,
+    bus::*, completions::*, cost::*, daemon::*, export::*, session::*, skill::*, task::*,
+    worktree::*,
 };
 
 #[derive(Parser)]
@@ -408,6 +409,11 @@ enum Cmd {
         #[arg(short = 'o', long)]
         output: Option<PathBuf>,
     },
+    /// 安裝／移除／顯示內嵌的 termade-ade skill
+    Skill {
+        #[command(subcommand)]
+        cmd: SkillCmd,
+    },
     /// 關閉常駐的 daemon 與所有受管 agent 子處理程序
     Shutdown,
     /// 產生 shell 補全腳本並印到 stdout (bash / zsh / fish)
@@ -421,6 +427,36 @@ enum Cmd {
         #[arg(value_parser = ["sessions"])]
         what: String,
     },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum SkillCmd {
+    /// 把 termade-ade skill 安裝到 agent 的 skills 目錄
+    Install {
+        /// 目標 agent：claude (.claude/skills)、agents (.agents/skills)、codex (.codex/skills)
+        #[arg(long, default_value = "claude", value_parser = ["claude", "agents", "codex"])]
+        target: String,
+        /// 安裝到家目錄 (所有專案共用)
+        #[arg(long, conflicts_with = "project")]
+        global: bool,
+        /// 安裝到目前專案 (預設)
+        #[arg(long)]
+        project: bool,
+    },
+    /// 移除已安裝的 termade-ade skill
+    Uninstall {
+        /// 目標 agent：claude、agents、codex
+        #[arg(long, default_value = "claude", value_parser = ["claude", "agents", "codex"])]
+        target: String,
+        /// 從家目錄移除
+        #[arg(long, conflicts_with = "project")]
+        global: bool,
+        /// 從目前專案移除 (預設)
+        #[arg(long)]
+        project: bool,
+    },
+    /// 印出內嵌的 SKILL.md
+    Show,
 }
 
 /// 依全域設定的 `[tui] language` 與環境變數決定介面語言。daemon 也走這裡，
@@ -604,6 +640,7 @@ fn main() -> Result<()> {
             diff,
             output,
         } => cmd_export(session, tree, diff, output),
+        Cmd::Skill { cmd } => cmd_skill(cmd),
         Cmd::Shutdown => cmd_shutdown(),
         Cmd::Completions { shell } => cmd_completions(shell),
         Cmd::Complete { .. } => cmd_complete_sessions(),

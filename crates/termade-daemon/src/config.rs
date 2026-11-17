@@ -61,6 +61,8 @@ pub struct AgentSpawnCfg {
     pub allowed_models: Vec<String>,
     /// 何時先問使用者：`never` (超標直接調降／拒絕)、`costly` (超標才問，預設)、`always`。
     pub confirm: Option<String>,
+    /// 單一父 session 同時最多幾個執行中的子 session (預設 3；`[limits] max_children` 有設時以它為準)。
+    pub max_live_children: Option<usize>,
 }
 
 /// 一次 agent spawn 的檢查結果。
@@ -79,6 +81,9 @@ pub enum SpawnCheck {
 impl AgentSpawnCfg {
     pub fn worktree(&self) -> bool {
         self.worktree.unwrap_or(true)
+    }
+    pub fn max_live_children(&self) -> usize {
+        self.max_live_children.unwrap_or(3)
     }
     pub fn max_effort(&self) -> &str {
         self.max_effort.as_deref().unwrap_or("medium")
@@ -139,6 +144,8 @@ pub struct CollabCfg {
     pub extra: Option<String>,
     /// 全域的 ADE 系統提示檔 (Markdown／文字)，附加在每個 agent 的協作說明裡。只認全域設定。
     pub prompt_file: Option<String>,
+    /// 在協作說明後附上 `termade-ade` skill 內文 (預設關閉；沒安裝 skill 的人也能拿到)。
+    pub inject_skill: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -587,6 +594,9 @@ impl Config {
         }
         if local.collab.instructions.is_some() {
             out.collab.instructions = local.collab.instructions;
+        }
+        if local.collab.inject_skill.is_some() {
+            out.collab.inject_skill = local.collab.inject_skill;
         }
         if local.collab.extra.is_some() {
             out.collab.extra = local.collab.extra;

@@ -238,6 +238,10 @@ msgid "包含整個子 Session 階層"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "印出內嵌的 SKILL.md"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "印出所有說明文字 (供翻譯抽取用，不會啟動 daemon)"
 msgstr ""
 
@@ -294,6 +298,18 @@ msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "安裝到家目錄 (所有專案共用)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "安裝到目前專案 (預設)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "安裝／移除／顯示內嵌的 termade-ade skill"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "寄件者 session id (預設讀 TERMADE_SESSION 環境變數)"
 msgstr ""
 
@@ -346,6 +362,10 @@ msgid "強制結束 agent 子處理程序"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "從家目錄移除"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "從檔案讀取 token (權限需為 0600 或 0400；避免 token 出現在 process list)"
 msgstr ""
 
@@ -354,11 +374,19 @@ msgid "從清單移除已結束的 session (有 worktree 分支時需已合併�
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "從目前專案移除 (預設)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "把 session (與其子 Session 樹)匯出為 Markdown 協作報告"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "把 session 的工作交接給另一個 agent (額度用完時)：沿用同一個工作目錄，附上交接簡報與 diff"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "把 termade-ade skill 安裝到 agent 的 skills 目錄"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -474,7 +502,19 @@ msgid "產生 shell 補全腳本並印到 stdout (bash / zsh / fish)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "目標 agent：claude (.claude/skills)、agents (.agents/skills)、codex (.codex/skills)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "目標 agent：claude、agents、codex"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "目標 session id 或標籤"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "移除已安裝的 termade-ade skill"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -707,6 +747,22 @@ msgstr ""
 
 #: src/cmd/session.rs
 msgid "已清理 {session} 所有背景處理程序"
+msgstr ""
+
+#: src/cmd/skill.rs
+msgid "找不到家目錄 (HOME)"
+msgstr ""
+
+#: src/cmd/skill.rs
+msgid "已安裝 skill：{p}"
+msgstr ""
+
+#: src/cmd/skill.rs
+msgid "已移除 skill：{p}"
+msgstr ""
+
+#: src/cmd/skill.rs
+msgid "沒有安裝 skill (target {t})"
 msgstr ""
 
 #: src/cmd/task.rs

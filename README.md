@@ -438,6 +438,18 @@ termade completions <bash|zsh|fish>               # 產生 Shell 自動補齊腳
 
 ---
 
+### 安裝 termade-ade skill
+
+內嵌的 `termade-ade` skill 說明通訊協定、省 token 規則與工作流程：
+
+```bash
+termade skill install [--target claude|agents|codex] [--global|--project]
+termade skill uninstall [--target ...] [--global|--project]
+termade skill show
+```
+
+不想安裝時，可在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。
+
 ## 設定檔與環境變數
 
 ### 設定檔：`config.toml`

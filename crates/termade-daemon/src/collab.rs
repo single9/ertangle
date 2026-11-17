@@ -71,7 +71,8 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
     if me.role == Role::Coordinator {
         out.push_str(
             "- Coordination: Spawn workers using termade_spawn and schedule dependencies with termade_task_create (via depends_on); use termade_wait to await replies, do not poll.\n\
-             - Budget & Models: Sessions spawned via termade_spawn get independent workspaces by default. Do not self-select expensive models or effort; use defaults unless needed. Ask the user before using high-tier models. If usage exceeds configured limits, the system will prompt for confirmation.\n",
+             - Budget & Models: Sessions spawned via termade_spawn get independent workspaces by default. Do not self-select expensive models or effort; use defaults unless needed. Ask the user before using high-tier models. If usage exceeds configured limits, the system will prompt for confirmation.\n\
+             - Token economy: Spawn the fewest workers; do small tasks inline. Give self-contained prompts with exact files/line ranges so workers do not re-explore. Prefer cheaper default models for mechanical work. Check quota via termade_whoami before spawning; when `QUOTA_WARN` arrives, stop spawning and have workers commit and report. Reuse an idle worker via termade_task_create instead of spawning a new one.\n",
         );
     } else {
         let report_target = if has_parent {
@@ -159,7 +160,13 @@ pub fn for_session(
     if cfg.collab.instructions == Some(false) {
         return None;
     }
-    let extra = extra_text(&cfg, me.map(|s| &s.role), project, global_dir);
+    let mut extra = extra_text(&cfg, me.map(|s| &s.role), project, global_dir);
+    if cfg.collab.inject_skill == Some(true) {
+        if !extra.is_empty() {
+            extra.push_str("\n\n");
+        }
+        extra.push_str(crate::skill::skill_body());
+    }
     Some(match me {
         Some(s) => {
             let parent = s.parent.as_ref().and_then(|p| state.sessions.get(p));
@@ -382,5 +389,33 @@ mod tests {
         let t = for_session(&State::default(), "nope", &dir, &project).unwrap();
         let (a, b) = (t.find("全域規範").unwrap(), t.find("附註").unwrap());
         assert!(a < b, "{t}");
+    }
+
+    #[test]
+    fn coordinator_gets_token_economy_rules() {
+        let me = sess("ses_c", "coordinator/x", Role::Coordinator);
+        let t = collab_instructions(&me, None, "");
+        assert!(
+            t.contains("Token economy") && t.contains("QUOTA_WARN"),
+            "{t}"
+        );
+        let w = collab_instructions(&sess("ses_w", "w", Role::Worker), None, "");
+        assert!(!w.contains("Token economy"));
+    }
+
+    #[test]
+    fn inject_skill_appends_body_only_when_enabled() {
+        let global = temp_dir("collab-skill-g");
+        let repo = temp_dir("collab-skill-r");
+        let st = State::new();
+        let off = for_session(&st, "nobody", &global, &repo).unwrap();
+        assert!(!off.contains("# termade ADE collaboration"));
+        std::fs::write(
+            global.join("config.toml"),
+            "[collab]\ninject_skill = true\n",
+        )
+        .unwrap();
+        let on = for_session(&st, "nobody", &global, &repo).unwrap();
+        assert!(on.contains("# termade ADE collaboration"), "{on}");
     }
 }

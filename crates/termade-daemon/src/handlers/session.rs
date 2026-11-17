@@ -79,6 +79,43 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
 
     // agent 自己建立 session：先檢查 model／effort 是否超出免確認範圍 (避免自動開出高消耗的 session)。
     let mut spawn_note: Option<String> = None;
+    let mut spawn = spawn;
+    if parent.is_some() {
+        // 額度吃緊：換 fallback agent 或直接拒絕，避免工作做到一半被額度打斷。
+        let quotas = lock(&shared.inner).state.quotas.clone();
+        let warn = cfg
+            .handoff
+            .warn_percent
+            .unwrap_or(crate::quota_watch::DEFAULT_WARN_PERCENT);
+        match crate::quota_watch::check_spawn_quota(
+            &spawn.kind,
+            &quotas,
+            &cfg.handoff.fallback,
+            warn,
+            now_millis(),
+        ) {
+            crate::quota_watch::SpawnQuota::Ok(n) => spawn_note = n,
+            crate::quota_watch::SpawnQuota::Fallback(k, m, n) => {
+                spawn.kind = k;
+                if m.is_some() {
+                    spawn.model = m;
+                }
+                spawn_note = Some(n);
+                resolved = cfg.resolve(
+                    &spawn.kind,
+                    &role,
+                    spawn.model.as_deref(),
+                    spawn.effort.as_deref(),
+                    &spawn.args,
+                    spawn.permission,
+                );
+            }
+            crate::quota_watch::SpawnQuota::Reject(e) => {
+                let _ = reply.send(Frame::error(e));
+                return;
+            }
+        }
+    }
     if let Some(pid) = &parent {
         let pol = &cfg.agent_spawn;
         let check = pol.check(resolved.model.as_deref(), resolved.effort.as_deref());
@@ -127,7 +164,11 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             }
             if effort_too_high {
                 let max = pol.max_effort().to_string();
-                spawn_note = Some(tr!("effort 已調降為 {max}", max = max));
+                let n = tr!("effort 已調降為 {max}", max = max);
+                spawn_note = Some(match spawn_note.take() {
+                    Some(q) => format!("{q}; {n}"),
+                    None => n,
+                });
                 resolved.effort = Some(max);
             }
         }
@@ -152,7 +193,11 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                 return;
             }
         }
-        if let Some(max_children) = cfg.limits.max_children {
+        {
+            let max_children = cfg
+                .limits
+                .max_children
+                .unwrap_or_else(|| cfg.agent_spawn.max_live_children());
             let live_children = inner.state.live_children_count(pid);
             if live_children >= max_children {
                 let _ = reply.send(Frame::error(tr!(
