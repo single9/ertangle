@@ -69,6 +69,7 @@ struct QrVersion {
     total_codewords: usize,
     data_codewords: usize,
     ec_codewords: usize,
+    blocks: usize,
     alignment_pos: &'static [usize],
 }
 
@@ -79,6 +80,7 @@ const VERSIONS: [QrVersion; 6] = [
         total_codewords: 26,
         data_codewords: 19,
         ec_codewords: 7,
+        blocks: 1,
         alignment_pos: &[],
     },
     QrVersion {
@@ -87,6 +89,7 @@ const VERSIONS: [QrVersion; 6] = [
         total_codewords: 44,
         data_codewords: 34,
         ec_codewords: 10,
+        blocks: 1,
         alignment_pos: &[6, 18],
     },
     QrVersion {
@@ -95,6 +98,7 @@ const VERSIONS: [QrVersion; 6] = [
         total_codewords: 70,
         data_codewords: 55,
         ec_codewords: 15,
+        blocks: 1,
         alignment_pos: &[6, 22],
     },
     QrVersion {
@@ -103,6 +107,7 @@ const VERSIONS: [QrVersion; 6] = [
         total_codewords: 100,
         data_codewords: 80,
         ec_codewords: 20,
+        blocks: 1,
         alignment_pos: &[6, 26],
     },
     QrVersion {
@@ -111,6 +116,7 @@ const VERSIONS: [QrVersion; 6] = [
         total_codewords: 134,
         data_codewords: 108,
         ec_codewords: 26,
+        blocks: 2,
         alignment_pos: &[6, 30],
     },
     QrVersion {
@@ -119,6 +125,7 @@ const VERSIONS: [QrVersion; 6] = [
         total_codewords: 172,
         data_codewords: 136,
         ec_codewords: 36,
+        blocks: 2,
         alignment_pos: &[6, 34],
     },
 ];
@@ -187,12 +194,43 @@ impl QrCode {
             pad_idx += 1;
         }
 
-        // 2. 計算糾錯碼
-        let ec_bytes = reed_solomon_compute(&data_bytes, ver.ec_codewords);
+        // 2. 計算糾錯碼與多區塊交錯 (Interleaving)
+        let mut all_bytes = Vec::with_capacity(ver.total_codewords);
+        if ver.blocks <= 1 {
+            let ec_bytes = reed_solomon_compute(&data_bytes, ver.ec_codewords);
+            all_bytes.extend(data_bytes);
+            all_bytes.extend(ec_bytes);
+        } else {
+            let num_blocks = ver.blocks;
+            let data_per_block = ver.data_codewords / num_blocks;
+            let ec_per_block = ver.ec_codewords / num_blocks;
 
-        // 3. 完整碼字串
-        let mut all_bytes = data_bytes;
-        all_bytes.extend_from_slice(&ec_bytes);
+            let mut block_data = Vec::with_capacity(num_blocks);
+            let mut block_ec = Vec::with_capacity(num_blocks);
+            for b in 0..num_blocks {
+                let start = b * data_per_block;
+                let end = start + data_per_block;
+                let slice = &data_bytes[start..end];
+                let ec = reed_solomon_compute(slice, ec_per_block);
+                block_data.push(slice);
+                block_ec.push(ec);
+            }
+
+            // 交錯排列資料位元組
+            #[allow(clippy::needless_range_loop)]
+            for i in 0..data_per_block {
+                for b in 0..num_blocks {
+                    all_bytes.push(block_data[b][i]);
+                }
+            }
+            // 交錯排列糾錯位元組
+            #[allow(clippy::needless_range_loop)]
+            for i in 0..ec_per_block {
+                for b in 0..num_blocks {
+                    all_bytes.push(block_ec[b][i]);
+                }
+            }
+        }
 
         let mut all_bits = Vec::with_capacity(all_bytes.len() * 8);
         for b in all_bytes {
@@ -329,9 +367,9 @@ impl QrCode {
             col -= 2;
         }
 
-        // 6. 填入格式資訊 (ECC L = 01, Mask 0 = 000 -> 01000 + BCH -> 0b111011111000100 ^ 0x5412)
-        // 預先計算好的 ECC L, Mask 0 格式字元 15 bits:
-        let format_bits: u16 = 0b111011111000100 ^ 0b101010000010010;
+        // 6. 填入格式資訊 (ECC L = 01, Mask 0 = 000 -> 01000 + BCH -> 0b010001111010110 ^ 0x5412 = 0b111011111000100)
+        // 預先計算好的 ECC L, Mask 0 遮罩後格式字元 15 bits：
+        let format_bits: u16 = 0b111011111000100;
         for i in 0..15 {
             let b = (format_bits >> (14 - i)) & 1 == 1;
             // 左上部分
@@ -359,7 +397,7 @@ impl QrCode {
         Some(QrCode { size, modules })
     }
 
-    /// 渲染為終端機字串 (利用 Unicode 半格字元 `▀`、`▄`、`█` 縮小行數)。
+    /// 渲染為終端機字串 (利用 Unicode 半格字元 `▀`、`▄`、`█` 縮小行數，以 ANSI 白底黑字輸出標準正向 QR Code)。
     pub fn render_terminal(&self) -> String {
         let border = 2;
         let full_size = self.size + border * 2;
@@ -367,6 +405,7 @@ impl QrCode {
 
         // 每次處理兩列 (上、下)
         for y in (0..full_size).step_by(2) {
+            out.push_str("\x1b[47;30m");
             for x in 0..full_size {
                 let top_dark = if y < border
                     || y >= border + self.size
@@ -389,11 +428,11 @@ impl QrCode {
                     self.is_dark(bot_y - border, x - border)
                 };
 
-                // 黑底終端機 (黑色為模組)：以反白或 Unicode 區塊顯示
-                // 上黑下黑: █
-                // 上黑下白: ▀
-                // 上白下黑: ▄
-                // 上白下白: 空白
+                // 在白底黑字下：
+                // top_dark (黑) + bot_dark (黑) => █ (全黑前景)
+                // top_dark (黑) + bot_dark (白) => ▀ (上半黑前景，下半白背景)
+                // top_dark (白) + bot_dark (黑) => ▄ (上半白背景，下半黑前景)
+                // top_dark (白) + bot_dark (白) => ' ' (全白背景，包含靜區)
                 match (top_dark, bot_dark) {
                     (true, true) => out.push('█'),
                     (true, false) => out.push('▀'),
@@ -401,9 +440,51 @@ impl QrCode {
                     (false, false) => out.push(' '),
                 }
             }
-            out.push('\n');
+            out.push_str("\x1b[0m\n");
         }
         out
+    }
+
+    /// 渲染為純字元二維陣列 (供 TUI 等自訂前景與背景色之渲染引擎使用)。
+    pub fn render_lines(&self) -> Vec<String> {
+        let border = 2;
+        let full_size = self.size + border * 2;
+        let mut lines = Vec::new();
+
+        for y in (0..full_size).step_by(2) {
+            let mut line = String::new();
+            for x in 0..full_size {
+                let top_dark = if y < border
+                    || y >= border + self.size
+                    || x < border
+                    || x >= border + self.size
+                {
+                    false
+                } else {
+                    self.is_dark(y - border, x - border)
+                };
+
+                let bot_y = y + 1;
+                let bot_dark = if bot_y < border
+                    || bot_y >= border + self.size
+                    || x < border
+                    || x >= border + self.size
+                {
+                    false
+                } else {
+                    self.is_dark(bot_y - border, x - border)
+                };
+
+                match (top_dark, bot_dark) {
+                    (true, true) => line.push('█'),
+                    (true, false) => line.push('▀'),
+                    (false, true) => line.push('▄'),
+                    (false, false) => line.push(' '),
+                }
+            }
+            lines.push(line);
+        }
+        lines
     }
 }
 

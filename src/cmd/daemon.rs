@@ -53,9 +53,9 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
     let web_port = cfg.web.resolved_port();
     let token_hint = token.as_deref().unwrap_or("<token>");
     let web_url = if let Some(ip) = &tailscale_ip {
-        format!("http://{ip}:{web_port}/#token={token_hint}")
+        format!("http://{ip}:{web_port}/?token={token_hint}")
     } else {
-        format!("http://127.0.0.1:{web_port}/#token={token_hint}")
+        format!("http://127.0.0.1:{web_port}/?token={token_hint}")
     };
 
     if json {

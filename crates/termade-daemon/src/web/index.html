@@ -1863,6 +1863,33 @@
         </div>
       </div>
     </div>
+
+    <!-- 抽屜：遠端連線 Token 認證 -->
+    <div id="sheet-token-auth" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">🔐 遠端連線認證</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-token-auth')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div style="color:var(--text-dim); font-size:12px; margin:8px 0 12px 0; line-height:1.5;">
+          請輸入 termade 遠端 Token (可在電腦端執行 <code style="font-family:var(--font-mono); color:var(--text); background:rgba(255,255,255,0.08); padding:2px 5px; border-radius:4px;">termade remote-info</code> 取得)。
+        </div>
+        <div class="form-group">
+          <label class="form-label">連線 Token</label>
+          <input id="sheet-token-input" class="sheet-input" style="font-family:var(--font-mono); font-size:12px;" placeholder="貼上 64 位元 Token 字串">
+        </div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-token-auth')">取消</button>
+          <button class="btn-action" onclick="submitTokenAuth()">確認並連線</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1880,16 +1907,30 @@
       e.preventDefault();
     }, { passive: false });
 
-    // 1. 初始化 Token
+    // 1. 初始化 Token (優先讀取 ?token=... 與 #token=...，並保存至 localStorage)
     let token = "";
-    const hash = window.location.hash.substring(1);
-    const hashParams = new URLSearchParams(hash);
-    if (hashParams.has("token")) {
-      token = hashParams.get("token");
-      localStorage.setItem("termade_token", token);
-      window.location.hash = "";
-    } else {
-      token = localStorage.getItem("termade_token") || "";
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const hashStr = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+      const hashParams = new URLSearchParams(hashStr);
+
+      if (searchParams.has("token") && searchParams.get("token")) {
+        token = searchParams.get("token");
+        localStorage.setItem("termade_token", token);
+        try {
+          history.replaceState(null, "", window.location.pathname + (window.location.hash || ""));
+        } catch (_) {}
+      } else if (hashParams.has("token") && hashParams.get("token")) {
+        token = hashParams.get("token");
+        localStorage.setItem("termade_token", token);
+        try {
+          history.replaceState(null, "", window.location.pathname + window.location.search);
+        } catch (_) {}
+      } else {
+        token = localStorage.getItem("termade_token") || "";
+      }
+    } catch (_) {
+      token = "";
     }
 
     let ws = null;
@@ -2000,13 +2041,52 @@
       return map[status] || status || "閒置";
     }
 
+    function openTokenAuthSheet() {
+      const input = document.getElementById("sheet-token-input");
+      if (input) input.value = token || "";
+      openSheet("sheet-token-auth");
+      setTimeout(() => { if (input) { input.focus(); input.select(); } }, 200);
+    }
+
+    function submitTokenAuth() {
+      const input = document.getElementById("sheet-token-input");
+      const val = input ? input.value.trim() : "";
+      if (val) {
+        token = val;
+        try { localStorage.setItem("termade_token", token); } catch(_) {}
+        closeSheet("sheet-token-auth");
+        showToast("已設定 Token，正在連線…");
+        if (ws) {
+          ws.onclose = null;
+          try { ws.close(); } catch(_) {}
+        }
+        connect();
+      } else {
+        showToast("請輸入 Token 字串", true);
+      }
+    }
+
     function connect() {
       const dot = document.getElementById("conn-dot");
       const statusBadge = document.getElementById("header-status-badge");
-      if (dot) dot.className = "status-dot connecting";
+      if (dot) {
+        dot.className = "status-dot connecting";
+        dot.onclick = openTokenAuthSheet;
+      }
       if (statusBadge) {
         statusBadge.innerText = "連線中…";
         statusBadge.className = "header-status-tag waiting";
+        statusBadge.onclick = openTokenAuthSheet;
+      }
+
+      if (!token) {
+        if (dot) dot.className = "status-dot disconnected";
+        if (statusBadge) {
+          statusBadge.innerText = "需認證";
+          statusBadge.className = "header-status-tag waiting";
+        }
+        openTokenAuthSheet();
+        return;
       }
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -2061,6 +2141,9 @@
         if (frame.note) showToast(frame.note);
       } else if (op === "error") {
         showToast(frame.message, true);
+        if (frame.message.includes("Token") || frame.message.includes("token") || frame.message.includes("認證")) {
+          openTokenAuthSheet();
+        }
       }
     }
 

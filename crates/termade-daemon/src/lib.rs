@@ -799,7 +799,7 @@ impl Shared {
             if state.running.load(Ordering::Relaxed) {
                 let token = self.auth_token();
                 let token_hint = token.as_deref().unwrap_or("");
-                return format!("http://{}/#token={token_hint}", state.addr);
+                return format!("http://{}/?token={token_hint}", state.addr);
             }
         }
         "off".to_string()
@@ -828,7 +828,7 @@ impl Shared {
         if let Some(state) = web_lock.as_ref() {
             if state.running.load(Ordering::Relaxed) && state.addr == resolved {
                 let token_hint = token.as_deref().unwrap_or("");
-                return Ok(format!("http://{resolved}/#token={token_hint}"));
+                return Ok(format!("http://{resolved}/?token={token_hint}"));
             }
             state.running.store(false, Ordering::Relaxed);
         }
@@ -841,7 +841,7 @@ impl Shared {
         });
         tracing::info!("termade Web 版已啟動：http://{resolved}");
         let token_hint = token.as_deref().unwrap_or("");
-        Ok(format!("http://{resolved}/#token={token_hint}"))
+        Ok(format!("http://{resolved}/?token={token_hint}"))
     }
 
     /// 關閉：先結束所有 agent 子處理程序，再移除 socket，最後離開。

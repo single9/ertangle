@@ -427,7 +427,8 @@ fn test_web_companion_dynamic_control_and_config() {
         if let Frame::Ok { note } = frame {
             let note_str = note.unwrap();
             assert!(
-                note_str.contains(&format!("http://{addr}/#token=")),
+                note_str.contains(&format!("http://{addr}/?token="))
+                    || note_str.contains(&format!("http://{addr}/#token=")),
                 "note 應包含正確的 URL，實際為: {note_str}"
             );
         } else {

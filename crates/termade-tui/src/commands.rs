@@ -686,15 +686,14 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             let token_hint = token.as_deref().unwrap_or("");
             let web_port = cfg.web.resolved_port();
             let url = if let Some(ip) = &tailscale_ip {
-                format!("http://{ip}:{web_port}/#token={token_hint}")
+                format!("http://{ip}:{web_port}/?token={token_hint}")
             } else {
-                format!("http://127.0.0.1:{web_port}/#token={token_hint}")
+                format!("http://127.0.0.1:{web_port}/?token={token_hint}")
             };
 
             if cmd_arg == "qr" || cmd_arg == "show" {
                 if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&url) {
-                    let rendered = qr.render_terminal();
-                    let lines: Vec<String> = rendered.lines().map(|s| s.to_string()).collect();
+                    let lines = qr.render_lines();
                     app.qr_modal = Some(crate::app::QrModal {
                         title: tr!("Web 版 QR Code"),
                         url: url.clone(),

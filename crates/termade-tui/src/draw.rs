@@ -490,7 +490,7 @@ pub(crate) fn draw_qr_modal(f: &mut TuiFrame, app: &App) {
     for line in &modal.qr_lines {
         lines.push(Line::from(Span::styled(
             line.clone(),
-            Style::default().fg(Color::White),
+            Style::default().fg(Color::Black).bg(Color::White),
         )));
     }
     lines.push(Line::from(""));
