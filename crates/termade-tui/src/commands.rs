@@ -245,7 +245,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
             "[--force]  清除所有已結束的 session (預設保留未合併或有變更的 worktree)"
         ),
     ),
-    ("merge", termade_core::tr_noop!("[session] [--dry-run]  合併 worktree 回主工作區")),
+    ("merge", termade_core::tr_noop!("[session] [--dry-run] [--resolve]  合併 worktree 回主工作區")),
     ("diff", termade_core::tr_noop!("顯示選取 session 的 diff")),
     ("gc", termade_core::tr_noop!("[session]  清理已合併的 worktree")),
     ("worktrees", termade_core::tr_noop!("顯示 worktree 清單")),
@@ -537,10 +537,13 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         "merge" => {
             let parts = rest.split_whitespace();
             let mut dry_run = false;
+            let mut resolve = false;
             let mut target = None;
             for p in parts {
                 if p == "--dry-run" || p == "-n" || p == "dry-run" {
                     dry_run = true;
+                } else if p == "--resolve" || p == "-r" || p == "resolve" {
+                    resolve = true;
                 } else if target.is_none() {
                     target = Some(p.to_string());
                 }
@@ -552,6 +555,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                     &Request::WorktreeMerge {
                         session: s,
                         dry_run,
+                        resolve,
                     },
                 )?;
             }

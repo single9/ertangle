@@ -79,6 +79,7 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     termade_core::tr_noop!("終止指定 session 的背景子處理程序 (不影響 agent 本體)"),
     termade_core::tr_noop!("終止該 session 底下所有背景子處理程序"),
     termade_core::tr_noop!("若 session 忙碌，先排入待送佇列，等閒下來再自動送出"),
+    termade_core::tr_noop!("若發生衝突，自動保留標記於 worktree 並委派 agent 解衝突"),
     termade_core::tr_noop!("補充給接手者的說明"),
     termade_core::tr_noop!("補全腳本用的查詢 (不會啟動 daemon)"),
     termade_core::tr_noop!("要終止的背景處理程序 PID (未指定且有 --all 則終止全部)"),

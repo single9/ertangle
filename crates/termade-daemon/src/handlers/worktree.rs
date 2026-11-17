@@ -1,6 +1,7 @@
 //! Worktree 與程式碼審查請求處理。
 
 use std::path::Path;
+use std::process::Command;
 use std::sync::Arc;
 
 use termade_core::{
@@ -11,8 +12,9 @@ use tr::tr;
 
 use crate::git::{
     compute_worktree_diff, create_worktree_pr, gc_block_reason, git_status_summary, merge_worktree,
-    remove_worktree, session_repo,
+    prepare_conflict_in_worktree, remove_worktree, session_repo, MergeConflict,
 };
+use crate::handlers::session::{resume_session, send_prompt};
 use crate::{lock, new_id, ClientTx, Shared};
 
 pub(crate) fn collect_worktrees(shared: &Shared) -> Vec<WorktreeInfo> {
@@ -75,7 +77,13 @@ pub(crate) fn handle_diff(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
     }
 }
 
-pub(crate) fn handle_merge(shared: &Arc<Shared>, reply: &ClientTx, session: String, dry_run: bool) {
+pub(crate) fn handle_merge(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    dry_run: bool,
+    resolve: bool,
+) {
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     let default_cwd = shared.default_cwd();
@@ -85,7 +93,77 @@ pub(crate) fn handle_merge(shared: &Arc<Shared>, reply: &ClientTx, session: Stri
                 let _ = reply.send(Frame::ok_note(msg));
             }
             Err(e) => {
-                let _ = reply.send(Frame::error(tr!("合併失敗：{e}", e = e)));
+                if let Some(conflict) = e.downcast_ref::<MergeConflict>() {
+                    if resolve {
+                        let wt_dir = Path::new(&s.cwd);
+                        match prepare_conflict_in_worktree(wt_dir, &conflict.target) {
+                            Ok(conflicts) => {
+                                let prompt = format!(
+                                    "[termade 衝突解決通知]\n在嘗試將分支「{branch}」合併至主分支「{target}」時發生 Git 合併衝突。\n已在你的工作目錄保留合併衝突標記。\n\n衝突檔案：\n{conflict_list}\n\n請執行以下步驟解決衝突：\n1. 檢視衝突檔案中的衝突標記 (<<<<<<<, =======, >>>>>>>)，根據上下文保留正確修改。\n2. 解決衝突後，執行專案的測試與檢查以確保功能正常。\n3. 確認完成後進行 commit，並透過 termade_status 回報進度。",
+                                    branch = conflict.branch,
+                                    target = conflict.target,
+                                    conflict_list = conflicts
+                                        .iter()
+                                        .map(|f| format!("- {f}"))
+                                        .collect::<Vec<_>>()
+                                        .join("\n"),
+                                );
+
+                                let send_res = if shared.control(&s.id).is_some() {
+                                    send_prompt(shared, &s.id, &prompt, &[])
+                                } else if s.native_id.is_some() {
+                                    resume_session(shared, &s.id, Some(prompt)).map(|_| ())
+                                } else {
+                                    Err(anyhow::anyhow!(tr!(
+                                        "session {label} 已結束且無對話 id，無法自動接續解衝突",
+                                        label = s.label
+                                    )))
+                                };
+
+                                match send_res {
+                                    Ok(()) => {
+                                        let note = tr!(
+                                            "已將衝突委派給 {label}，衝突檔案：{files}",
+                                            label = s.label,
+                                            files = conflicts.join(", ")
+                                        );
+                                        let _ = reply.send(Frame::ok_note(note));
+                                    }
+                                    Err(send_err) => {
+                                        let _ = Command::new("git")
+                                            .arg("-C")
+                                            .arg(wt_dir)
+                                            .args(["merge", "--abort"])
+                                            .output();
+                                        let _ = reply.send(Frame::error(tr!(
+                                            "委派解衝突失敗，已還原 worktree：{send_err}",
+                                            send_err = send_err
+                                        )));
+                                    }
+                                }
+                            }
+                            Err(prep_err) => {
+                                let _ = Command::new("git")
+                                    .arg("-C")
+                                    .arg(wt_dir)
+                                    .args(["merge", "--abort"])
+                                    .output();
+                                let _ = reply.send(Frame::error(tr!(
+                                    "在 worktree 建立衝突標記失敗：{prep_err}",
+                                    prep_err = prep_err
+                                )));
+                            }
+                        }
+                    } else {
+                        let msg = tr!(
+                            "合併衝突 ({files})；輸入 :merge --resolve 交由 Agent 自動解衝突",
+                            files = conflict.files.join(", ")
+                        );
+                        let _ = reply.send(Frame::error(msg));
+                    }
+                } else {
+                    let _ = reply.send(Frame::error(tr!("合併失敗：{e}", e = e)));
+                }
             }
         },
         None => {

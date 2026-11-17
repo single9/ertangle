@@ -160,8 +160,135 @@ pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
         .any(|l| !l.trim().is_empty() && !is_termade_status_line(l)))
 }
 
+/// 合併衝突資訊。
+#[derive(Debug, Clone)]
+pub(crate) struct MergeConflict {
+    pub branch: String,
+    pub target: String,
+    pub files: Vec<String>,
+}
+
+impl std::fmt::Display for MergeConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            tr!(
+                "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{files}",
+                branch = self.branch,
+                target = self.target,
+                files = self.files.join(", ")
+            )
+        )
+    }
+}
+
+impl std::error::Error for MergeConflict {}
+
+/// 在 session 的 worktree 執行 `git merge <target_branch> --no-commit` 產生衝突標記，並回傳衝突檔案清單。
+pub(crate) fn prepare_conflict_in_worktree(
+    wt_dir: &Path,
+    target_branch: &str,
+) -> Result<Vec<String>> {
+    let _ = git_output(wt_dir, &["merge", "--no-commit", target_branch])?;
+    let out = git_output(wt_dir, &["diff", "--name-only", "--diff-filter=U"])?;
+    let mut files: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
+    if files.is_empty() {
+        if let Ok(st) = git_output(wt_dir, &["status", "--porcelain"]) {
+            for line in String::from_utf8_lossy(&st.stdout).lines() {
+                let bytes = line.as_bytes();
+                if bytes.len() >= 4 {
+                    let code = &bytes[0..2];
+                    if matches!(code, b"UU" | b"AA" | b"UD" | b"DU" | b"DD" | b"AU" | b"UA") {
+                        files.push(line[3..].trim().to_string());
+                    }
+                }
+            }
+        }
+    }
+    Ok(files)
+}
+
+fn run_pre_merge_command(wt_dir: &Path, cmd: &str) -> Result<()> {
+    let child = Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .current_dir(wt_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .with_context(|| tr!("啟動合併前驗證指令失敗：{cmd}", cmd = cmd))?;
+
+    let child_id = child.id();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let out = child.wait_with_output();
+        let _ = tx.send(out);
+    });
+
+    match rx.recv_timeout(std::time::Duration::from_secs(300)) {
+        Ok(Ok(output)) => {
+            if !output.status.success() {
+                let combined = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                let lines: Vec<&str> = combined.lines().collect();
+                let start_idx = lines.len().saturating_sub(20);
+                let tail = lines[start_idx..].join("\n");
+                bail!(
+                    "{}",
+                    tr!(
+                        "合併前驗證指令失敗 ({cmd})：\n{tail}",
+                        cmd = cmd,
+                        tail = tail
+                    )
+                );
+            }
+            Ok(())
+        }
+        Ok(Err(e)) => bail!("{}", tr!("執行合併前驗證指令失敗：{e}", e = e)),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            let _ = std::process::Command::new("kill")
+                .args(["-9", &child_id.to_string()])
+                .output();
+            bail!("{}", tr!("合併前驗證指令逾時 (300 秒)"));
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            bail!("{}", tr!("執行合併前驗證指令異常結束"));
+        }
+    }
+}
+
 /// 若 worktree 內有尚未 commit 的變更，先自動 commit 到該 worktree 分支上。
 pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
+    let unmerged_out = git_output(wt_dir, &["diff", "--name-only", "--diff-filter=U"])?;
+    let has_unmerged_diff = String::from_utf8_lossy(&unmerged_out.stdout)
+        .lines()
+        .any(|l| !l.trim().is_empty());
+    let mut has_unmerged_status = false;
+    if let Ok(st) = git_output(wt_dir, &["status", "--porcelain"]) {
+        for line in String::from_utf8_lossy(&st.stdout).lines() {
+            let bytes = line.as_bytes();
+            if bytes.len() >= 4 {
+                let code = &bytes[0..2];
+                if matches!(code, b"UU" | b"AA" | b"UD" | b"DU" | b"DD" | b"AU" | b"UA") {
+                    has_unmerged_status = true;
+                    break;
+                }
+            }
+        }
+    }
+    if has_unmerged_diff || has_unmerged_status {
+        bail!("{}", tr!("工作區仍有未解決的合併衝突標記"));
+    }
+
     if !has_uncommitted(wt_dir)? {
         return Ok(());
     }
@@ -197,6 +324,16 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
 
 /// 把 session 的 worktree 分支合併回主工作區。
 pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool) -> Result<String> {
+    merge_worktree_with(main_repo, session, dry_run, None)
+}
+
+/// 帶自訂前置驗證指令 (如測試時覆寫，避免多執行緒共用設定檔競爭) 的合併實作。
+pub(crate) fn merge_worktree_with(
+    main_repo: &Path,
+    session: &Session,
+    dry_run: bool,
+    pre_merge_cmd_override: Option<&str>,
+) -> Result<String> {
     let branch = session
         .branch
         .as_deref()
@@ -282,6 +419,18 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
 
     if wt_dir.is_dir() {
         auto_commit_worktree(wt_dir, &session.label)?;
+        let pre_merge_cmd = pre_merge_cmd_override.map(str::to_string).or_else(|| {
+            crate::config::Config::load_file(&crate::paths::config_dir().join("config.toml"))
+                .git
+                .pre_merge_command
+        });
+        if let Some(cmd) = pre_merge_cmd
+            .as_deref()
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+        {
+            run_pre_merge_command(wt_dir, cmd)?;
+        }
     }
     let out = git_output(main_repo, &["merge", "--no-edit", branch])?;
     if !out.status.success() {
@@ -306,15 +455,11 @@ pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool)
                 )
             );
         }
-        bail!(
-            "{}",
-            tr!(
-                "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{files}",
-                branch = branch,
-                target = target,
-                files = conflicts.join(", ")
-            )
-        );
+        return Err(anyhow::Error::new(MergeConflict {
+            branch: branch.to_string(),
+            target,
+            files: conflicts,
+        }));
     }
     Ok(tr!(
         "已將 {branch} ({label})合併進 {target}",

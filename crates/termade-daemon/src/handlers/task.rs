@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use termade_core::{now_millis, MsgKind, State, Target, Task, TaskStatus};
+use termade_core::{now_millis, MsgKind, Role, State, Target, Task, TaskStatus};
 use termade_protocol::Frame;
 use tr::tr;
 
@@ -69,6 +69,59 @@ fn notify_assignee(shared: &Arc<Shared>, task: &Task) {
         body,
         None,
     );
+}
+
+/// 當任務狀態變為 Review 時，通知同專案的 Reviewer 進行審查。
+fn notify_reviewer_on_review(shared: &Arc<Shared>, task: &Task) {
+    let (reviewer, worker_label, worker_branch) = {
+        let inner = lock(&shared.inner);
+        let worker_sess = task
+            .assignee
+            .as_ref()
+            .and_then(|a| inner.state.sessions.get(a));
+        let worker_label = worker_sess
+            .map(|s| s.label.clone())
+            .unwrap_or_else(|| task.assignee.clone().unwrap_or_else(|| "未知".into()));
+        let worker_branch = worker_sess
+            .and_then(|s| s.branch.clone())
+            .unwrap_or_else(|| "未知".into());
+        let proj_root = worker_sess
+            .map(|s| s.project_root().to_string())
+            .or_else(|| {
+                task.created_by
+                    .as_ref()
+                    .and_then(|c| inner.state.sessions.get(c))
+                    .map(|s| s.project_root().to_string())
+            });
+        let reviewer = inner
+            .state
+            .sessions
+            .values()
+            .find(|s| {
+                s.role == Role::Reviewer
+                    && s.status.is_live()
+                    && proj_root.as_deref().is_none_or(|pr| s.project_root() == pr)
+            })
+            .map(|s| s.id.clone());
+        (reviewer, worker_label, worker_branch)
+    };
+
+    if let Some(target) = reviewer {
+        let body = format!(
+            "[termade 審查請求 id={task_id}]\n任務：{title}\n負責 Worker：{worker_label}\n分支：{worker_branch}\n狀態：review\n\n請透過 termade_diff 檢視變更並進行程式碼審查。",
+            task_id = task.id,
+            title = task.title,
+            worker_label = worker_label,
+            worker_branch = worker_branch,
+        );
+        let _ = shared.deliver_message(
+            task.assignee.clone(),
+            Target::Direct(target),
+            MsgKind::Handoff,
+            body,
+            None,
+        );
+    }
 }
 
 /// 任務是否還在等前置任務 (`blocked` 且有相依性沒完成)。
@@ -165,6 +218,7 @@ pub(crate) fn handle_update(
         Some(mut task) => {
             let previous_assignee = task.assignee.clone();
             let was_done = task.status == TaskStatus::Done;
+            let was_review = task.status == TaskStatus::Review;
             if let Some(st) = status {
                 task.status = st;
             }
@@ -180,6 +234,7 @@ pub(crate) fn handle_update(
             let newly_assigned = task.assignee.is_some() && task.assignee != previous_assignee;
             let task_id = task.id.clone();
             let now_done = task.status == TaskStatus::Done;
+            let now_review = task.status == TaskStatus::Review;
 
             shared.emit(termade_core::Event::TaskChanged { task: task.clone() });
 
@@ -189,6 +244,9 @@ pub(crate) fn handle_update(
             }
             if now_done && !was_done {
                 unblock_dependents(shared, &task_id);
+            }
+            if now_review && !was_review {
+                notify_reviewer_on_review(shared, &task);
             }
 
             let _ = reply.send(Frame::ok_note(tr!(

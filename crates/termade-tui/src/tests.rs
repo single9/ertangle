@@ -795,6 +795,10 @@ fn space_menu_tree_has_session_and_git_groups() {
     assert!(root.iter().any(|i| i.key == 's') && root.iter().any(|i| i.key == 'g'));
     let (_, s) = crate::menu::menu_items(&['s']).unwrap();
     assert!(s.iter().any(|i| i.key == 'n') && s.iter().any(|i| i.key == 'x'));
+    let (_, g) = crate::menu::menu_items(&['g']).unwrap();
+    assert!(g
+        .iter()
+        .any(|i| i.key == 'r' && matches!(i.act, crate::menu::Act::Cmd("merge --resolve"))));
     assert!(crate::menu::menu_items(&['z']).is_none());
 }
 
@@ -851,6 +855,9 @@ fn command_hints_list_matches_then_usage() {
     let usage = crate::commands::command_hints("merge --dr");
     assert_eq!(usage.len(), 1);
     assert!(usage[0].1.contains("dry-run"));
+    let usage_res = crate::commands::command_hints("merge --re");
+    assert_eq!(usage_res.len(), 1);
+    assert!(usage_res[0].1.contains("resolve"));
     assert!(crate::commands::command_hints("zzz").is_empty());
 }
 

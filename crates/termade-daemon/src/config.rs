@@ -308,6 +308,15 @@ impl WebCfg {
     }
 }
 
+/// Git 與 worktree 相關設定 ([git])。
+/// 為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫任意 shell 指令。
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct GitCfg {
+    /// 合併前執行的驗證指令 (如 "cargo test")。非 0 退出則中止合併。
+    pub pre_merge_command: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
@@ -319,6 +328,8 @@ pub struct Config {
     pub agents: BTreeMap<String, AgentCfg>,
     pub roles: BTreeMap<String, RoleCfg>,
     pub tui: TuiCfg,
+    /// Git 與 worktree 設定；為安全起見僅讀取全域設定檔。
+    pub git: GitCfg,
     /// Web 版支援設定；為安全起見僅讀取全域設定檔。
     pub web: WebCfg,
     /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
@@ -1023,5 +1034,24 @@ enabled = true
         assert_eq!(merged.remotes.len(), 2);
         assert!(!merged.remotes.contains_key("evil"));
         assert!(merged.remotes.contains_key("workstation"));
+    }
+
+    #[test]
+    fn git_pre_merge_command_parsing_and_security_ignored_in_local() {
+        let global_src = r#"
+[git]
+pre_merge_command = "cargo test"
+"#;
+        let global = Config::parse(global_src).unwrap();
+        assert_eq!(global.git.pre_merge_command.as_deref(), Some("cargo test"));
+
+        // repo 設定不得覆寫 pre_merge_command
+        let local_src = r#"
+[git]
+pre_merge_command = "rm -rf /"
+"#;
+        let local = Config::parse(local_src).unwrap();
+        let merged = Config::layered(global, local);
+        assert_eq!(merged.git.pre_merge_command.as_deref(), Some("cargo test"));
     }
 }
