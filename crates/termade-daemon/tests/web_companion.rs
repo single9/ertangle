@@ -335,6 +335,22 @@ fn test_web_companion_http_and_websocket() {
             }
         }
         assert!(got_snap, "WebSocket 應收到 Snapshot 回應");
+
+        // 7. 網頁版以 list_models 取得與 TUI 同源的 model 清單 (原始 JSON 與前端送出的格式相同)
+        write_ws_client_text_frame(&mut ws_stream, r#"{"op":"list_models","kind":"claude"}"#);
+        let mut models = None;
+        for _ in 0..10 {
+            if let Ok(resp_raw) = read_ws_server_text_frame(&mut reader) {
+                if let Ok(Frame::Models { kind, models: m }) = decode_line::<Frame>(&resp_raw) {
+                    assert_eq!(kind, "claude");
+                    models = Some(m);
+                    break;
+                }
+            }
+        }
+        let models = models.expect("WebSocket 應收到 Models 回應");
+        assert_eq!(models[0].id, "", "第一項是依設定檔預設");
+        assert!(models.iter().any(|m| m.id == "opus"));
     }
 
     let _ = fs::remove_dir_all(&root);

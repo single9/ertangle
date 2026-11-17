@@ -937,6 +937,22 @@ msgstr ""
 msgid "`{method}` 未回傳 thread id"
 msgstr ""
 
+#: crates/termade-adapter/src/models.rs
+msgid "最新 Fable"
+msgstr ""
+
+#: crates/termade-adapter/src/models.rs
+msgid "最新 Opus"
+msgstr ""
+
+#: crates/termade-adapter/src/models.rs
+msgid "最新 Sonnet"
+msgstr ""
+
+#: crates/termade-adapter/src/models.rs
+msgid "最新 Haiku"
+msgstr ""
+
 #: crates/termade-adapter/src/pty.rs
 msgid "openpty 失敗"
 msgstr ""
@@ -1751,6 +1767,14 @@ msgstr ""
 
 #: crates/termade-daemon/src/handlers/mod.rs
 msgid "Web 版未在執行"
+msgstr ""
+
+#: crates/termade-daemon/src/handlers/mod.rs
+msgid "未知的 agent：{kind}"
+msgstr ""
+
+#: crates/termade-daemon/src/handlers/mod.rs crates/termade-tui/src/menu.rs
+msgid "預設 (依 config.toml)"
 msgstr ""
 
 #: crates/termade-daemon/src/quota_watch.rs
@@ -3403,26 +3427,6 @@ msgstr ""
 
 #: crates/termade-tui/src/menu.rs
 msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
-msgstr ""
-
-#: crates/termade-tui/src/menu.rs
-msgid "最新 Fable"
-msgstr ""
-
-#: crates/termade-tui/src/menu.rs
-msgid "最新 Opus"
-msgstr ""
-
-#: crates/termade-tui/src/menu.rs
-msgid "最新 Sonnet"
-msgstr ""
-
-#: crates/termade-tui/src/menu.rs
-msgid "最新 Haiku"
-msgstr ""
-
-#: crates/termade-tui/src/menu.rs
-msgid "預設 (依 config.toml)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs

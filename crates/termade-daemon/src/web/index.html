@@ -2025,8 +2025,8 @@
       handoffKind: "claude"
     };
 
-    // Claude 清單需與 crates/termade-tui/src/menu.rs 的 CLAUDE_MODELS 同步。
-    // 其他 agent 的模型由各自 CLI 查詢，網頁版不寫死，請用自訂模型輸入。
+    // 離線備援清單：連上 daemon 後改用 list_models 回傳的清單 (與 TUI 同源)。
+    // Claude 清單需與 crates/termade-adapter/src/models.rs 的 CLAUDE_MODELS 同步。
     const DEFAULT_MODEL = { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 的預設模型" };
     const OTHER_MODEL_HINT = { id: "", label: "預設 (依設定檔)", desc: "其他模型請用「自訂模型」輸入 id" };
     const MODEL_CATALOG = {
@@ -2220,6 +2220,8 @@
 
       ws.onopen = () => {
         if (dot) dot.className = "status-dot connected";
+        // 斷線前送出但沒收到回覆的 list_models 要能重送。
+        for (const k in modelRequested) delete modelRequested[k];
         ws.send(JSON.stringify({
           op: "hello",
           client: "web",
@@ -2268,6 +2270,8 @@
         updateAllViews();
       } else if (op === "record") {
         applyRecord(frame.record);
+      } else if (op === "models") {
+        onModelsFrame(frame);
       } else if (op === "diff") {
         renderDiff(frame.diff);
       } else if (op === "ok") {
@@ -3434,10 +3438,52 @@
       btnEl.classList.add("active");
     }
 
-    function renderModelCardList(containerId, kind, currentVal, onSelect) {
+    // daemon 回傳的 model 清單 (agent → [{id,label}])，與 TUI 相同來源。
+    const modelCache = {};
+    const modelRequested = {};
+    const lastModelRender = {};
+
+    // Session.kind 序列化為 claude_code，daemon 與清單用 claude。
+    function normKind(kind) {
+      return kind === "claude_code" ? "claude" : (kind || "opencode");
+    }
+
+    function requestModels(kind) {
+      if (modelCache[kind] || modelRequested[kind]) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      modelRequested[kind] = true;
+      ws.send(JSON.stringify({ op: "list_models", kind }));
+    }
+
+    function onModelsFrame(frame) {
+      modelCache[frame.kind] = frame.models || [];
+      delete modelRequested[frame.kind];
+      for (const id in lastModelRender) {
+        const r = lastModelRender[id];
+        if (r.kind === frame.kind) renderModelCardList(id, r.kind, r.currentVal, r.onSelect);
+      }
+    }
+
+    function renderModelCardList(containerId, kindRaw, currentVal, onSelect) {
+      const kind = normKind(kindRaw);
       const container = document.getElementById(containerId);
       container.innerHTML = "";
-      const list = MODEL_CATALOG[kind] || MODEL_CATALOG.opencode;
+      lastModelRender[containerId] = { kind, currentVal, onSelect };
+      requestModels(kind);
+      const list = modelCache[kind]
+        ? modelCache[kind].map(m => ({
+            id: m.id,
+            label: m.label,
+            desc: m.id ? (m.label === m.id ? "" : m.id) : "使用 config.toml 的預設模型"
+          }))
+        : (MODEL_CATALOG[kind] || [OTHER_MODEL_HINT]);
+      if (!modelCache[kind] && modelRequested[kind]) {
+        const hint = document.createElement("div");
+        hint.className = "model-desc-text";
+        hint.style.padding = "4px 2px";
+        hint.innerText = "正在向 agent 查詢可用模型…";
+        container.appendChild(hint);
+      }
 
       list.forEach(item => {
         const card = document.createElement("div");
@@ -3452,6 +3498,7 @@
         card.onclick = () => {
           container.querySelectorAll(".model-card").forEach(c => c.classList.remove("active"));
           card.classList.add("active");
+          if (lastModelRender[containerId]) lastModelRender[containerId].currentVal = item.id;
           onSelect(item.id);
         };
         container.appendChild(card);

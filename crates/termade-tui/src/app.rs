@@ -643,7 +643,7 @@ impl App {
                 }
             }
             Frame::Messages { .. } => {}
-            Frame::PermissionDecision { .. } => {}
+            Frame::PermissionDecision { .. } | Frame::Models { .. } => {}
             Frame::Diff { session, diff, .. } => {
                 let raw_lines: Vec<String> = diff.lines().map(|l| l.to_string()).collect();
                 let files = parse_files(&raw_lines);

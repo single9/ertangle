@@ -207,6 +207,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             comment,
         } => worktree::handle_comment(shared, reply, session, location, comment),
 
+        Request::ListModels { kind } => list_models(shared, reply, kind),
         // Web Support
         Request::WebControl { enabled, addr } => match enabled {
             None => {
@@ -235,4 +236,60 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             }
         },
     }
+}
+
+/// `ListModels`：內建／CLI 查到的清單 + config.toml 的 `model`／`models`。
+/// 查 CLI 最多要幾秒，放到背景執行緒以免卡住這條連線。
+fn list_models(shared: &Arc<Shared>, reply: &ClientTx, kind: String) {
+    let Some(agent) = termade_core::AgentKind::parse(&kind) else {
+        let _ = reply.send(Frame::error(tr!("未知的 agent：{kind}", kind = kind)));
+        return;
+    };
+    let reply = reply.clone();
+    let cwd = shared.default_cwd();
+    std::thread::spawn(move || {
+        let _ = reply.send(Frame::Models {
+            kind,
+            models: model_list(&agent, &cwd),
+        });
+    });
+}
+
+pub(crate) fn model_list(
+    agent: &termade_core::AgentKind,
+    cwd: &std::path::Path,
+) -> Vec<termade_protocol::ModelInfo> {
+    use termade_protocol::ModelInfo;
+    let mut out = vec![ModelInfo {
+        id: String::new(),
+        label: tr!("預設 (依 config.toml)"),
+    }];
+    if matches!(agent, termade_core::AgentKind::ClaudeCode) {
+        out.extend(
+            termade_adapter::models::CLAUDE_MODELS
+                .iter()
+                .map(|(id, name)| ModelInfo {
+                    id: id.to_string(),
+                    label: termade_core::tr_dyn!(name),
+                }),
+        );
+    } else {
+        out.extend(
+            termade_adapter::models::query_models(agent)
+                .into_iter()
+                .map(|(label, id)| ModelInfo { id, label }),
+        );
+    }
+    let cfg = crate::config::Config::load(&crate::paths::config_dir(), cwd);
+    if let Some(a) = cfg.agents.get(agent.id()) {
+        for m in a.model.iter().chain(a.models.iter()) {
+            if !out.iter().any(|x| &x.id == m) {
+                out.push(ModelInfo {
+                    id: m.clone(),
+                    label: m.clone(),
+                });
+            }
+        }
+    }
+    out
 }

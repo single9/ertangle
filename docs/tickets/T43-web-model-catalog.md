@@ -17,7 +17,7 @@ Status: done
 
 - Claude 沒有列出模型的 CLI，只能內建；網頁版應與 `CLAUDE_MODELS` 相同。
 - 其他 agent 的模型清單需要向 CLI 查詢，網頁版目前沒有對應的協定請求；寫死的猜測清單比沒有更糟，先改為「預設 + 自訂輸入」。
-- 未做：新增 `Request::ListModels` 讓網頁向 daemon 取得與 TUI 相同的清單 (可另開票)。
+- 後續：`Request::ListModels` 讓網頁向 daemon 取得與 TUI 相同的清單，見 T44。
 
 ## 實作方式
 

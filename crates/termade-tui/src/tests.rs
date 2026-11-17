@@ -837,7 +837,7 @@ fn picker_filters_and_offers_default_model() {
 #[test]
 fn parses_models_output_and_skips_status_lines() {
     let out = "Fetching available models...\ngemini-4-argon-medium\tGemini 4 Argon (Medium)\nollama/gemma4:12b\n\n";
-    let m = crate::menu::parse_models(out);
+    let m = termade_adapter::models::parse_models(out);
     assert_eq!(m.len(), 2);
     assert_eq!(m[0].1, "gemini-4-argon-medium");
     assert!(m[0].0.contains("Gemini 4 Argon"));
@@ -869,9 +869,9 @@ fn command_hints_list_matches_then_usage() {
 #[test]
 fn parses_codex_model_catalog_visible_only() {
     let out = r#"{"models":[{"slug":"a","display_name":"A","visibility":"list"},{"slug":"b","display_name":"B","visibility":"hide"}]}"#;
-    let m = crate::menu::parse_codex_models(out);
+    let m = termade_adapter::models::parse_codex_models(out);
     assert_eq!(m, vec![("a  (A)".to_string(), "a".to_string())]);
-    assert!(crate::menu::parse_codex_models("not json").is_empty());
+    assert!(termade_adapter::models::parse_codex_models("not json").is_empty());
 }
 
 #[test]
@@ -2129,7 +2129,8 @@ gemini-pro-orchestrator-g1-pro\tPro\n\
 claude-opus-5-5-low\tClaude Opus 5.5 (Low)\n\
 claude-opus-5-5-high\tClaude Opus 5.5 (High)\n\
 gpt-oss-120b-medium\tGPT OSS\n";
-    let m = crate::menu::split_effort_variants(crate::menu::parse_models(out));
+    let m =
+        termade_adapter::models::split_effort_variants(termade_adapter::models::parse_models(out));
     let ids: Vec<&str> = m.iter().map(|(_, v)| v.as_str()).collect();
     assert_eq!(
         ids,

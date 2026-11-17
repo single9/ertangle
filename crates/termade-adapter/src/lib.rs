@@ -15,6 +15,7 @@ pub mod acp;
 pub mod ansi;
 pub mod claude;
 pub mod codex;
+pub mod models;
 pub mod pty;
 pub mod stderr;
 pub mod stream;

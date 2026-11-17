@@ -309,6 +309,11 @@ pub enum Request {
         #[serde(default)]
         addr: Option<String>,
     },
+    /// 列出某個 agent 可選的 model (Claude 內建清單；其他 agent 向 CLI 查詢，最多數秒)。
+    ListModels {
+        /// agent 種類 (`claude`、`codex`、`opencode`、`antigravity`)。
+        kind: String,
+    },
     /// 要 daemon 關閉。
     Shutdown,
 }
@@ -363,6 +368,18 @@ pub enum Frame {
     Error {
         message: String,
     },
+    /// `ListModels` 的回覆：`id` 為空字串代表「依設定檔預設」。
+    Models {
+        kind: String,
+        models: Vec<ModelInfo>,
+    },
+}
+
+/// 一個可選的 model。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelInfo {
+    pub id: String,
+    pub label: String,
 }
 
 impl Frame {
