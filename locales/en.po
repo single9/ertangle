@@ -1162,6 +1162,38 @@ msgstr "not merged yet"
 msgid "無法檢查合併狀態：{e}"
 msgstr "Cannot check merge status: {e}"
 
+#: crates/termade-daemon/src/git.rs
+msgid "不安全的檔案路徑：{file}"
+msgstr "Unsafe file path: {file}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "執行 git apply 失敗"
+msgstr "Failed to run git apply"
+
+#: crates/termade-daemon/src/git.rs
+msgid "等待 git apply 失敗"
+msgstr "Failed to wait for git apply"
+
+#: crates/termade-daemon/src/git.rs
+msgid "退回 hunk 失敗：{detail}"
+msgstr "Failed to revert hunk: {detail}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "已退回 {file} 的選取區塊"
+msgstr "Reverted selected hunk in {file}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "刪除未追蹤檔案失敗：{file}"
+msgstr "Failed to remove untracked file: {file}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "還原檔案失敗：{detail}"
+msgstr "Failed to restore file: {detail}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "已還原檔案 {file}"
+msgstr "Restored file {file}"
+
 #: crates/termade-daemon/src/handlers/session.rs
 msgid "設定要求每次都先確認"
 msgstr "Configuration requires confirmation every time"
@@ -1406,6 +1438,10 @@ msgstr "(removed)"
 #: crates/termade-daemon/src/handlers/worktree.rs
 msgid "取得 diff 失敗：{e}"
 msgstr "Failed to get diff: {e}"
+
+#: crates/termade-daemon/src/handlers/worktree.rs
+msgid "退回變更失敗：{e}"
+msgstr "Failed to revert changes: {e}"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
 msgid "session {label} 已結束且無對話 id，無法自動接續解衝突"
@@ -1889,6 +1925,10 @@ msgid "顯示選取 session 的 diff"
 msgstr "Show the selected session's diff"
 
 #: crates/termade-tui/src/commands.rs
+msgid "(Diff 視圖) 退回游標所在的 hunk 或整個檔案；:discard! 直接執行"
+msgstr "(Diff view) Revert the hunk or entire file at the cursor; :discard! executes immediately"
+
+#: crates/termade-tui/src/commands.rs
 msgid "[session]  清理已合併的 worktree"
 msgstr "[session]  Clean up merged worktrees"
 
@@ -2145,6 +2185,22 @@ msgid "已要求啟動 {kind}"
 msgstr "Requested start of {kind}"
 
 #: crates/termade-tui/src/commands.rs
+msgid "請先切換到 Diff 視圖再執行退回"
+msgstr "Switch to the Diff view before discarding changes"
+
+#: crates/termade-tui/src/commands.rs
+msgid "目前位置沒有可退回的變更"
+msgstr "No discardable changes at the current position"
+
+#: crates/termade-tui/src/commands.rs
+msgid "⚠ 將退回 {file} 的目前 hunk；再按一次 X 或輸入 :discard! 確認"
+msgstr "⚠ Will revert the current hunk in {file}; press X again or run :discard! to confirm"
+
+#: crates/termade-tui/src/commands.rs
+msgid "⚠ 將還原整個檔案 {file} 的變更；再按一次 X 或輸入 :discard! 確認"
+msgstr "⚠ Will restore the entire file {file}; press X again or run :discard! to confirm"
+
+#: crates/termade-tui/src/commands.rs
 msgid "此 session 沒有待核准請求"
 msgstr "This session has no pending approval"
 
@@ -2289,6 +2345,26 @@ msgid "常用連接埠"
 msgstr "Common port"
 
 #: crates/termade-tui/src/diff.rs
+msgid "▸ [已摺疊] {path} (+{added} -{removed}) — 按 Enter 展開"
+msgstr "▸ [collapsed] {path} (+{added} -{removed}) — press Enter to expand"
+
+#: crates/termade-tui/src/diff.rs
+msgid "沒有更多檔案"
+msgstr "No more files"
+
+#: crates/termade-tui/src/diff.rs
+msgid "[{idx}/{total}] {path} (+{added} -{removed})"
+msgstr "[{idx}/{total}] {path} (+{added} -{removed})"
+
+#: crates/termade-tui/src/diff.rs
+msgid "已摺疊 {path}"
+msgstr "Collapsed {path}"
+
+#: crates/termade-tui/src/diff.rs
+msgid "已展開 {path}"
+msgstr "Expanded {path}"
+
+#: crates/termade-tui/src/diff.rs
 msgid "沒有更多 hunk"
 msgstr "No more hunks"
 
@@ -2405,8 +2481,8 @@ msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session�
 msgstr "Agent output appears here. Press i to type a prompt, n to create a session, g for the Diff view."
 
 #: crates/termade-tui/src/draw.rs
-msgid " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session "
-msgstr " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k line · {{/}} hunk · c comment · M merge · [ ] switch session "
+msgid " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k 選行 · {{/}} hunk · (/) 檔案 · Enter 摺疊 · X 退回 · c 註解 · M 合併 "
+msgstr " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k line · {{/}} hunk · (/) file · Enter fold · X discard · c comment · M merge "
 
 #: crates/termade-tui/src/draw.rs
 msgid "(尚無 diff 資料，按 r 重新載入)"
@@ -2707,6 +2783,18 @@ msgstr "Diff and git"
 #: crates/termade-tui/src/help.rs
 msgid "移動游標／跳到上一個、下一個 hunk"
 msgstr "Move cursor / jump to previous, next hunk"
+
+#: crates/termade-tui/src/help.rs
+msgid "跳到上一個、下一個檔案 (diff --git)"
+msgstr "Jump to previous, next file (diff --git)"
+
+#: crates/termade-tui/src/help.rs
+msgid "(Diff 視圖)摺疊／展開目前游標所在的檔案"
+msgstr "(Diff view) Fold / unfold the file at the cursor"
+
+#: crates/termade-tui/src/help.rs
+msgid "(Diff 視圖)退回游標所在的 hunk 或整個檔案；再按一次 X 或 :discard! 確認"
+msgstr "(Diff view) Revert the hunk or entire file at the cursor; press X again or :discard! to confirm"
 
 #: crates/termade-tui/src/help.rs
 msgid "對游標所在行寫審查註解，送回該 agent"
@@ -3400,6 +3488,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session "
+#~ msgstr " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k line · {{/}} hunk · c comment · M merge · [ ] switch session "
 
 #~ msgid "claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)"
 #~ msgstr "The claude adapter does not support per-action approval yet (use --permission auto/bypass)"

@@ -1360,7 +1360,8 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
 }
 
 pub(crate) fn diff_line_style(l: &str) -> Style {
-    if l.starts_with("+++")
+    if l.starts_with("▸ ")
+        || l.starts_with("+++")
         || l.starts_with("---")
         || l.starts_with("diff ")
         || l.starts_with("index ")
@@ -1380,18 +1381,28 @@ pub(crate) fn diff_line_style(l: &str) -> Style {
 }
 
 pub(crate) fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
+    let file_part = crate::diff::current_file_progress(app)
+        .map(|(idx, total, path)| format!("· [{idx}/{total}] {path}  "))
+        .unwrap_or_default();
     let title = match app.selected_id() {
         Some(id) => {
             let s = &app.state.sessions[&id];
             tr!(
-                " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session ",
+                " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k 選行 · {{/}} hunk · (/) 檔案 · Enter 摺疊 · X 退回 · c 註解 · M 合併 ",
                 label = s.label,
                 branch = s.branch.as_deref().unwrap_or("main"),
+                file_part = file_part,
                 added = app.diff_added,
                 removed = app.diff_removed,
             )
         }
-        None => " Diff ".into(),
+        None => {
+            if file_part.is_empty() {
+                " Diff ".into()
+            } else {
+                format!(" Diff {file_part}")
+            }
+        }
     };
 
     let items: Vec<ListItem> = if app.diff_lines.is_empty() {

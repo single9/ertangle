@@ -11,8 +11,9 @@ use termade_protocol::Frame;
 use tr::tr;
 
 use crate::git::{
-    compute_worktree_diff, create_worktree_pr, gc_block_reason, git_status_summary, merge_worktree,
-    prepare_conflict_in_worktree, remove_worktree, session_repo, MergeConflict,
+    compute_worktree_diff, create_worktree_pr, discard_worktree_change, gc_block_reason,
+    git_status_summary, merge_worktree, prepare_conflict_in_worktree, remove_worktree,
+    session_repo, MergeConflict,
 };
 use crate::handlers::session::{resume_session, send_prompt};
 use crate::{lock, new_id, ClientTx, Shared};
@@ -68,6 +69,44 @@ pub(crate) fn handle_diff(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
                 let _ = reply.send(Frame::error(tr!("取得 diff 失敗：{e}", e = e)));
             }
         },
+        None => {
+            let _ = reply.send(Frame::error(tr!(
+                "找不到 session {session}",
+                session = session
+            )));
+        }
+    }
+}
+
+pub(crate) fn handle_discard(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    file: String,
+    patch: Option<String>,
+) {
+    let sid = shared.resolve_session(&session);
+    let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
+    match sess {
+        Some(s) => {
+            let wt_dir = Path::new(&s.cwd);
+            match discard_worktree_change(wt_dir, &file, patch.as_deref()) {
+                Ok(msg) => {
+                    if let Ok(diff) = compute_worktree_diff(wt_dir) {
+                        let _ = reply.send(Frame::Diff {
+                            session: s.id,
+                            branch: s.branch,
+                            cwd: s.cwd,
+                            diff,
+                        });
+                    }
+                    let _ = reply.send(Frame::ok_note(msg));
+                }
+                Err(e) => {
+                    let _ = reply.send(Frame::error(tr!("退回變更失敗：{e}", e = e)));
+                }
+            }
+        }
         None => {
             let _ = reply.send(Frame::error(tr!(
                 "找不到 session {session}",

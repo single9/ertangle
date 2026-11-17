@@ -2613,3 +2613,181 @@ fn mouse_click_on_footer_opens_ps_modal() {
     assert_eq!(app.mode, Mode::Ps);
     assert!(app.ps_modal.is_some());
 }
+
+#[test]
+fn diff_file_jump_and_collapse_preserves_gutter() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.view = CenterView::Diff;
+    let raw_diff = "\
+diff --git a/src/a.rs b/src/a.rs
+index 1111111..2222222 100644
+--- a/src/a.rs
++++ b/src/a.rs
+@@ -1,2 +1,3 @@
+ fn a() {
++    println!(\"a\");
+ }
+diff --git a/src/b.rs b/src/b.rs
+index 3333333..4444444 100644
+--- a/src/b.rs
++++ b/src/b.rs
+@@ -10,3 +10,4 @@
+ fn b() {
+-    old_b();
++    new_b1();
++    new_b2();
+ }
+diff --git a/src/c.rs b/src/c.rs
+index 5555555..6666666 100644
+--- a/src/c.rs
++++ b/src/c.rs
+@@ -20,2 +20,3 @@
+ fn c() {
++    c_added();
+ }";
+    app.apply_host_frame(
+        "local",
+        termade_protocol::Frame::Diff {
+            session: "ses_test".into(),
+            branch: Some("termade/ses_test".into()),
+            cwd: "/tmp".into(),
+            diff: raw_diff.into(),
+        },
+    );
+
+    assert_eq!(app.diff_files.len(), 3);
+    assert_eq!(app.diff_files[0].path, "src/a.rs");
+    assert_eq!(app.diff_files[1].path, "src/b.rs");
+    assert_eq!(app.diff_files[1].added, 2);
+    assert_eq!(app.diff_files[1].removed, 1);
+    assert_eq!(app.diff_files[2].path, "src/c.rs");
+
+    // 初始在檔案 1 的標頭 (行 0)
+    assert_eq!(app.diff_cursor, 0);
+    let rendered = render(&mut app);
+    assert!(rendered.contains("[1/3] src/a.rs"), "{rendered}");
+
+    // 按 `)` 跳至第 2 個檔案標頭
+    handle_key(&mut app, &mut w, kev(KeyCode::Char(')'))).unwrap();
+    assert_eq!(app.diff_cursor, app.diff_files[1].start_line);
+    assert!(app.diff_lines[app.diff_cursor].starts_with("diff --git a/src/b.rs"));
+    let rendered = render(&mut app);
+    assert!(rendered.contains("[2/3] src/b.rs"), "{rendered}");
+
+    // 再按 `)` 跳至第 3 個檔案標頭
+    handle_key(&mut app, &mut w, kev(KeyCode::Char(')'))).unwrap();
+    assert_eq!(app.diff_cursor, app.diff_files[2].start_line);
+    assert!(app.diff_lines[app.diff_cursor].starts_with("diff --git a/src/c.rs"));
+
+    // 按 `(` 跳回第 2 個檔案標頭
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('('))).unwrap();
+    assert_eq!(app.diff_cursor, app.diff_files[1].start_line);
+
+    // 按 Enter 摺疊第 2 個檔案
+    handle_key(&mut app, &mut w, kev(KeyCode::Enter)).unwrap();
+    assert!(app.diff_collapsed.contains("src/b.rs"));
+    let b_line_idx = app.diff_cursor;
+    assert!(
+        app.diff_lines[b_line_idx].contains("src/b.rs (+2 -1)"),
+        "第 2 個檔案應濃縮為單行摘要：{}",
+        app.diff_lines[b_line_idx]
+    );
+    assert_eq!(app.diff_gutter[b_line_idx], (None, None));
+
+    // 第 3 個檔案緊接在摺疊行之後，且行號邊欄 (20, 21, 22) 依然正確
+    let c_start = b_line_idx + 1;
+    assert_eq!(app.diff_lines[c_start], "diff --git a/src/c.rs b/src/c.rs");
+    // c_start + 4 是 `@@ -20,2 +20,3 @@`
+    assert_eq!(app.diff_gutter[c_start + 4], (None, None));
+    // c_start + 5 是 ` fn c() {` -> (Some(20), Some(20))
+    assert_eq!(app.diff_gutter[c_start + 5], (Some(20), Some(20)));
+    // c_start + 6 是 `+    c_added();` -> (None, Some(21))
+    assert_eq!(app.diff_gutter[c_start + 6], (None, Some(21)));
+    // c_start + 7 是 ` }` -> (Some(21), Some(22))
+    assert_eq!(app.diff_gutter[c_start + 7], (Some(21), Some(22)));
+}
+
+#[test]
+fn diff_extract_hunk_patch_and_discard_confirmation() {
+    let mut app = sample_app(&[]);
+    let (mut w, peer) = pair_writer();
+    app.view = CenterView::Diff;
+    let raw_diff = "\
+diff --git a/src/lib.rs b/src/lib.rs
+index 1111111..2222222 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,3 +1,3 @@
+ line1
+-line2
++line2_mod
+ line3
+@@ -10,3 +10,3 @@
+ line10
+-line11
++line11_mod
+ line12
+diff --git a/src/new.rs b/src/new.rs
+new file mode 100644
+--- /dev/null
++++ b/src/new.rs
+@@ -0,0 +1,2 @@
++hello
++world";
+    app.apply_host_frame(
+        "local",
+        termade_protocol::Frame::Diff {
+            session: "ses_test".into(),
+            branch: Some("termade/ses_test".into()),
+            cwd: "/tmp".into(),
+            diff: raw_diff.into(),
+        },
+    );
+
+    // 游標在檔案標頭行 (行 0) -> 整檔退回 (patch 為 None)
+    app.diff_cursor = 0;
+    let (file, patch) = crate::diff::extract_current_hunk_patch(&app).unwrap();
+    assert_eq!(file, "src/lib.rs");
+    assert!(patch.is_none());
+
+    // 游標在第 1 個 hunk 內 (行 6: `-line2`) -> 單一 hunk 退回
+    app.diff_cursor = 6;
+    let (file, patch) = crate::diff::extract_current_hunk_patch(&app).unwrap();
+    assert_eq!(file, "src/lib.rs");
+    let patch_str = patch.expect("應產生單一 hunk patch");
+    assert!(patch_str.contains("@@ -1,3 +1,3 @@"));
+    assert!(patch_str.contains("-line2\n+line2_mod"));
+    assert!(!patch_str.contains("@@ -10,3 +10,3 @@"));
+
+    // 未追蹤新檔 -> 強制整檔退回 (patch 為 None)
+    app.diff_cursor = app.diff_lines.len() - 1;
+    let (file_untracked, patch_untracked) = crate::diff::extract_current_hunk_patch(&app).unwrap();
+    assert_eq!(file_untracked, "src/new.rs");
+    assert!(patch_untracked.is_none());
+
+    // 移回第 1 個 hunk 按 X：第一次僅提示確認，第二次才送出 Request::WorktreeDiscard
+    app.diff_cursor = 6;
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('X'))).unwrap();
+    assert!(app.diff_discard_armed.is_some());
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('X'))).unwrap();
+    assert!(app.diff_discard_armed.is_none());
+
+    use std::io::BufRead;
+    let mut reader = std::io::BufReader::new(peer);
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    let req: Request = termade_protocol::decode_line(line.trim()).unwrap();
+    match req {
+        Request::WorktreeDiscard {
+            session,
+            file,
+            patch,
+        } => {
+            assert_eq!(session, "ses_test");
+            assert_eq!(file, "src/lib.rs");
+            assert!(patch.unwrap().contains("@@ -1,3 +1,3 @@"));
+        }
+        other => panic!("預期 WorktreeDiscard，收到 {other:?}"),
+    }
+}

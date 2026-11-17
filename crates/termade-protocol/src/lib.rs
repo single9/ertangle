@@ -266,6 +266,13 @@ pub enum Request {
     WorktreeDiff {
         session: SessionId,
     },
+    /// 退回 (捨棄) 某個 session 工作區的單一 Hunk 或整個檔案變更。
+    WorktreeDiscard {
+        session: SessionId,
+        file: String,
+        #[serde(default)]
+        patch: Option<String>,
+    },
     /// 將某個 session 的 worktree 分支合併回主工作區。
     WorktreeMerge {
         session: SessionId,

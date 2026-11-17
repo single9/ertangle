@@ -1,6 +1,6 @@
 //! TUI 狀態模型、版面模式與畫面快取。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use tr::tr;
 
@@ -12,7 +12,7 @@ use termade_core::{
 };
 use termade_protocol::Frame;
 
-use crate::diff::{build_gutter, diff_stat};
+use crate::diff::{build_gutter, diff_stat, parse_files, rebuild_visible_diff, DiffFile};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum Mode {
@@ -131,6 +131,9 @@ pub(crate) struct HostData {
     pub(crate) status: crate::hosts::HostStatus,
     pub(crate) daemon_epoch: Option<String>,
     pub(crate) diff_session: Option<SessionId>,
+    pub(crate) diff_raw_lines: Vec<String>,
+    pub(crate) diff_files: Vec<DiffFile>,
+    pub(crate) diff_collapsed: BTreeSet<String>,
     pub(crate) diff_lines: Vec<String>,
     pub(crate) diff_cursor: usize,
     pub(crate) diff_gutter: Vec<(Option<u64>, Option<u64>)>,
@@ -147,6 +150,9 @@ impl HostData {
             status: crate::hosts::HostStatus::Disconnected,
             daemon_epoch: None,
             diff_session: None,
+            diff_raw_lines: Vec::new(),
+            diff_files: Vec::new(),
+            diff_collapsed: BTreeSet::new(),
             diff_lines: Vec::new(),
             diff_cursor: 0,
             diff_gutter: Vec::new(),
@@ -194,6 +200,10 @@ pub(crate) struct App {
     pub(crate) picker: Option<crate::menu::Picker>,
     /// M3：目前顯示的 worktree diff 內容與游標行。
     pub(crate) diff_session: Option<SessionId>,
+    pub(crate) diff_raw_lines: Vec<String>,
+    pub(crate) diff_files: Vec<DiffFile>,
+    pub(crate) diff_collapsed: BTreeSet<String>,
+    pub(crate) diff_discard_armed: Option<(SessionId, String, Option<String>)>,
     pub(crate) diff_lines: Vec<String>,
     pub(crate) diff_cursor: usize,
     /// 每行對應的 (舊檔行號, 新檔行號)邊欄。
@@ -313,6 +323,10 @@ impl App {
             menu_path: Vec::new(),
             picker: None,
             diff_session: None,
+            diff_raw_lines: Vec::new(),
+            diff_files: Vec::new(),
+            diff_collapsed: BTreeSet::new(),
+            diff_discard_armed: None,
             diff_lines: Vec::new(),
             diff_cursor: 0,
             diff_gutter: Vec::new(),
@@ -508,6 +522,10 @@ impl App {
             self.state = entry.state.clone();
             self.daemon_epoch = entry.daemon_epoch.clone();
             self.diff_session = entry.diff_session.clone();
+            self.diff_raw_lines = entry.diff_raw_lines.clone();
+            self.diff_files = entry.diff_files.clone();
+            self.diff_collapsed = entry.diff_collapsed.clone();
+            self.diff_discard_armed = None;
             self.diff_lines = entry.diff_lines.clone();
             self.diff_gutter = entry.diff_gutter.clone();
             self.diff_added = entry.diff_added;
@@ -622,24 +640,40 @@ impl App {
             Frame::Messages { .. } => {}
             Frame::PermissionDecision { .. } => {}
             Frame::Diff { session, diff, .. } => {
-                let lines: Vec<String> = diff.lines().map(|l| l.to_string()).collect();
-                let gutter = build_gutter(&lines);
-                let (added, removed) = diff_stat(&lines);
+                let raw_lines: Vec<String> = diff.lines().map(|l| l.to_string()).collect();
+                let files = parse_files(&raw_lines);
+                let (added, removed) = diff_stat(&raw_lines);
+                let same_session = self.diff_session.as_deref() == Some(session.as_str());
                 if let Some(entry) = self.hosts.get_mut(host) {
+                    if entry.diff_session.as_deref() != Some(session.as_str()) {
+                        entry.diff_collapsed.clear();
+                        entry.diff_cursor = 0;
+                    } else {
+                        entry
+                            .diff_collapsed
+                            .retain(|p| files.iter().any(|f| &f.path == p));
+                    }
                     entry.diff_session = Some(session.clone());
-                    entry.diff_lines = lines.clone();
-                    entry.diff_gutter = gutter.clone();
+                    entry.diff_raw_lines = raw_lines.clone();
+                    entry.diff_files = files.clone();
+                    entry.diff_lines = raw_lines.clone();
+                    entry.diff_gutter = build_gutter(&raw_lines);
                     entry.diff_added = added;
                     entry.diff_removed = removed;
-                    entry.diff_cursor = 0;
                 }
                 if is_active {
+                    if !same_session {
+                        self.diff_collapsed.clear();
+                        self.diff_cursor = 0;
+                    } else {
+                        self.diff_collapsed
+                            .retain(|p| files.iter().any(|f| &f.path == p));
+                    }
+                    self.diff_discard_armed = None;
                     self.diff_session = Some(session);
-                    self.diff_lines = lines;
-                    self.diff_gutter = gutter;
-                    self.diff_added = added;
-                    self.diff_removed = removed;
-                    self.diff_cursor = 0;
+                    self.diff_raw_lines = raw_lines;
+                    self.diff_files = files;
+                    rebuild_visible_diff(self);
                     crate::search::refresh(self);
                 }
             }
@@ -802,14 +836,19 @@ impl App {
             return "diff".into();
         }
         let idx = self.diff_cursor.min(self.diff_lines.len() - 1);
-        let mut current_file = "unknown";
-        for l in &self.diff_lines[..=idx] {
-            if let Some(rest) = l.strip_prefix("+++ b/") {
-                current_file = rest.trim();
-            } else if let Some(rest) = l.strip_prefix("diff --git ") {
-                current_file = rest.trim();
+        let current_file = if let Some((_, _, path)) = crate::diff::current_file_progress(self) {
+            path
+        } else {
+            let mut file = "unknown";
+            for l in &self.diff_lines[..=idx] {
+                if let Some(rest) = l.strip_prefix("+++ b/") {
+                    file = rest.trim();
+                } else if let Some(rest) = l.strip_prefix("diff --git ") {
+                    file = rest.trim();
+                }
             }
-        }
+            file.to_string()
+        };
         let line_text = self.diff_lines[idx].trim();
         format!("{current_file} (L{}: {})", idx + 1, truncate(line_text, 48))
     }
