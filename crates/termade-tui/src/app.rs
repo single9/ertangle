@@ -56,12 +56,14 @@ pub(crate) enum CenterView {
     Worktrees,
     /// T18：依狀態分組的任務清單。
     Tasks,
+    /// 一次顯示最多 4 個 session 的迷你逐字稿。
+    Grid,
 }
 
 /// 主區版面模式。
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum LayoutMode {
-    /// Sessions／中央／Bus 三欄。
+    /// Sessions／中央／Project 三欄 (Bus 可用 `:bus` 暫時換進右欄)。
     Three,
     /// Sessions／中央兩欄，隱藏 Bus。
     Two,
@@ -257,6 +259,8 @@ pub(crate) struct App {
     pub(crate) layout: LayoutMode,
     /// Bus 欄被隱藏時，是否以浮層暫時顯示。
     pub(crate) bus_overlay: bool,
+    /// 三欄版面的右欄顯示 Bus (否則顯示 Project)。
+    pub(crate) right_bus: bool,
     /// 最近一次繪製時 Bus 是否可見，以及當時已看過的訊息數 (供未讀計數)。
     pub(crate) bus_visible: bool,
     pub(crate) bus_seen: usize,
@@ -358,6 +362,7 @@ impl App {
             mouse_capture: true,
             layout,
             bus_overlay: false,
+            right_bus: false,
             bus_visible: true,
             bus_seen: 0,
             bus_baselined: false,
@@ -810,6 +815,22 @@ impl App {
             .collect()
     }
 
+    /// 切換 Bus 顯示：三欄版面把右欄在 Project／Bus 間切換，其他版面切換浮層。
+    pub(crate) fn toggle_bus(&mut self) {
+        let on = if self.layout == LayoutMode::Three {
+            self.right_bus = !self.right_bus;
+            self.right_bus
+        } else {
+            !self.bus_overlay
+        };
+        self.bus_overlay = on;
+        self.status = if on {
+            tr!("Bus：顯示 (b 或 Esc 關閉)")
+        } else {
+            tr!("Bus：隱藏")
+        };
+    }
+
     pub(crate) fn cycle_layout(&mut self) {
         self.set_layout(self.layout.next());
     }
@@ -887,6 +908,7 @@ pub(crate) fn main_pane_text(app: &App) -> String {
             .collect::<Vec<_>>()
             .join("\n"),
         CenterView::Tasks => crate::tasks::tasks_text(app),
+        CenterView::Grid => String::new(),
     }
 }
 

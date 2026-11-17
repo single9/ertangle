@@ -22,6 +22,7 @@ mod markdown;
 mod menu;
 mod mouse;
 mod notify;
+mod project;
 mod ps;
 mod search;
 mod settings;

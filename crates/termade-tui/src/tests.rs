@@ -448,7 +448,12 @@ fn layout_modes_render_expected_panes() {
     assert_eq!(app.layout, LayoutMode::Two, "預設是兩欄 (不顯示 Bus)");
     app.layout = LayoutMode::Three;
     let (_, three) = render_size(&mut app, 120, 40);
-    assert!(three.contains("Sessions") && three.contains("Bus / Tasks"));
+    assert!(three.contains("Sessions") && three.contains("Project"));
+    assert!(!three.contains("Bus / Tasks"));
+    app.right_bus = true;
+    let (_, three_bus) = render_size(&mut app, 120, 40);
+    assert!(three_bus.contains("Bus / Tasks"));
+    app.right_bus = false;
 
     app.layout = LayoutMode::Two;
     let (_, two) = render_size(&mut app, 120, 40);
@@ -2790,4 +2795,156 @@ new file mode 100644
         }
         other => panic!("預期 WorktreeDiscard，收到 {other:?}"),
     }
+}
+
+fn task(id: &str, title: &str, status: termade_core::TaskStatus, who: &str) -> termade_core::Task {
+    termade_core::Task {
+        id: id.into(),
+        title: title.into(),
+        detail: String::new(),
+        status,
+        assignee: Some(who.into()),
+        created_by: None,
+        depends_on: Vec::new(),
+        updated_ms: 1,
+    }
+}
+
+fn lines_text(lines: &[ratatui::text::Line]) -> String {
+    lines
+        .iter()
+        .map(|l| {
+            l.spans
+                .iter()
+                .map(|s| s.content.as_ref())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn project_panel_shows_collaboration_running_and_hides_empty() {
+    let mut app = sample_app(&[]);
+    app.home_project = "/work/alpha".into();
+    app.scope_here = true;
+    app.state.sessions.get_mut("ses_test").unwrap().cwd = "/work/alpha".into();
+    app.state.sessions.get_mut("ses_test").unwrap().status = SessionStatus::Idle;
+    // 空狀態：只有提示，沒有任何區段標題。
+    let txt = lines_text(&crate::project::project_panel_lines(&app, 100_000));
+    assert_eq!(txt.lines().count(), 1, "{txt}");
+
+    add_session(&mut app, "ses_web", "worker/web", 5);
+    add_session(&mut app, "ses_other", "other", 6);
+    {
+        let w = app.state.sessions.get_mut("ses_web").unwrap();
+        w.cwd = "/work/alpha".into();
+        w.parent = Some("ses_test".into());
+        w.status_note = Some("編輯中".into());
+        w.active_tools.push(termade_core::ActiveTool {
+            name: "Bash".into(),
+            summary: "cargo test".into(),
+            started_ms: 88_000,
+            is_subagent: false,
+        });
+        w.active_tools.push(termade_core::ActiveTool {
+            name: "Task".into(),
+            summary: String::new(),
+            started_ms: 90_000,
+            is_subagent: true,
+        });
+        let o = app.state.sessions.get_mut("ses_other").unwrap();
+        o.cwd = "/work/beta".into();
+        o.bg_procs.push(termade_core::BgProc {
+            pid: 999,
+            name: "leak".into(),
+            cmdline: String::new(),
+            elapsed_secs: 1,
+        });
+    }
+    let t = task(
+        "t1",
+        "Fix web scope",
+        termade_core::TaskStatus::Doing,
+        "ses_web",
+    );
+    app.state.tasks.insert(t.id.clone(), t);
+    let t = task(
+        "t2",
+        "Done thing",
+        termade_core::TaskStatus::Done,
+        "ses_web",
+    );
+    app.state.tasks.insert(t.id.clone(), t);
+    let txt = lines_text(&crate::project::project_panel_lines(&app, 100_000));
+    assert!(
+        txt.contains("協作") && txt.contains("↳ ○ worker/web"),
+        "{txt}"
+    );
+    assert!(txt.contains("編輯中") && txt.contains("doing: Fix web scope"));
+    assert!(!txt.contains("Done thing"));
+    assert!(txt.contains("run:Bash") && txt.contains("12s") && txt.contains("sub:Task"));
+    // 其他專案的 bg 處理程序不在範圍內。
+    assert!(!txt.contains("leak"));
+    app.scope_here = false;
+    let txt = lines_text(&crate::project::project_panel_lines(&app, 100_000));
+    assert!(txt.contains("bg:999"));
+}
+
+#[test]
+fn grid_paging_and_rects() {
+    use crate::project::{grid_page, grid_rects};
+    assert_eq!(grid_page(0, 0), (0, 0, 1));
+    assert_eq!(grid_page(2, 3), (0, 3, 1));
+    assert_eq!(grid_page(3, 6), (0, 4, 2));
+    assert_eq!(grid_page(4, 6), (4, 2, 2));
+    assert_eq!(grid_page(9, 6), (4, 2, 2));
+    let a = Rect::new(0, 0, 120, 40);
+    assert_eq!(grid_rects(a, 1), vec![a]);
+    let two = grid_rects(a, 2);
+    assert_eq!(two[0].height, 40);
+    let narrow = grid_rects(Rect::new(0, 0, 80, 40), 2);
+    assert_eq!(narrow[0].width, 80);
+    assert_eq!(grid_rects(a, 3)[2].width, 120);
+    assert_eq!(grid_rects(a, 4).len(), 4);
+}
+
+#[test]
+fn grid_view_renders_page_with_selected_and_toggles() {
+    let mut app = sample_app(&["hello-main"]);
+    for i in 0..5 {
+        let id = format!("ses_g{i}");
+        add_session(&mut app, &id, &format!("grid{i}"), 10 + i);
+        app.state
+            .transcripts
+            .insert(id, VecDeque::from(vec![format!("body-g{i}")]));
+    }
+    app.scope_here = false;
+    let (mut w, _peer) = pair_writer();
+    execute_command(&mut app, &mut w, "grid").unwrap();
+    assert_eq!(app.view, CenterView::Grid);
+    let text = render(&mut app);
+    // 6 個 session：第一頁 4 個 (含 sample 與 grid0..2)，第二頁不顯示。
+    assert!(
+        text.contains("body-g0") && !text.contains("body-g4"),
+        "{text}"
+    );
+    assert!(text.contains("1/2"));
+    app.selected = 5;
+    let text = render(&mut app);
+    assert!(text.contains("body-g4") && text.contains("2/2"));
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.view, CenterView::Transcript);
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('V'), KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.view, CenterView::Grid);
 }

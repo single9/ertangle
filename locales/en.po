@@ -1063,6 +1063,7 @@ msgid "閒置"
 msgstr "Idle"
 
 #: crates/termade-core/src/lib.rs crates/termade-tui/src/app.rs
+#: crates/termade-tui/src/project.rs
 msgid "執行中"
 msgstr "running"
 
@@ -1905,6 +1906,14 @@ msgid "錯誤：{message}"
 msgstr "Error: {message}"
 
 #: crates/termade-tui/src/app.rs
+msgid "Bus：顯示 (b 或 Esc 關閉)"
+msgstr "Bus: shown (b or Esc to close)"
+
+#: crates/termade-tui/src/app.rs
+msgid "Bus：隱藏"
+msgstr "Bus: hidden"
+
+#: crates/termade-tui/src/app.rs
 msgid "版面：{layout}"
 msgstr "Layout: {layout}"
 
@@ -2177,7 +2186,7 @@ msgstr "[on|off|status|qr|<addr>]  Configure and start the Web version"
 msgid "顯示 Web 版網址與連線資訊"
 msgstr "Display Web version URL and connection info"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/help.rs
+#: crates/termade-tui/src/commands.rs
 msgid "顯示／隱藏 Bus 浮層"
 msgstr "Show / hide the Bus overlay"
 
@@ -2284,14 +2293,6 @@ msgstr "Transcript: raw text"
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
 msgid "逐字稿顯示：Markdown 渲染"
 msgstr "Transcript: rendered Markdown"
-
-#: crates/termade-tui/src/commands.rs
-msgid "Bus：顯示"
-msgstr "Bus: shown"
-
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
-msgid "Bus：隱藏"
-msgstr "Bus: hidden"
 
 #: crates/termade-tui/src/commands.rs
 msgid "用法：:scope [here|all]"
@@ -2813,6 +2814,10 @@ msgstr "  ? help  M merge  G clean up  q quit"
 msgid "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"
 msgstr "  j/k select task  Enter go to assignee  :task-status <status>  ? help"
 
+#: crates/termade-tui/src/draw.rs
+msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
+msgstr "  Select a session to switch panes (4 per page)  Enter/V back to single transcript  ? help"
+
 #: crates/termade-tui/src/help.rs
 msgid "常用"
 msgstr "Common"
@@ -2946,8 +2951,16 @@ msgid "Diff 檢視"
 msgstr "Diff view"
 
 #: crates/termade-tui/src/help.rs
-msgid "切換版面：三欄／兩欄／分頁"
-msgstr "Switch layout: three columns / two columns / tabs"
+msgid "切換版面：三欄 (Sessions／中央／Project)／兩欄／分頁"
+msgstr "Switch layout: three columns (Sessions / center / Project) / two columns / tabs"
+
+#: crates/termade-tui/src/help.rs
+msgid "網格檢視：一次看 4 個 session (Enter 返回)"
+msgstr "Grid view: watch 4 sessions at once (Enter to return)"
+
+#: crates/termade-tui/src/help.rs
+msgid "顯示／隱藏 Bus (三欄時取代右欄的 Project)"
+msgstr "Show/hide Bus (replaces the Project panel in the right column of the three-column layout)"
 
 #: crates/termade-tui/src/help.rs
 msgid "原始文字／Markdown；顯示／隱藏思考"
@@ -3078,8 +3091,8 @@ msgid "設定或調高選取 session 的成本上限，如 :budget 10"
 msgstr "Set or raise the selected session's cost limit, e.g. :budget 10"
 
 #: crates/termade-tui/src/help.rs
-msgid "切換版面；:raw、:thoughts、:bus 切換顯示"
-msgstr "Switch layout; :raw, :thoughts, :bus toggle display"
+msgid "切換版面；:raw、:thoughts、:bus、:grid 切換顯示"
+msgstr "Switch layout; :raw, :thoughts, :bus, :grid toggle display"
 
 #: crates/termade-tui/src/help.rs
 msgid "on|off 開關通知 (回合結束、等待核准、失敗、額度用完)；test 試發；方式在 config.toml [tui] notify"
@@ -3156,10 +3169,6 @@ msgstr "Mouse capture: on (drag to select and copy the center pane; Shift+drag f
 #: crates/termade-tui/src/input.rs
 msgid "滑鼠擷取：關 (可直接拖曳選取複製；滾輪用終端機 alternate scroll)"
 msgstr "Mouse capture: off (drag to select natively; the wheel uses the terminal's alternate scroll)"
-
-#: crates/termade-tui/src/input.rs
-msgid "Bus：顯示 (b 或 Esc 關閉；僅在兩欄／分頁模式有浮層)"
-msgstr "Bus: shown (b or Esc to close; overlay only in two-column / tabs layouts)"
 
 #: crates/termade-tui/src/input.rs
 msgid "已清除選取"
@@ -3284,6 +3293,10 @@ msgstr "Task view"
 #: crates/termade-tui/src/menu.rs
 msgid "切換版面"
 msgstr "Switch layout"
+
+#: crates/termade-tui/src/menu.rs
+msgid "網格檢視 (一次看 4 個 session)"
+msgstr "Grid view (4 sessions at once)"
 
 #: crates/termade-tui/src/menu.rs
 msgid "原始文字／Markdown"
@@ -3445,6 +3458,26 @@ msgstr "Notifications: notify_command is not set"
 #: crates/termade-tui/src/notify.rs
 msgid "通知命令執行失敗：{e}"
 msgstr "Notification command failed: {e}"
+
+#: crates/termade-tui/src/project.rs
+msgid "協作"
+msgstr "Collaboration"
+
+#: crates/termade-tui/src/project.rs
+msgid "最新訊息"
+msgstr "Latest messages"
+
+#: crates/termade-tui/src/project.rs
+msgid "目前沒有協作或執行中的項目。b 切換 Bus。"
+msgstr "No collaboration or running items. Press b to switch to Bus."
+
+#: crates/termade-tui/src/project.rs
+msgid " Project · 全部專案 "
+msgstr " Project · all projects "
+
+#: crates/termade-tui/src/project.rs
+msgid "尚無 session：按 n 建立"
+msgstr "No sessions yet: press n to create one"
 
 #: crates/termade-tui/src/ps.rs
 msgid "已強制終止處理程序 PID {pid} (SIGKILL)"
@@ -3731,6 +3764,18 @@ msgstr "Connection lost, reconnecting; please wait"
 
 #~ msgid "kill {sig} -{pgid} 失敗"
 #~ msgstr "kill {sig} -{pgid} failed"
+
+#~ msgid "Bus：顯示"
+#~ msgstr "Bus: shown"
+
+#~ msgid "切換版面：三欄／兩欄／分頁"
+#~ msgstr "Switch layout: three columns / two columns / tabs"
+
+#~ msgid "切換版面；:raw、:thoughts、:bus 切換顯示"
+#~ msgstr "Switch layout; :raw, :thoughts, :bus toggle display"
+
+#~ msgid "Bus：顯示 (b 或 Esc 關閉；僅在兩欄／分頁模式有浮層)"
+#~ msgstr "Bus: shown (b or Esc to close; overlay only in two-column / tabs layouts)"
 
 #~ msgid " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session "
 #~ msgstr " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k line · {{/}} hunk · c comment · M merge · [ ] switch session "
