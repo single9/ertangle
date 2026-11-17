@@ -283,6 +283,10 @@ msgid "強制刪除 (即使有未 commit 變更或未合併分支)"
 msgstr "Force removal (even with uncommitted changes or an unmerged branch)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "強制終止 (SIGKILL)"
+msgstr "Force kill (SIGKILL)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "強制結束 agent 子處理程序"
 msgstr "Forcibly end the agent child process"
 
@@ -301,6 +305,10 @@ msgstr "Hand a session's work off to another agent (when quota runs out): reuses
 #: src/cmd/helptext/help_strings.rs
 msgid "指定 events.jsonl 路徑 (預設為 termade 自己的 log)"
 msgstr "Path to events.jsonl (defaults to termade's own log)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "指定 session id 或標籤 (未指定則列出所有 session)"
+msgstr "Target session ID or label (lists all sessions if omitted)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "接手的 agent，可加 `:model`，例如 codex、claude:sonnet"
@@ -367,6 +375,10 @@ msgid "檔案與行號位置 (例如 `src/lib.rs:42`)"
 msgstr "File and line location (e.g. `src/lib.rs:42`)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "檢視指定 session 或所有 session 的背景子處理程序與執行中工具"
+msgstr "View background child processes and active tools for a given session or all sessions"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "檢視指定 session 的 worktree git diff (M3)"
 msgstr "Show the git diff of the given session's worktree (M3)"
 
@@ -403,8 +415,20 @@ msgid "產生 shell 補全腳本並印到 stdout (bash / zsh / fish)"
 msgstr "Generate a shell completion script and print it to stdout (bash / zsh / fish)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "目標 session id 或標籤"
+msgstr "Target session ID or label"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "種類：code / pr / doc / test / run (預設 code)"
 msgstr "Kind: code / pr / doc / test / run (default code)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "終止指定 session 的背景子處理程序 (不影響 agent 本體)"
+msgstr "Terminate background child processes of a given session (without affecting the agent itself)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "終止該 session 底下所有背景子處理程序"
+msgstr "Terminate all background child processes under this session"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "若 session 忙碌，先排入待送佇列，等閒下來再自動送出"
@@ -417,6 +441,10 @@ msgstr "Extra notes for the agent taking over"
 #: src/cmd/helptext/help_strings.rs
 msgid "補全腳本用的查詢 (不會啟動 daemon)"
 msgstr "Query used by completion scripts (does not start the daemon)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "要終止的背景處理程序 PID (未指定且有 --all 則終止全部)"
+msgstr "PID of the background process to terminate (terminates all if omitted and --all is set)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "角色：coordinator / worker / reviewer / tester (預設 worker)"
@@ -574,6 +602,42 @@ msgstr "Woken"
 #: src/cmd/session.rs
 msgid "已更新成本上限"
 msgstr "Cost limit updated"
+
+#: src/cmd/session.rs
+msgid "找不到 session {target}"
+msgstr "Session {target} not found"
+
+#: src/cmd/session.rs
+msgid "執行中工具／Subagent："
+msgstr "Active tools / Subagents:"
+
+#: src/cmd/session.rs
+msgid "背景子處理程序："
+msgstr "Background child processes:"
+
+#: src/cmd/session.rs crates/termade-tui/src/ps.rs
+msgid "執行時間"
+msgstr "Elapsed"
+
+#: src/cmd/session.rs
+msgid "命令列"
+msgstr "Command"
+
+#: src/cmd/session.rs
+msgid "(無執行中工具或背景處理程序)"
+msgstr "(no active tools or background processes)"
+
+#: src/cmd/session.rs
+msgid "請指定 --pid <PID> 或 --all"
+msgstr "Please specify --pid <PID> or --all"
+
+#: src/cmd/session.rs
+msgid "已終止處理程序 PID {p}"
+msgstr "Terminated process PID {p}"
+
+#: src/cmd/session.rs
+msgid "已清理 {session} 所有背景處理程序"
+msgstr "Cleaned up all background processes for {session}"
 
 #: src/cmd/task.rs
 msgid "(沒有任務)"
@@ -788,6 +852,10 @@ msgstr "Failed to run kill"
 #: crates/termade-adapter/src/lib.rs
 msgid "kill {sig} {pid} 失敗"
 msgstr "kill {sig} {pid} failed"
+
+#: crates/termade-adapter/src/lib.rs
+msgid "kill {sig} -{pgid} 失敗"
+msgstr "kill {sig} -{pgid} failed"
 
 #: crates/termade-adapter/src/lib.rs
 msgid "{kind} 尚不支援 allowed_tools／disallowed_tools；請改用 claude"
@@ -1231,6 +1299,18 @@ msgid "已移除 {label}"
 msgstr "Removed {label}"
 
 #: crates/termade-daemon/src/handlers/session.rs
+msgid "無法取得 session 主處理程序 PID"
+msgstr "Failed to get session main process PID"
+
+#: crates/termade-daemon/src/handlers/session.rs
+msgid "PID {pid} 不屬於 session {sid} 的後代處理程序"
+msgstr "PID {pid} is not a descendant process of session {sid}"
+
+#: crates/termade-daemon/src/handlers/session.rs
+msgid "終止 PID {pid} 失敗：{e}"
+msgstr "Failed to terminate PID {pid}: {e}"
+
+#: crates/termade-daemon/src/handlers/session.rs
 msgid "請指定 model 或 effort"
 msgstr "Specify a model or effort"
 
@@ -1556,6 +1636,10 @@ msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr "▸ Tools ×{calls} (✓{ok}) · last: {last}"
 
 #: crates/termade-tui/src/app.rs
+msgid "執行中"
+msgstr "running"
+
+#: crates/termade-tui/src/app.rs
 msgid "工具：展開 (每筆呼叫都顯示，按 O 摺疊)"
 msgstr "Tools: expanded (every call shown, O to collapse)"
 
@@ -1644,6 +1728,7 @@ msgid "已送出 prompt"
 msgstr "Prompt sent"
 
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
+#: crates/termade-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr "No session selected"
 
@@ -1878,6 +1963,22 @@ msgstr "Resume requested"
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
 msgid "已送出中斷"
 msgstr "Interrupt sent"
+
+#: crates/termade-tui/src/commands.rs
+msgid "用法：:bg-kill <PID> (或 :bg-kill --all)"
+msgstr "Usage: :bg-kill <PID> (or :bg-kill --all)"
+
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/ps.rs
+msgid "已要求清理 {session} 底下所有背景處理程序"
+msgstr "Requested cleanup of all background processes for {session}"
+
+#: crates/termade-tui/src/commands.rs
+msgid "已請求終止處理程序 PID {pid}"
+msgstr "Requested termination of process PID {pid}"
+
+#: crates/termade-tui/src/commands.rs
+msgid "無效的 PID：{rest}"
+msgstr "Invalid PID: {rest}"
 
 #: crates/termade-tui/src/commands.rs
 msgid "沒有可清除的已結束 session"
@@ -2302,6 +2403,10 @@ msgstr " Settings "
 #: crates/termade-tui/src/draw.rs
 msgid " QR Code "
 msgstr " QR Code "
+
+#: crates/termade-tui/src/draw.rs
+msgid " 處理程序 "
+msgstr " Processes "
 
 #: crates/termade-tui/src/draw.rs
 msgid " prompt (@ 附檔 · Enter 送出 · Alt-Enter 排隊) "
@@ -2768,6 +2873,10 @@ msgid "切換 effort (執行中)"
 msgstr "Switch effort (running)"
 
 #: crates/termade-tui/src/menu.rs
+msgid "處理程序與 Subagent"
+msgstr "Processes & Subagents"
+
+#: crates/termade-tui/src/menu.rs
 msgid "休眠"
 msgstr "Sleep"
 
@@ -2955,6 +3064,42 @@ msgstr "Notifications: notify_command is not set"
 #: crates/termade-tui/src/notify.rs
 msgid "通知命令執行失敗：{e}"
 msgstr "Notification command failed: {e}"
+
+#: crates/termade-tui/src/ps.rs
+msgid "已強制終止處理程序 PID {pid} (SIGKILL)"
+msgstr "Forcibly terminated process PID {pid} (SIGKILL)"
+
+#: crates/termade-tui/src/ps.rs
+msgid "已請求終止處理程序 PID {pid} (SIGTERM，再按一次強制終止)"
+msgstr "Requested termination of process PID {pid} (SIGTERM, press again to force kill)"
+
+#: crates/termade-tui/src/ps.rs
+msgid "沒有可終止的背景處理程序"
+msgstr "No background processes to terminate"
+
+#: crates/termade-tui/src/ps.rs
+msgid " ─── 執行中工具／Subagent ───"
+msgstr " ─── Active Tools / Subagents ───"
+
+#: crates/termade-tui/src/ps.rs
+msgid " ─── 背景子處理程序 (PID / 執行時間 / 命令列) ───"
+msgstr " ─── Background Child Processes (PID / Elapsed / Command) ───"
+
+#: crates/termade-tui/src/ps.rs
+msgid "  (目前沒有殘留的背景子處理程序)"
+msgstr "  (No background child processes remaining)"
+
+#: crates/termade-tui/src/ps.rs
+msgid "命令列摘要"
+msgstr "Command summary"
+
+#: crates/termade-tui/src/ps.rs
+msgid " ↑↓/j/k 移動 · x 單獨終止 (連按強制) · X 清理全部 · Esc/q 關閉"
+msgstr " ↑↓/j/k Move · x Terminate (repeat to force) · X Clean all · Esc/q Close"
+
+#: crates/termade-tui/src/ps.rs
+msgid " 處理程序與 Subagent 監控 ({label}) "
+msgstr " Process & Subagent Monitor ({label}) "
 
 #: crates/termade-tui/src/search.rs
 msgid "這個視圖不支援搜尋 (逐字稿與 Diff 才有)"

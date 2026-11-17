@@ -116,6 +116,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     Act::Cmd("cancel"),
                 ),
                 it(
+                    'p',
+                    termade_core::tr_noop!("處理程序與 Subagent"),
+                    Act::Cmd("ps"),
+                ),
+                it(
                     'k',
                     termade_core::tr_noop!("結束 session"),
                     Act::Cmd("kill"),

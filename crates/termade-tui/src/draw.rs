@@ -111,6 +111,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         Mode::Help => draw_help(f, app),
         Mode::Settings => draw_settings(f, app),
         Mode::Qr => draw_qr_modal(f, app),
+        Mode::Ps => crate::ps::draw(f, app),
         _ => {}
     }
 }
@@ -965,7 +966,22 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::Magenta),
                 ));
             }
-            if !note.is_empty() {
+            let active_tool = if s.status == SessionStatus::Busy {
+                s.active_tools.last()
+            } else {
+                None
+            };
+            if let Some(tool) = active_tool {
+                let tag = if tool.is_subagent { "sub" } else { "run" };
+                line1.push(Span::styled(
+                    format!(" · {}:{}", tag, truncate(&tool.name, 12)),
+                    Style::default().fg(if tool.is_subagent {
+                        Color::Magenta
+                    } else {
+                        Color::Cyan
+                    }),
+                ));
+            } else if !note.is_empty() {
                 line1.push(Span::styled(
                     format!(" · {}", truncate(note, 18)),
                     Style::default().fg(Color::Cyan),
@@ -1021,6 +1037,22 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             };
             line2.push(Span::styled(meta_text, Style::default().fg(meta_color)));
 
+            if !s.bg_procs.is_empty() {
+                let count = s.bg_procs.len();
+                let name = &s.bg_procs[0].name;
+                let bg_label = if count > 1 {
+                    format!(" · bg:{count} ({name}…)")
+                } else {
+                    format!(" · bg:{count} ({name})")
+                };
+                let bg_color = if s.status == SessionStatus::Idle {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                };
+                line2.push(Span::styled(bg_label, Style::default().fg(bg_color)));
+            }
+
             ListItem::new(vec![Line::from(line1), Line::from(line2)])
         })
         .collect();
@@ -1065,7 +1097,9 @@ pub(crate) fn transcript_stamp(app: &App, id: &SessionId) -> (usize, usize, usiz
 /// 依目前模式 (Markdown / 原始)與寬度，把逐字稿建成樣式化且已換行的行。
 /// 工具呼叫 (`▸ …`)與結果 (`  ✓ …`／`  ✗ …`)行：原樣顯示並上色。
 fn tool_line(l: &str) -> Option<Line<'static>> {
-    let style = if l.starts_with("▸ ") {
+    let style = if l.starts_with("▸ [subagent]") {
+        Style::default().fg(Color::Magenta)
+    } else if l.starts_with("▸ ") {
         Style::default().fg(Color::Cyan)
     } else if l.starts_with("  ✓") {
         Style::default().fg(Color::DarkGray)
@@ -1086,7 +1120,13 @@ pub(crate) fn build_transcript_lines(
         Some(b) => b,
         None => return (Vec::new(), Vec::new()),
     };
-    let src = crate::app::visible_transcript(buf.iter(), app.show_thoughts, app.show_tools);
+    let active = app
+        .state
+        .sessions
+        .get(id)
+        .map(|s| s.active_tools.as_slice())
+        .unwrap_or(&[]);
+    let src = crate::app::visible_transcript(buf.iter(), app.show_thoughts, app.show_tools, active);
     if app.raw_md {
         let lines: Vec<Line<'static>> = src.iter().map(|l| Line::raw(l.clone())).collect();
         (markdown::wrap_lines(lines, width), Vec::new())
@@ -1246,10 +1286,26 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 parts.push(format!("@{branch}"));
             }
             let text = format!(" {} ", parts.join(" · "));
-            Line::from(Span::styled(
+            let mut spans = vec![Span::styled(
                 truncate(&text, inner_w.max(8)),
                 Style::default().fg(Color::DarkGray),
-            ))
+            )];
+            if !s.bg_procs.is_empty() {
+                let count = s.bg_procs.len();
+                let name = &s.bg_procs[0].name;
+                let bg_label = if count > 1 {
+                    format!(" · bg:{count} ({name}…)")
+                } else {
+                    format!(" · bg:{count} ({name})")
+                };
+                let bg_color = if s.status == SessionStatus::Idle {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                };
+                spans.push(Span::styled(bg_label, Style::default().fg(bg_color)));
+            }
+            Line::from(spans)
         }
         None => Line::default(),
     };
@@ -1535,6 +1591,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         Mode::Help => tr!(" 說明 "),
         Mode::Settings => tr!(" 設定 "),
         Mode::Qr => tr!(" QR Code "),
+        Mode::Ps => tr!(" 處理程序 "),
         Mode::Prompt => match app
             .selected_id()
             .and_then(|id| app.state.queues.get(&id).map(Vec::len))

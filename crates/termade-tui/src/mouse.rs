@@ -74,6 +74,20 @@ pub(crate) fn handle_mouse(
             if crate::tasks::click_task(app, mouse.column, mouse.row) {
                 return Ok(());
             }
+            if app.view == CenterView::Transcript
+                && mouse.row == app.transcript_area.bottom().saturating_sub(1)
+                && mouse.column >= app.transcript_area.x
+                && mouse.column < app.transcript_area.right()
+            {
+                let has_bg = app
+                    .selected_id()
+                    .and_then(|id| app.state.sessions.get(&id))
+                    .is_some_and(|s| !s.bg_procs.is_empty());
+                if has_bg {
+                    crate::ps::open(app);
+                    return Ok(());
+                }
+            }
             // 逐字稿拖曳選取：只涵蓋中央區塊，不會選到左右側欄。
             if app.view == CenterView::Transcript {
                 if let Some(p) = transcript_pos(app, mouse.column, mouse.row, false) {

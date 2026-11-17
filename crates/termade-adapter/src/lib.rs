@@ -128,6 +128,10 @@ pub trait AgentControl: Send + Sync {
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
     /// 這個 session 實際使用的傳輸方式 (顯示用)。
     fn transport(&self) -> &'static str;
+    /// 取得 agent 主處理程序 PID。
+    fn pid(&self) -> Option<u32> {
+        None
+    }
     /// 執行期切換 model 與／或 effort (下一個回合起生效)。
     /// 成功回傳實際生效的 model (agent 有回報才有)；不支援的 adapter 回傳明確錯誤。
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
@@ -165,6 +169,18 @@ pub fn signal_pid(pid: u32, sig: &str) -> Result<()> {
         .with_context(|| tr!("執行 kill 失敗"))?;
     if !status.success() {
         bail!("{}", tr!("kill {sig} {pid} 失敗", sig = sig, pid = pid));
+    }
+    Ok(())
+}
+
+/// 對指定處理程序群組 (PGID) 送出 Unix 訊號 (例如 `-STOP` / `-CONT` / `-KILL`)。
+pub fn signal_pgid(pgid: u32, sig: &str) -> Result<()> {
+    let status = std::process::Command::new("kill")
+        .args([sig, &format!("-{pgid}")])
+        .status()
+        .with_context(|| tr!("執行 kill 失敗"))?;
+    if !status.success() {
+        bail!("{}", tr!("kill {sig} -{pgid} 失敗", sig = sig, pgid = pgid));
     }
     Ok(())
 }

@@ -30,6 +30,7 @@ pub use server::{
     RemoteOptions,
 };
 mod paths;
+pub(crate) mod procs;
 pub use client::{ensure_daemon, is_running, send_request, Client, ConnStream};
 pub use git::compute_worktree_diff;
 pub use paths::{config_dir, default_token_path, log_path, runtime_dir, socket_path, state_dir};
@@ -386,6 +387,14 @@ impl Shared {
             }
         });
 
+        let weak_for_procs = Arc::downgrade(&shared);
+        std::thread::spawn(move || {
+            while let Some(sh) = weak_for_procs.upgrade() {
+                sh.scan_all_bg_procs();
+                std::thread::sleep(Duration::from_secs(3));
+            }
+        });
+
         // 重啟後子處理程序已不受管：把仍 live 的 session 收斂成 Failed，狀態與 log 才一致。
         // 有原生對話 id 的可以接續，但不自動做 (會在使用者沒注意時動用額度)，只留一則說明。
         let orphans: Vec<(SessionId, bool)> = {
@@ -656,6 +665,7 @@ impl Shared {
             lock(&self.inner).pending_nudge.remove(sid);
             self.clear_queue_for_ended(sid, false);
         } else if became_idle {
+            self.scan_bg_procs_for_session(sid);
             // 使用者排的 prompt 是明確指示，先送；佇列沒送出東西才補未讀訊息提醒 (T25)。
             if !self.flush_queue_if_idle(sid) {
                 self.nudge_unread_if_idle(sid);
@@ -877,6 +887,52 @@ impl Shared {
                 session: sid.clone(),
                 status: SessionStatus::Idle,
             });
+        }
+    }
+
+    /// 探測單一 session 的後代背景處理程序，清單有變更時發出 Event::SessionBgProcs。
+    pub(crate) fn scan_bg_procs_for_session(&self, sid: &SessionId) {
+        let (root_pid, is_busy, old_procs) = {
+            let inner = lock(&self.inner);
+            let Some(s) = inner.state.sessions.get(sid) else {
+                return;
+            };
+            if !s.status.is_live() {
+                return;
+            }
+            let is_busy = s.status == SessionStatus::Busy;
+            let old_procs = s.bg_procs.clone();
+            let root_pid = inner.sessions.get(sid).and_then(|e| e.ctl.pid());
+            (root_pid, is_busy, old_procs)
+        };
+
+        let Some(pid) = root_pid else {
+            return;
+        };
+
+        let new_procs = procs::scan_session_procs(pid, is_busy);
+        if new_procs != old_procs {
+            self.emit(Event::SessionBgProcs {
+                session: sid.clone(),
+                procs: new_procs,
+            });
+        }
+    }
+
+    /// 探測所有活躍 session 的後代背景處理程序。
+    pub(crate) fn scan_all_bg_procs(&self) {
+        let live_sids: Vec<SessionId> = {
+            let inner = lock(&self.inner);
+            inner
+                .state
+                .sessions
+                .iter()
+                .filter(|(_, s)| s.status.is_live())
+                .map(|(sid, _)| sid.clone())
+                .collect()
+        };
+        for sid in live_sids {
+            self.scan_bg_procs_for_session(&sid);
         }
     }
 

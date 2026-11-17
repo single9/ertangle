@@ -149,6 +149,27 @@ enum Cmd {
     Cancel { session: String },
     /// 強制結束 agent 子處理程序
     Kill { session: String },
+    /// 檢視指定 session 或所有 session 的背景子處理程序與執行中工具
+    Ps {
+        /// 指定 session id 或標籤 (未指定則列出所有 session)
+        session: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// 終止指定 session 的背景子處理程序 (不影響 agent 本體)
+    BgKill {
+        /// 目標 session id 或標籤
+        session: String,
+        /// 要終止的背景處理程序 PID (未指定且有 --all 則終止全部)
+        #[arg(long)]
+        pid: Option<u32>,
+        /// 終止該 session 底下所有背景子處理程序
+        #[arg(long)]
+        all: bool,
+        /// 強制終止 (SIGKILL)
+        #[arg(long)]
+        force: bool,
+    },
     /// 接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)
     Resume {
         session: String,
@@ -458,6 +479,13 @@ fn main() -> Result<()> {
         Cmd::Queue { session, clear } => cmd_queue(session, clear),
         Cmd::Cancel { session } => cmd_cancel(session),
         Cmd::Kill { session } => cmd_kill(session),
+        Cmd::Ps { session, json } => cmd_ps(session, json),
+        Cmd::BgKill {
+            session,
+            pid,
+            all,
+            force,
+        } => cmd_bg_kill(session, pid, all, force),
         Cmd::Resume { session, text } => cmd_resume(session, text),
         Cmd::Sleep { session } => cmd_sleep(session),
         Cmd::Wake { session } => cmd_wake(session),

@@ -200,6 +200,9 @@ impl AgentControl for MockCtl {
     fn transport(&self) -> &'static str {
         "mock"
     }
+    fn pid(&self) -> Option<u32> {
+        Some(std::process::id())
+    }
 }
 
 /// 測試不能讀到使用者真實的 `~/.config/termade/config.toml`：把設定目錄指到空的暫存目錄。
@@ -263,6 +266,8 @@ fn add_session(
             handed_off_to: None,
             effort: None,
             slash_commands: Vec::new(),
+            active_tools: Vec::new(),
+            bg_procs: Vec::new(),
         },
     );
     inner.sessions.insert(
@@ -905,6 +910,8 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         handed_off_to: None,
         effort: None,
         slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
     }
 }
 
@@ -1044,6 +1051,8 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         handed_off_to: None,
         effort: None,
         slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
     }
 }
 
@@ -2909,4 +2918,64 @@ fn session_config_error_leaves_state_untouched() {
     let frames: Vec<Frame> = rx.try_iter().collect();
     assert!(matches!(frames[0], Frame::Error { .. }));
     assert!(lock(&shared.inner).state.sessions["s1"].model.is_none());
+}
+
+#[test]
+fn kill_bg_proc_refuses_non_descendant_and_terminates_real_child() {
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl = MockCtl {
+        inputs: Arc::new(Mutex::new(Vec::new())),
+        wakes: Arc::new(Mutex::new(0)),
+        cancels: Arc::new(Mutex::new(0)),
+    };
+    add_session(&shared, "s1", "w1", SessionStatus::Idle, ctl.as_ctl(), &cwd);
+
+    // 啟動一個真實的背景子處理程序 (sleep 30)
+    let mut child = Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .expect("spawn sleep failed");
+    let child_pid = child.id();
+
+    let (tx, rx) = client_channel(None);
+
+    // 1. 嘗試終止一個不屬於該 session 後代的隨機 PID，應被拒絕
+    shared.handle(
+        &tx,
+        Request::KillBgProc {
+            session: "s1".into(),
+            pid: Some(999_999),
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(&frames[0], Frame::Error { message } if message.contains("999999")),
+        "應拒絕殺死非後代處理程序：{frames:?}"
+    );
+
+    // 2. 探測後代處理程序，應該能檢測到真實的 child_pid
+    shared.scan_bg_procs_for_session(&"s1".into());
+    let procs = lock(&shared.inner).state.sessions["s1"].bg_procs.clone();
+    assert!(
+        procs.iter().any(|p| p.pid == child_pid),
+        "應在 session 的 bg_procs 中探測到子處理程序 PID {child_pid}"
+    );
+
+    // 3. 呼叫 KillBgProc 終止該真實子處理程序
+    shared.handle(
+        &tx,
+        Request::KillBgProc {
+            session: "s1".into(),
+            pid: Some(child_pid),
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(matches!(&frames[0], Frame::Ok { .. }));
+
+    // 等待子處理程序結束並確認被訊號終止
+    let status = child.wait().expect("wait child failed");
+    assert!(!status.success());
 }

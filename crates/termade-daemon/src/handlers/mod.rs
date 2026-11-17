@@ -90,6 +90,11 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         Request::QueuePop { session } => session::handle_queue_pop(shared, reply, session),
         Request::Cancel { session } => session::handle_cancel(shared, reply, session),
         Request::Kill { session } => session::handle_kill(shared, reply, session),
+        Request::KillBgProc {
+            session,
+            pid,
+            force,
+        } => session::handle_kill_bg_proc(shared, reply, session, pid, force),
         Request::Resume { session, prompt } => {
             session::handle_resume(shared, reply, session, prompt)
         }

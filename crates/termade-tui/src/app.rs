@@ -38,6 +38,8 @@ pub(crate) enum Mode {
     Settings,
     /// Web 版 QR Code 彈窗。
     Qr,
+    /// 背景處理程序與 Subagent 監控浮層 (`:ps` 或 `Space s p`)。
+    Ps,
 }
 
 #[derive(Clone, Debug)]
@@ -264,6 +266,7 @@ pub(crate) struct App {
     pub(crate) search: Option<crate::search::Search>,
     pub(crate) last_search: String,
     pub(crate) qr_modal: Option<QrModal>,
+    pub(crate) ps_modal: Option<crate::ps::PsModal>,
     pub(crate) should_quit: bool,
 }
 
@@ -353,6 +356,7 @@ impl App {
             search: None,
             last_search: String::new(),
             qr_modal: None,
+            ps_modal: None,
             should_quit: false,
         }
     }
@@ -812,11 +816,20 @@ impl App {
 
 pub(crate) fn main_pane_text(app: &App) -> String {
     match app.view {
-        CenterView::Transcript => app
-            .selected_id()
-            .and_then(|id| app.state.transcripts.get(&id))
-            .map(|buf| visible_transcript(buf.iter(), app.show_thoughts, app.show_tools).join("\n"))
-            .unwrap_or_default(),
+        CenterView::Transcript => {
+            let active = app
+                .selected_id()
+                .and_then(|id| app.state.sessions.get(&id))
+                .map(|s| s.active_tools.as_slice())
+                .unwrap_or(&[]);
+            app.selected_id()
+                .and_then(|id| app.state.transcripts.get(&id))
+                .map(|buf| {
+                    visible_transcript(buf.iter(), app.show_thoughts, app.show_tools, active)
+                        .join("\n")
+                })
+                .unwrap_or_default()
+        }
         CenterView::Diff => app.diff_lines.join("\n"),
         CenterView::Worktrees => app
             .worktrees
@@ -839,16 +852,18 @@ pub(crate) fn main_pane_text(app: &App) -> String {
 
 /// 依顯示設定過濾逐字稿：隱藏思考行；未展開工具時，把連續的工具呼叫／成功結果
 /// 摺成一行摘要 (失敗 `✗` 行保留，錯誤不該被藏起來)。
+/// 若最後一筆工具呼叫尚未完成 (`active_tools` 非空)，不摺入統計行，而是獨立顯示於最下方。
 pub(crate) fn visible_transcript<'a>(
     lines: impl Iterator<Item = &'a String>,
     show_thoughts: bool,
     show_tools: bool,
+    active_tools: &[termade_core::ActiveTool],
 ) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    // (呼叫數, 成功數, 最後一個呼叫行)
-    let mut run: Option<(usize, usize, String)> = None;
-    fn flush(out: &mut Vec<String>, run: &mut Option<(usize, usize, String)>) {
-        if let Some((calls, ok, last)) = run.take() {
+    // (呼叫數, 成功數, 最後一個呼叫行, 上一個已完成的呼叫行)
+    let mut run: Option<(usize, usize, String, Option<String>)> = None;
+    fn flush(out: &mut Vec<String>, run: &mut Option<(usize, usize, String, Option<String>)>) {
+        if let Some((calls, ok, last, _)) = run.take() {
             if calls == 1 {
                 out.push(last);
             } else {
@@ -869,8 +884,14 @@ pub(crate) fn visible_transcript<'a>(
         if show_tools {
             out.push(l.clone());
         } else if l.starts_with("▸ ") {
-            let (calls, ok, _) = run.take().unwrap_or((0, 0, String::new()));
-            run = Some((calls + 1, ok, l.clone()));
+            let (calls, ok, last, prev_completed) =
+                run.take().unwrap_or((0, 0, String::new(), None));
+            let prev = if calls > 0 {
+                Some(last)
+            } else {
+                prev_completed
+            };
+            run = Some((calls + 1, ok, l.clone(), prev));
         } else if l.starts_with("  ✓") {
             if let Some(r) = run.as_mut() {
                 r.1 += 1;
@@ -880,7 +901,57 @@ pub(crate) fn visible_transcript<'a>(
             out.push(l.clone());
         }
     }
-    flush(&mut out, &mut run);
+
+    if !active_tools.is_empty() {
+        let tool = active_tools.last().unwrap();
+        let elapsed_secs = (termade_core::now_millis().saturating_sub(tool.started_ms)) / 1000;
+        let tag = if tool.is_subagent {
+            "subagent"
+        } else {
+            &tr!("執行中")
+        };
+        let sum_part = if tool.summary.is_empty() {
+            String::new()
+        } else {
+            format!(": {}", tool.summary)
+        };
+        let active_line = format!("▸ [{tag}] {}{sum_part} ({elapsed_secs}s)", tool.name);
+
+        if show_tools {
+            if let Some(last) = out.last_mut() {
+                if last.starts_with("▸ ") {
+                    *last = active_line;
+                } else {
+                    out.push(active_line);
+                }
+            } else {
+                out.push(active_line);
+            }
+        } else if let Some((calls, ok, _last, prev_completed)) = run.take() {
+            let completed_calls = calls.saturating_sub(1);
+            if completed_calls == 1 {
+                if let Some(p) = prev_completed {
+                    out.push(p);
+                }
+            } else if completed_calls > 1 {
+                let last_str = prev_completed
+                    .as_deref()
+                    .unwrap_or("")
+                    .trim_start_matches("▸ ");
+                out.push(tr!(
+                    "▸ 工具 ×{calls} (✓{ok})· 最後：{last}",
+                    calls = completed_calls,
+                    ok = ok,
+                    last = last_str
+                ));
+            }
+            out.push(active_line);
+        } else {
+            out.push(active_line);
+        }
+    } else {
+        flush(&mut out, &mut run);
+    }
     out
 }
 

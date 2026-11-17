@@ -272,6 +272,8 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         handed_off_to: None,
         effort: resolved.effort.clone(),
         slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
     };
     shared.emit(Event::SessionStarted {
         session: session.clone(),
@@ -1050,6 +1052,60 @@ pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: Strin
             )));
         }
     }
+}
+
+pub(crate) fn handle_kill_bg_proc(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    pid: Option<u32>,
+    force: bool,
+) {
+    let Some((sid, ctl)) = shared.control(&session) else {
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
+        return;
+    };
+
+    let Some(root_pid) = ctl.pid() else {
+        let _ = reply.send(Frame::error(tr!("無法取得 session 主處理程序 PID")));
+        return;
+    };
+
+    let sig = if force { "-KILL" } else { "-TERM" };
+
+    if let Some(target_pid) = pid {
+        // 驗證 target_pid 確實屬於該 Session 的後代處理程序樹
+        if !crate::procs::is_descendant(root_pid, target_pid) {
+            let _ = reply.send(Frame::error(tr!(
+                "PID {pid} 不屬於 session {sid} 的後代處理程序",
+                pid = target_pid,
+                sid = sid
+            )));
+            return;
+        }
+
+        if let Err(e) = termade_adapter::signal_pid(target_pid, sig) {
+            let _ = reply.send(Frame::error(tr!(
+                "終止 PID {pid} 失敗：{e}",
+                pid = target_pid,
+                e = e
+            )));
+            return;
+        }
+    } else {
+        // pid: None 代表清理該 Session 底下所有背景子處理程序
+        let descendants = crate::procs::find_descendants(root_pid);
+        for dpid in descendants {
+            let _ = termade_adapter::signal_pid(dpid, sig);
+        }
+    }
+
+    // 重新探測並更新事件
+    shared.scan_bg_procs_for_session(&sid);
+    let _ = reply.send(Frame::ok());
 }
 
 pub(crate) fn handle_config(

@@ -30,6 +30,7 @@ pub(crate) fn handle_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) 
             crate::settings::handle_key(app, Some(writer), key);
             return Ok(());
         }
+        Mode::Ps => return crate::ps::handle_key(app, Some(writer), key),
         Mode::Qr => {
             match key.code {
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char(' ') => {
@@ -559,7 +560,8 @@ pub(crate) fn handle_input_mode(
                 | Mode::Help
                 | Mode::Search
                 | Mode::Settings
-                | Mode::Qr => {}
+                | Mode::Qr
+                | Mode::Ps => {}
             }
         }
         _ => {}

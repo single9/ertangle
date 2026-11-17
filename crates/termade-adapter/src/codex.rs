@@ -378,19 +378,25 @@ impl AgentControl for CodexControl {
         Ok(())
     }
 
+    fn pid(&self) -> Option<u32> {
+        Some(self.child.lock().unwrap().id())
+    }
+
     fn kill(&self) -> Result<()> {
+        let pid = self.child.lock().unwrap().id();
+        let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
         self.child.lock().unwrap().kill().ok();
         Ok(())
     }
 
     fn sleep(&self) -> Result<()> {
         let pid = self.child.lock().unwrap().id();
-        crate::signal_pid(pid, "-STOP")
+        crate::signal_pgid(pid, "-STOP").or_else(|_| crate::signal_pid(pid, "-STOP"))
     }
 
     fn wake(&self) -> Result<()> {
         let pid = self.child.lock().unwrap().id();
-        crate::signal_pid(pid, "-CONT")
+        crate::signal_pgid(pid, "-CONT").or_else(|_| crate::signal_pid(pid, "-CONT"))
     }
 
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()> {
@@ -450,6 +456,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .stderr(Stdio::piped());
     for (k, v) in &spec.env {
         cmd.env(k, v);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
     }
 
     let mut child = cmd

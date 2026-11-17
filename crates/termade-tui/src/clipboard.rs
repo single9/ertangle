@@ -52,9 +52,14 @@ fn transcript_messages(lines: &[String]) -> Vec<Vec<String>> {
 }
 
 fn transcript_lines(app: &App) -> Vec<String> {
+    let active = app
+        .selected_id()
+        .and_then(|id| app.state.sessions.get(&id))
+        .map(|s| s.active_tools.as_slice())
+        .unwrap_or(&[]);
     app.selected_id()
         .and_then(|id| app.state.transcripts.get(&id))
-        .map(|buf| visible_transcript(buf.iter(), app.show_thoughts, app.show_tools))
+        .map(|buf| visible_transcript(buf.iter(), app.show_thoughts, app.show_tools, active))
         .unwrap_or_default()
 }
 

@@ -28,6 +28,8 @@ fn sample_app(lines: &[&str]) -> App {
         handed_off_to: None,
         effort: None,
         slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
     };
     app.state.sessions.insert(s.id.clone(), s);
     let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();
@@ -1083,11 +1085,11 @@ fn tool_runs_fold_into_one_line_but_keep_failures() {
     .iter()
     .map(|s| s.to_string())
     .collect();
-    let folded = crate::app::visible_transcript(src.iter(), false, false);
+    let folded = crate::app::visible_transcript(src.iter(), false, false, &[]);
     assert_eq!(folded.len(), 5, "{folded:?}");
     assert!(folded[1].contains("工具 ×2"), "{folded:?}");
     assert!(folded.iter().any(|l| l.contains("✗ exit 1")));
-    let full = crate::app::visible_transcript(src.iter(), false, true);
+    let full = crate::app::visible_transcript(src.iter(), false, true, &[]);
     assert_eq!(full.len(), src.len());
 }
 
@@ -1283,6 +1285,8 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
         handed_off_to: None,
         effort: None,
         slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
     };
     for s in [
         mk("a", "/work/alpha", None),
@@ -2358,4 +2362,247 @@ fn spawn_mode_ctrl_r_cycles_role() {
     crate::input::handle_key(&mut app, &mut w, ctrl_r).unwrap();
     assert_eq!(app.spawn_role, Role::Worker);
     assert!(app.status.contains("worker"));
+}
+
+#[test]
+fn visible_transcript_with_active_tool_and_subagent() {
+    use termade_core::ActiveTool;
+    let now = termade_core::now_millis();
+
+    let src: Vec<String> = vec![
+        "start".into(),
+        "▸ Bash echo 1".into(),
+        "  ✓ 1".into(),
+        "▸ Bash echo 2".into(),
+        "  ✓ 2".into(),
+        "▸ Bash sleep 60".into(),
+    ];
+
+    let active = vec![ActiveTool {
+        name: "Bash".into(),
+        summary: "sleep 60".into(),
+        started_ms: now.saturating_sub(12_000),
+        is_subagent: false,
+    }];
+
+    // 摺疊模式下：前兩次成功的呼叫摺為一行，進行中的 sleep 60 獨立顯示在最下方
+    let folded = crate::app::visible_transcript(src.iter(), false, false, &active);
+    assert_eq!(folded.len(), 3, "{folded:?}");
+    assert_eq!(folded[0], "start");
+    assert!(folded[1].contains("工具 ×2 (✓2)"), "{folded:?}");
+    assert!(
+        folded[2].contains("▸ [執行中] Bash: sleep 60 (12s)"),
+        "{folded:?}"
+    );
+
+    // 原生 Subagent 測試
+    let sub_active = vec![ActiveTool {
+        name: "Task".into(),
+        summary: "audit codebase".into(),
+        started_ms: now.saturating_sub(5_000),
+        is_subagent: true,
+    }];
+    let sub_src: Vec<String> = vec!["start".into(), "▸ Task audit codebase".into()];
+    let sub_folded = crate::app::visible_transcript(sub_src.iter(), false, false, &sub_active);
+    assert_eq!(sub_folded.len(), 2, "{sub_folded:?}");
+    assert!(
+        sub_folded[1].contains("▸ [subagent] Task: audit codebase (5s)"),
+        "{sub_folded:?}"
+    );
+}
+
+#[test]
+fn ps_modal_navigation_and_kill() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use std::io::BufRead;
+    use termade_core::BgProc;
+    use termade_protocol::Request;
+
+    let mut app = sample_app(&[]);
+    let (mut w, peer) = pair_writer();
+    let mut reader = std::io::BufReader::new(peer);
+
+    // 為 ses_test 設定背景處理程序
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.bg_procs = vec![
+            BgProc {
+                pid: 1001,
+                name: "node".into(),
+                cmdline: "node server.js".into(),
+                elapsed_secs: 25,
+            },
+            BgProc {
+                pid: 1002,
+                name: "vite".into(),
+                cmdline: "vite --port 5173".into(),
+                elapsed_secs: 10,
+            },
+        ];
+    }
+
+    // 透過 :ps 開啟浮層
+    crate::commands::execute_command(&mut app, &mut w, "ps").unwrap();
+    assert_eq!(app.mode, Mode::Ps);
+    assert!(app.ps_modal.is_some());
+    assert_eq!(app.ps_modal.as_ref().unwrap().cursor, 0);
+
+    let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+
+    // 下移游標選取第 2 筆 (PID 1002)
+    crate::input::handle_key(&mut app, &mut w, key(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.ps_modal.as_ref().unwrap().cursor, 1);
+
+    // 按 x 單獨終止 PID 1002 (第 1 次：SIGTERM，force = false)
+    crate::input::handle_key(&mut app, &mut w, key(KeyCode::Char('x'))).unwrap();
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    let req1: Request = termade_protocol::decode_line(line.trim()).unwrap();
+    assert!(matches!(
+        req1,
+        Request::KillBgProc {
+            ref session,
+            pid: Some(1002),
+            force: false,
+        } if session == "ses_test"
+    ));
+    assert!(app.status.contains("SIGTERM"));
+
+    // 對同一個仍在跑的 PID 再按一次 x (第 2 次：SIGKILL，force = true)
+    crate::input::handle_key(&mut app, &mut w, key(KeyCode::Char('x'))).unwrap();
+    line.clear();
+    reader.read_line(&mut line).unwrap();
+    let req2: Request = termade_protocol::decode_line(line.trim()).unwrap();
+    assert!(matches!(
+        req2,
+        Request::KillBgProc {
+            ref session,
+            pid: Some(1002),
+            force: true,
+        } if session == "ses_test"
+    ));
+    assert!(app.status.contains("SIGKILL"));
+
+    // 按 X 清理全部背景處理程序
+    let shift_x = KeyEvent::new(KeyCode::Char('X'), KeyModifiers::SHIFT);
+    crate::input::handle_key(&mut app, &mut w, shift_x).unwrap();
+    line.clear();
+    reader.read_line(&mut line).unwrap();
+    let req3: Request = termade_protocol::decode_line(line.trim()).unwrap();
+    assert!(matches!(
+        req3,
+        Request::KillBgProc {
+            ref session,
+            pid: None,
+            force: false,
+        } if session == "ses_test"
+    ));
+
+    // 按 Esc 關閉浮層回到 Normal
+    crate::input::handle_key(&mut app, &mut w, key(KeyCode::Esc)).unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.ps_modal.is_none());
+}
+
+#[test]
+fn bg_kill_command_syntax() {
+    use std::io::BufRead;
+    use termade_protocol::Request;
+
+    let mut app = sample_app(&[]);
+    let (mut w, peer) = pair_writer();
+    let mut reader = std::io::BufReader::new(peer);
+
+    // 未帶參數應提示用法
+    crate::commands::execute_command(&mut app, &mut w, "bg-kill").unwrap();
+    assert!(app.status.contains("用法"));
+
+    // 指定 PID
+    crate::commands::execute_command(&mut app, &mut w, "bg-kill 48291").unwrap();
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    let req1: Request = termade_protocol::decode_line(line.trim()).unwrap();
+    assert!(matches!(
+        req1,
+        Request::KillBgProc {
+            ref session,
+            pid: Some(48291),
+            force: false,
+        } if session == "ses_test"
+    ));
+
+    // 指定 --all
+    crate::commands::execute_command(&mut app, &mut w, "bg-kill --all").unwrap();
+    line.clear();
+    reader.read_line(&mut line).unwrap();
+    let req2: Request = termade_protocol::decode_line(line.trim()).unwrap();
+    assert!(matches!(
+        req2,
+        Request::KillBgProc {
+            ref session,
+            pid: None,
+            force: false,
+        } if session == "ses_test"
+    ));
+}
+
+#[test]
+fn session_list_and_footer_active_and_bg_indicators() {
+    let mut app = sample_app(&[]);
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Busy;
+        s.active_tools = vec![termade_core::ActiveTool {
+            name: "Bash".into(),
+            summary: "sleep 60".into(),
+            started_ms: termade_core::now_millis(),
+            is_subagent: false,
+        }];
+        s.bg_procs = vec![termade_core::BgProc {
+            pid: 1234,
+            name: "node".into(),
+            cmdline: "node server.js".into(),
+            elapsed_secs: 5,
+        }];
+    }
+    let text = render(&mut app);
+    assert!(text.contains("run:Bash"), "{text}");
+    assert!(text.contains("bg:1 (node)"), "{text}");
+
+    // 回到 Idle 狀態，第一行 run:Bash 消失，第二行與 Footer 的 bg:1 (node) 仍保留
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Idle;
+        s.active_tools.clear();
+    }
+    let text_idle = render(&mut app);
+    assert!(!text_idle.contains("run:Bash"), "{text_idle}");
+    assert!(text_idle.contains("bg:1 (node)"), "{text_idle}");
+}
+
+#[test]
+fn mouse_click_on_footer_opens_ps_modal() {
+    use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.bg_procs = vec![termade_core::BgProc {
+            pid: 1234,
+            name: "node".into(),
+            cmdline: "node".into(),
+            elapsed_secs: 1,
+        }];
+    }
+    render_size(&mut app, 120, 40);
+    assert_eq!(app.mode, Mode::Normal);
+
+    // 點擊逐字稿底部邊框 (Footer)
+    let footer_row = app.transcript_area.bottom().saturating_sub(1);
+    let footer_col = app.transcript_area.x + 5;
+    let ev = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: footer_col,
+        row: footer_row,
+        modifiers: KeyModifiers::NONE,
+    };
+    crate::mouse::handle_mouse(&mut app, &mut w, ev).unwrap();
+    assert_eq!(app.mode, Mode::Ps);
+    assert!(app.ps_modal.is_some());
 }

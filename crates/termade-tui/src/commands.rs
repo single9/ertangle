@@ -454,6 +454,40 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 app.status = tr!("已送出中斷");
             }
         }
+        "ps" => crate::ps::open(app),
+        "bg-kill" => {
+            let Some(id) = app.selected_id() else {
+                app.status = tr!("沒有選取的 session");
+                return Ok(());
+            };
+            if rest.is_empty() {
+                app.status = tr!("用法：:bg-kill <PID> (或 :bg-kill --all)");
+                return Ok(());
+            }
+            if rest == "--all" || rest == "-a" || rest == "all" {
+                send(
+                    writer,
+                    &Request::KillBgProc {
+                        session: id.clone(),
+                        pid: None,
+                        force: false,
+                    },
+                )?;
+                app.status = tr!("已要求清理 {session} 底下所有背景處理程序", session = id);
+            } else if let Ok(pid) = rest.parse::<u32>() {
+                send(
+                    writer,
+                    &Request::KillBgProc {
+                        session: id,
+                        pid: Some(pid),
+                        force: false,
+                    },
+                )?;
+                app.status = tr!("已請求終止處理程序 PID {pid}", pid = pid);
+            } else {
+                app.status = tr!("無效的 PID：{rest}", rest = rest);
+            }
+        }
         "rm" | "remove" => {
             let force = rest.split_whitespace().any(|w| w == "--force" || w == "-f");
             let target = rest

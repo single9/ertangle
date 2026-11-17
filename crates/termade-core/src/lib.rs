@@ -290,6 +290,12 @@ pub struct Session {
     /// agent 回報的原生斜線指令名稱 (不含 `/`；Claude `slash_commands`、ACP `available_commands_update`)。
     #[serde(default)]
     pub slash_commands: Vec<String>,
+    /// 目前正在執行中的工具或 Subagent。
+    #[serde(default)]
+    pub active_tools: Vec<ActiveTool>,
+    /// 背景殘留的子處理程序清單。
+    #[serde(default)]
+    pub bg_procs: Vec<BgProc>,
 }
 
 impl Session {
@@ -303,6 +309,34 @@ impl Session {
         self.budget_usd
             .map(|limit| format!("${:.2}/{}", self.cost.usd, format_usd_limit(limit)))
     }
+}
+
+/// 目前正在執行中的工具或 Subagent。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActiveTool {
+    pub name: String,
+    pub summary: String,
+    pub started_ms: u64,
+    pub is_subagent: bool,
+}
+
+/// 背景殘留的子處理程序。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BgProc {
+    pub pid: u32,
+    pub name: String,
+    pub cmdline: String,
+    #[serde(default)]
+    pub elapsed_secs: u64,
+}
+
+/// 判斷一個工具名稱是否為原生 Subagent 工具。
+pub fn is_subagent_tool(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "task" | "agent" | "dispatch_agent" | "invoke_subagent" | "spawn_agent" | "subagent"
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +747,11 @@ pub enum Event {
         session: SessionId,
         text: String,
     },
+    /// session 的背景子處理程序清單更新。
+    SessionBgProcs {
+        session: SessionId,
+        procs: Vec<BgProc>,
+    },
     ToolCall {
         session: SessionId,
         name: String,
@@ -867,6 +906,14 @@ impl State {
             Event::SessionStatus { session, status } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = *status;
+                    if *status != SessionStatus::Busy && *status != SessionStatus::WaitingApproval {
+                        s.active_tools.clear();
+                    }
+                }
+            }
+            Event::SessionBgProcs { session, procs } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.bg_procs = procs.clone();
                 }
             }
             Event::SessionContext {
@@ -980,6 +1027,28 @@ impl State {
                 ok,
                 output,
             } => {
+                if let Some(s) = self.sessions.get_mut(session) {
+                    if ok.is_none() && !name.is_empty() {
+                        let is_sub = is_subagent_tool(name);
+                        let sum = tool_summary(input).unwrap_or_default();
+                        s.active_tools.push(ActiveTool {
+                            name: name.clone(),
+                            summary: sum,
+                            started_ms: now_millis(),
+                            is_subagent: is_sub,
+                        });
+                    } else if ok.is_some() {
+                        if !name.is_empty() {
+                            if let Some(pos) = s.active_tools.iter().position(|t| t.name == *name) {
+                                s.active_tools.remove(pos);
+                            } else if !s.active_tools.is_empty() {
+                                s.active_tools.remove(0);
+                            }
+                        } else if !s.active_tools.is_empty() {
+                            s.active_tools.remove(0);
+                        }
+                    }
+                }
                 if ok.is_none() && !name.is_empty() {
                     let line = match tool_summary(input) {
                         Some(sum) => format!("▸ {name}: {sum}"),
@@ -1742,6 +1811,8 @@ pub(crate) mod tests {
             handed_off_to: None,
             effort: None,
             slash_commands: Vec::new(),
+            active_tools: Vec::new(),
+            bg_procs: Vec::new(),
         }
     }
 
@@ -2048,6 +2119,92 @@ pub(crate) mod tests {
         let t: Vec<_> = st.transcripts["s1"].iter().cloned().collect();
         assert_eq!(t[0], "▸ Bash: git status -s");
         assert_eq!(t[1], "  ✗ fatal: not a repo …(+1 行)");
+    }
+
+    #[test]
+    fn active_tools_and_bg_procs_lifecycle() {
+        assert!(is_subagent_tool("Task"));
+        assert!(is_subagent_tool("Agent"));
+        assert!(is_subagent_tool("invoke_subagent"));
+        assert!(is_subagent_tool("spawn_agent"));
+        assert!(!is_subagent_tool("Bash"));
+
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::SessionStarted {
+                session: sample_session("s1"),
+            },
+        ));
+
+        // 工具開始執行
+        st.apply(&rec(
+            2,
+            Event::ToolCall {
+                session: "s1".into(),
+                name: "Bash".into(),
+                input: r#"{"command":"cargo test"}"#.into(),
+                ok: None,
+                output: None,
+            },
+        ));
+        assert_eq!(st.sessions["s1"].active_tools.len(), 1);
+        assert_eq!(st.sessions["s1"].active_tools[0].name, "Bash");
+        assert!(!st.sessions["s1"].active_tools[0].is_subagent);
+
+        // 原生 Subagent 開始執行
+        st.apply(&rec(
+            3,
+            Event::ToolCall {
+                session: "s1".into(),
+                name: "Task".into(),
+                input: r#"{"prompt":"review"}"#.into(),
+                ok: None,
+                output: None,
+            },
+        ));
+        assert_eq!(st.sessions["s1"].active_tools.len(), 2);
+        assert!(st.sessions["s1"].active_tools[1].is_subagent);
+
+        // 第一個工具結束
+        st.apply(&rec(
+            4,
+            Event::ToolCall {
+                session: "s1".into(),
+                name: "Bash".into(),
+                input: String::new(),
+                ok: Some(true),
+                output: Some("ok".into()),
+            },
+        ));
+        assert_eq!(st.sessions["s1"].active_tools.len(), 1);
+        assert_eq!(st.sessions["s1"].active_tools[0].name, "Task");
+
+        // 回合結束轉為 Idle，清空殘餘 active_tools
+        st.apply(&rec(
+            5,
+            Event::SessionStatus {
+                session: "s1".into(),
+                status: SessionStatus::Idle,
+            },
+        ));
+        assert!(st.sessions["s1"].active_tools.is_empty());
+
+        // 背景處理程序事件更新
+        st.apply(&rec(
+            6,
+            Event::SessionBgProcs {
+                session: "s1".into(),
+                procs: vec![BgProc {
+                    pid: 1234,
+                    name: "node".into(),
+                    cmdline: "node server.js".into(),
+                    elapsed_secs: 15,
+                }],
+            },
+        ));
+        assert_eq!(st.sessions["s1"].bg_procs.len(), 1);
+        assert_eq!(st.sessions["s1"].bg_procs[0].pid, 1234);
     }
 }
 

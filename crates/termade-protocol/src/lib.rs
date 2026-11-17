@@ -6,6 +6,7 @@
 //! 這個 crate 只有 wire 型別與編解碼，不含任何 IO，方便日後換成 TCP / JSON-RPC。
 
 use serde::{Deserialize, Serialize};
+pub use termade_core::{ActiveTool, BgProc};
 use termade_core::{
     AgentKind, ArtifactKind, Attachment, BusMessage, Decision, MsgId, MsgKind, PermissionPolicy,
     Record, Role, Seq, SessionId, State, Target, TaskId, TaskStatus, WorktreeInfo,
@@ -140,6 +141,14 @@ pub enum Request {
     /// 結束 session 並殺掉處理程序。
     Kill {
         session: SessionId,
+    },
+    /// 終止某個 session 的背景子處理程序 (`pid: None` 代表清理全部)。
+    KillBgProc {
+        session: SessionId,
+        #[serde(default)]
+        pid: Option<u32>,
+        #[serde(default)]
+        force: bool,
     },
     /// 接續已結束的 session：用 agent 原生的對話 id 接回原對話 (session id 不變)。
     Resume {

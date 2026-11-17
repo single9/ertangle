@@ -415,6 +415,8 @@ mod tests {
                     handed_off_to: None,
                     effort: None,
                     slash_commands: Vec::new(),
+                    active_tools: Vec::new(),
+                    bg_procs: Vec::new(),
                 },
             );
         }

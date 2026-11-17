@@ -33,21 +33,28 @@ impl AgentControl for PtyControl {
         Ok(())
     }
 
+    fn pid(&self) -> Option<u32> {
+        self.child.lock().unwrap().process_id()
+    }
+
     fn kill(&self) -> Result<()> {
+        if let Some(pid) = self.pid() {
+            let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
+        }
         self.child.lock().unwrap().kill().ok();
         Ok(())
     }
 
     fn sleep(&self) -> Result<()> {
-        if let Some(pid) = self.child.lock().unwrap().process_id() {
-            crate::signal_pid(pid, "-STOP")?;
+        if let Some(pid) = self.pid() {
+            crate::signal_pgid(pid, "-STOP").or_else(|_| crate::signal_pid(pid, "-STOP"))?;
         }
         Ok(())
     }
 
     fn wake(&self) -> Result<()> {
-        if let Some(pid) = self.child.lock().unwrap().process_id() {
-            crate::signal_pid(pid, "-CONT")?;
+        if let Some(pid) = self.pid() {
+            crate::signal_pgid(pid, "-CONT").or_else(|_| crate::signal_pid(pid, "-CONT"))?;
         }
         Ok(())
     }

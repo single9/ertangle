@@ -331,3 +331,122 @@ pub(crate) fn cmd_budget(session: String, budget_usd: f64) -> Result<()> {
     }
     Ok(())
 }
+
+pub(crate) fn cmd_ps(session: Option<String>, json: bool) -> Result<()> {
+    let frame = roundtrip(&Request::Snapshot)?;
+    let Frame::Snapshot { state } = frame else {
+        bail!("{}", tr!("未取得快照"));
+    };
+
+    let target_sid = session
+        .as_ref()
+        .map(|s| state.resolve_session_id(s).unwrap_or_else(|| s.clone()));
+
+    let target_sessions: Vec<_> = state
+        .sessions_sorted()
+        .into_iter()
+        .filter(|s| match &target_sid {
+            Some(target) => s.id == *target,
+            None => true,
+        })
+        .collect();
+
+    if target_sessions.is_empty() {
+        if let Some(target) = session {
+            println!("{}", tr!("找不到 session {target}", target = target));
+        } else {
+            println!("{}", tr!("(沒有 session)"));
+        }
+        return Ok(());
+    }
+
+    if json {
+        let list: Vec<_> = target_sessions
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "session": s.id,
+                    "label": s.label,
+                    "active_tools": s.active_tools,
+                    "bg_procs": s.bg_procs,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&list)?);
+        return Ok(());
+    }
+
+    for s in target_sessions {
+        println!("=== {} ({}) ===", s.id, s.label);
+        if !s.active_tools.is_empty() {
+            println!("{}", tr!("執行中工具／Subagent："));
+            for t in &s.active_tools {
+                let tag = if t.is_subagent {
+                    "[subagent]"
+                } else {
+                    "[tool]"
+                };
+                let elapsed = (termade_core::now_millis().saturating_sub(t.started_ms)) / 1000;
+                println!("  {:<10} {:<15} {} ({}s)", tag, t.name, t.summary, elapsed);
+            }
+        }
+        if !s.bg_procs.is_empty() {
+            println!("{}", tr!("背景子處理程序："));
+            println!("  {:<8} {:<10} {}", "PID", tr!("執行時間"), tr!("命令列"));
+            for p in &s.bg_procs {
+                let etime = format_elapsed(p.elapsed_secs);
+                println!("  {:<8} {:<10} {}", p.pid, etime, p.cmdline);
+            }
+        }
+        if s.active_tools.is_empty() && s.bg_procs.is_empty() {
+            println!("  {}", tr!("(無執行中工具或背景處理程序)"));
+        }
+        println!();
+    }
+    Ok(())
+}
+
+fn format_elapsed(secs: u64) -> String {
+    if secs >= 3600 {
+        format!(
+            "{:02}:{:02}:{:02}",
+            secs / 3600,
+            (secs % 3600) / 60,
+            secs % 60
+        )
+    } else {
+        format!("{:02}:{:02}", secs / 60, secs % 60)
+    }
+}
+
+pub(crate) fn cmd_bg_kill(session: String, pid: Option<u32>, all: bool, force: bool) -> Result<()> {
+    if pid.is_none() && !all {
+        bail!("{}", tr!("請指定 --pid <PID> 或 --all"));
+    }
+    let target_pid = if all { None } else { pid };
+    match roundtrip(&Request::KillBgProc {
+        session: session.clone(),
+        pid: target_pid,
+        force,
+    })? {
+        Frame::Ok { note } => {
+            if let Some(p) = target_pid {
+                println!(
+                    "{}",
+                    note.unwrap_or_else(|| tr!("已終止處理程序 PID {p}", p = p))
+                );
+            } else {
+                println!(
+                    "{}",
+                    note.unwrap_or_else(|| tr!(
+                        "已清理 {session} 所有背景處理程序",
+                        session = session
+                    ))
+                );
+            }
+        }
+        Frame::Error { message } => bail!("{message}"),
+        _ => {}
+    }
+    Ok(())
+}
