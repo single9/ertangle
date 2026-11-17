@@ -291,7 +291,7 @@ msgstr "Run in a separate git worktree (M3)"
 msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生效)"
 msgstr "Switch a session's model and/or effort at runtime (takes effect from the next turn)"
 
-#: src/cmd/helptext/help_strings.rs
+#: src/cmd/helptext/help_strings.rs crates/termade-tui/src/commands.rs
 msgid "安裝到家目錄 (所有專案共用)"
 msgstr "Install into the home directory (shared by all projects)"
 
@@ -744,19 +744,19 @@ msgstr "Terminated process PID {p}"
 msgid "已清理 {session} 所有背景處理程序"
 msgstr "Cleaned up all background processes for {session}"
 
-#: src/cmd/skill.rs
+#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
 msgid "找不到家目錄 (HOME)"
 msgstr "Home directory (HOME) not found"
 
-#: src/cmd/skill.rs
+#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
 msgid "已安裝 skill：{p}"
 msgstr "Installed skill: {p}"
 
-#: src/cmd/skill.rs
+#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
 msgid "已移除 skill：{p}"
 msgstr "Removed skill: {p}"
 
-#: src/cmd/skill.rs
+#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
 msgid "沒有安裝 skill (target {t})"
 msgstr "Skill not installed (target {t})"
 
@@ -2223,6 +2223,10 @@ msgid "[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)
 msgstr "[here|all]  Show this project only / all projects (sessions, Bus, tasks)"
 
 #: crates/termade-tui/src/commands.rs
+msgid "[install|uninstall|show] [claude|agents|codex] [global]  安裝 termade-ade skill"
+msgstr "[install|uninstall|show] [claude|agents|codex] [global]  Install the termade-ade skill"
+
+#: crates/termade-tui/src/commands.rs
 msgid "[on|off|test]  開關通知 (回合結束／等待核准／失敗／額度用完)；不帶參數顯示狀態"
 msgstr "[on|off|test]  Toggle notifications (turn done / awaiting approval / failed / quota exhausted); without arguments shows status"
 
@@ -2559,6 +2563,18 @@ msgid "推理強度"
 msgstr "Reasoning effort"
 
 #: crates/termade-tui/src/commands.rs
+msgid "安裝到目前專案 (加 global 則裝到家目錄)"
+msgstr "Install into the current project (add global for the home directory)"
+
+#: crates/termade-tui/src/commands.rs
+msgid "移除已安裝的 skill"
+msgstr "Remove the installed skill"
+
+#: crates/termade-tui/src/commands.rs
+msgid "顯示 skill 安裝位置與注入設定"
+msgstr "Show the skill install path and injection setting"
+
+#: crates/termade-tui/src/commands.rs
 msgid "預設的 agent"
 msgstr "Default agent"
 
@@ -2621,6 +2637,22 @@ msgstr "Default port"
 #: crates/termade-tui/src/commands.rs
 msgid "常用連接埠"
 msgstr "Common port"
+
+#: crates/termade-tui/src/commands.rs
+msgid "用法：:skill [install|uninstall|show] [claude|agents|codex] [global]"
+msgstr "Usage: :skill [install|uninstall|show] [claude|agents|codex] [global]"
+
+#: crates/termade-tui/src/commands.rs
+msgid "skill {state}：{p} (注入協作說明可在 :settings 開關)"
+msgstr "skill {state}: {p} (toggle injection into collaboration instructions in :settings)"
+
+#: crates/termade-tui/src/commands.rs
+msgid "已安裝"
+msgstr "installed"
+
+#: crates/termade-tui/src/commands.rs
+msgid "未安裝"
+msgstr "not installed"
 
 #: crates/termade-tui/src/diff.rs
 msgid "▸ [已摺疊] {path} (+{added} -{removed}) — 按 Enter 展開"
@@ -3638,6 +3670,10 @@ msgstr "Max effort for agent spawns without confirmation"
 #: crates/termade-tui/src/settings.rs
 msgid "把協作說明注入每個 agent"
 msgstr "Inject collaboration instructions into every agent"
+
+#: crates/termade-tui/src/settings.rs
+msgid "把 termade-ade skill 注入協作說明"
+msgstr "Inject the termade-ade skill into collaboration instructions"
 
 #: crates/termade-tui/src/settings.rs
 msgid "Web 版支援 (Web UI)"

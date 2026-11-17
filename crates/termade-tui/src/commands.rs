@@ -272,6 +272,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("tools", termade_core::tr_noop!("展開／摺疊工具呼叫")),
     ("scope", termade_core::tr_noop!("[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)")),
     (
+        "skill",
+        termade_core::tr_noop!("[install|uninstall|show] [claude|agents|codex] [global]  安裝 termade-ade skill"),
+    ),
+    (
         "notify",
         termade_core::tr_noop!("[on|off|test]  開關通知 (回合結束／等待核准／失敗／額度用完)；不帶參數顯示狀態"),
     ),
@@ -608,6 +612,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         "task-status" => crate::tasks::set_selected_status(app, writer, rest)?,
         "thoughts" | "think" => toggle_thoughts(app),
         "tools" => toggle_tools(app),
+        "skill" => skill_command(app, rest)?,
         "scope" | "project" => match rest {
             "here" | "this" => toggle_scope(app, Some(true)),
             "all" => toggle_scope(app, Some(false)),
@@ -1526,6 +1531,20 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
     };
     let list: Vec<(String, String)> = match verb {
         "model" if words.is_empty() => models(&kind),
+        "skill" if words.is_empty() => vec![
+            (
+                "install".into(),
+                tr!("安裝到目前專案 (加 global 則裝到家目錄)"),
+            ),
+            ("uninstall".into(), tr!("移除已安裝的 skill")),
+            ("show".into(), tr!("顯示 skill 安裝位置與注入設定")),
+        ],
+        "skill" if words.len() == 1 => vec![
+            ("claude".into(), ".claude/skills".into()),
+            ("agents".into(), ".agents/skills".into()),
+            ("codex".into(), ".codex/skills".into()),
+            ("global".into(), tr!("安裝到家目錄 (所有專案共用)")),
+        ],
         "effort" if words.is_empty() => efforts(),
         "set" => {
             words.retain(|w| *w != "--repo");
@@ -1599,4 +1618,64 @@ fn percent_encode(s: &str) -> String {
         }
     }
     out
+}
+
+/// `:skill [install|uninstall|show] [claude|agents|codex] [global]`：安裝內嵌的 termade-ade skill。
+fn skill_command(app: &mut App, rest: &str) -> Result<()> {
+    let mut words = rest.split_whitespace();
+    let action = words.next().unwrap_or("show");
+    let mut target = "claude";
+    let mut global = false;
+    for w in words {
+        match w {
+            "global" | "--global" => global = true,
+            "project" | "--project" => global = false,
+            t if termade_daemon::skill::target_dir(t).is_some() => target = t,
+            _ => bail!(
+                "{}",
+                tr!("用法：:skill [install|uninstall|show] [claude|agents|codex] [global]")
+            ),
+        }
+    }
+    let base = if global {
+        std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .ok_or_else(|| anyhow::anyhow!("{}", tr!("找不到家目錄 (HOME)")))?
+    } else {
+        std::path::PathBuf::from(&app.home_project)
+    };
+    app.status = skill_action(&base, action, target)?;
+    Ok(())
+}
+
+/// 實際的安裝／移除／查詢，回傳狀態列文字 (拆出來方便測試)。
+pub(crate) fn skill_action(base: &std::path::Path, action: &str, target: &str) -> Result<String> {
+    use termade_daemon::skill;
+    Ok(match action {
+        "install" => {
+            let p = skill::install(base, target)?;
+            tr!("已安裝 skill：{p}", p = p.display())
+        }
+        "uninstall" => match skill::uninstall(base, target)? {
+            Some(d) => tr!("已移除 skill：{p}", p = d.display()),
+            None => tr!("沒有安裝 skill (target {t})", t = target),
+        },
+        "show" => {
+            let path = skill::skill_path(base, target).unwrap_or_default();
+            let installed = path.is_file();
+            tr!(
+                "skill {state}：{p} (注入協作說明可在 :settings 開關)",
+                state = if installed {
+                    tr!("已安裝")
+                } else {
+                    tr!("未安裝")
+                },
+                p = path.display()
+            )
+        }
+        _ => bail!(
+            "{}",
+            tr!("用法：:skill [install|uninstall|show] [claude|agents|codex] [global]")
+        ),
+    })
 }

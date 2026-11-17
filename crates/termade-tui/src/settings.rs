@@ -22,12 +22,13 @@ pub(crate) enum Item {
     SpawnConfirm,
     SpawnMaxEffort,
     CollabInstructions,
+    InjectSkill,
     WebCompanion,
     WebPort,
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 12] = [
+pub(crate) const ITEMS: [Item; 13] = [
     Item::DefaultAgent,
     Item::DefaultPermission,
     Item::TargetAgent,
@@ -37,6 +38,7 @@ pub(crate) const ITEMS: [Item; 12] = [
     Item::SpawnConfirm,
     Item::SpawnMaxEffort,
     Item::CollabInstructions,
+    Item::InjectSkill,
     Item::WebCompanion,
     Item::WebPort,
     Item::Language,
@@ -135,6 +137,7 @@ impl Item {
             Item::SpawnConfirm => tr!("agent 建立高消耗 session 時"),
             Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
+            Item::InjectSkill => tr!("把 termade-ade skill 注入協作說明"),
             Item::WebCompanion => tr!("Web 版支援 (Web UI)"),
             Item::WebPort => tr!("Web 版連接埠 (Web Port)"),
             Item::Language => tr!("介面語言"),
@@ -155,6 +158,7 @@ impl Item {
             Item::SpawnConfirm => c.agent_spawn.confirm().to_string(),
             Item::SpawnMaxEffort => c.agent_spawn.max_effort().to_string(),
             Item::CollabInstructions => on_off(c.collab.instructions != Some(false)),
+            Item::InjectSkill => on_off(c.collab.inject_skill == Some(true)),
             Item::WebCompanion => {
                 if c.web.enabled == Some(false) {
                     "".into()
@@ -218,7 +222,7 @@ impl Item {
                 v.extend(termade_adapter::EFFORT_LEVELS.iter().map(|l| pair(l, l)));
                 v
             }
-            Item::SpawnWorktree | Item::CollabInstructions => {
+            Item::SpawnWorktree | Item::CollabInstructions | Item::InjectSkill => {
                 vec![pair("on", &tr!("開")), pair("off", &tr!("關"))]
             }
             Item::SpawnConfirm => vec![
@@ -282,7 +286,10 @@ impl Item {
     }
 
     pub(crate) fn is_toggle(self) -> bool {
-        matches!(self, Item::SpawnWorktree | Item::CollabInstructions)
+        matches!(
+            self,
+            Item::SpawnWorktree | Item::CollabInstructions | Item::InjectSkill
+        )
     }
 }
 
@@ -389,6 +396,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::SpawnConfirm => (&["agent_spawn"], "confirm"),
         Item::SpawnMaxEffort => (&["agent_spawn"], "max_effort"),
         Item::CollabInstructions => (&["collab"], "instructions"),
+        Item::InjectSkill => (&["collab"], "inject_skill"),
         Item::WebCompanion | Item::WebPort => return,
         Item::Language => (&["tui"], "language"),
         Item::Model => (&["agents", ""], "model"),

@@ -2948,3 +2948,29 @@ fn grid_view_renders_page_with_selected_and_toggles() {
     .unwrap();
     assert_eq!(app.view, CenterView::Grid);
 }
+
+#[test]
+fn skill_command_installs_shows_and_uninstalls_in_project() {
+    let t = std::env::temp_dir().join(termade_core::new_id("tuiskill"));
+    std::fs::create_dir_all(&t).unwrap();
+    let show = crate::commands::skill_action(&t, "show", "claude").unwrap();
+    assert!(
+        show.contains("未安裝") || show.contains("not installed"),
+        "{show}"
+    );
+    crate::commands::skill_action(&t, "install", "claude").unwrap();
+    assert!(t.join(".claude/skills/termade-ade/SKILL.md").is_file());
+    crate::commands::skill_action(&t, "install", "agents").unwrap();
+    assert!(t.join(".agents/skills/termade-ade/SKILL.md").is_file());
+    crate::commands::skill_action(&t, "uninstall", "claude").unwrap();
+    assert!(!t.join(".claude/skills/termade-ade").exists());
+    assert!(crate::commands::skill_action(&t, "bogus", "claude").is_err());
+    let _ = std::fs::remove_dir_all(&t);
+}
+
+#[test]
+fn inject_skill_is_a_settings_toggle() {
+    use crate::settings::{Item, ITEMS};
+    assert!(ITEMS.contains(&Item::InjectSkill));
+    assert!(Item::InjectSkill.is_toggle());
+}

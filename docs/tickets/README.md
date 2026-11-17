@@ -47,7 +47,7 @@
 | [T39](T39-kill-pgid-misparse-logout.md) | `kill -SIG -<pgid>` 被誤解析成 `kill -1`，結束 session 時整個桌面被登出 (已完成) | P0 | T32 |
 | [T40](T40-web-project-scope-and-overview.md) | Web 版專案範疇切換、QR Code 帶入專案與「總覽」分頁 (已完成) | P2 | T30, T32 |
 | [T41](T41-tui-project-panel-and-grid.md) | TUI 右欄改為「Project」面板與中央四格群組檢視 (已完成) | P2 | T13, T32 |
-| [T42](T42-tui-skill-toggle-and-command.md) | TUI 設定選單的 `inject_skill` 開關與 `:skill` 指令 | P3 | T38 |
+| [T42](T42-tui-skill-toggle-and-command.md) | TUI 設定選單的 `inject_skill` 開關與 `:skill` 指令 (已完成) | P3 | T38 |
 | [T43](T43-web-model-catalog.md) | Web 版模型清單過時，與 TUI 不一致 (已完成) | P2 | T30 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
