@@ -762,8 +762,8 @@ msgid "claude 錯誤：{detail}"
 msgstr "claude error: {detail}"
 
 #: crates/termade-adapter/src/claude.rs
-msgid "claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)"
-msgstr "The claude adapter does not support per-action approval yet (use --permission auto/bypass)"
+msgid "claude 逐項核准已由 MCP (termade_approve) 轉發，此請求無效或已逾時"
+msgstr "Claude granular approvals are forwarded via MCP (termade_approve); this request is invalid or expired"
 
 #: crates/termade-adapter/src/claude.rs
 msgid "無法啟動 `claude`"
@@ -3344,6 +3344,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)"
+#~ msgstr "The claude adapter does not support per-action approval yet (use --permission auto/bypass)"
 
 #~ msgid "啟動 agent，如 :spawn claude:opus 做某事；不帶參數開選擇器"
 #~ msgstr "Start an agent, e.g. :spawn claude:opus do something; without arguments opens the picker"

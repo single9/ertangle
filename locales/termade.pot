@@ -766,7 +766,7 @@ msgid "claude 錯誤：{detail}"
 msgstr ""
 
 #: crates/termade-adapter/src/claude.rs
-msgid "claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)"
+msgid "claude 逐項核准已由 MCP (termade_approve) 轉發，此請求無效或已逾時"
 msgstr ""
 
 #: crates/termade-adapter/src/claude.rs

@@ -1251,6 +1251,19 @@ pub(crate) fn handle_permission(
 }
 
 /// MCP `termade_approve`：先套用規則與政策，沒有結論就發核准請求並等人回覆 (逾時視為拒絕)。
+pub(crate) fn handle_mcp_permission(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    title: String,
+    detail: String,
+) {
+    let sid = shared.resolve_session(&session);
+    let decision = ask_user(shared, &sid, title, detail, true);
+    let _ = reply.send(Frame::PermissionDecision { decision });
+}
+
+/// 相容舊版 MCP 核准呼叫 (回覆 Ok 帶字串)。
 pub(crate) fn handle_approval_ask(
     shared: &Arc<Shared>,
     reply: &ClientTx,

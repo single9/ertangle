@@ -419,7 +419,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
   - 拒絕：`rm -rf`、`git push --force`、讀取 `~/.ssh`、外洩風險樣式
 - **預設最小權限**：Claude 用 `--permission-mode` + `--allowedTools`；Codex 用 sandbox + approval policy；
   對「不受信任的 repo」走 `--bare` (不載入 hooks/plugins/CLAUDE.md)。
-- **秘密保護**：`redact_secrets` 目前只套用在寫入事件 log 與 `termade_diff` 的回傳；**其他 MCP 工具的回傳尚未做敏感樣式過濾** (原設計項目，未實作)。
+- **秘密保護**：`redact_secrets` 套用在寫入事件 log 以及所有 MCP 工具回傳 (在 `tools/call` 統一出口進行敏感金鑰樣式過濾)。
 - **審計**：所有事件落地成 jsonl，可事後重建「誰在何時批准了什麼」。
 
 ---
@@ -589,10 +589,10 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | --- | --- | --- |
 | async runtime | `tokio`、`async_trait Adapter` | 未採用；同步 `AgentControl` + std thread (4.4、11) |
 | `outbox/` 監看 | daemon 以 `notify` 監看 agent 寫入並轉發 | 未實作；只有 `mailbox/` 單向寫入 |
-| MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 僅 log 與 `termade_diff` 套用 `redact_secrets` |
+| MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 已在所有 MCP 工具回傳與事件 log 全面套用 `redact_secrets` (見 T33) |
 | 每任務訊息預算 | token／回合上限 | 已實作 session 美元／token 上限、父子樹總額上限與子 agent 數量／深度上限 (`[limits]`、`:budget`、`termade budget`)；訊息匯流排另有速率限制與重複迴圈斷路 |
 | Handoff | 連同 worktree 交給另一個 agent | 只有 `handoff` 訊息類型 |
 | `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | `tasks.json` 未實作；協作說明改由 MCP `initialize.instructions` 與 adapter 系統提示／首則 prompt 注入 (見 `collab.rs`)，不寫入 worktree 的 `AGENTS.md`，避免自動 commit 把它一起提交進使用者分支或覆蓋 repo 自己的 `AGENTS.md` |
-| Claude 逐項核准 | 轉成 `PermissionRequested` | 未實作 (`claude.rs` 不轉發) |
+| Claude 逐項核准 | 轉成 `PermissionRequested` | 已實作，透過 `--permission-prompt-tool mcp__termade__termade_approve --permission-prompts host` 轉發至 MCP 工具並由 daemon 決策 (見 T33) |
 | Codex 回合、ACP 逐項核准 | 實機驗證 | 程式路徑就緒，未實機驗證 |
 | `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `termade-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |

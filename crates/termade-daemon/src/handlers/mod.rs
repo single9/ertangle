@@ -119,6 +119,11 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             session,
             budget_usd,
         } => session::handle_budget(shared, reply, session, budget_usd),
+        Request::McpPermission {
+            session,
+            title,
+            detail,
+        } => session::handle_mcp_permission(shared, reply, session, title, detail),
         Request::ApprovalAsk {
             session,
             tool,

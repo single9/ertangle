@@ -11,7 +11,8 @@ use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
 use termade_core::{
-    AgentKind, ArtifactKind, MsgKind, PermissionPolicy, Role, SessionId, Target, TaskStatus,
+    AgentKind, ArtifactKind, Decision, MsgKind, PermissionPolicy, Role, SessionId, Target,
+    TaskStatus,
 };
 use termade_protocol::{Frame, Request, SpawnRequest, Transport};
 
@@ -79,15 +80,19 @@ pub fn handle_rpc(session: &str, msg: &Value) -> Option<Value> {
                     } else {
                         serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
                     };
+                    let text = termade_core::redact_secrets(&text);
                     Ok(json!({
                         "content": [{ "type": "text", "text": text }],
                         "isError": false
                     }))
                 }
-                Err(e) => Ok(json!({
-                    "content": [{ "type": "text", "text": format!("Error: {e}") }],
-                    "isError": true
-                })),
+                Err(e) => {
+                    let err_msg = termade_core::redact_secrets(&format!("Error: {e}"));
+                    Ok(json!({
+                        "content": [{ "type": "text", "text": err_msg }],
+                        "isError": true
+                    }))
+                }
             }
         }
         other => Err((-32601, format!("Unsupported MCP method: {other}"))),
@@ -744,14 +749,22 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "termade_approve" => {
-            let tool = args["tool_name"].as_str().unwrap_or("tool").to_string();
+            let tool = args["tool_name"]
+                .as_str()
+                .or_else(|| args["name"].as_str())
+                .unwrap_or("tool")
+                .to_string();
             let input = args["input"].clone();
-            let frame = roundtrip(&Request::ApprovalAsk {
+            let frame = roundtrip(&Request::McpPermission {
                 session: session.to_string(),
-                tool,
-                input: input.to_string(),
+                title: tool,
+                detail: input.to_string(),
             })?;
-            let allowed = matches!(&frame, Frame::Ok { note: Some(n) } if n == "allow");
+            let allowed = match frame {
+                Frame::PermissionDecision { decision } => decision != Decision::Deny,
+                Frame::Ok { note: Some(n) } => n == "allow",
+                _ => false,
+            };
             Ok(approval_response(allowed, &input))
         }
 

@@ -178,6 +178,14 @@ pub enum Request {
         session: SessionId,
         budget_usd: f64,
     },
+    /// agent (經 MCP `termade_approve`)請求核准並等待結果。
+    McpPermission {
+        session: SessionId,
+        #[serde(alias = "tool")]
+        title: String,
+        #[serde(alias = "input")]
+        detail: String,
+    },
     /// agent (經 MCP `termade_approve`)請求核准並等待結果；回覆 `Ok` 的 note 為 `allow` 或 `deny`。
     ApprovalAsk {
         session: SessionId,
@@ -333,6 +341,10 @@ pub enum Frame {
     /// 所有受管 worktree 清單。
     Worktrees {
         worktrees: Vec<WorktreeInfo>,
+    },
+    /// 核准決策回覆 (給 MCP `termade_approve` 或 client)。
+    PermissionDecision {
+        decision: Decision,
     },
     /// 操作成功 (可帶說明)。
     Ok {

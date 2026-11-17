@@ -620,6 +620,7 @@ impl App {
                 }
             }
             Frame::Messages { .. } => {}
+            Frame::PermissionDecision { .. } => {}
             Frame::Diff { session, diff, .. } => {
                 let lines: Vec<String> = diff.lines().map(|l| l.to_string()).collect();
                 let gutter = build_gutter(&lines);

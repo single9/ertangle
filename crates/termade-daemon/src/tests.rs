@@ -1487,6 +1487,136 @@ fn approval_ask_waits_for_human_decision() {
 }
 
 #[test]
+fn mcp_permission_auto_policy_answers_immediately_and_deny_wins() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: ask_sess("ses-auto-mcp", PermissionPolicy::Auto),
+    });
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::McpPermission {
+            session: "ses-auto-mcp".into(),
+            title: "Bash".into(),
+            detail: r#"{"command":"make"}"#.into(),
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(
+            &frames[0],
+            Frame::PermissionDecision {
+                decision: Decision::Allow
+            }
+        ),
+        "Auto 政策一般指令應自動允許：{frames:?}"
+    );
+
+    shared.handle(
+        &tx,
+        Request::McpPermission {
+            session: "ses-auto-mcp".into(),
+            title: "Bash".into(),
+            detail: r#"{"command":"git push --force"}"#.into(),
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(
+            &frames[0],
+            Frame::PermissionDecision {
+                decision: Decision::Deny
+            }
+        ),
+        "命中 deny 規則應立即拒絕：{frames:?}"
+    );
+
+    let history: Vec<_> = lock(&shared.inner).backlog.iter().cloned().collect();
+    assert!(
+        history.iter().any(|r| matches!(
+            r.event,
+            Event::PermissionResolved {
+                ref session,
+                decision: Decision::Deny,
+                ..
+            } if session == "ses-auto-mcp"
+        )),
+        "應發出 PermissionResolved 拒絕事件"
+    );
+}
+
+#[test]
+fn mcp_permission_ask_waits_for_human_decision_allow_and_deny() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: ask_sess("ses-ask-mcp", PermissionPolicy::Ask),
+    });
+    let s2 = shared.clone();
+    let h = std::thread::spawn(move || {
+        let (tx, rx) = client_channel(None);
+        s2.handle(
+            &tx,
+            Request::McpPermission {
+                session: "ses-ask-mcp".into(),
+                title: "Bash".into(),
+                detail: r#"{"command":"cargo test"}"#.into(),
+            },
+        );
+        let r = rx.try_iter().next();
+        r
+    });
+    // 等核准請求出現在狀態裡，且確認有 PermissionRequested 事件
+    let req = loop {
+        if let Some(r) = lock(&shared.inner).state.pending_permissions.keys().next() {
+            break r.clone();
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let history: Vec<_> = lock(&shared.inner).backlog.iter().cloned().collect();
+    assert!(
+        history.iter().any(|r| matches!(
+            r.event,
+            Event::PermissionRequested { ref request } if request.session == "ses-ask-mcp" && request.req == req
+        )),
+        "應發出 PermissionRequested 事件"
+    );
+
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Permission {
+            session: "ses-ask-mcp".into(),
+            req: req.clone(),
+            decision: Decision::Allow,
+        },
+    );
+    let reply = h.join().unwrap();
+    assert!(
+        matches!(
+            reply,
+            Some(Frame::PermissionDecision {
+                decision: Decision::Allow
+            })
+        ),
+        "應收到 Decision::Allow 回覆：{reply:?}"
+    );
+    assert!(lock(&shared.inner).state.pending_permissions.is_empty());
+
+    let history: Vec<_> = lock(&shared.inner).backlog.iter().cloned().collect();
+    assert!(
+        history.iter().any(|r| matches!(
+            r.event,
+            Event::PermissionResolved {
+                ref session,
+                ref req,
+                decision: Decision::Allow,
+            } if session == "ses-ask-mcp"
+        )),
+        "應發出 PermissionResolved 允許事件"
+    );
+}
+
+#[test]
 fn restore_prunes_old_ended_sessions_but_keeps_branches_and_recent() {
     let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("termade-prune")));
     let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();

@@ -175,6 +175,100 @@ fn spawn_prompt_output_shutdown() {
         .any(|l| l.contains("接手"));
     assert!(echoed, "新 session 的第一個 prompt 應是交接簡報");
 
+    // T33：MCP 秘密遮罩：透過 termade_send 送出含金鑰的訊息，經 termade_inbox / termade_wait 讀回時已被遮罩為 <REDACTED>。
+    let rpc_send = termade_daemon::mcp::handle_rpc(
+        &old_id,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 100,
+            "method": "tools/call",
+            "params": {
+                "name": "termade_send",
+                "arguments": {
+                    "to": new.id.clone(),
+                    "body": "secret sk-1234567890abcdefghijklmnop and text"
+                }
+            }
+        }),
+    )
+    .expect("termade_send rpc response");
+    assert_eq!(rpc_send["result"]["isError"], false);
+
+    let rpc_inbox = termade_daemon::mcp::handle_rpc(
+        &new.id,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 101,
+            "method": "tools/call",
+            "params": {
+                "name": "termade_inbox",
+                "arguments": {
+                    "unread_only": true
+                }
+            }
+        }),
+    )
+    .expect("termade_inbox rpc response");
+    let inbox_text = rpc_inbox["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        inbox_text.contains("sk-<REDACTED>"),
+        "inbox 應遮罩金鑰：{inbox_text}"
+    );
+    assert!(
+        !inbox_text.contains("1234567890abcdefghijklmnop"),
+        "明文金鑰不應洩漏：{inbox_text}"
+    );
+
+    // termade_wait 阻塞等待新訊息也確認會遮罩金鑰
+    let new_id_clone = new.id.clone();
+    let old_id_clone = old_id.clone();
+    let wait_handle = std::thread::spawn(move || {
+        termade_daemon::mcp::handle_rpc(
+            &new_id_clone,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 102,
+                "method": "tools/call",
+                "params": {
+                    "name": "termade_wait",
+                    "arguments": {
+                        "from": old_id_clone,
+                        "timeout_ms": 5000
+                    }
+                }
+            }),
+        )
+    });
+    std::thread::sleep(Duration::from_millis(50));
+    termade_daemon::mcp::handle_rpc(
+        &old_id,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 103,
+            "method": "tools/call",
+            "params": {
+                "name": "termade_send",
+                "arguments": {
+                    "to": new.id.clone(),
+                    "body": "token ghp_1234567890abcdefghijklmnop secret"
+                }
+            }
+        }),
+    );
+    let rpc_wait = wait_handle
+        .join()
+        .unwrap()
+        .expect("termade_wait rpc response");
+    let wait_text = rpc_wait["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        wait_text.contains("ghp_<REDACTED>"),
+        "wait 應遮罩金鑰：{wait_text}"
+    );
+    assert!(
+        !wait_text.contains("1234567890abcdefghijklmnop"),
+        "明文金鑰不應洩漏：{wait_text}"
+    );
+
     let mut s = Client::connect().unwrap();
     s.send(&Request::Shutdown).unwrap();
     // log 已落地且 seq 連續。

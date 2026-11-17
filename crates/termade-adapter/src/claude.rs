@@ -360,11 +360,11 @@ impl AgentControl for ClaudeControl {
         crate::signal_pgid(pid, "-CONT").or_else(|_| crate::signal_pid(pid, "-CONT"))
     }
 
-    /// M1 尚未支援逐項核准：Claude 的權限在啟動時以 `--permission-mode` 決定。
+    /// Claude 的逐項核准透過 `--permission-prompt-tool` (MCP `termade_approve`) 由 daemon 處理。
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
         bail!(
             "{}",
-            tr!("claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)")
+            tr!("claude 逐項核准已由 MCP (termade_approve) 轉發，此請求無效或已逾時")
         )
     }
 
@@ -426,7 +426,12 @@ pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     }
     // 非 bypass 時，需要核准的工具呼叫交給 termade (規則引擎／使用者)決定。
     if spec.mcp_exe.is_some() && spec.permission != termade_core::PermissionPolicy::Bypass {
-        out.push("--permission-prompt-tool=mcp__termade__termade_approve".into());
+        out.extend([
+            "--permission-prompt-tool".into(),
+            "mcp__termade__termade_approve".into(),
+            "--permission-prompts".into(),
+            "host".into(),
+        ]);
     }
     let mut allowed = spec.allowed_tools.clone();
     if spec.mcp_exe.is_some() && spec.permission.auto_approves() {
@@ -699,12 +704,18 @@ mod tests {
     #[test]
     fn prompt_tool_flag_added_unless_bypass() {
         let a = permission_args(&spec_for_args());
-        assert!(a.contains(&"--permission-prompt-tool=mcp__termade__termade_approve".to_string()));
+        assert!(a
+            .windows(2)
+            .any(|w| w == ["--permission-prompt-tool", "mcp__termade__termade_approve"]));
+        assert!(a.windows(2).any(|w| w == ["--permission-prompts", "host"]));
         let mut s = spec_for_args();
         s.permission = termade_core::PermissionPolicy::Bypass;
         assert!(!permission_args(&s)
             .iter()
             .any(|x| x.contains("permission-prompt-tool")));
+        assert!(!permission_args(&s)
+            .iter()
+            .any(|x| x.contains("permission-prompts")));
     }
 
     #[test]

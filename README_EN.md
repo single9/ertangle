@@ -31,7 +31,7 @@ Each agent communicates via its **official, native structured interface without 
 | --- | --- | --- | --- | --- |
 | **OpenCode** | ACP | `opencode acp` | `acp` | ✅ Full bidirectional structured mode (streaming, tool calls, permission forwarding, MCP injection) |
 | **Antigravity** | ACP | `agy acp` | `acp` | ✅ Full bidirectional structured mode (ACP dialect compatible, MCP injection) |
-| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ Token streaming, tool calls, cost statistics, 5h/7d quota tracking, MCP injection |
+| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ Token streaming, tool calls, cost statistics, 5h/7d quota tracking, MCP injection, granular permission forwarding |
 | **Codex** | app-server | `codex app-server` | `app-server` | ⚠️ Handshake & thread verified; sending turns requires `codex login` on the local machine |
 | **Universal Fallback** | PTY | Interactive agent CLI | `pty` | ✅ Automatically falls back to PTY pass-through when native protocols are missing or uninstalled |
 
@@ -157,6 +157,8 @@ Every structured agent session is automatically injected with a stdio MCP server
   - `auto` (default): Safe operations are approved automatically.
   - `bypass`: Skips permission confirmation.
 - **Policy Engine**: Configured via `~/.config/termade/policy.toml` and `.termade/policy.toml` using `deny` (blacklist) → `allow` (whitelist) → session policy order.
+- **Claude Granular Approval Forwarding (T33)**: Mounts `--permission-prompt-tool mcp__termade__termade_approve --permission-prompts host` in non-`bypass` mode, enabling Claude's tool invocations to be filtered by `policy.toml` and approved interactively in TUI `ask` mode.
+- **Comprehensive Secret Redaction (T33)**: All MCP tool outputs (including `termade_inbox`, `termade_wait`, `termade_ask`, `termade_diff`, etc.) and event logs automatically sanitize sensitive credentials (`sk-...`, `ghp_...`, `AKIA...`, etc.) into `<REDACTED>` before delivery.
 
 ### 6. Remote Connections, Tailscale Integration & Auto-Reconnect (T28)
 

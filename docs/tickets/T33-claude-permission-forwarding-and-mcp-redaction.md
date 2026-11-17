@@ -2,7 +2,7 @@
 
 優先度：P1　範圍：`termade-core`、`termade-protocol`、`termade-adapter`、`termade-daemon`　相依：T04
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 

@@ -31,7 +31,7 @@
 | --- | --- | --- | --- | --- |
 | **OpenCode** | ACP | `opencode acp` | `acp` | ✅ 完整雙向結構化 (串流、工具呼叫、權限核准轉發、MCP 注入) |
 | **Antigravity** | ACP | `agy acp` | `acp` | ✅ 完整雙向結構化 (ACP 方言相容、MCP 注入) |
-| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 逐字串流、工具呼叫、成本統計、5h/7d 額度回報、MCP 注入 |
+| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 逐字串流、工具呼叫、成本統計、5h/7d 額度回報、MCP 注入、逐項權限核准轉發 |
 | **Codex** | app-server | `codex app-server` | `app-server` | ⚠️ 握手與 Thread 已驗證；執行回合需先於本機執行 `codex login` |
 | **萬用後備** | PTY | 各 Agent 互動 CLI | `pty` | ✅ 找不到原生協定或未安裝時，`--transport auto` 自動退回 PTY 直通 |
 
@@ -157,6 +157,8 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - `auto` (預設)：安全工具自動核准。
   - `bypass`：跳過權限確認。
 - **規則引擎**：支援全域 `~/.config/termade/policy.toml` 與專案 `.termade/policy.toml`，以 `deny` (黑名單) → `allow` (白名單) → session 政策順序過濾指令。
+- **Claude 逐項核准轉發 (T33)**：非 `bypass` 模式下為 Claude 掛載 `--permission-prompt-tool mcp__termade__termade_approve --permission-prompts host`，使 Claude 的單一工具呼叫能受到 `policy.toml` 攔截並在 `ask` 模式下由 TUI 互動核准。
+- **全面秘密遮罩 (Secret Redaction, T33)**：所有 MCP 工具輸出 (包含 `termade_inbox`、`termade_wait`、`termade_ask`、`termade_diff` 等) 與事件紀錄在送出前均自動過濾常見 API Key 與 Token (`sk-...`、`ghp_...`、`AKIA...` 等)，遮罩為 `<REDACTED>`。
 
 ### 6. 遠端連線、Tailscale 整合與斷線自動重連 (T28)
 
