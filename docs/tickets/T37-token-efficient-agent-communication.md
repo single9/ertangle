@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-daemon`、`AGENTS.md`、`docs/`　相依：T20, T31
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 
