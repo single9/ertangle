@@ -915,12 +915,12 @@ msgid "執行 kill 失敗"
 msgstr "Failed to run kill"
 
 #: crates/termade-adapter/src/lib.rs
-msgid "kill {sig} {pid} 失敗"
-msgstr "kill {sig} {pid} failed"
+msgid "kill {args} 失敗"
+msgstr "kill {args} failed"
 
 #: crates/termade-adapter/src/lib.rs
-msgid "kill {sig} -{pgid} 失敗"
-msgstr "kill {sig} -{pgid} failed"
+msgid "拒絕對 PID {pid} 送訊號"
+msgstr "Refusing to signal PID {pid}"
 
 #: crates/termade-adapter/src/lib.rs
 msgid "{kind} 尚不支援 allowed_tools／disallowed_tools；請改用 claude"
@@ -3725,6 +3725,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "kill {sig} {pid} 失敗"
+#~ msgstr "kill {sig} {pid} failed"
+
+#~ msgid "kill {sig} -{pgid} 失敗"
+#~ msgstr "kill {sig} -{pgid} failed"
 
 #~ msgid " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k 選行 · {{/}} hunk · c 註解 · M 合併 · [ ] 換 session "
 #~ msgstr " Diff: {label} ({branch})  +{added} -{removed}  ·  j/k line · {{/}} hunk · c comment · M merge · [ ] switch session "

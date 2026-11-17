@@ -161,28 +161,82 @@ pub fn check_effort(e: &str) -> Result<()> {
     Ok(())
 }
 
-/// 對指定 PID 送出 Unix 訊號 (例如 `-STOP` / `-CONT`)。
-pub fn signal_pid(pid: u32, sig: &str) -> Result<()> {
+/// 組出 `kill -s <NAME> -- <target>` 的參數。
+///
+/// 一律用 `-s NAME --` 形式：procps-ng 4.0.4 的 `kill -KILL -<pgid>` 會把 `-<pgid>`
+/// 誤解析成 `-1` (送給使用者的所有處理程序)，等於 `kill -9 -1`，會把整個桌面登出。
+fn kill_args(sig: &str, target: String) -> [String; 4] {
+    let name = sig.trim_start_matches('-').trim_start_matches("SIG");
+    ["-s".into(), name.into(), "--".into(), target]
+}
+
+fn run_kill(args: [String; 4]) -> Result<()> {
     let status = std::process::Command::new("kill")
-        .args([sig, &pid.to_string()])
+        .args(&args)
+        .stderr(std::process::Stdio::null())
         .status()
         .with_context(|| tr!("執行 kill 失敗"))?;
     if !status.success() {
-        bail!("{}", tr!("kill {sig} {pid} 失敗", sig = sig, pid = pid));
+        bail!("{}", tr!("kill {args} 失敗", args = args.join(" ")));
     }
     Ok(())
 }
 
+/// 對指定 PID 送出 Unix 訊號 (例如 `-STOP` / `-CONT`)。
+pub fn signal_pid(pid: u32, sig: &str) -> Result<()> {
+    // 0 / 1 會變成「自己的群組」或 init，絕不送。
+    if pid <= 1 {
+        bail!("{}", tr!("拒絕對 PID {pid} 送訊號", pid = pid));
+    }
+    run_kill(kill_args(sig, pid.to_string()))
+}
+
 /// 對指定處理程序群組 (PGID) 送出 Unix 訊號 (例如 `-STOP` / `-CONT` / `-KILL`)。
 pub fn signal_pgid(pgid: u32, sig: &str) -> Result<()> {
-    let status = std::process::Command::new("kill")
-        .args([sig, &format!("-{pgid}")])
-        .status()
-        .with_context(|| tr!("執行 kill 失敗"))?;
-    if !status.success() {
-        bail!("{}", tr!("kill {sig} -{pgid} 失敗", sig = sig, pgid = pgid));
+    // `-0` 是自己的群組、`-1` 是所有處理程序，絕不送。
+    if pgid <= 1 {
+        bail!("{}", tr!("拒絕對 PID {pid} 送訊號", pid = pgid));
     }
-    Ok(())
+    run_kill(kill_args(sig, format!("-{pgid}")))
+}
+
+#[cfg(test)]
+mod signal_tests {
+    use super::*;
+
+    #[test]
+    fn kill_args_never_put_negative_target_before_double_dash() {
+        assert_eq!(
+            kill_args("-KILL", "-4242".into()),
+            ["-s", "KILL", "--", "-4242"]
+        );
+        assert_eq!(kill_args("-STOP", "42".into()), ["-s", "STOP", "--", "42"]);
+        assert_eq!(
+            kill_args("SIGCONT", "42".into()),
+            ["-s", "CONT", "--", "42"]
+        );
+    }
+
+    #[test]
+    fn refuses_pid_zero_and_one() {
+        assert!(signal_pgid(0, "-KILL").is_err());
+        assert!(signal_pgid(1, "-KILL").is_err());
+        assert!(signal_pid(0, "-KILL").is_err());
+        assert!(signal_pid(1, "-KILL").is_err());
+    }
+
+    #[test]
+    fn pgid_signal_hits_only_the_group() {
+        use std::os::unix::process::CommandExt;
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        signal_pgid(child.id(), "-KILL").unwrap();
+        let st = child.wait().unwrap();
+        assert!(!st.success());
+    }
 }
 
 /// 探測某個可執行程式是否存在，回傳絕對路徑。
