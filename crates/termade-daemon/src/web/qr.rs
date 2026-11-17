@@ -1,5 +1,5 @@
 //! 零外部相依的輕量 QR Code 產生器與終端機 Unicode 半格渲染器。
-//! 支援 Version 1 到 6，Byte 模式，Low 容錯率 (ECC L)。
+//! 支援 Version 1 到 9，Byte 模式，Low 容錯率 (ECC L)。
 
 /// GF(256) 常數與對數表 (多項式 0x11D)。
 const GF_EXP: [u8; 512] = {
@@ -75,7 +75,7 @@ struct QrVersion {
     alignment_pos: &'static [usize],
 }
 
-const VERSIONS: [QrVersion; 6] = [
+const VERSIONS: [QrVersion; 9] = [
     QrVersion {
         version: 1,
         size: 21,
@@ -129,6 +129,33 @@ const VERSIONS: [QrVersion; 6] = [
         ec_codewords: 36,
         blocks: 2,
         alignment_pos: &[6, 34],
+    },
+    QrVersion {
+        version: 7,
+        size: 45,
+        total_codewords: 196,
+        data_codewords: 156,
+        ec_codewords: 40,
+        blocks: 2,
+        alignment_pos: &[6, 22, 38],
+    },
+    QrVersion {
+        version: 8,
+        size: 49,
+        total_codewords: 242,
+        data_codewords: 194,
+        ec_codewords: 48,
+        blocks: 2,
+        alignment_pos: &[6, 24, 42],
+    },
+    QrVersion {
+        version: 9,
+        size: 53,
+        total_codewords: 292,
+        data_codewords: 232,
+        ec_codewords: 60,
+        blocks: 2,
+        alignment_pos: &[6, 26, 46],
     },
 ];
 
@@ -334,6 +361,16 @@ impl QrCode {
             function[(size - 1 - i) * size + 8] = true;
         }
 
+        // Version 7+ 需要版本資訊區 (右上角 3x6 與左下角 6x3)，先保留避免資料寫入。
+        if ver.version >= 7 {
+            for i in 0..18 {
+                let a = size - 11 + i % 3;
+                let b = i / 3;
+                function[b * size + a] = true;
+                function[a * size + b] = true;
+            }
+        }
+
         // 5. 填入資料位元 (交錯直行向上向下填入，並套用遮罩 Pattern 0: (row + col) % 2 == 0)
         let mut bit_idx = 0;
         let mut col = size as isize - 1;
@@ -393,6 +430,22 @@ impl QrCode {
                 (size - 15 + i, 8)
             };
             matrix[r2 * size + c2] = Some(b);
+        }
+
+        // 7. 版本資訊 (Version 7+)：6 bits 版本號 + 12 bits BCH (產生多項式 0x1F25)。
+        if ver.version >= 7 {
+            let mut rem = ver.version;
+            for _ in 0..12 {
+                rem = (rem << 1) ^ (if (rem >> 11) & 1 == 1 { 0x1F25 } else { 0 });
+            }
+            let version_bits: u32 = ((ver.version << 12) | rem) as u32;
+            for i in 0..18 {
+                let b = (version_bits >> i) & 1 == 1;
+                let a = size - 11 + i % 3;
+                let row = i / 3;
+                matrix[row * size + a] = Some(b);
+                matrix[a * size + row] = Some(b);
+            }
         }
 
         let modules = matrix.into_iter().map(|b| b.unwrap_or(false)).collect();
@@ -502,6 +555,31 @@ mod tests {
         let rendered = qr.render_terminal();
         assert!(!rendered.is_empty());
         assert!(rendered.contains('█') || rendered.contains('▀') || rendered.contains('▄'));
+    }
+
+    #[test]
+    fn test_project_scoped_web_url_fits_qr() {
+        // 含完整專案路徑的 :web qr 網址必須仍能編碼 (T40 曾讓網址超過 v6 容量)。
+        let token = "696f5524c18f1c5108d815accb60db754fae5f1ec6d43639584f5b4dea9e255e";
+        let url = format!(
+            "http://100.64.100.100:7421/?token={token}&project=%2Fworkspace%2Fprojects%2Fexample-organization%2Frepo"
+        );
+        let qr = QrCode::encode(&url).expect("長 URL 應可編碼");
+        assert!(qr.size >= 45);
+        assert!(!qr.render_lines().is_empty());
+    }
+
+    #[test]
+    fn test_version_info_bits() {
+        // QR 規格附錄：version 7 與 8 的 18-bit 版本資訊 (BCH 0x1F25)。
+        for (version, expected) in [(7usize, 0b000111110010010100u32), (8, 0b001000010110111100)] {
+            let mut rem = version;
+            for _ in 0..12 {
+                rem = (rem << 1) ^ (if (rem >> 11) & 1 == 1 { 0x1F25 } else { 0 });
+            }
+            let bits: u32 = ((version << 12) | rem) as u32;
+            assert_eq!(bits, expected, "version {version}");
+        }
     }
 
     #[test]
