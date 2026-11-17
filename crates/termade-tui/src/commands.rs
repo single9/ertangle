@@ -728,17 +728,15 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 format!("http://127.0.0.1:{web_port}/?token={token_hint}")
             };
 
-            if cmd_arg == "qr" || cmd_arg == "show" {
-                if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&url) {
-                    let lines = qr.render_lines();
-                    app.qr_modal = Some(crate::app::QrModal {
-                        title: tr!("Web 版 QR Code"),
-                        url: url.clone(),
-                        qr_lines: lines,
-                    });
-                    app.mode = crate::app::Mode::Qr;
-                    return Ok(());
-                }
+            // 狀態 / QR 一律以彈出視窗顯示網址與 QR Code。
+            if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&url) {
+                app.qr_modal = Some(crate::app::QrModal {
+                    title: tr!("Web 版 QR Code"),
+                    url: url.clone(),
+                    qr_lines: qr.render_lines(),
+                });
+                app.mode = crate::app::Mode::Qr;
+                return Ok(());
             }
 
             app.status = tr!(
