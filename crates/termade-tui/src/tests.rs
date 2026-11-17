@@ -2300,7 +2300,12 @@ fn submit_spawn_parses_role_flag_coordinator_and_short_flag() {
     let mut reader = std::io::BufReader::new(peer);
 
     // 1. --role coordinator
-    crate::commands::submit_spawn(&mut app, &mut w, "--role coordinator claude:opus plan the work").unwrap();
+    crate::commands::submit_spawn(
+        &mut app,
+        &mut w,
+        "--role coordinator claude:opus plan the work",
+    )
+    .unwrap();
     let mut line1 = String::new();
     reader.read_line(&mut line1).unwrap();
     let req1: Request = termade_protocol::decode_line(&line1).unwrap();
@@ -2315,7 +2320,8 @@ fn submit_spawn_parses_role_flag_coordinator_and_short_flag() {
     }
 
     // 2. -r reviewer
-    crate::commands::submit_spawn(&mut app, &mut w, "-r reviewer opencode review the diff").unwrap();
+    crate::commands::submit_spawn(&mut app, &mut w, "-r reviewer opencode review the diff")
+        .unwrap();
     let mut line2 = String::new();
     reader.read_line(&mut line2).unwrap();
     let req2: Request = termade_protocol::decode_line(&line2).unwrap();

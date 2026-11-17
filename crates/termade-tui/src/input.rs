@@ -437,10 +437,7 @@ pub(crate) fn handle_input_mode(
                 Role::Coordinator => Role::Reviewer,
                 _ => Role::Worker,
             };
-            app.status = tr!(
-                "角色 = {role}",
-                role = app.spawn_role.id()
-            );
+            app.status = tr!("角色 = {role}", role = app.spawn_role.id());
         }
         KeyCode::Tab if app.mode == Mode::Command => complete_command(app),
         KeyCode::Tab if matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) => {

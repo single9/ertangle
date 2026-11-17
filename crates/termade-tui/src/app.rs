@@ -7,7 +7,8 @@ use tr::tr;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 use termade_core::{
-    now_millis, AgentKind, BusMessage, PermissionPolicy, Role, SessionId, State, Target, WorktreeInfo,
+    now_millis, AgentKind, BusMessage, PermissionPolicy, Role, SessionId, State, Target,
+    WorktreeInfo,
 };
 use termade_protocol::Frame;
 

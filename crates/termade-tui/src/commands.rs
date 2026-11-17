@@ -912,7 +912,8 @@ fn extract_named_flag(text: &str, flag: &str) -> (Option<String>, String) {
     for (idx, _) in text.match_indices(flag) {
         let before_ok = idx == 0 || text[..idx].ends_with(char::is_whitespace);
         let after_idx = idx + flag.len();
-        let after_ok = after_idx == text.len() || text[after_idx..].starts_with(char::is_whitespace);
+        let after_ok =
+            after_idx == text.len() || text[after_idx..].starts_with(char::is_whitespace);
         if before_ok && after_ok {
             let after = &text[after_idx..];
             let mut parts = after.split_whitespace();

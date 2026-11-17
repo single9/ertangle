@@ -264,7 +264,9 @@ mod tests {
         sub.parent = Some("ses_top".into());
         sub.branch = Some("termade/ses_c".into());
         let t = collab_instructions(&sub, Some(&top), "");
-        assert!(t.contains("do not merge") && t.contains("termade_send") && t.contains("do not poll"));
+        assert!(
+            t.contains("do not merge") && t.contains("termade_send") && t.contains("do not poll")
+        );
         assert!(t.lines().count() <= 30);
     }
 

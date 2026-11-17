@@ -2307,11 +2307,11 @@ msgid " prompt (排隊 {n} 則 · Alt-Enter 再排) "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " spawn → {target} · worktree={worktree} · 權限={permission} · Ctrl-F effort "
+msgid " spawn → {target} · role={role} · worktree={worktree} · 權限={permission} · Ctrl-R role · Ctrl-F effort "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " spawn：<agent[:model]> <prompt> · Ctrl-F effort "
+msgid " spawn：<agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2696,6 +2696,10 @@ msgstr ""
 
 #: crates/termade-tui/src/input.rs
 msgid "effort = {effort}"
+msgstr ""
+
+#: crates/termade-tui/src/input.rs
+msgid "角色 = {role}"
 msgstr ""
 
 #: crates/termade-tui/src/input.rs
