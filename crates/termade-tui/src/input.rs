@@ -193,6 +193,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
                     &Request::WorktreeMerge {
                         session: id,
                         dry_run: false,
+                        resolve: false,
                     },
                 )?;
             }

@@ -155,6 +155,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     Act::Cmd("merge --dry-run"),
                 ),
                 it(
+                    'r',
+                    termade_core::tr_noop!("合併並委派解衝突"),
+                    Act::Cmd("merge --resolve"),
+                ),
+                it(
                     'c',
                     termade_core::tr_noop!("gc 已合併的 worktree"),
                     Act::Cmd("gc"),

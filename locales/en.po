@@ -435,6 +435,10 @@ msgid "若 session 忙碌，先排入待送佇列，等閒下來再自動送出"
 msgstr "If the session is busy, queue the prompt and send it automatically once it is idle"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "若發生衝突，自動保留標記於 worktree 並委派 agent 解衝突"
+msgstr "On conflict, retain markers in worktree and delegate resolution to agent"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "補充給接手者的說明"
 msgstr "Extra notes for the agent taking over"
 
@@ -1047,6 +1051,38 @@ msgid "git status 失敗：{detail}"
 msgstr "git status failed: {detail}"
 
 #: crates/termade-daemon/src/git.rs
+msgid "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{files}"
+msgstr "Merging {branch} into {target} hit conflicts and was rolled back. Conflicting files: {files}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "啟動合併前驗證指令失敗：{cmd}"
+msgstr "Failed to spawn pre-merge validation command: {cmd}"
+
+#: crates/termade-daemon/src/git.rs
+msgid ""
+"合併前驗證指令失敗 ({cmd})：\n"
+"{tail}"
+msgstr ""
+"Pre-merge validation command failed ({cmd}):\n"
+"{tail}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "執行合併前驗證指令失敗：{e}"
+msgstr "Failed to execute pre-merge validation command: {e}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "合併前驗證指令逾時 (300 秒)"
+msgstr "Pre-merge validation command timed out (300s)"
+
+#: crates/termade-daemon/src/git.rs
+msgid "執行合併前驗證指令異常結束"
+msgstr "Pre-merge validation command terminated unexpectedly"
+
+#: crates/termade-daemon/src/git.rs
+msgid "工作區仍有未解決的合併衝突標記"
+msgstr "Workspace still contains unresolved merge conflict markers"
+
+#: crates/termade-daemon/src/git.rs
 msgid "git add 失敗：{detail}"
 msgstr "git add failed: {detail}"
 
@@ -1093,10 +1129,6 @@ msgstr "[dry-run] Merge {branch} ({label}) into {target}: {ff_desc}, {pending_de
 #: crates/termade-daemon/src/git.rs
 msgid "合併 {branch} 到 {target} 失敗，已還原：{detail}"
 msgstr "Merging {branch} into {target} failed and was rolled back: {detail}"
-
-#: crates/termade-daemon/src/git.rs
-msgid "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{files}"
-msgstr "Merging {branch} into {target} hit conflicts and was rolled back. Conflicting files: {files}"
 
 #: crates/termade-daemon/src/git.rs
 msgid "已將 {branch} ({label})合併進 {target}"
@@ -1226,8 +1258,8 @@ msgid "已接續 {label}"
 msgstr "Resumed {label}"
 
 #: crates/termade-daemon/src/handlers/session.rs
-msgid "接續 {label} 失敗：{e}"
-msgstr "Failed to resume {label}: {e}"
+msgid "接續 {session} 失敗：{e}"
+msgstr "Failed to resume {session}: {e}"
 
 #: crates/termade-daemon/src/handlers/session.rs
 msgid "{session} 已結束；可用 :resume (或 `termade resume`)接續原對話"
@@ -1374,6 +1406,26 @@ msgstr "(removed)"
 #: crates/termade-daemon/src/handlers/worktree.rs
 msgid "取得 diff 失敗：{e}"
 msgstr "Failed to get diff: {e}"
+
+#: crates/termade-daemon/src/handlers/worktree.rs
+msgid "session {label} 已結束且無對話 id，無法自動接續解衝突"
+msgstr "Session {label} has ended without conversation ID, cannot auto-resume to resolve conflicts"
+
+#: crates/termade-daemon/src/handlers/worktree.rs
+msgid "已將衝突委派給 {label}，衝突檔案：{files}"
+msgstr "Delegated conflicts to {label}, conflicting files: {files}"
+
+#: crates/termade-daemon/src/handlers/worktree.rs
+msgid "委派解衝突失敗，已還原 worktree：{send_err}"
+msgstr "Failed to delegate conflict resolution, worktree rolled back: {send_err}"
+
+#: crates/termade-daemon/src/handlers/worktree.rs
+msgid "在 worktree 建立衝突標記失敗：{prep_err}"
+msgstr "Failed to prepare conflict markers in worktree: {prep_err}"
+
+#: crates/termade-daemon/src/handlers/worktree.rs
+msgid "合併衝突 ({files})；輸入 :merge --resolve 交由 Agent 自動解衝突"
+msgstr "Merge conflict ({files}); run :merge --resolve to delegate to agent"
 
 #: crates/termade-daemon/src/handlers/worktree.rs
 msgid "合併失敗：{e}"
@@ -1829,8 +1881,8 @@ msgid "[--force]  清除所有已結束的 session (預設保留未合併或有�
 msgstr "[--force]  Remove all ended sessions (keeps unmerged or dirty worktrees by default)"
 
 #: crates/termade-tui/src/commands.rs
-msgid "[session] [--dry-run]  合併 worktree 回主工作區"
-msgstr "[session] [--dry-run]  Merge the worktree back into the main checkout"
+msgid "[session] [--dry-run] [--resolve]  合併 worktree 回主工作區"
+msgstr "[session] [--dry-run] [--resolve]  Merge the worktree back into the main checkout"
 
 #: crates/termade-tui/src/commands.rs
 msgid "顯示選取 session 的 diff"
@@ -2661,8 +2713,8 @@ msgid "對游標所在行寫審查註解，送回該 agent"
 msgstr "Write a review comment on the cursor line and send it to the agent"
 
 #: crates/termade-tui/src/help.rs
-msgid "合併選取 session 的 worktree；:merge --dry-run 先看"
-msgstr "Merge the selected session's worktree; preview with :merge --dry-run"
+msgid "合併選取 session 的 worktree；:merge --dry-run 先看；:merge --resolve 委派解衝突"
+msgstr "Merge selected session's worktree; preview with :merge --dry-run; delegate conflicts with :merge --resolve"
 
 #: crates/termade-tui/src/help.rs
 msgid "清理已合併的 worktree"
@@ -2899,6 +2951,10 @@ msgstr "Merge into the main checkout"
 #: crates/termade-tui/src/menu.rs
 msgid "merge 乾跑 (dry-run)"
 msgstr "Merge dry run"
+
+#: crates/termade-tui/src/menu.rs
+msgid "合併並委派解衝突"
+msgstr "Merge and delegate conflicts"
 
 #: crates/termade-tui/src/menu.rs
 msgid "gc 已合併的 worktree"
@@ -3347,6 +3403,15 @@ msgstr "Connection lost, reconnecting; please wait"
 
 #~ msgid "claude adapter 尚未支援逐項核准 (請用 --permission auto/bypass)"
 #~ msgstr "The claude adapter does not support per-action approval yet (use --permission auto/bypass)"
+
+#~ msgid "接續 {label} 失敗：{e}"
+#~ msgstr "Failed to resume {label}: {e}"
+
+#~ msgid "[session] [--dry-run]  合併 worktree 回主工作區"
+#~ msgstr "[session] [--dry-run]  Merge the worktree back into the main checkout"
+
+#~ msgid "合併選取 session 的 worktree；:merge --dry-run 先看"
+#~ msgstr "Merge the selected session's worktree; preview with :merge --dry-run"
 
 #~ msgid "啟動 agent，如 :spawn claude:opus 做某事；不帶參數開選擇器"
 #~ msgstr "Start an agent, e.g. :spawn claude:opus do something; without arguments opens the picker"

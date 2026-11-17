@@ -95,7 +95,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
         &[
             ("j k { }", tr_noop!("移動游標／跳到上一個、下一個 hunk")),
             ("c", tr_noop!("對游標所在行寫審查註解，送回該 agent")),
-            ("M", tr_noop!("合併選取 session 的 worktree；:merge --dry-run 先看")),
+            (
+                "M",
+                tr_noop!("合併選取 session 的 worktree；:merge --dry-run 先看；:merge --resolve 委派解衝突"),
+            ),
             ("G", tr_noop!("清理已合併的 worktree")),
         ],
     ),

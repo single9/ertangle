@@ -103,7 +103,7 @@ termade
 - **Worktree 獨立分支**：每個 session 使用專屬 `git worktree` 與 `termade/<session>` 分支，互不干擾。
 - **即時彩色 Diff**：在 TUI 按 `Tab` 切換至 Diff 視圖，按 `{` / `}` 跳轉 hunk。
 - **行內註解審查 (Review Comment)**：在 Diff 視圖按 `c`，直接對該行留下修改建議 (例如：「請補上邊界條件檢查」)，系統會自動將註解送回該 Agent 要求修正。
-- **安全合併 (Merge)**：按 `M` 或執行 `termade merge`，系統會先執行 pre-check，自動 commit worktree 變更並合併回主分支。
+- **安全合併與衝突解決 (Merge & Conflict Resolution)**：按 `M` 或執行 `termade merge`，系統會先執行 pre-check (支援全域 `pre_merge_command` 守門驗證)，自動 commit worktree 變更並合併回主分支。若發生衝突，可透過 `:merge --resolve` (或 Which-key `Space g r`) 將衝突標記保留於隔離 Worktree，主分支保持乾淨，並自動委派該 Agent 進行解衝突與重新驗證。
 - **清理 (GC)**：按 `G` 或執行 `termade gc`，自動清除已結束且已合併的 Worktree，絕不誤刪未合併成果。
 
 ### 2. 跨 Agent 協作匯流排與任務看板 (MCP & Bus)
@@ -265,7 +265,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | 按鍵 | 動作 |
 | --- | --- |
 | `c` | (Diff 視圖) 針對當前選取的行留下 Review 審查註解並送回 Agent 修改 |
-| `M` | 將選取 Session 的 Worktree 分支安全合併回主分支 (可先用 `:merge --dry-run` 預覽) |
+| `M` | 將選取 Session 的 Worktree 分支安全合併回主分支 (可先用 `:merge --dry-run` 預覽，或 `:merge --resolve` 委派解衝突) |
 | `G` | 清理 (GC) 已結束且已合併的 Worktree |
 | `z` | 切換暫停休眠 (`SIGSTOP`) 與喚醒 (`SIGCONT`) |
 | `x` | 中斷 Agent 當前回合運算 (Cancel) |
@@ -279,6 +279,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 - `:spawn [--role <角色>] <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn --role coordinator claude:opus "規劃架構"`)
 - `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
 - `:resume [prompt]` — 接續已結束或中斷的 Session 對話
+- `:merge [--dry-run] [--resolve]` — 合併選取 Session 的 Worktree 回主分支 (支援自動委派解衝突)
 - `:queue` / `:unqueue` / `:queue clear` — 檢視、取出或清空待送佇列
 - `:rm` / `:clean` — 移除已結束的 Session / 清除所有已結束項目
 - `:budget <金額>` — 查看或調高當前 Session 的美元預算上限
@@ -315,7 +316,7 @@ termade queue <session-or-label> [--clear]        # 查看或清空待送佇列
 termade worktrees                                 # 列出所有由 termade 管理的 worktree
 termade diff <session-or-label>                   # 檢視指定 session 的 git diff
 termade review <session-or-label> --location <file>:<line> "審查意見"
-termade merge <session-or-label> [--dry-run]      # 合併分支回主工作區
+termade merge <session-or-label> [--dry-run] [--resolve] # 合併分支回主工作區 (支援自動委派解衝突)
 termade pr <session-or-label> --title "PR 標題"   # 透過 gh 建立 Pull Request
 termade gc [--session <id>]                       # 清理已結束且已合併的 worktrees
 
@@ -385,6 +386,10 @@ fallback = ["codex", "claude:sonnet"]
 [collab]
 instructions = true               # 是否自動向 Agent 注入 termade 協作工具使用規範
 extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
+
+[git]
+# Git 與 worktree 設定 (安全起見只認全域設定，專案層不可覆寫)
+pre_merge_command = "cargo test"       # 合併前驗證指令；非 0 退出則中止合併
 ```
 
 > [!NOTE]

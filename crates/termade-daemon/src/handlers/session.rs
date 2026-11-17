@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
 
+use anyhow::bail;
+
 use termade_adapter::{spawn as spawn_adapter, AgentEvent, SessionSpec};
 use termade_core::{
     now_millis, Artifact, BusMessage, Cost, Decision, Event, MsgKind, Session, SessionStatus,
@@ -472,42 +474,36 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
 }
 
 /// 接續：讓已結束的 session 用 agent 原生的對話 id 接回原對話，沿用同一個 termade session id。
-pub(crate) fn handle_resume(
+pub(crate) fn resume_session(
     shared: &Arc<Shared>,
-    reply: &ClientTx,
-    session: String,
+    sid: &str,
     prompt: Option<String>,
-) {
-    let sid = shared.resolve_session(&session);
-    let Some(s) = lock(&shared.inner).state.sessions.get(&sid).cloned() else {
-        let _ = reply.send(Frame::error(tr!(
-            "找不到 session {session}",
-            session = session
-        )));
-        return;
+) -> anyhow::Result<String> {
+    let Some(s) = lock(&shared.inner).state.sessions.get(sid).cloned() else {
+        bail!("{}", tr!("找不到 session {session}", session = sid));
     };
     if s.status.is_live() {
-        let _ = reply.send(Frame::error(tr!(
-            "{label} 仍在執行，不需要接續",
-            label = s.label
-        )));
-        return;
+        bail!("{}", tr!("{label} 仍在執行，不需要接續", label = s.label));
     }
     let Some(native_id) = s.native_id.clone() else {
-        let _ = reply.send(Frame::error(tr!(
-            "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 還沒回報就結束了)；請改用交接 (handoff)",
-            label = s.label
-        )));
-        return;
+        bail!(
+            "{}",
+            tr!(
+                "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 還沒回報就結束了)；請改用交接 (handoff)",
+                label = s.label
+            )
+        );
     };
     let cwd = PathBuf::from(&s.cwd);
     if !cwd.is_dir() {
-        let _ = reply.send(Frame::error(tr!(
-            "{label} 的工作目錄 {cwd} 已不存在，無法接續",
-            label = s.label,
-            cwd = s.cwd
-        )));
-        return;
+        bail!(
+            "{}",
+            tr!(
+                "{label} 的工作目錄 {cwd} 已不存在，無法接續",
+                label = s.label,
+                cwd = s.cwd
+            )
+        );
     }
     // 交接後新舊 session 共用同一個 worktree；不要讓兩個 agent 同時改同一個目錄。
     if let Some(user) = s
@@ -515,12 +511,14 @@ pub(crate) fn handle_resume(
         .as_ref()
         .and_then(|_| shared.cwd_in_use_by_other(&s))
     {
-        let _ = reply.send(Frame::error(tr!(
-            "worktree 正由 {user} 使用，不能接續 {label}",
-            user = user,
-            label = s.label
-        )));
-        return;
+        bail!(
+            "{}",
+            tr!(
+                "worktree 正由 {user} 使用，不能接續 {label}",
+                user = user,
+                label = s.label
+            )
+        );
     }
     // bin、args、env、工具限制重新讀設定；model 與權限以這個 session 原本的為準。
     let mut resolved = config::Config::load(&config_dir(), &cwd).resolve(
@@ -539,7 +537,7 @@ pub(crate) fn handle_resume(
         Default::default()
     };
     let launch = Launch {
-        id: sid.clone(),
+        id: sid.to_string(),
         kind: s.kind.clone(),
         cwd,
         transport: termade_protocol::Transport::Structured,
@@ -550,21 +548,32 @@ pub(crate) fn handle_resume(
         resume: Some(native_id),
         cost_base,
     };
-    match launch_session(shared, launch) {
-        Ok(()) => {
-            // 清掉「可用 :resume 接續」之類的舊說明。
-            if s.status_note.is_some() {
-                shared.emit(Event::SessionNote {
-                    session: sid.clone(),
-                    note: String::new(),
-                });
-            }
-            let _ = reply.send(Frame::ok_note(tr!("已接續 {label}", label = s.label)));
+    launch_session(shared, launch)?;
+    // 清掉「可用 :resume 接續」之類的舊說明。
+    if s.status_note.is_some() {
+        shared.emit(Event::SessionNote {
+            session: sid.to_string(),
+            note: String::new(),
+        });
+    }
+    Ok(s.label)
+}
+
+pub(crate) fn handle_resume(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    prompt: Option<String>,
+) {
+    let sid = shared.resolve_session(&session);
+    match resume_session(shared, &sid, prompt) {
+        Ok(label) => {
+            let _ = reply.send(Frame::ok_note(tr!("已接續 {label}", label = label)));
         }
         Err(e) => {
             let _ = reply.send(Frame::error(tr!(
-                "接續 {label} 失敗：{e}",
-                label = s.label,
+                "接續 {session} 失敗：{e}",
+                session = session,
                 e = e
             )));
         }

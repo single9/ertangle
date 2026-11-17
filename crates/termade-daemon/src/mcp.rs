@@ -804,9 +804,11 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .context("missing required parameter `session`")?
                 .to_string();
             let dry_run = args["dry_run"].as_bool().unwrap_or(false);
+            let resolve = args["resolve"].as_bool().unwrap_or(false);
             match roundtrip(&Request::WorktreeMerge {
                 session: target,
                 dry_run,
+                resolve,
             })? {
                 Frame::Ok { note } => Ok(json!({ "ok": true, "note": note })),
                 other => bail!("unexpected response: {other:?}"),

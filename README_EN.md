@@ -103,7 +103,7 @@ termade
 - **Dedicated Worktree & Branch**: Each session operates inside an independent `git worktree` and `termade/<session>` branch, eliminating file conflicts.
 - **Real-Time Color Diff**: Press `Tab` in the TUI to switch to the Diff view; navigate hunks with `{` / `}`.
 - **Inline Review Comments**: Press `c` on any diff line to submit inline feedback (e.g., "Add boundary checks here"). The comment is routed back to the agent for automated revision.
-- **Safe Merge**: Press `M` or run `termade merge`. The system runs pre-flight safety checks, commits uncommitted worktree changes automatically, and merges into the main branch.
+- **Safe Merge & Conflict Resolution**: Press `M` or run `termade merge`. The system runs pre-flight safety checks (supports global `pre_merge_command` gate verification), commits uncommitted worktree changes automatically, and merges into the main branch. On conflicts, use `:merge --resolve` (or Which-key `Space g r`) to keep conflict markers isolated in the worktree while keeping `main` clean, delegating conflict resolution to the agent.
 - **Garbage Collection (GC)**: Press `G` or run `termade gc` to clean up merged and completed worktrees safely without deleting unmerged work.
 
 ### 2. Multi-Agent Bus & Task Board (MCP)
@@ -265,7 +265,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 | Key | Action |
 | --- | --- |
 | `c` | (Diff view) Leave review comment on cursor line and route back to agent |
-| `M` | Safely merge selected session's worktree branch into main (`:merge --dry-run` to preview) |
+| `M` | Safely merge selected session's worktree branch into main (`:merge --dry-run` to preview, `:merge --resolve` to delegate conflicts) |
 | `G` | Clean up (GC) completed and merged worktrees |
 | `z` | Toggle session pause (`SIGSTOP`) and wake (`SIGCONT`) |
 | `x` | Interrupt current agent turn (Cancel) |
@@ -315,7 +315,7 @@ termade queue <session-or-label> [--clear]        # View or clear prompt queue
 termade worktrees                                 # List all managed git worktrees
 termade diff <session-or-label>                   # View git diff for a session
 termade review <session-or-label> --location <file>:<line> "Review comment"
-termade merge <session-or-label> [--dry-run]      # Merge session branch back to main
+termade merge <session-or-label> [--dry-run] [--resolve] # Merge session branch back to main
 termade pr <session-or-label> --title "PR title"  # Create GitHub Pull Request via gh
 termade gc [--session <id>]                       # Clean up merged worktrees safely
 
@@ -384,6 +384,10 @@ fallback = ["codex", "claude:sonnet"]
 [collab]
 instructions = true               # Inject termade collaboration rules into agent system prompt
 extra = "Follow guidelines in CONTRIBUTING.md closely"
+
+[git]
+# Git & worktree settings (read only from global config for security)
+pre_merge_command = "cargo test"       # Pre-merge validation command; non-zero exits abort merge
 ```
 
 > [!TIP]

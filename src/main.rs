@@ -334,6 +334,9 @@ enum Cmd {
         /// 僅乾跑：不改動 repo，回報會 commit 的檔案與是否可快轉
         #[arg(long)]
         dry_run: bool,
+        /// 若發生衝突，自動保留標記於 worktree 並委派 agent 解衝突
+        #[arg(long)]
+        resolve: bool,
     },
     /// 為指定 session 的 worktree 建立 GitHub PR (M3)
     Pr {
@@ -551,7 +554,11 @@ fn main() -> Result<()> {
             location,
             comment,
         } => cmd_review(session, location, comment),
-        Cmd::Merge { session, dry_run } => cmd_merge(session, dry_run),
+        Cmd::Merge {
+            session,
+            dry_run,
+            resolve,
+        } => cmd_merge(session, dry_run, resolve),
         Cmd::Pr {
             session,
             title,

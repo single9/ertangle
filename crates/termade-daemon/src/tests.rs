@@ -989,6 +989,235 @@ fn merge_targets_each_sessions_own_repo() {
 }
 
 #[test]
+fn auto_commit_worktree_rejects_unresolved_conflict() {
+    let repo = temp_repo("uu1");
+    let s = wt_session(&repo, "s_uu");
+    let wt = Path::new(&s.cwd);
+    // 製造衝突 (兩分支修改同一檔案同一行)
+    fs::write(repo.join("file.txt"), "base\n").unwrap();
+    git(&repo, &["add", "file.txt"]);
+    git(&repo, &["commit", "-m", "base"]);
+    git(&repo, &["branch", "feature_uu"]);
+    git(&repo, &["checkout", "feature_uu"]);
+    fs::write(repo.join("file.txt"), "from feature\n").unwrap();
+    git(&repo, &["commit", "-am", "feature change"]);
+    git(&repo, &["checkout", "main"]);
+    fs::write(wt.join("file.txt"), "from worktree\n").unwrap();
+    git(wt, &["add", "file.txt"]);
+    git(wt, &["commit", "-m", "worktree change"]);
+    // 在 worktree 嘗試 merge feature_uu 產生衝突標記
+    let _ = Command::new("git")
+        .current_dir(wt)
+        .args(["merge", "--no-commit", "feature_uu"])
+        .output();
+    // 驗證工作區具有 UU 狀態
+    let st = git_output(wt, &["status", "--porcelain"]).unwrap();
+    let st_str = String::from_utf8_lossy(&st.stdout);
+    assert!(st_str.contains("file.txt"));
+    // auto_commit_worktree 應拒絕 commit
+    let res = auto_commit_worktree(wt, "test_worker");
+    assert!(res.is_err());
+    let err = res.unwrap_err().to_string();
+    assert!(err.contains("未解決的合併衝突標記"), "{err}");
+}
+
+#[test]
+fn merge_resolve_loop_delegates_to_session() {
+    let repo = temp_repo("resolve_loop");
+    let sa = wt_session(&repo, "sa");
+    let sb = wt_session(&repo, "sb");
+    let wta = Path::new(&sa.cwd);
+    let wtb = Path::new(&sb.cwd);
+
+    fs::write(wta.join("conflict.txt"), "branch A change\n").unwrap();
+    fs::write(wtb.join("conflict.txt"), "branch B change\n").unwrap();
+
+    // 先合進 A
+    merge_worktree(&repo, &sa, false).unwrap();
+    assert!(repo.join("conflict.txt").exists());
+    assert_eq!(
+        fs::read_to_string(repo.join("conflict.txt")).unwrap(),
+        "branch A change\n"
+    );
+
+    let shared = test_shared();
+    let b_ctl = MockCtl::default();
+    {
+        let mut inner = shared.inner.lock().unwrap();
+        inner.state.sessions.insert(sb.id.clone(), sb.clone());
+        inner.sessions.insert(
+            sb.id.clone(),
+            SessionEntry {
+                ctl: b_ctl.as_ctl(),
+                run: new_id("run"),
+            },
+        );
+    }
+
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::WorktreeMerge {
+            session: sb.id.clone(),
+            dry_run: false,
+            resolve: true,
+        },
+    );
+
+    let frame = rx.rx.recv().unwrap();
+    match frame {
+        Frame::Ok { note: Some(n) } => {
+            assert!(n.contains("委派") || n.contains("conflict.txt"), "{n}");
+        }
+        other => panic!("預期 Frame::Ok(note)，得到 {other:?}"),
+    }
+
+    // 驗證主工作區 (main) 保持乾淨無 MERGE_HEAD
+    assert!(!repo.join(".git/MERGE_HEAD").exists());
+    assert!(!has_uncommitted(&repo).unwrap());
+
+    // 驗證 B 的 Worktree 內含有衝突檔案 (具有衝突標記)
+    let content_b = fs::read_to_string(wtb.join("conflict.txt")).unwrap();
+    assert!(
+        content_b.contains("<<<<<<<"),
+        "B 工作區應含衝突標記：{content_b}"
+    );
+
+    // 驗證 B Session 收到包含衝突檔案清單的解衝突 Prompt
+    let inputs = b_ctl.inputs();
+    assert!(!inputs.is_empty(), "B session 應收到 prompt");
+    assert!(
+        inputs.iter().any(|i| i.contains("conflict.txt")),
+        "Prompt 應包含衝突檔案 conflict.txt：{:?}",
+        inputs
+    );
+}
+
+#[test]
+fn pre_merge_command_blocks_and_allows_merge() {
+    let repo = temp_repo("pmc");
+    let s = wt_session(&repo, "s_pmc");
+    let wt = Path::new(&s.cwd);
+    fs::write(wt.join("hello.txt"), "world\n").unwrap();
+
+    // 1. 設定 pre_merge_command = "false"
+    let err = merge_worktree_with(&repo, &s, false, Some("false"))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("合併前驗證指令失敗") || err.contains("false"),
+        "{err}"
+    );
+    assert!(
+        !repo.join("hello.txt").exists(),
+        "驗證失敗時主工作區不應被修改"
+    );
+
+    // 2. 設定 pre_merge_command = "true"
+    let res = merge_worktree_with(&repo, &s, false, Some("true")).unwrap();
+    assert!(repo.join("hello.txt").exists(), "驗證成功時應正常合併");
+    assert!(res.contains("已將"), "{res}");
+}
+
+#[test]
+fn task_review_status_notifies_and_wakes_reviewer() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let worker_ctl = MockCtl::default();
+    let reviewer_ctl = MockCtl::default();
+
+    add_session(
+        &shared,
+        "worker_ses",
+        "worker-1",
+        SessionStatus::Idle,
+        worker_ctl.as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "reviewer_ses",
+        "reviewer-1",
+        SessionStatus::Sleeping,
+        reviewer_ctl.as_ctl(),
+        &dir,
+    );
+
+    // 設定角色與分支
+    {
+        let mut inner = shared.inner.lock().unwrap();
+        if let Some(w) = inner.state.sessions.get_mut("worker_ses") {
+            w.role = Role::Worker;
+            w.branch = Some("termade/worker_ses".to_string());
+        }
+        if let Some(r) = inner.state.sessions.get_mut("reviewer_ses") {
+            r.role = Role::Reviewer;
+        }
+    }
+
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::TaskCreate {
+            title: "實作重要功能".to_string(),
+            detail: "詳細內容".to_string(),
+            assignee: Some("worker_ses".to_string()),
+            created_by: None,
+            depends_on: Vec::new(),
+        },
+    );
+    let _ = rx.rx.recv().unwrap();
+
+    let task_id = {
+        let inner = shared.inner.lock().unwrap();
+        inner.state.tasks.values().next().unwrap().id.clone()
+    };
+
+    // 更新任務狀態為 Review
+    shared.handle(
+        &tx,
+        Request::TaskUpdate {
+            id: task_id.clone(),
+            status: Some(TaskStatus::Review),
+            assignee: None,
+            detail: None,
+        },
+    );
+    let _ = rx.rx.recv().unwrap();
+
+    // 驗證 Reviewer 被喚醒或收到訊息
+    let msgs = {
+        let inner = shared.inner.lock().unwrap();
+        inner.state.inbox_for("reviewer_ses", None)
+    };
+    assert!(!msgs.is_empty(), "Reviewer 應收到通知訊息");
+    let msg = &msgs[0];
+    assert_eq!(msg.kind, MsgKind::Handoff);
+    assert!(
+        msg.body.contains(&task_id),
+        "通知應包含任務 ID：{}",
+        msg.body
+    );
+    assert!(
+        msg.body.contains("worker-1"),
+        "通知應包含負責 Worker：{}",
+        msg.body
+    );
+    assert!(
+        msg.body.contains("review"),
+        "通知應包含 review 狀態：{}",
+        msg.body
+    );
+    assert!(reviewer_ctl.wake_count() > 0, "休眠中的 Reviewer 應被喚醒");
+    let inputs = reviewer_ctl.inputs();
+    assert!(
+        inputs.iter().any(|i| i.contains(&task_id)),
+        "Reviewer 應收到包含任務 ID 的 nudge 輸入：{:?}",
+        inputs
+    );
+}
+
+#[test]
 fn gc_protects_unmerged_and_dirty() {
     let repo = temp_repo("g1");
     // 已合併且乾淨

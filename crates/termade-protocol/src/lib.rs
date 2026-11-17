@@ -271,6 +271,8 @@ pub enum Request {
         session: SessionId,
         #[serde(default)]
         dry_run: bool,
+        #[serde(default)]
+        resolve: bool,
     },
     /// 為某個 session 的分支建立 Pull Request (透過 `gh`)。
     WorktreePr {
