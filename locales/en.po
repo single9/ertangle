@@ -1580,12 +1580,12 @@ msgid "逐字稿：第 {next} 行 (End 回到最新)"
 msgstr "Transcript: line {next} (End to jump to latest)"
 
 #: crates/termade-tui/src/app.rs
-msgid "只顯示本專案的 session ({project})，P 顯示全部"
-msgstr "Showing sessions of this project only ({project}), P to show all"
+msgid "只顯示本專案的 session、Bus 訊息與任務 ({project})，P 顯示全部"
+msgstr "Showing sessions, Bus messages, and tasks of this project only ({project}), P to show all"
 
 #: crates/termade-tui/src/app.rs
-msgid "顯示全部專案的 session，P 只看本專案"
-msgstr "Showing sessions of all projects, P for this project only"
+msgid "顯示全部專案的 session、Bus 訊息與任務，P 只看本專案"
+msgstr "Showing sessions, Bus messages, and tasks of all projects, P for this project only"
 
 #: crates/termade-tui/src/attach.rs
 msgid "寫入暫存圖片失敗：{e}"
@@ -1600,8 +1600,28 @@ msgid "沒有可複製的內容"
 msgstr "Nothing to copy"
 
 #: crates/termade-tui/src/clipboard.rs
-msgid "已複製主要區塊 {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
-msgstr "Copied {lines} lines of the main pane (OSC 52; if it fails, Shift+drag to select)"
+msgid "沒有第 {n} 則訊息 (共 {total} 則)"
+msgstr "No message #{n} ({total} total)"
+
+#: crates/termade-tui/src/clipboard.rs
+msgid "第 {n} 則訊息"
+msgstr "message #{n}"
+
+#: crates/termade-tui/src/clipboard.rs
+msgid "最新訊息 (第 {n} 則)"
+msgstr "latest message (#{n})"
+
+#: crates/termade-tui/src/clipboard.rs
+msgid "指定訊息編號僅適用於 Transcript 視圖"
+msgstr "Specifying a message number only applies to the Transcript view"
+
+#: crates/termade-tui/src/clipboard.rs
+msgid "主要區塊"
+msgstr "main pane"
+
+#: crates/termade-tui/src/clipboard.rs
+msgid "已複製{label} {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
+msgstr "Copied {lines} lines of {label} (OSC 52; if it fails, Shift+drag to select)"
 
 #: crates/termade-tui/src/clipboard.rs crates/termade-tui/src/mouse.rs
 msgid "複製失敗：{e}"
@@ -1720,8 +1740,8 @@ msgid "[session] [--force]  移除已結束的 session"
 msgstr "[session] [--force]  Remove an ended session"
 
 #: crates/termade-tui/src/commands.rs
-msgid "清除所有已結束 (且沒有分支)的 session"
-msgstr "Remove all ended sessions (without branches)"
+msgid "[--force]  清除所有已結束的 session (預設保留未合併或有變更的 worktree)"
+msgstr "[--force]  Remove all ended sessions (keeps unmerged or dirty worktrees by default)"
 
 #: crates/termade-tui/src/commands.rs
 msgid "[session] [--dry-run]  合併 worktree 回主工作區"
@@ -1764,8 +1784,8 @@ msgid "展開／摺疊工具呼叫"
 msgstr "Expand / collapse tool calls"
 
 #: crates/termade-tui/src/commands.rs
-msgid "[here|all]  只看本專案／顯示全部專案的 session"
-msgstr "[here|all]  Show sessions of this project only / all projects"
+msgid "[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)"
+msgstr "[here|all]  Show this project only / all projects (sessions, Bus, tasks)"
 
 #: crates/termade-tui/src/commands.rs
 msgid "[on|off|test]  開關通知 (回合結束／等待核准／失敗／額度用完)；不帶參數顯示狀態"
@@ -1808,8 +1828,8 @@ msgid "<訊息>  廣播給所有 session"
 msgstr "<message>  Broadcast to all sessions"
 
 #: crates/termade-tui/src/commands.rs
-msgid "複製目前畫面內容"
-msgstr "Copy the current screen"
+msgid "[編號]  複製主要區塊；Transcript 可指定第幾則訊息 (預設最新)"
+msgstr "[number]  Copy main pane; in Transcript, specify message number (default: latest)"
 
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
 msgid "離開 (保留 daemon)"
@@ -1858,6 +1878,10 @@ msgstr "Resume requested"
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
 msgid "已送出中斷"
 msgstr "Interrupt sent"
+
+#: crates/termade-tui/src/commands.rs
+msgid "沒有可清除的已結束 session"
+msgstr "No ended sessions to clean"
 
 #: crates/termade-tui/src/commands.rs
 msgid "已要求清除 {n} 個已結束的 session"
@@ -1922,6 +1946,10 @@ msgstr "Unknown host: {target}, available hosts: {avail}"
 #: crates/termade-tui/src/commands.rs
 msgid "用法：/layout three|two|tabs"
 msgstr "Usage: /layout three|two|tabs"
+
+#: crates/termade-tui/src/commands.rs
+msgid "用法：copy [訊息編號]"
+msgstr "Usage: copy [message number]"
 
 #: crates/termade-tui/src/commands.rs
 msgid "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session (其他專案 {others} 個)。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit"
@@ -2252,6 +2280,14 @@ msgid "agent 之間的訊息與任務看板會出現在這裡。"
 msgstr "Messages between agents and the task board appear here."
 
 #: crates/termade-tui/src/draw.rs
+msgid " Bus / Tasks · 本專案 "
+msgstr " Bus / Tasks · This project "
+
+#: crates/termade-tui/src/draw.rs
+msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
+msgstr " Bus / Tasks · This project ({n} elsewhere, P to show) "
+
+#: crates/termade-tui/src/draw.rs
 msgid " 輸入 (i 輸入 · ? 說明) "
 msgstr " Input (i to type · ? help) "
 
@@ -2432,6 +2468,10 @@ msgid "移除已結束的 session；Space s X 全部清除"
 msgstr "Remove an ended session; Space s X removes all"
 
 #: crates/termade-tui/src/help.rs
+msgid "強制清除未合併或有變更的 worktree (會失去內容)"
+msgstr "Force-clean unmerged or dirty worktrees (discards changes)"
+
+#: crates/termade-tui/src/help.rs
 msgid "檢視"
 msgstr "View"
 
@@ -2464,8 +2504,8 @@ msgid "(輸入 prompt 或命令時)回顧歷史輸入"
 msgstr "(while typing a prompt or command) browse input history"
 
 #: crates/termade-tui/src/help.rs
-msgid "只看本專案／顯示全部專案的 session"
-msgstr "Show sessions of this project only / all projects"
+msgid "只看本專案／顯示全部專案 (session、Bus、任務)"
+msgstr "Show this project only / all projects (sessions, Bus, tasks)"
 
 #: crates/termade-tui/src/help.rs
 msgid "(輸入 prompt 時)換行；輸入框隨行數長高，貼上保留換行"
@@ -2496,8 +2536,8 @@ msgid "拖曳 / Y / F2"
 msgstr "Drag / Y / F2"
 
 #: crates/termade-tui/src/help.rs
-msgid "選取複製；複製目前畫面；切換滑鼠擷取"
-msgstr "Select to copy; copy current screen; toggle mouse capture"
+msgid "選取複製；複製內容 (Transcript 預設最新訊息，可用 :copy N 指定)；切換滑鼠擷取"
+msgstr "Select to copy; copy content (latest message in Transcript, or :copy N); toggle mouse capture"
 
 #: crates/termade-tui/src/help.rs
 msgid "Diff 與 git"
@@ -2536,8 +2576,12 @@ msgid "接續已結束的 session (處理程序死掉或 daemon 重啟後)；可
 msgstr "Resume an ended session (after the process died or the daemon restarted); optional prompt"
 
 #: crates/termade-tui/src/help.rs
-msgid "移除已結束的 session／全部清除"
-msgstr "Remove an ended session / remove all"
+msgid "移除選取的 session／清除所有已結束的 session (含 worktree)"
+msgstr "Remove selected session / clean all ended sessions (including worktrees)"
+
+#: crates/termade-tui/src/help.rs
+msgid "複製內容；Transcript 可指定第 N 則訊息 (預設最新)"
+msgstr "Copy content; in Transcript, specify message #N (default: latest)"
 
 #: crates/termade-tui/src/help.rs
 msgid "結束／中斷選取的 session"
@@ -2684,8 +2728,8 @@ msgid "Web 版 (網址與 QR Code)"
 msgstr "Web version (URL & QR Code)"
 
 #: crates/termade-tui/src/menu.rs
-msgid "複製目前畫面"
-msgstr "Copy current screen"
+msgid "複製內容 (Transcript 預設最新訊息)"
+msgstr "Copy content (latest message in Transcript)"
 
 #: crates/termade-tui/src/menu.rs
 msgid "說明 (所有按鍵與命令)"
@@ -3147,6 +3191,36 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "只顯示本專案的 session ({project})，P 顯示全部"
+#~ msgstr "Showing sessions of this project only ({project}), P to show all"
+
+#~ msgid "顯示全部專案的 session，P 只看本專案"
+#~ msgstr "Showing sessions of all projects, P for this project only"
+
+#~ msgid "已複製主要區塊 {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
+#~ msgstr "Copied {lines} lines of the main pane (OSC 52; if it fails, Shift+drag to select)"
+
+#~ msgid "清除所有已結束 (且沒有分支)的 session"
+#~ msgstr "Remove all ended sessions (without branches)"
+
+#~ msgid "[here|all]  只看本專案／顯示全部專案的 session"
+#~ msgstr "[here|all]  Show sessions of this project only / all projects"
+
+#~ msgid "複製目前畫面內容"
+#~ msgstr "Copy the current screen"
+
+#~ msgid "只看本專案／顯示全部專案的 session"
+#~ msgstr "Show sessions of this project only / all projects"
+
+#~ msgid "選取複製；複製目前畫面；切換滑鼠擷取"
+#~ msgstr "Select to copy; copy current screen; toggle mouse capture"
+
+#~ msgid "移除已結束的 session／全部清除"
+#~ msgstr "Remove an ended session / remove all"
+
+#~ msgid "複製目前畫面"
+#~ msgstr "Copy current screen"
 
 #~ msgid "啟動 Web 版 HTTP/WebSocket 介面 (例如 tailscale 或 127.0.0.1:7421)"
 #~ msgstr "Start Web version HTTP/WebSocket interface (e.g. tailscale or 127.0.0.1:7421)"

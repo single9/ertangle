@@ -135,6 +135,8 @@ pub(crate) fn start_web_server(
 }
 
 fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
+    // macOS (BSD) 上 accept() 會繼承 listener 的 non-blocking 屬性，需明確設回阻塞模式。
+    stream.set_nonblocking(false)?;
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut first_line = String::new();
     if reader.read_line(&mut first_line)? == 0 {
