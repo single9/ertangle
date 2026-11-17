@@ -4,6 +4,20 @@
 
 All git commit messages **MUST** be written in **English** following standard Conventional Commits format (e.g. `feat(scope): description`, `fix(scope): description`, `refactor(scope): description`, `chore: description`, etc.). Do **NOT** write git commit messages in Chinese.
 
+## Pre-commit Verification Checklist (Commit 前檢查清單)
+
+Before committing changes or pushing to git, all agents and contributors **MUST** verify the following checks locally to ensure CI will not fail:
+
+1. **Code formatting**: Run `cargo fmt` to automatically format all code (`cargo fmt --check` must pass).
+2. **Clippy linter**: Run `cargo clippy --all-targets -- -D warnings` and fix all warnings.
+3. **i18n catalog synchronization**:
+   - If any user-facing strings or `tr!("...")` are added, modified, or removed:
+     - Run `make i18n-extract` to update `locales/termade.pot` and `locales/en.po`.
+     - Fill in the English translations in `locales/en.po` (no empty `msgstr` or fuzzy tags).
+     - Verify with `make i18n-check`.
+4. **Automated pre-commit hook**:
+   - Developers can run `make setup-hooks` to automatically install `.git/hooks/pre-commit`, which enforces formatting, clippy, and i18n checks on every `git commit`.
+
 ## Traditional Chinese Documentation & Copywriting Rules (台灣繁體中文規範)
 
 Whenever generating, modifying, or reviewing documentation, comments, or user-facing text in **Traditional Chinese (zh-TW)**, you **MUST** strictly adhere to the following rules (detailed in `.agents/skills/taiwanese-tech-writing/SKILL.md`):
