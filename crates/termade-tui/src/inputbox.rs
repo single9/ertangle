@@ -114,6 +114,55 @@ pub(crate) fn row_text(text: &str, row: Row) -> String {
         .collect()
 }
 
+/// 把一列畫成 `Line`；`sel` 是選取的字元索引範圍 `[lo, hi)`，範圍內以反白標示。
+pub(crate) fn row_line(
+    text: &str,
+    row: Row,
+    sel: Option<(usize, usize)>,
+) -> ratatui::text::Line<'static> {
+    use ratatui::style::{Modifier, Style};
+    use ratatui::text::{Line, Span};
+
+    let plain = row_text(text, row);
+    let Some((lo, hi)) = sel else {
+        return Line::raw(plain);
+    };
+    let from = lo.max(row.start).min(row.end);
+    let to = hi.min(row.end).max(from);
+    if from >= to {
+        return Line::raw(plain);
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let prefix: String = chars[row.start..from].iter().collect();
+    let mid: String = chars[from..to].iter().collect();
+    let suffix: String = chars[to..row.end].iter().collect();
+    Line::from(vec![
+        Span::raw(prefix),
+        Span::styled(mid, Style::default().add_modifier(Modifier::REVERSED)),
+        Span::raw(suffix),
+    ])
+}
+
+/// 選取範圍換成不含頭的字元索引 `[lo, hi)`；錨點與目前位置相同代表沒有選取。
+pub(crate) fn selection_range(sel: Option<(usize, usize)>) -> Option<(usize, usize)> {
+    let (a, h) = sel?;
+    if a == h {
+        None
+    } else if a < h {
+        Some((a, h + 1))
+    } else {
+        Some((h, a + 1))
+    }
+}
+
+/// 選取範圍內的純文字。
+pub(crate) fn selected_text(text: &str, sel: Option<(usize, usize)>) -> String {
+    let Some((lo, hi)) = selection_range(sel) else {
+        return String::new();
+    };
+    text.chars().skip(lo).take(hi.saturating_sub(lo)).collect()
+}
+
 /// 輸入框需要的高度 (含邊框)。
 pub(crate) fn height_for(text: &str, outer_width: u16) -> u16 {
     let inner = (outer_width as usize).saturating_sub(2);

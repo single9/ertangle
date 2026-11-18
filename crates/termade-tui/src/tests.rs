@@ -555,7 +555,7 @@ fn switching_layout_clears_stale_click_areas() {
 }
 
 #[test]
-fn clicking_each_line_of_two_line_session_row_selects_that_session() {
+fn clicking_each_session_row_selects_that_session() {
     let mut app = sample_app(&["hi"]);
     add_session(&mut app, "ses_b", "second", 5);
     app.layout = LayoutMode::Two;
@@ -564,8 +564,8 @@ fn clicking_each_line_of_two_line_session_row_selects_that_session() {
     let first_row = app.sessions_area.y + 1;
     let (mut w, _peer) = pair_writer();
 
-    // 第一筆的兩行都應該選到第一個 session。
-    for row in [first_row, first_row + 1] {
+    // 每一筆只佔一行：第一列選第一個 session、第二列選第二個。
+    for (row, want) in [(first_row, 0usize), (first_row + 1, 1usize)] {
         app.selected = 1;
         let ev = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -574,18 +574,8 @@ fn clicking_each_line_of_two_line_session_row_selects_that_session() {
             modifiers: KeyModifiers::NONE,
         };
         handle_mouse(&mut app, &mut w, ev).unwrap();
-        assert_eq!(app.selected, 0, "row {row} 應選到第一筆");
+        assert_eq!(app.selected, want, "row {row} 應選到第 {want} 筆");
     }
-
-    // 第二筆的第一行選到第二個 session。
-    let ev = MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: x,
-        row: first_row + 2,
-        modifiers: KeyModifiers::NONE,
-    };
-    handle_mouse(&mut app, &mut w, ev).unwrap();
-    assert_eq!(app.selected, 1);
 }
 
 #[test]
@@ -1328,6 +1318,111 @@ fn test_app() -> App {
 }
 
 #[test]
+fn input_box_selection_extracts_text_and_spans_rows() {
+    use crate::inputbox::{selected_text, selection_range};
+    assert_eq!(selection_range(None), None);
+    assert_eq!(selection_range(Some((3, 3))), None, "點一下不算選取");
+    assert_eq!(selection_range(Some((2, 5))), Some((2, 6)));
+    assert_eq!(selection_range(Some((5, 2))), Some((2, 6)), "反向拖曳");
+    assert_eq!(selected_text("你好世界", Some((0, 1))), "你好");
+    assert_eq!(selected_text("abc\ndef", Some((2, 4))), "c\nd");
+    assert_eq!(selected_text("abc", None), "");
+}
+
+#[test]
+fn normal_mode_typing_nudges_instead_of_silently_ignoring() {
+    let mut app = sample_app(&["hi"]);
+    let (mut w, _peer) = pair_writer();
+    let key = KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE);
+    handle_key(&mut app, &mut w, key).unwrap();
+    assert_eq!(app.mode, Mode::Normal, "不該自動進入輸入模式");
+    assert!(app.input.is_empty());
+    assert!(app.input_nudging(), "應顯示「先按 i 或 Enter」提示");
+    assert!(app.status.contains("i") && app.status.contains("Enter"));
+
+    // 按下 i 之後才真的能打字。
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.input, "w");
+}
+
+#[test]
+fn paste_in_normal_mode_enters_prompt_mode() {
+    let mut app = sample_app(&["hi"]);
+    handle_paste(&mut app, "hello");
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "hello");
+}
+
+#[test]
+fn click_and_drag_in_input_box_selects_text() {
+    let mut app = sample_app(&["hi"]);
+    app.mode = Mode::Prompt;
+    app.input = "hello world".into();
+    app.input_cursor = 11;
+    let _ = render_size(&mut app, 120, 40);
+    let area = app.input_area;
+    let (mut w, _peer) = pair_writer();
+
+    // 點在輸入框最前面：游標移過去並開始選取。
+    let down = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: area.x + 1,
+        row: area.y + 1,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(&mut app, &mut w, down).unwrap();
+    assert_eq!(app.input_cursor, 0);
+    assert_eq!(app.input_sel, Some((0, 0)));
+
+    // 往右拖到第 5 欄 → 選到 "hello"。
+    let drag = MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        ..down
+    };
+    handle_mouse(
+        &mut app,
+        &mut w,
+        MouseEvent {
+            column: area.x + 5,
+            ..drag
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        crate::inputbox::selected_text(&app.input, app.input_sel),
+        "hello"
+    );
+}
+
+#[test]
+fn click_on_input_box_in_normal_mode_starts_prompt() {
+    let mut app = sample_app(&["hi"]);
+    let _ = render_size(&mut app, 120, 40);
+    let area = app.input_area;
+    let (mut w, _peer) = pair_writer();
+    let ev = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: area.x + 1,
+        row: area.y + 1,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(&mut app, &mut w, ev).unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+}
+
+#[test]
 fn all_scope_shows_project_chip_and_groups_by_project() {
     let mut app = sample_app(&["hi"]);
     app.home_project = "/work/alpha".into();
@@ -1336,7 +1431,7 @@ fn all_scope_shows_project_chip_and_groups_by_project() {
     let (_, text) = render_size(&mut app, 120, 40);
     let squashed: String = text.split_whitespace().collect();
     assert!(squashed.contains("beta"), "{text}");
-    assert!(squashed.contains("全部專案"), "{text}");
+    assert!(squashed.contains("Sessions·全部"), "{text}");
 }
 
 #[test]
@@ -2579,16 +2674,19 @@ fn session_list_and_footer_active_and_bg_indicators() {
         }];
     }
     let text = render(&mut app);
-    assert!(text.contains("run:Bash"), "{text}");
+    // 側欄只留短標記 (bg1)，完整內容在 footer 與逐字稿裡；工具呼叫也只出現在逐字稿。
+    assert!(text.contains("bg1"), "{text}");
     assert!(text.contains("bg:1 (node)"), "{text}");
+    assert!(text.contains("Bash: sleep 60"), "{text}");
+    assert!(!text.contains("run:Bash"), "側欄不該再塞工具名稱：{text}");
 
-    // 回到 Idle 狀態，第一行 run:Bash 消失，第二行與 Footer 的 bg:1 (node) 仍保留
+    // 回到 Idle，bg 標記仍保留 (黃色提醒) 且 footer 仍有完整名稱。
     if let Some(s) = app.state.sessions.get_mut("ses_test") {
         s.status = SessionStatus::Idle;
         s.active_tools.clear();
     }
     let text_idle = render(&mut app);
-    assert!(!text_idle.contains("run:Bash"), "{text_idle}");
+    assert!(text_idle.contains("bg1"), "{text_idle}");
     assert!(text_idle.contains("bg:1 (node)"), "{text_idle}");
 }
 

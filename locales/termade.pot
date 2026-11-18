@@ -1993,6 +1993,18 @@ msgstr ""
 msgid "版面：{layout}"
 msgstr ""
 
+#: crates/termade-tui/src/app.rs
+msgid "目前是命令模式：按 {keys} 才能輸入文字"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs
+msgid "i 或 Enter"
+msgstr ""
+
+#: crates/termade-tui/src/app.rs
+msgid "i"
+msgstr ""
+
 #: crates/termade-tui/src/app.rs crates/termade-tui/src/app.rs
 msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr ""
@@ -2065,7 +2077,7 @@ msgstr ""
 msgid "已複製{label} {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
 msgstr ""
 
-#: crates/termade-tui/src/clipboard.rs crates/termade-tui/src/mouse.rs
+#: crates/termade-tui/src/clipboard.rs crates/termade-tui/src/mouse.rs crates/termade-tui/src/mouse.rs
 msgid "複製失敗：{e}"
 msgstr ""
 
@@ -2786,15 +2798,15 @@ msgid "⏸暫停跟隨"
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " Sessions · 本專案 "
+msgid " Sessions "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " Sessions · 本專案 (另 {n} 個在別處，P 顯示) "
+msgid " Sessions · +{n} "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid " Sessions · 全部專案 "
+msgid " Sessions · 全部 "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2839,6 +2851,10 @@ msgstr ""
 
 #: crates/termade-tui/src/draw.rs
 msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
+msgstr ""
+
+#: crates/termade-tui/src/draw.rs
+msgid " 請先按 {keys} 才能輸入 "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2906,7 +2922,15 @@ msgid " 搜尋 (Enter／↓ 下一個 · ↑ 上一個 · Esc 離開) "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
-msgid "  ? 說明  Space 選單  : 命令  q 離開"
+msgid "請先按 {keys} 才能輸入文字"
+msgstr ""
+
+#: crates/termade-tui/src/draw.rs
+msgid "按 {keys} 開始輸入，? 看說明"
+msgstr ""
+
+#: crates/termade-tui/src/draw.rs
+msgid "  i 輸入  ? 說明  Space 選單  : 命令  q 離開"
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2983,6 +3007,14 @@ msgstr ""
 
 #: crates/termade-tui/src/help.rs
 msgid "貼上剪貼簿圖片 (需 wl-paste 或 xclip)"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "滑鼠拖曳"
+msgstr ""
+
+#: crates/termade-tui/src/help.rs
+msgid "(輸入框內)選取文字，放開即複製到剪貼簿 (OSC 52)"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
@@ -3317,6 +3349,10 @@ msgstr ""
 msgid "候選：{list}"
 msgstr ""
 
+#: crates/termade-tui/src/input.rs
+msgid "已切換到輸入模式 (Enter 送出 · Esc 取消)"
+msgstr ""
+
 #: crates/termade-tui/src/menu.rs
 msgid "設定 (預設 model／effort／權限…)"
 msgstr ""
@@ -3475,6 +3511,18 @@ msgstr ""
 
 #: crates/termade-tui/src/menu.rs
 msgid "沒有符合的 playbook"
+msgstr ""
+
+#: crates/termade-tui/src/mouse.rs
+msgid "輸入模式：Enter 送出 · Esc 取消 · 可拖曳選取複製"
+msgstr ""
+
+#: crates/termade-tui/src/mouse.rs
+msgid "已選取 {n} 個字元 (放開滑鼠複製)"
+msgstr ""
+
+#: crates/termade-tui/src/mouse.rs
+msgid "已複製輸入框選取內容 ({n} 個字元)"
 msgstr ""
 
 #: crates/termade-tui/src/mouse.rs

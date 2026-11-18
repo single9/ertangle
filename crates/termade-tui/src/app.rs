@@ -11,6 +11,7 @@ use termade_core::{
     WorktreeInfo,
 };
 use termade_protocol::Frame;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::diff::{build_gutter, diff_stat, parse_files, rebuild_visible_diff, DiffFile};
 
@@ -113,6 +114,9 @@ pub(crate) fn effective_layout(mode: LayoutMode, width: u16) -> LayoutMode {
 
 /// 串流期間逐字稿最短重算間隔；其餘變動 (換 session／寬度／模式)立即重算。
 pub(crate) const MD_REBUILD_INTERVAL: Duration = Duration::from_millis(120);
+
+/// 「請先按 i 或 Enter」提示的顯示時間。
+pub(crate) const INPUT_NUDGE_DURATION: Duration = Duration::from_millis(1800);
 
 /// 逐字稿渲染快取：只有來源／寬度／模式改變時才重算 Markdown。
 pub(crate) struct MdCache {
@@ -244,6 +248,12 @@ pub(crate) struct App {
     pub(crate) last_rebuild: std::time::Instant,
     /// 因節流而延後的重算，下一輪迴圈需補畫。
     pub(crate) rebuild_pending: bool,
+    /// 最近一次繪製時輸入框的區域 (供滑鼠點選與選取複製)。
+    pub(crate) input_area: Rect,
+    /// 輸入框內的滑鼠選取範圍 (以字元索引計的 `(錨點, 目前位置)`，含頭尾之間的字元)。
+    pub(crate) input_sel: Option<(usize, usize)>,
+    /// `Normal` 模式誤打字時記下的時間；用來提示要先進輸入模式。
+    pub(crate) input_nudge: Option<std::time::Instant>,
     /// 最近一次繪製時 Sessions 清單的區域 (供滑鼠點選)。
     pub(crate) sessions_area: Rect,
     /// Sessions 清單目前捲動的起始索引 (滑鼠點選需加此偏移)。
@@ -359,6 +369,9 @@ impl App {
             md_cache: None,
             last_rebuild: std::time::Instant::now(),
             rebuild_pending: false,
+            input_area: Rect::default(),
+            input_sel: None,
+            input_nudge: None,
             sessions_area: Rect::default(),
             sessions_offset: 0,
             transcript_area: Rect::default(),
@@ -859,6 +872,47 @@ impl App {
         self.sync_active_host_from_selection();
     }
 
+    /// `Normal` 模式收到可列印字元：不打字，但明確提示要先切進輸入模式。
+    /// 使用者常忘了要先按 `i` 或 Enter，看到畫面沒反應會以為程式卡住。
+    pub(crate) fn nudge_input(&mut self) {
+        self.input_nudge = Some(std::time::Instant::now());
+        self.status = tr!(
+            "目前是命令模式：按 {keys} 才能輸入文字",
+            keys = self.input_key_hint()
+        );
+    }
+
+    /// 是否正在顯示「請先按 i 或 Enter」的提示 (按下未綁定的字元後短暫出現)。
+    pub(crate) fn input_nudging(&self) -> bool {
+        self.input_nudge
+            .is_some_and(|t| t.elapsed() < INPUT_NUDGE_DURATION)
+    }
+
+    /// 這個視圖按 Enter 是否會進入輸入模式 (`Diff`／`Tasks`／`Grid` 的 Enter 另有用途)。
+    pub(crate) fn enter_opens_input(&self) -> bool {
+        !matches!(
+            self.view,
+            CenterView::Diff | CenterView::Tasks | CenterView::Grid
+        )
+    }
+
+    /// 提示文字裡的按鍵說明：Enter 不能進輸入模式的視圖只寫 `i`。
+    pub(crate) fn input_key_hint(&self) -> String {
+        if self.enter_opens_input() {
+            tr!("i 或 Enter")
+        } else {
+            tr!("i")
+        }
+    }
+
+    /// 進入 `Prompt` 輸入模式 (清空輸入框並把游標放到開頭)。
+    pub(crate) fn start_prompt(&mut self) {
+        self.mode = Mode::Prompt;
+        self.input.clear();
+        self.input_cursor = 0;
+        self.input_sel = None;
+    }
+
     /// 取得目前 diff 游標所在行的位置描述 (`檔案 :: 行內容`)。
     pub(crate) fn current_diff_location(&self) -> String {
         if self.diff_lines.is_empty() {
@@ -1096,6 +1150,26 @@ pub(crate) fn truncate(s: &str, max: usize) -> String {
         out.push('…');
         out
     }
+}
+
+/// 依顯示寬度截斷 (中文等寬字元佔 2 欄)，超出時以 `…` 結尾。
+pub(crate) fn truncate_width(s: &str, max: usize) -> String {
+    let s = s.replace('\n', " ");
+    if UnicodeWidthStr::width(s.as_str()) <= max {
+        return s;
+    }
+    let mut out = String::new();
+    let mut w = 0usize;
+    for c in s.chars() {
+        let cw = c.width().unwrap_or(0);
+        if w + cw + 1 > max {
+            break;
+        }
+        w += cw;
+        out.push(c);
+    }
+    out.push('…');
+    out
 }
 
 pub(crate) fn short(id: &str) -> String {

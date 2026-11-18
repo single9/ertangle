@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 use tr::tr;
 use unicode_width::UnicodeWidthChar;
 
-use crate::app::{scroll_transcript_lines, App, CenterView};
+use crate::app::{scroll_transcript_lines, App, CenterView, Mode};
 use crate::clipboard::write_clipboard;
 use crate::hosts::HostRouter;
 use crate::request_selected_diff;
@@ -44,6 +44,22 @@ pub(crate) fn handle_mouse(
                 crate::quota::open(app);
                 return Ok(());
             }
+            // 輸入框：`Normal` 模式點一下即進入輸入模式；其他輸入模式可拖曳選取複製。
+            if app.input_area.contains(pos) {
+                if app.mode == Mode::Normal {
+                    app.start_prompt();
+                    app.status = tr!("輸入模式：Enter 送出 · Esc 取消 · 可拖曳選取複製");
+                    return Ok(());
+                }
+                if is_input_mode(app.mode) {
+                    if let Some(idx) = input_char_index(app, mouse.column, mouse.row, false) {
+                        app.input_cursor = idx;
+                        app.input_sel = Some((idx, idx));
+                        app.selection = None;
+                    }
+                    return Ok(());
+                }
+            }
             if let Some(&(_, idx)) = app.tab_areas.iter().find(|(r, _)| r.contains(pos)) {
                 if idx < app.session_ids().len() {
                     app.selected = idx;
@@ -61,7 +77,7 @@ pub(crate) fn handle_mouse(
                 && mouse.row < area.y + area.height - 1
                 && area.contains(pos)
             {
-                // 每一筆 session 佔兩行，`ListState.offset` 是「筆數」不是列數。
+                // 每一筆 session 佔一行；`ListState.offset` 是筆數 (此處等於列數)。
                 let rel_row = mouse.row.saturating_sub(area.y + 1);
                 let idx = app.sessions_offset + (rel_row / crate::SESSION_ITEM_ROWS) as usize;
                 if idx < app.session_ids().len() {
@@ -97,6 +113,36 @@ pub(crate) fn handle_mouse(
                 if let Some(p) = transcript_pos(app, mouse.column, mouse.row, false) {
                     app.selection = Some((p, p));
                 }
+            }
+        }
+        MouseEventKind::Drag(MouseButton::Left) if app.input_sel.is_some() => {
+            if let Some(idx) = input_char_index(app, mouse.column, mouse.row, true) {
+                if let Some((anchor, _)) = app.input_sel {
+                    app.input_sel = Some((anchor, idx));
+                    let n = crate::inputbox::selected_text(&app.input, app.input_sel)
+                        .chars()
+                        .count();
+                    if n > 0 {
+                        app.status = tr!("已選取 {n} 個字元 (放開滑鼠複製)", n = n);
+                    }
+                }
+            }
+        }
+        MouseEventKind::Up(MouseButton::Left) if app.input_sel.is_some() => {
+            let had_selection = app.input_sel.is_some_and(|(a, h)| a != h);
+            let sel = app.input_sel.take();
+            let text = crate::inputbox::selected_text(&app.input, sel);
+            if !had_selection || text.is_empty() {
+                return Ok(());
+            }
+            match write_clipboard(&text) {
+                Ok(()) => {
+                    app.status = tr!(
+                        "已複製輸入框選取內容 ({n} 個字元)",
+                        n = text.chars().count()
+                    );
+                }
+                Err(e) => app.status = tr!("複製失敗：{e}", e = e),
             }
         }
         MouseEventKind::Drag(MouseButton::Left) if app.view == CenterView::Transcript => {
@@ -141,6 +187,46 @@ pub(crate) fn handle_mouse(
         _ => {}
     }
     Ok(())
+}
+
+/// 這些模式會在輸入框裡編輯文字 (點擊可移動游標、拖曳可選取複製)。
+pub(crate) fn is_input_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::Prompt
+            | Mode::Spawn
+            | Mode::Message
+            | Mode::Review
+            | Mode::Command
+            | Mode::Jump
+            | Mode::Search
+    )
+}
+
+/// 把輸入框上的滑鼠座標映射成字元索引；`clamp` 時允許拖到區域外。
+pub(crate) fn input_char_index(app: &App, column: u16, row: u16, clamp: bool) -> Option<usize> {
+    let area = app.input_area;
+    if area.width < 3 || area.height < 3 {
+        return None;
+    }
+    let x0 = area.x + 1;
+    let y0 = area.y + 1;
+    let w = area.width.saturating_sub(2);
+    let h = area.height.saturating_sub(2);
+    let inside = column >= x0 && column < x0 + w && row >= y0 && row < y0 + h;
+    if !inside && !clamp {
+        return None;
+    }
+    let col = column.saturating_sub(x0).min(w - 1) as usize;
+    let rel = row.saturating_sub(y0).min(h - 1) as usize;
+    let rows = crate::inputbox::rows(&app.input, w as usize);
+    let (cur_row, _) = crate::inputbox::cursor_pos(&app.input, &rows, app.input_cursor);
+    // 與 `draw_input` 相同的可見視窗起點。
+    let first = (cur_row + 1)
+        .saturating_sub(h as usize)
+        .min(rows.len().saturating_sub(h as usize));
+    let target = (first + rel).min(rows.len().saturating_sub(1));
+    Some(crate::inputbox::index_at(&app.input, &rows, target, col))
 }
 
 /// 把滑鼠座標映射成逐字稿的 (絕對渲染行, 顯示欄)；`clamp` 時允許拖到區域外。

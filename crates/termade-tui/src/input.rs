@@ -246,11 +246,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             toggle_collapse_current_file(app)
         }
         KeyCode::Char('X') if app.view == CenterView::Diff => discard_diff(app, writer, false)?,
-        KeyCode::Enter | KeyCode::Char('i') => {
-            app.mode = Mode::Prompt;
-            app.input.clear();
-            app.input_cursor = 0;
-        }
+        KeyCode::Enter | KeyCode::Char('i') => app.start_prompt(),
         KeyCode::Char('n') => crate::menu::start_spawn_picker(app),
         KeyCode::Char('f') => crate::search::open(app, None),
         KeyCode::Char('m') => {
@@ -343,6 +339,15 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         KeyCode::Char('}') => jump_hunk(app, true),
         KeyCode::Char('(') | KeyCode::Char('<') => jump_file(app, false),
         KeyCode::Char(')') | KeyCode::Char('>') => jump_file(app, true),
+        // `Normal` 模式誤打字：直接提示要先進輸入模式，而不是靜靜地沒有反應。
+        KeyCode::Char(c)
+            if !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                && !c.is_control() =>
+        {
+            app.nudge_input();
+        }
         _ => {}
     }
     Ok(())
@@ -353,6 +358,8 @@ pub(crate) fn handle_input_mode(
     writer: &mut HostRouter,
     key: KeyEvent,
 ) -> Result<()> {
+    // 任何按鍵都會讓滑鼠選取失效 (字元索引已經改變)。
+    app.input_sel = None;
     // `@` 檔案建議：查詢改變就把選取索引歸零；上下鍵／Ctrl-N／Ctrl-P 在建議間移動，Tab 採用。
     if let Some((start, cands)) = at_candidates(app) {
         let tok = at_token_text(app);
@@ -778,6 +785,12 @@ pub(crate) fn delete_input(app: &mut App) {
 
 /// 貼上 (bracketed paste)：只插入目前輸入框；換行轉成空白以維持單行輸入。
 pub(crate) fn handle_paste(app: &mut App, text: &str) {
+    // `Normal` 模式貼上文字時直接切進輸入模式，否則內容會插進看不見的輸入框，
+    // 使用者會以為貼上沒反應 (而且下次按 i 會清空)。
+    if app.mode == Mode::Normal && !text.trim().is_empty() {
+        app.start_prompt();
+        app.status = tr!("已切換到輸入模式 (Enter 送出 · Esc 取消)");
+    }
     // 拖曳檔案進終端機會貼上它的路徑：轉成 `@path` 附件引用。
     if matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) {
         if let Some(r) = crate::attach::pasted_file_ref(text) {

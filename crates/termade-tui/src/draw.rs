@@ -899,9 +899,24 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
     f.render_widget(Paragraph::new(vec![tabs, stats]), area);
 }
 
-/// Sessions 清單每一筆固定佔用的列數 (第一行標籤 + 第二行次要資訊)。
-/// 滑鼠點擊換算索引時必須用這個值，否則會把第二行算成下一筆。
-pub(crate) const SESSION_ITEM_ROWS: u16 = 2;
+/// Sessions 清單每一筆固定佔用的列數 (單行：狀態 + 標籤)。
+/// 滑鼠點擊換算索引時必須用這個值，否則會把列算成下一筆。
+pub(crate) const SESSION_ITEM_ROWS: u16 = 1;
+
+/// 把一段文字推入 spans 並累計顯示寬度。
+fn push_span(
+    spans: &mut Vec<Span<'static>>,
+    used: &mut usize,
+    text: impl Into<String>,
+    style: Style,
+) {
+    let text = text.into();
+    if text.is_empty() {
+        return;
+    }
+    *used += UnicodeWidthStr::width(text.as_str());
+    spans.push(Span::styled(text, style));
+}
 
 pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.sessions_area = area;
@@ -932,6 +947,11 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         app.state.sessions.len()
     };
     let hidden = total_sessions.saturating_sub(sessions.len());
+    // 邊框佔 2 欄，`▸ ` 選取符號另外佔 2 欄。
+    let inner_w = area.width.saturating_sub(4) as usize;
+
+    // 每筆 session 只用一行：狀態 + 標籤 + 少數警示標記。
+    // 模型、branch、context、成本等細節都在逐字稿下方 (footer) 顯示，側欄不再重複。
     let items: Vec<ListItem> = sessions
         .iter()
         .map(|(host_name, s)| {
@@ -943,146 +963,92 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 SessionStatus::Idle => Color::Gray,
                 _ => Color::DarkGray,
             };
+            let dim = Style::default().fg(Color::DarkGray);
             let depth = app.session_tree_depth(host_name, &s.id);
-            let indent = "  ".repeat(depth.min(6));
-            let child_prefix = if depth > 0 { "↳ " } else { "" };
-            let branch = s.branch.as_deref().unwrap_or("");
-            let note = s.status_note.as_deref().unwrap_or("");
+            let mut spans: Vec<Span<'static>> = Vec::new();
+            let mut used = 0usize;
 
-            // 第一行：階層 + 狀態 + 標籤 (精簡)，子 session/agent 可一眼看出。
-            let mut line1: Vec<Span> = Vec::new();
-            if !indent.is_empty() {
-                line1.push(Span::styled(
-                    indent.clone(),
-                    Style::default().fg(Color::DarkGray),
-                ));
+            if depth > 0 {
+                push_span(&mut spans, &mut used, " ".repeat(depth.min(3) * 2), dim);
+                push_span(&mut spans, &mut used, "↳", dim);
             }
             if show_project && depth == 0 {
-                line1.push(Span::styled(
+                push_span(
+                    &mut spans,
+                    &mut used,
                     format!(
-                        " {} ",
-                        truncate(&project_name(s.project_root(), &roots), 10)
+                        "{} ",
+                        truncate_width(&project_name(s.project_root(), &roots), 8)
                     ),
                     Style::default()
                         .fg(Color::Black)
                         .bg(project_color(s.project_root())),
-                ));
-                line1.push(Span::raw(" "));
+                );
             }
-            if depth > 0 {
-                line1.push(Span::styled(
-                    child_prefix,
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
-            line1.push(Span::styled(
-                format!("{} ", s.status.glyph()),
-                Style::default().fg(color),
-            ));
             if multi_host {
-                line1.push(Span::styled(
-                    format!("[{host_name}] "),
+                push_span(
+                    &mut spans,
+                    &mut used,
+                    format!("[{host_name}]"),
                     Style::default().fg(Color::Cyan),
-                ));
+                );
             }
-            line1.push(Span::raw(truncate(&s.label, 24)));
-            if s.role != termade_core::Role::Worker || s.parent.is_some() {
-                line1.push(Span::styled(
-                    format!(" [{}]", s.role.id()),
-                    Style::default().fg(Color::Magenta),
-                ));
-            }
-            let active_tool = if s.status == SessionStatus::Busy {
-                s.active_tools.last()
-            } else {
-                None
-            };
-            if let Some(tool) = active_tool {
-                let tag = if tool.is_subagent { "sub" } else { "run" };
-                line1.push(Span::styled(
-                    format!(" · {}:{}", tag, truncate(&tool.name, 12)),
-                    Style::default().fg(if tool.is_subagent {
-                        Color::Magenta
-                    } else {
-                        Color::Cyan
-                    }),
-                ));
-            } else if !note.is_empty() {
-                line1.push(Span::styled(
-                    format!(" · {}", truncate(note, 18)),
-                    Style::default().fg(Color::Cyan),
-                ));
-            }
+            push_span(
+                &mut spans,
+                &mut used,
+                s.status.glyph(),
+                Style::default().fg(color),
+            );
 
-            // 第二行：次要資訊 (kind/branch/context/budget)，避免主列過擠。
-            // 模型與 effort 改顯示在 transcript 下方，這裡不再重複。
-            let mut meta: Vec<String> = Vec::new();
-            let mut km = s.kind.id().to_string();
-            if s.permission == PermissionPolicy::Bypass {
-                km.push_str("!bypass");
-            }
-            meta.push(km);
-            if !branch.is_empty() {
-                meta.push(format!("@{}", truncate(branch, 18)));
-            }
-            if let Some(c) = s.context {
-                let pct = c.percent();
-                meta.push(format!(
-                    "ctx {}",
-                    pct.map_or_else(
-                        || termade_core::human_tokens(c.used),
-                        |p| format!("{p:.0}%")
-                    )
+            // 右側只留真正需要注意的短標記：context 快滿、有背景處理程序。
+            let mut right: Vec<(String, Color)> = Vec::new();
+            if let Some(p) = s.context.and_then(|c| c.percent()).filter(|p| *p >= 80.0) {
+                right.push((
+                    format!("{p:.0}%"),
+                    if p >= 92.0 { Color::Red } else { Color::Yellow },
                 ));
             }
             if s.tool_calls > 0 {
-                meta.push(format!("{} calls", s.tool_calls));
+                right.push((format!("{} calls", s.tool_calls), Color::DarkGray));
             }
-            if let Some(bstr) = s.format_budget() {
-                meta.push(bstr);
-            }
-
-            let mut line2: Vec<Span> = Vec::new();
-            let detail_indent = if depth > 0 {
-                format!("{indent}  ")
-            } else {
-                "  ".to_string()
-            };
-            line2.push(Span::raw(detail_indent));
-            let meta_text = meta.join(" · ");
-            // context/budget 警示色以整段標示簡化，仍保留可讀性。
-            let pct = s.context.and_then(|c| c.percent());
-            let meta_color = if s.over_budget
-                || s.budget_usd
-                    .zip(Some(s.cost.usd))
-                    .is_some_and(|(l, u)| u >= l)
-                || pct.is_some_and(|p| p >= 92.0)
-            {
-                Color::Red
-            } else if pct.is_some_and(|p| p >= 80.0) {
-                Color::Yellow
-            } else {
-                Color::DarkGray
-            };
-            line2.push(Span::styled(meta_text, Style::default().fg(meta_color)));
-
             if !s.bg_procs.is_empty() {
-                let count = s.bg_procs.len();
-                let name = &s.bg_procs[0].name;
-                let bg_label = if count > 1 {
-                    format!(" · bg:{count} ({name}…)")
-                } else {
-                    format!(" · bg:{count} ({name})")
-                };
-                let bg_color = if s.status == SessionStatus::Idle {
-                    Color::Yellow
-                } else {
-                    Color::DarkGray
-                };
-                line2.push(Span::styled(bg_label, Style::default().fg(bg_color)));
+                right.push((
+                    format!("bg{}", s.bg_procs.len()),
+                    if s.status == SessionStatus::Idle {
+                        Color::Yellow
+                    } else {
+                        Color::DarkGray
+                    },
+                ));
+            }
+            let right_w: usize = right
+                .iter()
+                .map(|(t, _)| UnicodeWidthStr::width(t.as_str()) + 1)
+                .sum();
+
+            // 標籤吃掉剩下的寬度 (至少留 1 欄，太窄時用 `…`)。
+            // 角色、模型、branch、context、成本等細節都在逐字稿 footer 顯示。
+            let budget = inner_w.saturating_sub(used + 1 + right_w).max(1);
+            push_span(
+                &mut spans,
+                &mut used,
+                format!(" {}", truncate_width(&s.label, budget)),
+                Style::default(),
+            );
+            if !right.is_empty() {
+                let pad = inner_w.saturating_sub(used + right_w);
+                push_span(&mut spans, &mut used, " ".repeat(pad), dim);
+                for (text, c) in right {
+                    push_span(
+                        &mut spans,
+                        &mut used,
+                        format!(" {text}"),
+                        Style::default().fg(c),
+                    );
+                }
             }
 
-            ListItem::new(vec![Line::from(line1), Line::from(line2)])
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -1097,11 +1063,11 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 .borders(Borders::ALL)
                 .title(if app.scope_here {
                     match hidden {
-                        0 => tr!(" Sessions · 本專案 "),
-                        n => tr!(" Sessions · 本專案 (另 {n} 個在別處，P 顯示) ", n = n),
+                        0 => tr!(" Sessions "),
+                        n => tr!(" Sessions · +{n} ", n = n),
                     }
                 } else if show_project {
-                    tr!(" Sessions · 全部專案 ")
+                    tr!(" Sessions · 全部 ")
                 } else {
                     " Sessions ".to_string()
                 }),
@@ -1625,8 +1591,12 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     f.render_widget(para, area);
 }
 
-pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
+pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &mut App) {
+    app.input_area = area;
+    let nudging = app.mode == Mode::Normal && app.input_nudging();
+    let keys = app.input_key_hint();
     let title = match app.mode {
+        Mode::Normal if nudging => tr!(" 請先按 {keys} 才能輸入 ", keys = keys),
         Mode::Normal => tr!(" 輸入 (i 輸入 · ? 說明) "),
         Mode::Help => tr!(" 說明 "),
         Mode::Settings => tr!(" 設定 "),
@@ -1672,7 +1642,9 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
         Mode::Jump => tr!(" 跳轉 session "),
         Mode::Search => tr!(" 搜尋 (Enter／↓ 下一個 · ↑ 上一個 · Esc 離開) "),
     };
-    let style = if app.mode == Mode::Normal {
+    let style = if nudging {
+        Style::default().fg(Color::Yellow)
+    } else if app.mode == Mode::Normal {
         Style::default()
     } else {
         Style::default().fg(Color::Cyan)
@@ -1686,20 +1658,46 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
     let first = (cur_row + 1)
         .saturating_sub(visible_rows)
         .min(rows.len().saturating_sub(visible_rows));
-    let visible: Vec<Line> = rows
+    let sel = crate::inputbox::selection_range(app.input_sel);
+    let mut visible: Vec<Line> = rows
         .iter()
         .skip(first)
         .take(visible_rows)
-        .map(|r| Line::raw(crate::inputbox::row_text(&app.input, *r)))
+        .map(|r| crate::inputbox::row_line(&app.input, *r, sel))
         .collect();
 
-    let para = Paragraph::new(visible)
-        .style(style)
-        .block(Block::default().borders(Borders::ALL).title(title));
+    // `Normal` 模式沒有游標可打字時，留一行提示，避免使用者以為程式沒反應。
+    if app.input.is_empty() && app.mode == Mode::Normal {
+        let (hint, color) = if nudging {
+            (
+                tr!("請先按 {keys} 才能輸入文字", keys = keys),
+                Color::Yellow,
+            )
+        } else {
+            (
+                tr!("按 {keys} 開始輸入，? 看說明", keys = keys),
+                Color::DarkGray,
+            )
+        };
+        visible = vec![Line::styled(hint, Style::default().fg(color))];
+    }
+
+    let border = if nudging {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let para = Paragraph::new(visible).style(style).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(border)
+            .title(title),
+    );
     f.render_widget(para, area);
 
     // 把終端機游標放到輸入框內，IME 的 preedit 就會錨定在這裡。
-    if area.width > 2 && area.height > 2 {
+    // `Normal` 模式沒有游標，配合提示文字讓使用者知道要先按 i 或 Enter。
+    if app.mode != Mode::Normal && area.width > 2 && area.height > 2 {
         let x = area
             .x
             .saturating_add(1)
@@ -1712,7 +1710,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     let hints = match app.view {
-        CenterView::Transcript => tr!("  ? 說明  Space 選單  : 命令  q 離開"),
+        CenterView::Transcript => tr!("  i 輸入  ? 說明  Space 選單  : 命令  q 離開"),
         CenterView::Diff => tr!("  ? 說明  c 註解  M 合併  q 離開"),
         CenterView::Worktrees => tr!("  ? 說明  M 合併  G 清理  q 離開"),
         CenterView::Tasks => tr!("  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"),

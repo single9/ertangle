@@ -32,6 +32,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 tr_noop!("附加檔案或圖片；會在專案內模糊搜尋，↑↓ 選、Tab 採用"),
             ),
             ("Ctrl-V", tr_noop!("貼上剪貼簿圖片 (需 wl-paste 或 xclip)")),
+            (
+                tr_noop!("滑鼠拖曳"),
+                tr_noop!("(輸入框內)選取文字，放開即複製到剪貼簿 (OSC 52)"),
+            ),
             (tr_noop!("拖曳檔案"), tr_noop!("把檔案拖進終端機會自動轉成 @路徑")),
             ("Ctrl-W", tr_noop!("(spawn 時)切換是否使用獨立 git worktree")),
             ("Ctrl-R", tr_noop!("(spawn 時)切換角色 worker／coordinator／reviewer")),
