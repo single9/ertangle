@@ -1,0 +1,75 @@
+name: prepare-release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本號 (例如 0.6.0)，留空則由 git-cliff 依 commit 自動計算"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # 使用 PAT 才能讓 push 的 tag 觸發 release.yml，也能繞過 branch protection
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: 計算版本號
+        id: ver
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --bumped-version
+        env:
+          OUTPUT: /dev/null
+
+      - name: 決定版本號
+        id: next
+        run: |
+          ver="${{ inputs.version }}"
+          if [ -z "$ver" ]; then ver="${{ steps.ver.outputs.content }}"; fi
+          ver="${ver#v}"
+          ver="$(echo "$ver" | tr -d '[:space:]')"
+          if ! echo "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "無效的版本號: '$ver'" >&2; exit 1
+          fi
+          if git rev-parse "v$ver" >/dev/null 2>&1; then
+            echo "tag v$ver 已存在" >&2; exit 1
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: 更新 Cargo.toml
+        run: sed -i 's/^version = ".*"/version = "${{ steps.next.outputs.version }}"/' Cargo.toml
+
+      - name: 產生 CHANGELOG
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag v${{ steps.next.outputs.version }}
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: 檢查 (fmt / clippy / Cargo.lock)
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Commit 並建立 tag
+        run: |
+          v="${{ steps.next.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock CHANGELOG.md
+          git commit -m "chore(release): prepare for v$v"
+          git tag -a "v$v" -m "chore: release v$v"
+          git push origin HEAD "v$v"

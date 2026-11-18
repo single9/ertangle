@@ -97,7 +97,7 @@ release-bump:
 	@next_ver="$${VERSION:-$$(PATH="$(BUILD_PATH)" git cliff --bumped-version 2>/dev/null | tr -d 'v')}"; \
 	if [ -z "$$next_ver" ]; then echo "無法自動計算版本號，請指定 VERSION=x.y.z" >&2; exit 1; fi; \
 	echo "準備發布版本: v$$next_ver"; \
-	sed -i 's/^version = ".*"/version = "'$$next_ver'"/' Cargo.toml; \
+	sed -i.bak 's/^version = ".*"/version = "'$$next_ver'"/' Cargo.toml && rm -f Cargo.toml.bak; \
 	PATH="$(BUILD_PATH)" $(CARGO) check >/dev/null 2>&1; \
 	PATH="$(BUILD_PATH)" git cliff --tag "v$$next_ver" -o CHANGELOG.md; \
 	echo "已更新 Cargo.toml 與 CHANGELOG.md 至 v$$next_ver"; \
