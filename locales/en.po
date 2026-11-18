@@ -2732,11 +2732,11 @@ msgstr " Help (Esc to close) "
 
 #: crates/termade-tui/src/draw.rs
 msgid " ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"
-msgstr " ↑↓ select · Enter choose (toggles flip) · ←→ cycle · Esc close  Saved instantly"
+msgstr " ↑↓ move · Enter pick · ←→ cycle · Esc close"
 
 #: crates/termade-tui/src/draw.rs
 msgid " 設定 (寫入全域 config.toml) "
-msgstr " Settings (written to global config.toml) "
+msgstr " Settings (config.toml) "
 
 #: crates/termade-tui/src/draw.rs
 msgid " 過濾："
@@ -3749,47 +3749,47 @@ msgstr "Default permission"
 
 #: crates/termade-tui/src/settings.rs
 msgid "下面兩項設定的對象 agent"
-msgstr "Agent for the two settings below"
+msgstr "Agent for rows below"
 
 #: crates/termade-tui/src/settings.rs
 msgid "{agent} 的預設 model (清單載入中…)"
-msgstr "Default model for {agent} (loading list…)"
+msgstr "{agent} model (loading…)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "{agent} 的預設 model"
-msgstr "Default model for {agent}"
+msgstr "{agent} model"
 
 #: crates/termade-tui/src/settings.rs
 msgid "{agent} 的預設 effort"
-msgstr "Default effort for {agent}"
+msgstr "{agent} effort"
 
 #: crates/termade-tui/src/settings.rs
 msgid "agent 自己建立的 session 用獨立 worktree"
-msgstr "Sessions spawned by agents use their own worktree"
+msgstr "Agent spawns use a worktree"
 
 #: crates/termade-tui/src/settings.rs
 msgid "agent 建立高消耗 session 時"
-msgstr "When an agent spawns a costly session"
+msgstr "Agent spawns costly session"
 
 #: crates/termade-tui/src/settings.rs
 msgid "agent 建立 session 免確認的 effort 上限"
-msgstr "Max effort for agent spawns without confirmation"
+msgstr "Effort cap, no confirmation"
 
 #: crates/termade-tui/src/settings.rs
 msgid "daemon 重啟時自動接續執行中的 session"
-msgstr "Auto-resume running sessions when the daemon restarts"
+msgstr "Auto-resume on restart"
 
 #: crates/termade-tui/src/settings.rs
 msgid "worktree 共用 cargo target (編譯排隊、不重複)"
-msgstr "Share one cargo target across worktrees (builds queue, no duplicates)"
+msgstr "Shared cargo target"
 
 #: crates/termade-tui/src/settings.rs
 msgid "把協作說明注入每個 agent"
-msgstr "Inject collaboration instructions into every agent"
+msgstr "Inject collab instructions"
 
 #: crates/termade-tui/src/settings.rs
 msgid "把 termade-ade skill 注入協作說明"
-msgstr "Inject the termade-ade skill into collaboration instructions"
+msgstr "Inject termade-ade skill"
 
 #: crates/termade-tui/src/settings.rs
 msgid "把省 token 提示注入協作說明"
@@ -3797,15 +3797,15 @@ msgstr "Inject token-saving hints into the collaboration instructions"
 
 #: crates/termade-tui/src/settings.rs
 msgid "Web 版支援 (Web UI)"
-msgstr "Web version support (Web UI)"
+msgstr "Web UI"
 
 #: crates/termade-tui/src/settings.rs
 msgid "Web 版連接埠 (Web Port)"
-msgstr "Web version port (Web Port)"
+msgstr "Web port"
 
 #: crates/termade-tui/src/settings.rs
 msgid "介面語言"
-msgstr "Interface language"
+msgstr "Language"
 
 #: crates/termade-tui/src/settings.rs
 msgid "未設定"
@@ -3817,11 +3817,11 @@ msgstr "Not set (auto)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "ask：每個動作都問"
-msgstr "ask: confirm every action"
+msgstr "ask: confirm each action"
 
 #: crates/termade-tui/src/settings.rs
 msgid "auto：自動核准一般動作"
-msgstr "auto: approve routine actions automatically"
+msgstr "auto: approve routine"
 
 #: crates/termade-tui/src/settings.rs
 msgid "bypass：完全不問"
@@ -3829,7 +3829,7 @@ msgstr "bypass: never ask"
 
 #: crates/termade-tui/src/settings.rs
 msgid "未設定 (agent 自己的預設)"
-msgstr "Not set (agent's own default)"
+msgstr "Not set (agent default)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "開"
@@ -3841,15 +3841,15 @@ msgstr "Off"
 
 #: crates/termade-tui/src/settings.rs
 msgid "超出範圍才問使用者"
-msgstr "Ask the user only when over the limits"
+msgstr "Ask only beyond limits"
 
 #: crates/termade-tui/src/settings.rs
 msgid "每次都問使用者"
-msgstr "Always ask the user"
+msgstr "Always ask"
 
 #: crates/termade-tui/src/settings.rs
 msgid "不問 (effort 調降、model 拒絕)"
-msgstr "Never ask (lower effort, reject model)"
+msgstr "Never ask, auto-downgrade"
 
 #: crates/termade-tui/src/settings.rs
 msgid "Tailscale (自動 IP:{port})"
@@ -3869,7 +3869,7 @@ msgstr "Default (7421)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "自動 (依 LANG 環境變數)"
-msgstr "Auto (from LANG environment variable)"
+msgstr "Auto (from LANG)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "已關閉 Web 版並儲存至 {path}"

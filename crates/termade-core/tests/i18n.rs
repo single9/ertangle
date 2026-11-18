@@ -14,12 +14,12 @@ fn switch_language_round_trip() {
 
     i18n::set_language(Language::En).unwrap();
     assert_eq!(i18n::current(), Language::En);
-    assert_eq!(tui("介面語言"), "Interface language");
+    assert_eq!(tui("介面語言"), "Language");
     // 具名佔位符保留給 runtime_format 代入。
-    assert_eq!(tui("{agent} 的預設 model"), "Default model for {agent}");
+    assert_eq!(tui("{agent} 的預設 model"), "{agent} model");
     assert_eq!(
         tr::runtime_format!(tui("{agent} 的預設 model"), agent = "claude"),
-        "Default model for claude"
+        "claude model"
     );
     // 缺譯退回原文。
     assert_eq!(tui("沒有這條翻譯"), "沒有這條翻譯");
