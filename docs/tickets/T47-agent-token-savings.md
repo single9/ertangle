@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：`termade-daemon`、`termade-tui`、`termade-core`　相依：T38, T42
 
-Status: ready-for-human
+Status: in-progress
 
 ## 問題
 
@@ -71,7 +71,7 @@ Gemini 指令耗時扣除 ≥60 秒的離群值後：ssh 20%、git 20%、python 
 
 分三步，每步獨立可交付。
 
-1. **量測與顯示**：每個 session 累計回合數與上下文大小 (`Session.cost` 已有 token 欄位，需確認能否取得每回合上下文)，顯示在 TUI 的 session 清單與 `termade` 的 CLI 輸出。這是後面兩步的基線。
+1. **量測與顯示** (已完成)：context 用量原本就有 (`Session.context`，TUI 顯示 `ctx` 並在 80%、92% 變色)；新增 `Session.tool_calls` (只累計工具呼叫的開始事件，作為回合數近似值，因為約 95% 的回合只有單一工具呼叫)，顯示在 TUI session 次要資訊列的 `N calls`。
 2. **長對話提醒**：新增設定 `[budget] long_session_turns` 與 `long_session_context` (預設關閉)，超過時在 TUI 顯示提示，建議 `:handoff` 或開新 session；沿用 T15 的通知機制與 T17 的預算設定。
 3. **省 token 提示**：新增 `[collab] token_hints` (預設關閉)，開啟時在協作說明附加數條：獨立的工具呼叫放在同一回合、唯讀探查合併成單一 shell 指令、輸出以 `head`、`--stat` 等限制長度、不重複讀取已讀過的檔案。沿用 `inject_skill` 的模式 (`config.rs`、`collab.rs`)，TUI `:settings` 增加開關 (同 T42)。
 4. **注入內容瘦身 (可選)**：縮短 `termade_spawn` 等工具的描述；以 step 1 的數據確認有效再做。

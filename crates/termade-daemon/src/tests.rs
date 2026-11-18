@@ -268,6 +268,7 @@ fn add_session(
             slash_commands: Vec::new(),
             active_tools: Vec::new(),
             bg_procs: Vec::new(),
+            tool_calls: 0,
         },
     );
     inner.sessions.insert(
@@ -912,6 +913,7 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         slash_commands: Vec::new(),
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
+        tool_calls: 0,
     }
 }
 
@@ -1282,6 +1284,7 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         slash_commands: Vec::new(),
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
+        tool_calls: 0,
     }
 }
 

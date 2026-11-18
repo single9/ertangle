@@ -1035,6 +1035,9 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     )
                 ));
             }
+            if s.tool_calls > 0 {
+                meta.push(format!("{} calls", s.tool_calls));
+            }
             if let Some(bstr) = s.format_budget() {
                 meta.push(bstr);
             }

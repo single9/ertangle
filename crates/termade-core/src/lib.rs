@@ -296,6 +296,9 @@ pub struct Session {
     /// 背景殘留的子處理程序清單。
     #[serde(default)]
     pub bg_procs: Vec<BgProc>,
+    /// 累計的工具呼叫次數 (只算開始事件；回合數的近似值，舊 log 沒有此欄位)。
+    #[serde(default)]
+    pub tool_calls: u32,
 }
 
 impl Session {
@@ -1029,6 +1032,7 @@ impl State {
             } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     if ok.is_none() && !name.is_empty() {
+                        s.tool_calls = s.tool_calls.saturating_add(1);
                         let is_sub = is_subagent_tool(name);
                         let sum = tool_summary(input).unwrap_or_default();
                         s.active_tools.push(ActiveTool {
@@ -2011,6 +2015,7 @@ pub(crate) mod tests {
             slash_commands: Vec::new(),
             active_tools: Vec::new(),
             bg_procs: Vec::new(),
+            tool_calls: 0,
         }
     }
 
@@ -2317,6 +2322,30 @@ pub(crate) mod tests {
         let t: Vec<_> = st.transcripts["s1"].iter().cloned().collect();
         assert_eq!(t[0], "▸ Bash: git status -s");
         assert_eq!(t[1], "  ✗ fatal: not a repo …(+1 行)");
+    }
+
+    #[test]
+    fn tool_calls_count_only_start_events() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::SessionStarted {
+                session: sample_session("s1"),
+            },
+        ));
+        let call = |ok: Option<bool>, name: &str| Event::ToolCall {
+            session: "s1".into(),
+            name: name.into(),
+            input: String::new(),
+            ok,
+            output: None,
+        };
+        st.apply(&rec(2, call(None, "Bash")));
+        st.apply(&rec(3, call(Some(true), "Bash")));
+        st.apply(&rec(4, call(None, "Read")));
+        // 沒有名稱的開始事件不算。
+        st.apply(&rec(5, call(None, "")));
+        assert_eq!(st.sessions["s1"].tool_calls, 2);
     }
 
     #[test]

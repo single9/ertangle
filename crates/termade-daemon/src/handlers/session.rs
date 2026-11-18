@@ -321,6 +321,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         slash_commands: Vec::new(),
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
+        tool_calls: 0,
     };
     shared.emit(Event::SessionStarted {
         session: session.clone(),

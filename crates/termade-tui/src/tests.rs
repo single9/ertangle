@@ -30,6 +30,7 @@ fn sample_app(lines: &[&str]) -> App {
         slash_commands: Vec::new(),
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
+        tool_calls: 0,
     };
     app.state.sessions.insert(s.id.clone(), s);
     let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();
@@ -1299,6 +1300,7 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
         slash_commands: Vec::new(),
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
+        tool_calls: 0,
     };
     for s in [
         mk("a", "/work/alpha", None),
