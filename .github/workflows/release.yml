@@ -2,6 +2,9 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # Dispatched by prepare-release.yml (tags pushed with GITHUB_TOKEN do not
+  # trigger push events). Run it with --ref <tag>.
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always

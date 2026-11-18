@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   prepare:
@@ -74,3 +75,11 @@ jobs:
           git commit -m "chore(release): prepare for v$v"
           git tag -a "v$v" -m "chore: release v$v"
           git push origin HEAD "v$v"
+
+      - name: Dispatch release workflow
+        # Tags pushed with GITHUB_TOKEN do not trigger release.yml, so dispatch
+        # it explicitly. Skipped when a PAT is used (the tag push triggers it).
+        if: ${{ secrets.RELEASE_TOKEN == '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref "v${{ steps.next.outputs.version }}"
