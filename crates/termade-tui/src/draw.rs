@@ -517,7 +517,7 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let loading = p.loading;
     let p = &*p;
     let vis = p.visible();
-    let w = 56.min(f.area().width);
+    let w = 72.min(f.area().width);
     let h = (vis.len() as u16 + 4).clamp(6, 18).min(f.area().height);
     let area = Rect::new(
         f.area().x + (f.area().width.saturating_sub(w)) / 2,
