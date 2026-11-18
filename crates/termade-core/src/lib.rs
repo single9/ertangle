@@ -1684,13 +1684,40 @@ pub fn tool_summary(input: &str) -> Option<String> {
                     }
                 }
             }
-            if m.is_empty() {
+            // ACP 的 shell 工具在 `tool_call` 階段只帶 `cwd`，把整個 JSON 印出來只是噪音。
+            if m.keys()
+                .all(|k| matches!(k.as_str(), "cwd" | "workdir" | "timeout"))
+            {
                 None
             } else {
                 Some(one_line(&v.to_string()))
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tool_summary_tests {
+    use super::tool_summary;
+
+    #[test]
+    fn picks_the_descriptive_field() {
+        assert_eq!(
+            tool_summary(r#"{"command":"cargo fmt","cwd":"/tmp"}"#).as_deref(),
+            Some("cargo fmt")
+        );
+        assert!(
+            tool_summary(r#"{"cwd":"/mnt"}"#).is_none(),
+            "只有 cwd 的物件沒有資訊量，不該印 JSON"
+        );
+        assert!(tool_summary(r#"{"workdir":"/mnt","timeout":10}"#).is_none());
+        let other = tool_summary(r#"{"mcp":"x","args":["a"]}"#);
+        assert!(
+            other.as_deref().is_some_and(|s| s.contains("\"mcp\"")),
+            "未知欄位仍要能看到原文：{other:?}"
+        );
+        assert!(tool_summary("not json").is_none());
     }
 }
 
