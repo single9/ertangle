@@ -79,7 +79,9 @@ jobs:
       - name: Dispatch release workflow
         # Tags pushed with GITHUB_TOKEN do not trigger release.yml, so dispatch
         # it explicitly. Skipped when a PAT is used (the tag push triggers it).
-        if: ${{ secrets.RELEASE_TOKEN == '' }}
+        # The `secrets` context is not available in `if`, so expose it via env.
+        if: ${{ env.HAS_RELEASE_TOKEN != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
         run: gh workflow run release.yml --ref "v${{ steps.next.outputs.version }}"
