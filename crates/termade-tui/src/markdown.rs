@@ -51,9 +51,9 @@ impl Renderer {
     }
 
     /// 渲染並切換換行，同時回傳所有精準欄位對齊的連結目標。
-    pub fn render_and_wrap(
+    pub fn render_and_wrap<S: AsRef<str>>(
         &mut self,
-        src: &[String],
+        src: &[S],
         width: usize,
         base_line_idx: usize,
     ) -> (Vec<Line<'static>>, Vec<LinkTarget>) {
@@ -62,12 +62,16 @@ impl Renderer {
     }
 
     /// 渲染並包含每行內部的連結欄位區間。
-    pub fn render_with_links(&mut self, src: &[String], width: usize) -> Vec<LineWithLinks> {
+    pub fn render_with_links<S: AsRef<str>>(
+        &mut self,
+        src: &[S],
+        width: usize,
+    ) -> Vec<LineWithLinks> {
         self.in_fence = false;
         let mut out = Vec::with_capacity(src.len());
         let mut i = 0usize;
         while i < src.len() {
-            let line = &src[i];
+            let line = src[i].as_ref();
 
             if self.in_fence {
                 if fence(line).is_some() {
@@ -106,14 +110,14 @@ impl Renderer {
                 continue;
             }
 
-            if is_table_row(line) && i + 1 < src.len() && is_table_sep(&src[i + 1]) {
-                let mut block = vec![line.clone()];
+            if is_table_row(line) && i + 1 < src.len() && is_table_sep(src[i + 1].as_ref()) {
+                let mut block = vec![line];
                 let mut j = i + 2;
-                while j < src.len() && is_table_row(&src[j]) {
-                    block.push(src[j].clone());
+                while j < src.len() && is_table_row(src[j].as_ref()) {
+                    block.push(src[j].as_ref());
                     j += 1;
                 }
-                for tl in render_table(&block, &src[i + 1], width) {
+                for tl in render_table(&block, src[i + 1].as_ref(), width) {
                     out.push((tl, Vec::new()));
                 }
                 i = j;
@@ -128,7 +132,7 @@ impl Renderer {
 
     /// 把來源行渲染成樣式化行。`width` 是可用顯示寬度 (不含邊框)。
     #[allow(dead_code)]
-    pub fn render(&mut self, src: &[String], width: usize) -> Vec<Line<'static>> {
+    pub fn render<S: AsRef<str>>(&mut self, src: &[S], width: usize) -> Vec<Line<'static>> {
         self.render_with_links(src, width)
             .into_iter()
             .map(|(l, _)| l)
@@ -352,7 +356,7 @@ fn task_marker(rest: &str) -> (&'static str, &str) {
 // ---------------------------------------------------------------------------
 
 /// 若此行是圍籬 (``` 或 ~~~)則回傳語言標籤 (可為空)。
-fn fence(line: &str) -> Option<String> {
+pub(crate) fn fence(line: &str) -> Option<String> {
     let t = line.trim_start();
     let rest = t.strip_prefix("```").or_else(|| t.strip_prefix("~~~"))?;
     Some(rest.trim().to_string())
@@ -407,12 +411,12 @@ enum Align {
     Center,
 }
 
-fn is_table_row(line: &str) -> bool {
+pub(crate) fn is_table_row(line: &str) -> bool {
     let t = line.trim();
     t.len() >= 2 && t.contains('|')
 }
 
-fn is_table_sep(line: &str) -> bool {
+pub(crate) fn is_table_sep(line: &str) -> bool {
     let cells = split_row(line);
     !cells.is_empty()
         && cells.iter().all(|c| {
@@ -522,11 +526,11 @@ fn truncate_spans(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
     out
 }
 
-fn render_table(rows: &[String], sep: &str, width: usize) -> Vec<Line<'static>> {
-    let header = split_row(&rows[0]);
+fn render_table<S: AsRef<str>>(rows: &[S], sep: &str, width: usize) -> Vec<Line<'static>> {
+    let header = split_row(rows[0].as_ref());
     let n = header.len().max(1);
     let aligns = parse_align(sep, n);
-    let body: Vec<Vec<String>> = rows[1..].iter().map(|r| split_row(r)).collect();
+    let body: Vec<Vec<String>> = rows[1..].iter().map(|r| split_row(r.as_ref())).collect();
     let header_style = Style::default().fg(HEADING).add_modifier(Modifier::BOLD);
 
     let mut widths = vec![1usize; n];

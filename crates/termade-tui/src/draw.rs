@@ -1078,15 +1078,84 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.sessions_offset = list_state.offset();
 }
 
-/// 逐字稿指紋：串流增量會改變末行長度或行數，滿額截斷會改變首行。
-pub(crate) fn transcript_stamp(app: &App, id: &SessionId) -> (usize, usize, usize) {
-    app.state.transcripts.get(id).map_or((0, 0, 0), |b| {
-        (
-            b.len(),
-            b.front().map_or(0, String::len),
-            b.back().map_or(0, String::len),
-        )
-    })
+pub(crate) fn fnv1a(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
+/// 逐字稿指紋：串流增量會改變末行或行數，滿額截斷會改變首行。
+pub(crate) fn transcript_stamp(app: &App, id: &SessionId) -> TranscriptStamp {
+    app.state
+        .transcripts
+        .get(id)
+        .map_or(TranscriptStamp::default(), |b| TranscriptStamp {
+            len: b.len(),
+            front_len: b.front().map_or(0, String::len),
+            front_hash: b.front().map_or(0, |s| fnv1a(s.as_bytes())),
+            back_len: b.back().map_or(0, String::len),
+            back_hash: b.back().map_or(0, |s| fnv1a(s.as_bytes())),
+        })
+}
+
+/// 尋找原始逐字稿的安全前綴分界點 (0..S 為安全前綴，S..len 為尾端)。
+/// 保守選擇分界點：不可在未閉合的 Markdown 圍籬、表格、或進行中的工具呼叫中。
+pub(crate) fn find_safe_boundary(buf: &std::collections::VecDeque<String>) -> usize {
+    let len = buf.len();
+    if len <= 2 {
+        return 0;
+    }
+
+    let mut in_fence = false;
+    let mut fence_after = Vec::with_capacity(len);
+    for l in buf.iter() {
+        if crate::markdown::fence(l).is_some() {
+            in_fence = !in_fence;
+        }
+        fence_after.push(in_fence);
+    }
+
+    let search_end = len.saturating_sub(2);
+
+    // 優先找 code fence 之外的空白行：空白行必非工具行、非表格、非段落中斷，且會 flush 工具摺疊
+    for i in (1..=search_end).rev() {
+        if !fence_after[i - 1] && buf[i - 1].trim().is_empty() && !buf[i].starts_with("  ✓") {
+            return i;
+        }
+    }
+
+    // 若無空白行，找 code fence 之外的獨立普通行
+    for i in (1..=search_end).rev() {
+        if fence_after[i - 1] {
+            continue;
+        }
+        let prev = &buf[i - 1];
+        let next = &buf[i];
+
+        if prev.starts_with("▸ ")
+            || prev.starts_with("  ✓")
+            || prev.starts_with("  ✗")
+            || prev.starts_with("💭 ")
+        {
+            continue;
+        }
+        if next.starts_with("  ✓") {
+            continue;
+        }
+        if crate::markdown::is_table_row(prev) || crate::markdown::is_table_sep(prev) {
+            continue;
+        }
+        if crate::markdown::is_table_row(next) || crate::markdown::is_table_sep(next) {
+            continue;
+        }
+
+        return i;
+    }
+
+    0
 }
 
 /// 依目前模式 (Markdown / 原始)與寬度，把逐字稿建成樣式化且已換行的行。
@@ -1106,6 +1175,54 @@ fn tool_line(l: &str) -> Option<Line<'static>> {
     Some(Line::from(Span::styled(l.to_string(), style)))
 }
 
+pub(crate) fn render_transcript_slice<'a>(
+    lines_iter: impl Iterator<Item = &'a String>,
+    raw_md: bool,
+    show_thoughts: bool,
+    show_tools: bool,
+    active_tools: &[termade_core::ActiveTool],
+    width: usize,
+    base_line_idx: usize,
+) -> (Vec<Line<'static>>, Vec<markdown::LinkTarget>) {
+    let src = crate::app::visible_transcript(lines_iter, show_thoughts, show_tools, active_tools);
+    if raw_md {
+        let lines: Vec<Line<'static>> = src
+            .iter()
+            .map(|l| Line::raw(l.as_ref().to_string()))
+            .collect();
+        (markdown::wrap_lines(lines, width), Vec::new())
+    } else {
+        let mut out: Vec<Line<'static>> = Vec::with_capacity(src.len());
+        let mut links: Vec<markdown::LinkTarget> = Vec::new();
+        let mut batch: Vec<&str> = Vec::new();
+        for l in &src {
+            let s: &str = l.as_ref();
+            if let Some(line) = tool_line(s) {
+                if !batch.is_empty() {
+                    let (b_lines, b_links) = markdown::Renderer::new().render_and_wrap(
+                        &batch,
+                        width,
+                        base_line_idx + out.len(),
+                    );
+                    out.extend(b_lines);
+                    links.extend(b_links);
+                    batch.clear();
+                }
+                out.push(line);
+            } else {
+                batch.push(s);
+            }
+        }
+        if !batch.is_empty() {
+            let (b_lines, b_links) =
+                markdown::Renderer::new().render_and_wrap(&batch, width, base_line_idx + out.len());
+            out.extend(b_lines);
+            links.extend(b_links);
+        }
+        (out, links)
+    }
+}
+
 pub(crate) fn build_transcript_lines(
     app: &App,
     id: &SessionId,
@@ -1121,38 +1238,191 @@ pub(crate) fn build_transcript_lines(
         .get(id)
         .map(|s| s.active_tools.as_slice())
         .unwrap_or(&[]);
-    let src = crate::app::visible_transcript(buf.iter(), app.show_thoughts, app.show_tools, active);
-    if app.raw_md {
-        let lines: Vec<Line<'static>> = src.iter().map(|l| Line::raw(l.clone())).collect();
-        (markdown::wrap_lines(lines, width), Vec::new())
+    render_transcript_slice(
+        buf.iter(),
+        app.raw_md,
+        app.show_thoughts,
+        app.show_tools,
+        active,
+        width,
+        0,
+    )
+}
+
+pub(crate) fn update_transcript_cache(
+    app: &mut App,
+    id: &SessionId,
+    width: usize,
+    area_width: u16,
+) {
+    let buf = match app.state.transcripts.get(id) {
+        Some(b) => b,
+        None => {
+            app.md_cache = None;
+            return;
+        }
+    };
+    let active = app
+        .state
+        .sessions
+        .get(id)
+        .map(|s| s.active_tools.as_slice())
+        .unwrap_or(&[]);
+    let curr_stamp = transcript_stamp(app, id);
+
+    let can_incremental = if let Some(c) = &app.md_cache {
+        c.session == *id
+            && c.raw == app.raw_md
+            && c.width == area_width
+            && c.show_tools == app.show_tools
+            && c.show_thoughts == app.show_thoughts
+            && buf.len() >= c.prefix_raw_len
+            && (c.prefix_raw_len == 0 || {
+                let front_ok = buf.front().map_or(0, String::len) == c.prefix_front_len
+                    && buf.front().map_or(0, |s| fnv1a(s.as_bytes())) == c.prefix_front_hash;
+                let last_prefix_line = &buf[c.prefix_raw_len - 1];
+                let last_prefix_ok = last_prefix_line.len() == c.prefix_last_len
+                    && fnv1a(last_prefix_line.as_bytes()) == c.prefix_last_hash;
+                front_ok && last_prefix_ok
+            })
     } else {
-        // 工具呼叫／結果行是程式產生的摘要，不能當 Markdown：
-        // `_`、`*`、反斜線會被吃掉 (例如 mcp__termade__termade_peers 變成 mcpadeadepeers)。
-        let mut out: Vec<Line<'static>> = Vec::new();
-        let mut links: Vec<markdown::LinkTarget> = Vec::new();
-        let mut batch: Vec<String> = Vec::new();
-        for l in src {
-            if let Some(line) = tool_line(&l) {
-                if !batch.is_empty() {
-                    let (b_lines, b_links) =
-                        markdown::Renderer::new().render_and_wrap(&batch, width, out.len());
-                    out.extend(b_lines);
-                    links.extend(b_links);
-                    batch.clear();
-                }
-                out.push(line);
-            } else {
-                batch.push(l);
+        false
+    };
+
+    if can_incremental {
+        let c = app.md_cache.as_mut().unwrap();
+        c.lines.truncate(c.prefix_lines_count);
+        c.links.truncate(c.prefix_links_count);
+
+        let tail_start = c.prefix_raw_len;
+        let tail_end = buf.len();
+
+        let (tail_lines, tail_links) = render_transcript_slice(
+            buf.range(tail_start..tail_end),
+            app.raw_md,
+            app.show_thoughts,
+            app.show_tools,
+            active,
+            width,
+            c.prefix_lines_count,
+        );
+
+        c.lines.extend(tail_lines);
+        c.links.extend(tail_links);
+        c.stamp = curr_stamp;
+
+        // 若 tail 累積超過 32 行，嘗試將新的安全邊界納入前綴
+        if buf.len() > c.prefix_raw_len + 32 {
+            let new_safe = find_safe_boundary(buf);
+            if new_safe > c.prefix_raw_len {
+                let (mid_lines, mid_links) = render_transcript_slice(
+                    buf.range(c.prefix_raw_len..new_safe),
+                    app.raw_md,
+                    app.show_thoughts,
+                    app.show_tools,
+                    &[],
+                    width,
+                    c.prefix_lines_count,
+                );
+                c.lines.truncate(c.prefix_lines_count);
+                c.links.truncate(c.prefix_links_count);
+                c.prefix_lines_count += mid_lines.len();
+                c.prefix_links_count += mid_links.len();
+                c.lines.extend(mid_lines);
+                c.links.extend(mid_links);
+
+                c.prefix_raw_len = new_safe;
+                c.prefix_last_len = buf[new_safe - 1].len();
+                c.prefix_last_hash = fnv1a(buf[new_safe - 1].as_bytes());
+
+                let (new_tail_lines, new_tail_links) = render_transcript_slice(
+                    buf.range(new_safe..buf.len()),
+                    app.raw_md,
+                    app.show_thoughts,
+                    app.show_tools,
+                    active,
+                    width,
+                    c.prefix_lines_count,
+                );
+                c.lines.extend(new_tail_lines);
+                c.links.extend(new_tail_links);
             }
         }
-        if !batch.is_empty() {
-            let (b_lines, b_links) =
-                markdown::Renderer::new().render_and_wrap(&batch, width, out.len());
-            out.extend(b_lines);
-            links.extend(b_links);
-        }
-        (out, links)
+    } else {
+        let safe_boundary = find_safe_boundary(buf);
+        let (lines, links, prefix_lines_count, prefix_links_count) = if safe_boundary > 0 {
+            let (mut p_lines, mut p_links) = render_transcript_slice(
+                buf.range(0..safe_boundary),
+                app.raw_md,
+                app.show_thoughts,
+                app.show_tools,
+                &[],
+                width,
+                0,
+            );
+            let p_len = p_lines.len();
+            let p_links_len = p_links.len();
+
+            let (t_lines, t_links) = render_transcript_slice(
+                buf.range(safe_boundary..buf.len()),
+                app.raw_md,
+                app.show_thoughts,
+                app.show_tools,
+                active,
+                width,
+                p_len,
+            );
+
+            p_lines.extend(t_lines);
+            p_links.extend(t_links);
+            (p_lines, p_links, p_len, p_links_len)
+        } else {
+            let (all_lines, all_links) = render_transcript_slice(
+                buf.iter(),
+                app.raw_md,
+                app.show_thoughts,
+                app.show_tools,
+                active,
+                width,
+                0,
+            );
+            (all_lines, all_links, 0, 0)
+        };
+
+        let prefix_front_len = buf.front().map_or(0, String::len);
+        let prefix_front_hash = buf.front().map_or(0, |s| fnv1a(s.as_bytes()));
+        let prefix_last_len = if safe_boundary > 0 {
+            buf[safe_boundary - 1].len()
+        } else {
+            0
+        };
+        let prefix_last_hash = if safe_boundary > 0 {
+            fnv1a(buf[safe_boundary - 1].as_bytes())
+        } else {
+            0
+        };
+
+        app.md_cache = Some(MdCache {
+            session: id.clone(),
+            stamp: curr_stamp,
+            raw: app.raw_md,
+            width: area_width,
+            show_tools: app.show_tools,
+            show_thoughts: app.show_thoughts,
+            lines,
+            links,
+            prefix_raw_len: safe_boundary,
+            prefix_lines_count,
+            prefix_links_count,
+            prefix_front_hash,
+            prefix_front_len,
+            prefix_last_hash,
+            prefix_last_len,
+        });
     }
+
+    app.last_rebuild = std::time::Instant::now();
+    app.rebuild_pending = false;
 }
 
 pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
@@ -1165,6 +1435,8 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
             c.session != *id
                 || c.raw != app.raw_md
                 || c.width != area.width
+                || c.show_tools != app.show_tools
+                || c.show_thoughts != app.show_thoughts
                 || (c.stamp != transcript_stamp(app, id) && {
                     // 只有內容增量：節流，避免串流時每個 delta 都重算整份。
                     let due = app.last_rebuild.elapsed() >= MD_REBUILD_INTERVAL;
@@ -1184,17 +1456,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     app.transcript_scroll = None; // 換 session 時回到跟隨
                     app.selection = None;
                 }
-                let (lines, links) = build_transcript_lines(app, id, inner_w);
-                app.last_rebuild = std::time::Instant::now();
-                app.rebuild_pending = false;
-                app.md_cache = Some(MdCache {
-                    session: id.clone(),
-                    stamp: transcript_stamp(app, id),
-                    raw: app.raw_md,
-                    width: area.width,
-                    lines,
-                    links,
-                });
+                update_transcript_cache(app, id, inner_w, area.width);
             }
             None => app.md_cache = None,
         }

@@ -349,11 +349,20 @@ fn thinking_lines_are_hidden_by_default() {
 fn cache_lines(lines: Vec<Line<'static>>) -> MdCache {
     MdCache {
         session: "ses_test".into(),
-        stamp: (0, 0, 0),
+        stamp: TranscriptStamp::default(),
         raw: false,
         width: 80,
+        show_tools: false,
+        show_thoughts: false,
         lines,
         links: Vec::new(),
+        prefix_raw_len: 0,
+        prefix_lines_count: 0,
+        prefix_links_count: 0,
+        prefix_front_hash: 0,
+        prefix_front_len: 0,
+        prefix_last_hash: 0,
+        prefix_last_len: 0,
     }
 }
 
@@ -3429,4 +3438,329 @@ fn quota_popup_renders_and_header_click_area_is_set() {
         "{out}"
     );
     assert!(app.quota_area.width > 0, "標題列額度摘要應可點擊");
+}
+
+fn generate_realistic_transcript(target_lines: usize) -> Vec<String> {
+    let template = [
+        "❯ Please implement the feature and check tests",
+        "💭 Analyzing requirements and scanning existing code...",
+        "## Implementation Plan",
+        "Here is the plan to optimize the rendering path with **bold text**, *italic text*, `inline_code()`, and a [link](https://example.com/repo).",
+        "We need to consider the following aspects:",
+        "- 1. Check current bottlenecks using profiling or benchmarks.",
+        "- 2. Avoid intermediate allocations of `Vec<String>` where possible.",
+        "- 3. Keep an incremental prefix cache for rendered lines.",
+        "```rust",
+        "pub struct Cache {",
+        "    pub prefix_lines: Vec<Line<'static>>,",
+        "    pub links: Vec<LinkTarget>,",
+        "    pub valid_len: usize,",
+        "}",
+        "```",
+        "Now running tool invocations to inspect files:",
+        "▸ read_file: path=\"crates/termade-tui/src/draw.rs\"",
+        "  ✓ read 120 lines",
+        "▸ run_command: cargo check --workspace",
+        "  ✓ finished with exit code 0",
+        "▸ edit_file: path=\"crates/termade-tui/src/markdown.rs\"",
+        "  ✓ successfully updated 2 hunks",
+        "Performance comparison table:",
+        "| Step | Target | Expected |",
+        "|---|---|---|",
+        "| Cold Rebuild | 4000 lines | fast |",
+        "| Incremental | 1 line append | ultra fast |",
+        "",
+        "> Quote from design docs: correctness first, conservative safe boundary.",
+        "End of cycle section.",
+    ];
+    let mut out = Vec::with_capacity(target_lines);
+    while out.len() < target_lines {
+        for line in &template {
+            if out.len() >= target_lines {
+                break;
+            }
+            out.push(line.to_string());
+        }
+    }
+    out
+}
+
+#[test]
+fn transcript_perf_report() {
+    let lines = generate_realistic_transcript(4000);
+    assert_eq!(lines.len(), 4000);
+
+    let mut app = sample_app(&[]);
+    let deque: VecDeque<String> = lines.clone().into();
+    app.state.transcripts.insert("ses_test".into(), deque);
+
+    let id = "ses_test".to_string();
+    let width = 100;
+
+    // Warm up
+    let _ = crate::app::visible_transcript(lines.iter(), app.show_thoughts, app.show_tools, &[]);
+    let _ = crate::draw::build_transcript_lines(&app, &id, width);
+
+    let runs = 11;
+    let mut vis_durations = Vec::new();
+    let mut build_durations = Vec::new();
+    let mut inc_durations = Vec::new();
+
+    for _ in 0..runs {
+        let t0 = std::time::Instant::now();
+        let vis =
+            crate::app::visible_transcript(lines.iter(), app.show_thoughts, app.show_tools, &[]);
+        let elapsed_vis = t0.elapsed();
+        vis_durations.push(elapsed_vis);
+        std::hint::black_box(&vis);
+
+        let t1 = std::time::Instant::now();
+        let (built_lines, built_links) = crate::draw::build_transcript_lines(&app, &id, width);
+        let elapsed_build = t1.elapsed();
+        build_durations.push(elapsed_build);
+        std::hint::black_box((&built_lines, &built_links));
+    }
+
+    // Measure append-only incremental rebuild
+    crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+    for _ in 0..runs {
+        app.state
+            .transcripts
+            .get_mut(&id)
+            .unwrap()
+            .push_back("incremental test append line".to_string());
+        let t2 = std::time::Instant::now();
+        crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+        let elapsed_inc = t2.elapsed();
+        inc_durations.push(elapsed_inc);
+        // Pop the line back and restore cache for next iteration
+        app.state.transcripts.get_mut(&id).unwrap().pop_back();
+        crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+    }
+
+    vis_durations.sort();
+    build_durations.sort();
+    inc_durations.sort();
+
+    let median_vis = vis_durations[runs / 2];
+    let median_build = build_durations[runs / 2];
+    let median_inc = inc_durations[runs / 2];
+
+    println!("\n=== TRANSCRIPT PERF REPORT (AFTER) ===");
+    println!("Lines: {}", lines.len());
+    println!("Runs: {}", runs);
+    println!(
+        "visible_transcript: median = {:?} (min: {:?}, max: {:?})",
+        median_vis,
+        vis_durations[0],
+        vis_durations[runs - 1]
+    );
+    println!(
+        "build_transcript_lines (cold rebuild, width {}): median = {:?} (min: {:?}, max: {:?})",
+        width,
+        median_build,
+        build_durations[0],
+        build_durations[runs - 1]
+    );
+    println!(
+        "update_transcript_cache (append 1 line incremental): median = {:?} (min: {:?}, max: {:?})",
+        median_inc,
+        inc_durations[0],
+        inc_durations[runs - 1]
+    );
+    println!("======================================\n");
+}
+
+fn transcript_lines_to_plain(lines: &[Line<'_>]) -> Vec<String> {
+    lines
+        .iter()
+        .map(|l| {
+            l.spans
+                .iter()
+                .map(|s| s.content.as_ref())
+                .collect::<String>()
+        })
+        .collect()
+}
+
+#[test]
+fn append_only_incremental_rebuild_matches_cold_rebuild() {
+    let lines = generate_realistic_transcript(1000);
+    let mut app = sample_app(&[]);
+    let deque: VecDeque<String> = lines.into();
+    app.state.transcripts.insert("ses_test".into(), deque);
+    let id = "ses_test".to_string();
+    let width = 90;
+
+    // Build initial cache
+    crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+    assert!(app.md_cache.is_some());
+
+    // Append several new lines (mix of markdown, link, tool)
+    let new_lines = [
+        "### Newly Appended Heading",
+        "Here is new text with [new link](https://example.com/new).",
+        "▸ read_file: path=\"new_file.rs\"",
+        "  ✓ read 50 lines",
+        "Final trailing note.",
+    ];
+    for nl in &new_lines {
+        app.state
+            .transcripts
+            .get_mut(&id)
+            .unwrap()
+            .push_back(nl.to_string());
+    }
+
+    // Incremental rebuild
+    crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+    let cache = app.md_cache.as_ref().unwrap();
+
+    // Cold full rebuild
+    let (cold_lines, cold_links) = crate::draw::build_transcript_lines(&app, &id, width);
+
+    // Compare lines
+    let inc_text = transcript_lines_to_plain(&cache.lines);
+    let cold_text = transcript_lines_to_plain(&cold_lines);
+    assert_eq!(inc_text, cold_text, "Rendered line text must match exactly");
+
+    // Compare links
+    assert_eq!(
+        cache.links, cold_links,
+        "Extracted links and line indexes must match exactly"
+    );
+}
+
+#[test]
+fn streaming_line_changed_in_place_same_length_invalidates_and_updates() {
+    let mut app = sample_app(&["first line", "", "initial line content ABC"]);
+    let id = "ses_test".to_string();
+    let width = 80;
+
+    crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+    let initial_stamp = app.md_cache.as_ref().unwrap().stamp;
+    let initial_text = transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines);
+    assert!(initial_text
+        .iter()
+        .any(|l| l.contains("initial line content ABC")));
+
+    // Change last line in place with EXACT same length
+    let last = app
+        .state
+        .transcripts
+        .get_mut(&id)
+        .unwrap()
+        .back_mut()
+        .unwrap();
+    *last = "initial line content XYZ".to_string(); // ABC -> XYZ, same length!
+
+    let new_stamp = crate::draw::transcript_stamp(&app, &id);
+    assert_ne!(
+        initial_stamp, new_stamp,
+        "Stamp must change even when length is identical"
+    );
+
+    // Rebuild cache
+    crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+    let updated_text = transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines);
+    assert!(
+        !updated_text.iter().any(|l| l.contains("ABC")),
+        "Old text must be gone"
+    );
+    assert!(
+        updated_text.iter().any(|l| l.contains("XYZ")),
+        "New in-place text must appear"
+    );
+}
+
+#[test]
+fn rebuild_on_width_change_session_switch_and_toggles_match_cold_rebuild() {
+    let lines = generate_realistic_transcript(200);
+    let mut app = sample_app(&[]);
+    let deque: VecDeque<String> = lines.into();
+    app.state.transcripts.insert("ses_test".into(), deque);
+    let id = "ses_test".to_string();
+
+    // 1. Initial build at width 100
+    crate::draw::update_transcript_cache(&mut app, &id, 100, 100);
+
+    // 2. Width change to 60
+    crate::draw::update_transcript_cache(&mut app, &id, 60, 60);
+    let (cold_lines_w, cold_links_w) = crate::draw::build_transcript_lines(&app, &id, 60);
+    assert_eq!(
+        transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines),
+        transcript_lines_to_plain(&cold_lines_w)
+    );
+    assert_eq!(app.md_cache.as_ref().unwrap().links, cold_links_w);
+
+    // 3. Raw mode toggle
+    app.raw_md = true;
+    crate::draw::update_transcript_cache(&mut app, &id, 60, 60);
+    let (cold_lines_raw, _) = crate::draw::build_transcript_lines(&app, &id, 60);
+    assert_eq!(
+        transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines),
+        transcript_lines_to_plain(&cold_lines_raw)
+    );
+    app.raw_md = false;
+
+    // 4. show_tools toggle
+    app.show_tools = true;
+    crate::draw::update_transcript_cache(&mut app, &id, 60, 60);
+    let (cold_lines_tools, _) = crate::draw::build_transcript_lines(&app, &id, 60);
+    assert_eq!(
+        transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines),
+        transcript_lines_to_plain(&cold_lines_tools)
+    );
+    app.show_tools = false;
+
+    // 5. show_thoughts toggle
+    app.show_thoughts = true;
+    crate::draw::update_transcript_cache(&mut app, &id, 60, 60);
+    let (cold_lines_thoughts, _) = crate::draw::build_transcript_lines(&app, &id, 60);
+    assert_eq!(
+        transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines),
+        transcript_lines_to_plain(&cold_lines_thoughts)
+    );
+    app.show_thoughts = false;
+
+    // 6. Session switch
+    let id2 = "ses_test2".to_string();
+    let s2 = app.state.sessions.get("ses_test").unwrap().clone();
+    app.state.sessions.insert(id2.clone(), s2);
+    app.state.transcripts.insert(
+        id2.clone(),
+        VecDeque::from(vec!["hello from ses2".to_string()]),
+    );
+    crate::draw::update_transcript_cache(&mut app, &id2, 60, 60);
+    let (cold_lines_s2, _) = crate::draw::build_transcript_lines(&app, &id2, 60);
+    assert_eq!(
+        transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines),
+        transcript_lines_to_plain(&cold_lines_s2)
+    );
+}
+
+#[test]
+fn tool_folding_identical_for_show_tools_false() {
+    let mut app = sample_app(&[
+        "header text",
+        "",
+        "▸ read_file: a",
+        "  ✓ 1",
+        "▸ read_file: b",
+        "  ✓ 2",
+        "▸ run_cmd: cargo test",
+        "  ✓ 3",
+        "trailing prose",
+    ]);
+    let id = "ses_test".to_string();
+    let width = 80;
+
+    app.show_tools = false;
+    crate::draw::update_transcript_cache(&mut app, &id, width, width as u16);
+    let cache_text = transcript_lines_to_plain(&app.md_cache.as_ref().unwrap().lines);
+    let (cold_lines, _) = crate::draw::build_transcript_lines(&app, &id, width);
+    let cold_text = transcript_lines_to_plain(&cold_lines);
+
+    assert_eq!(cache_text, cold_text);
+    assert!(cache_text.iter().any(|l| l.contains("工具 ×3 (✓3)")));
 }

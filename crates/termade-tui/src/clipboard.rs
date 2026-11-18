@@ -199,7 +199,12 @@ fn transcript_lines(app: &App) -> Vec<String> {
         .unwrap_or(&[]);
     app.selected_id()
         .and_then(|id| app.state.transcripts.get(&id))
-        .map(|buf| visible_transcript(buf.iter(), app.show_thoughts, app.show_tools, active))
+        .map(|buf| {
+            visible_transcript(buf.iter(), app.show_thoughts, app.show_tools, active)
+                .into_iter()
+                .map(|c| c.into_owned())
+                .collect()
+        })
         .unwrap_or_default()
 }
 

@@ -1,5 +1,6 @@
 //! TUI 狀態模型、版面模式與畫面快取。
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use tr::tr;
@@ -118,16 +119,37 @@ pub(crate) const MD_REBUILD_INTERVAL: Duration = Duration::from_millis(120);
 /// 「請先按 i 或 Enter」提示的顯示時間。
 pub(crate) const INPUT_NUDGE_DURATION: Duration = Duration::from_millis(1800);
 
-/// 逐字稿渲染快取：只有來源／寬度／模式改變時才重算 Markdown。
+/// 逐字稿指紋：串流增量會改變末行或行數，滿額截斷會改變首行。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub(crate) struct TranscriptStamp {
+    pub(crate) len: usize,
+    pub(crate) front_len: usize,
+    pub(crate) front_hash: u64,
+    pub(crate) back_len: usize,
+    pub(crate) back_hash: u64,
+}
+
+/// 逐字稿渲染快取：包含已渲染之穩定前綴與可動態重算之尾端。
 pub(crate) struct MdCache {
     pub(crate) session: SessionId,
-    /// 該 session 逐字稿的輕量指紋 (行數、首行長、末行長)；其他 session 或
-    /// 非逐字稿事件造成的 `state.seq` 變動不會讓快取失效。
-    pub(crate) stamp: (usize, usize, usize),
+    pub(crate) stamp: TranscriptStamp,
     pub(crate) raw: bool,
     pub(crate) width: u16,
+    pub(crate) show_tools: bool,
+    pub(crate) show_thoughts: bool,
     pub(crate) lines: Vec<Line<'static>>,
     pub(crate) links: Vec<crate::markdown::LinkTarget>,
+    /// 穩定前綴所涵蓋的原始逐字稿行數。
+    pub(crate) prefix_raw_len: usize,
+    /// 穩定前綴產生的渲染行數。
+    pub(crate) prefix_lines_count: usize,
+    /// 穩定前綴產生的連結數。
+    pub(crate) prefix_links_count: usize,
+    /// 穩定前綴首行與末行的長度與 hash (用以偵測滿額截斷或中間修改)。
+    pub(crate) prefix_front_hash: u64,
+    pub(crate) prefix_front_len: usize,
+    pub(crate) prefix_last_hash: u64,
+    pub(crate) prefix_last_len: usize,
 }
 
 /// 單一主機的狀態與資料快照。
@@ -974,6 +996,13 @@ pub(crate) fn main_pane_text(app: &App) -> String {
     }
 }
 
+struct ToolRun<'a> {
+    calls: usize,
+    ok: usize,
+    last: Cow<'a, str>,
+    prev_completed: Option<Cow<'a, str>>,
+}
+
 /// 依顯示設定過濾逐字稿：隱藏思考行；未展開工具時，把連續的工具呼叫／成功結果
 /// 摺成一行摘要 (失敗 `✗` 行保留，錯誤不該被藏起來)。
 /// 若最後一筆工具呼叫尚未完成 (`active_tools` 非空)，不摺入統計行，而是獨立顯示於最下方。
@@ -982,22 +1011,21 @@ pub(crate) fn visible_transcript<'a>(
     show_thoughts: bool,
     show_tools: bool,
     active_tools: &[termade_core::ActiveTool],
-) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    // (呼叫數, 成功數, 最後一個呼叫行, 上一個已完成的呼叫行)
-    let mut run: Option<(usize, usize, String, Option<String>)> = None;
-    fn flush(out: &mut Vec<String>, run: &mut Option<(usize, usize, String, Option<String>)>) {
-        if let Some((calls, ok, last, _)) = run.take() {
-            if calls == 1 {
-                out.push(last);
+) -> Vec<Cow<'a, str>> {
+    let mut out: Vec<Cow<'a, str>> = Vec::with_capacity(lines.size_hint().0);
+    let mut run: Option<ToolRun<'a>> = None;
+    fn flush<'a>(out: &mut Vec<Cow<'a, str>>, run: &mut Option<ToolRun<'a>>) {
+        if let Some(r) = run.take() {
+            if r.calls == 1 {
+                out.push(r.last);
             } else {
-                let last = last.trim_start_matches("▸ ");
-                out.push(tr!(
+                let last_str = r.last.trim_start_matches("▸ ");
+                out.push(Cow::Owned(tr!(
                     "▸ 工具 ×{calls} (✓{ok})· 最後：{last}",
-                    calls = calls,
-                    ok = ok,
-                    last = last
-                ));
+                    calls = r.calls,
+                    ok = r.ok,
+                    last = last_str
+                )));
             }
         }
     }
@@ -1006,23 +1034,25 @@ pub(crate) fn visible_transcript<'a>(
             continue;
         }
         if show_tools {
-            out.push(l.clone());
+            out.push(Cow::Borrowed(l.as_str()));
         } else if l.starts_with("▸ ") {
-            let (calls, ok, last, prev_completed) =
-                run.take().unwrap_or((0, 0, String::new(), None));
-            let prev = if calls > 0 {
-                Some(last)
-            } else {
-                prev_completed
+            let (calls, ok, prev) = match run.take() {
+                Some(r) => (r.calls + 1, r.ok, Some(r.last)),
+                None => (1, 0, None),
             };
-            run = Some((calls + 1, ok, l.clone(), prev));
+            run = Some(ToolRun {
+                calls,
+                ok,
+                last: Cow::Borrowed(l.as_str()),
+                prev_completed: prev,
+            });
         } else if l.starts_with("  ✓") {
             if let Some(r) = run.as_mut() {
-                r.1 += 1;
+                r.ok += 1;
             }
         } else {
             flush(&mut out, &mut run);
-            out.push(l.clone());
+            out.push(Cow::Borrowed(l.as_str()));
         }
     }
 
@@ -1044,34 +1074,35 @@ pub(crate) fn visible_transcript<'a>(
         if show_tools {
             if let Some(last) = out.last_mut() {
                 if last.starts_with("▸ ") {
-                    *last = active_line;
+                    *last = Cow::Owned(active_line);
                 } else {
-                    out.push(active_line);
+                    out.push(Cow::Owned(active_line));
                 }
             } else {
-                out.push(active_line);
+                out.push(Cow::Owned(active_line));
             }
-        } else if let Some((calls, ok, _last, prev_completed)) = run.take() {
-            let completed_calls = calls.saturating_sub(1);
+        } else if let Some(r) = run.take() {
+            let completed_calls = r.calls.saturating_sub(1);
             if completed_calls == 1 {
-                if let Some(p) = prev_completed {
+                if let Some(p) = r.prev_completed {
                     out.push(p);
                 }
             } else if completed_calls > 1 {
-                let last_str = prev_completed
+                let last_str = r
+                    .prev_completed
                     .as_deref()
                     .unwrap_or("")
                     .trim_start_matches("▸ ");
-                out.push(tr!(
+                out.push(Cow::Owned(tr!(
                     "▸ 工具 ×{calls} (✓{ok})· 最後：{last}",
                     calls = completed_calls,
-                    ok = ok,
+                    ok = r.ok,
                     last = last_str
-                ));
+                )));
             }
-            out.push(active_line);
+            out.push(Cow::Owned(active_line));
         } else {
-            out.push(active_line);
+            out.push(Cow::Owned(active_line));
         }
     } else {
         flush(&mut out, &mut run);
