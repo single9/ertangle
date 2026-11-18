@@ -227,7 +227,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ),
     (
         "resume",
-        termade_core::tr_noop!("[prompt]  接續選取的已結束 session (接回原對話，session 不變)"),
+        termade_core::tr_noop!("[prompt]  不帶參數開選擇器；有 prompt 時接續選取的 session"),
     ),
     (
         "model",
@@ -455,13 +455,14 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             }
         }
         "resume" => {
-            if let Some(id) = app.selected_id() {
-                let prompt = Some(rest.to_string()).filter(|p| !p.is_empty());
+            if rest.is_empty() {
+                crate::menu::start_resume_picker(app);
+            } else if let Some(id) = app.selected_id() {
                 send(
                     writer,
                     &Request::Resume {
                         session: id,
-                        prompt,
+                        prompt: Some(rest.to_string()),
                     },
                 )?;
                 app.status = tr!("已要求接續");

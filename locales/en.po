@@ -2175,8 +2175,8 @@ msgid "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 a
 msgstr "[agent[:model]] [note]  Hand off the selected session's work to another agent"
 
 #: crates/termade-tui/src/commands.rs
-msgid "[prompt]  接續選取的已結束 session (接回原對話，session 不變)"
-msgstr "[prompt]  Resume the selected ended session (same conversation, same session)"
+msgid "[prompt]  不帶參數開選擇器；有 prompt 時接續選取的 session"
+msgstr "[prompt]  Without args open picker; with prompt resume selected session"
 
 #: crates/termade-tui/src/commands.rs
 msgid "[名稱]  切換選取 session 的 model (下一回合起生效)；不帶參數列出目前與可選項"
@@ -3507,6 +3507,14 @@ msgid "選擇團隊範本 (選完輸入目標需求)"
 msgstr "Choose a team playbook (then enter the goal)"
 
 #: crates/termade-tui/src/menu.rs
+msgid "沒有可接續的 session (已結束且具備對話 id)"
+msgstr "No resumable sessions (ended and with conversation id)"
+
+#: crates/termade-tui/src/menu.rs
+msgid "接續 session (Enter 確認 · Esc 取消)"
+msgstr "Resume session (Enter to confirm · Esc to cancel)"
+
+#: crates/termade-tui/src/menu.rs
 msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同一個工作目錄)"
 msgstr "Handoff to {target} requested (the old session stops; the new agent uses the same working directory)"
 
@@ -3525,6 +3533,14 @@ msgstr "Model for {agent} (type to filter; Enter uses the typed value if nothing
 #: crates/termade-tui/src/menu.rs
 msgid "沒有符合的 playbook"
 msgstr "No matching playbook"
+
+#: crates/termade-tui/src/menu.rs
+msgid "已要求接續 {label}"
+msgstr "Resume requested for {label}"
+
+#: crates/termade-tui/src/menu.rs
+msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
+msgstr "{label} has no resumable conversation id (PTY, older log, or agent exited without reporting)"
 
 #: crates/termade-tui/src/mouse.rs
 msgid "輸入模式：Enter 送出 · Esc 取消 · 可拖曳選取複製"
@@ -3954,6 +3970,21 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "已複製{label} {lines} 行 ({backend})"
+#~ msgstr "Copied {lines} lines of {label} ({backend})"
+
+#~ msgid "已匯出至 {path} 並複製到剪貼簿 ({backend})"
+#~ msgstr "Exported to {path} and copied to clipboard ({backend})"
+
+#~ msgid "已複製輸入框選取內容 ({n} 個字元 · {backend})"
+#~ msgstr "Copied input selection ({n} chars · {backend})"
+
+#~ msgid "已複製選取 {n} 行 ({backend})"
+#~ msgstr "Copied {n} selected lines ({backend})"
+
+#~ msgid "[prompt]  接續選取的已結束 session (接回原對話，session 不變)"
+#~ msgstr "[prompt]  Resume the selected ended session (same conversation, same session)"
 
 #~ msgid "目前是命令模式：按 i 或 Enter 才能輸入文字"
 #~ msgstr "Normal mode: press i or Enter to type"

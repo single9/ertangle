@@ -307,6 +307,8 @@ pub(crate) enum PickStage {
     Model(AgentKind),
     /// 選擇多 Agent 團隊範本。
     Playbook,
+    /// 選擇要接續的已結束 session。
+    Resume,
 }
 
 pub(crate) struct Picker {
@@ -502,6 +504,65 @@ pub(crate) fn start_playbook_picker(app: &mut App) {
     app.mode = Mode::Pick;
 }
 
+pub(crate) fn format_compact_age(now_ms: u64, created_ms: u64) -> String {
+    let secs = now_ms.saturating_sub(created_ms) / 1000;
+    if secs >= 86_400 {
+        format!("{}d", secs / 86_400)
+    } else if secs >= 3600 {
+        format!("{}h", secs / 3600)
+    } else {
+        format!("{}m", secs / 60)
+    }
+}
+
+pub(crate) fn start_resume_picker(app: &mut App) {
+    let mut ended: Vec<&termade_core::Session> = app
+        .state
+        .sessions
+        .values()
+        .filter(|s| !s.status.is_live())
+        .collect();
+    if ended.is_empty() {
+        app.status = tr!("沒有可接續的 session (已結束且具備對話 id)");
+        return;
+    }
+    ended.sort_by_key(|a| std::cmp::Reverse(a.created_ms));
+    let now_ms = termade_core::now_millis();
+    let items: Vec<(String, String)> = ended
+        .into_iter()
+        .map(|s| {
+            let kind_model = match &s.model {
+                Some(m) if !m.is_empty() => format!("{}:{}", s.kind.id(), m),
+                _ => s.kind.id().to_string(),
+            };
+            let age = format_compact_age(now_ms, s.created_ms);
+            let resumable = if s.native_id.is_some() { "↻" } else { "–" };
+            let label = format!(
+                "{} {}  {}  {}  {}",
+                s.status.glyph(),
+                s.label,
+                kind_model,
+                age,
+                resumable
+            );
+            (label, s.id.clone())
+        })
+        .collect();
+
+    app.picker = Some(Picker {
+        stage: PickStage::Resume,
+        title: tr!("接續 session (Enter 確認 · Esc 取消)"),
+        items,
+        filter: String::new(),
+        cursor: 0,
+        pending: None,
+        loading: false,
+        group_effort: false,
+        variants: Default::default(),
+    });
+    app.mode = Mode::Pick;
+}
+
 fn finish_picker(
     app: &mut App,
     writer: &mut HostRouter,
@@ -659,6 +720,31 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                     app.input = format!("playbook {name} ");
                     app.input_cursor = app.input.chars().count();
                     app.status = tr!("輸入目標需求後按 Enter 啟動 playbook {name}", name = name);
+                }
+                PickStage::Resume => {
+                    let Some(id) = chosen else {
+                        return Ok(());
+                    };
+                    if let Some(s) = app.state.sessions.get(&id) {
+                        let label = s.label.clone();
+                        if !s.status.is_live() && s.native_id.is_some() {
+                            crate::send(
+                                writer,
+                                &termade_protocol::Request::Resume {
+                                    session: id,
+                                    prompt: None,
+                                },
+                            )?;
+                            app.picker = None;
+                            app.mode = Mode::Normal;
+                            app.status = tr!("已要求接續 {label}", label = label);
+                        } else if !s.status.is_live() {
+                            app.status = tr!(
+                                "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)",
+                                label = label
+                            );
+                        }
+                    }
                 }
             }
         }

@@ -2038,6 +2038,18 @@ fn resume_command_sends_request_and_is_discoverable() {
         }
         other => panic!("應送出 Resume，得到 {other:?}"),
     }
+
+    // 不帶參數且無 ended session 時不開選擇器並設定狀態提示。
+    crate::commands::execute_command(&mut app, &mut w, "resume").unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("沒有可接續的 session"));
+
+    // 有 ended session 時，不帶參數開啟選擇器。
+    app.state.sessions.get_mut("ses_test").unwrap().status = SessionStatus::Exited;
+    crate::commands::execute_command(&mut app, &mut w, "resume").unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+    assert!(app.picker.is_some());
+
     // Tab 補全表與 Space 選單都找得到，且 session 層的快捷鍵不重複。
     assert!(crate::commands::COMMANDS
         .iter()
@@ -2049,6 +2061,180 @@ fn resume_command_sends_request_and_is_discoverable() {
     let n = keys.len();
     keys.dedup();
     assert_eq!(keys.len(), n, "Space s 選單有重複的快捷鍵");
+}
+
+#[test]
+fn format_compact_age_produces_compact_strings() {
+    use crate::menu::format_compact_age;
+    assert_eq!(format_compact_age(10_000, 10_000), "0m");
+    assert_eq!(format_compact_age(70_000, 10_000), "1m");
+    assert_eq!(format_compact_age(3_600_000 + 10_000, 10_000), "1h");
+    assert_eq!(format_compact_age(86_400_000 * 2 + 10_000, 10_000), "2d");
+}
+
+#[test]
+fn resume_picker_lists_ended_filters_and_resumes() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    peer.set_read_timeout(Some(std::time::Duration::from_millis(100)))
+        .unwrap();
+
+    let now = termade_core::now_millis();
+
+    // 1. 執行中的 session (live)：不應出現在清單中
+    let s_live = Session {
+        id: "ses_live".into(),
+        kind: AgentKind::OpenCode,
+        label: "worker/live".into(),
+        cwd: "/tmp".into(),
+        branch: None,
+        role: Role::Worker,
+        status: SessionStatus::Busy,
+        model: Some("gpt-4".into()),
+        cost: Cost::default(),
+        parent: None,
+        created_ms: now.saturating_sub(10_000),
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: None,
+        context: None,
+        native_id: Some("nav_live".into()),
+        permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
+        handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+    };
+
+    // 2. 舊的已結束 session，具備 native_id (可接續)
+    let s_old = Session {
+        id: "ses_old".into(),
+        kind: AgentKind::ClaudeCode,
+        label: "worker/alpha".into(),
+        cwd: "/tmp".into(),
+        branch: None,
+        role: Role::Worker,
+        status: SessionStatus::Exited,
+        model: Some("sonnet".into()),
+        cost: Cost::default(),
+        parent: None,
+        created_ms: now.saturating_sub(200_000),
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: None,
+        context: None,
+        native_id: Some("nav_old".into()),
+        permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
+        handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+    };
+
+    // 3. 新的失敗 session，沒有 native_id (不可接續)
+    let s_new = Session {
+        id: "ses_new".into(),
+        kind: AgentKind::Antigravity,
+        label: "worker/beta".into(),
+        cwd: "/tmp".into(),
+        branch: None,
+        role: Role::Worker,
+        status: SessionStatus::Failed,
+        model: None,
+        cost: Cost::default(),
+        parent: None,
+        created_ms: now.saturating_sub(50_000),
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: None,
+        context: None,
+        native_id: None,
+        permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
+        handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+    };
+
+    app.state.sessions.insert("ses_live".into(), s_live);
+    app.state.sessions.insert("ses_old".into(), s_old);
+    app.state.sessions.insert("ses_new".into(), s_new);
+
+    crate::menu::start_resume_picker(&mut app);
+    assert_eq!(app.mode, Mode::Pick);
+    let picker = app.picker.as_ref().unwrap();
+    // 只列出已結束 (Exited 或 Failed) 的 session，共 2 個。
+    assert_eq!(picker.items.len(), 2);
+    // 最新的排在前面 (ses_new 在前，ses_old 在後)。
+    assert_eq!(picker.items[0].1, "ses_new");
+    assert_eq!(picker.items[1].1, "ses_old");
+
+    // 檢查標籤格式：
+    // ses_new: Failed 顯示 ✗，無 model 則只顯示 kind，無 native_id 結尾為 –
+    assert!(picker.items[0]
+        .0
+        .starts_with("✗ worker/beta  antigravity  "));
+    assert!(picker.items[0].0.ends_with("  –"));
+
+    // ses_old: Exited 顯示 ✓，model 為 sonnet，有 native_id 結尾為 ↻
+    assert!(picker.items[1]
+        .0
+        .starts_with("✓ worker/alpha  claude:sonnet  "));
+    assert!(picker.items[1].0.ends_with("  ↻"));
+
+    // 測試輸入過濾 (typing filter)
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('a'))).unwrap();
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('l'))).unwrap();
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('p'))).unwrap();
+    {
+        let p = app.picker.as_ref().unwrap();
+        assert_eq!(p.visible().len(), 1);
+        assert_eq!(p.visible()[0].1, "ses_old");
+    }
+
+    // 按 Backspace 清空過濾
+    handle_key(&mut app, &mut w, kev(KeyCode::Backspace)).unwrap();
+    handle_key(&mut app, &mut w, kev(KeyCode::Backspace)).unwrap();
+    handle_key(&mut app, &mut w, kev(KeyCode::Backspace)).unwrap();
+    assert_eq!(app.picker.as_ref().unwrap().visible().len(), 2);
+
+    // 游標目前在 index 0 (ses_new，不可接續)。按 Enter：
+    // 不會送出 Resume，選擇器保持開啟，狀態顯示不可接續提示。
+    handle_key(&mut app, &mut w, kev(KeyCode::Enter)).unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+    assert!(app.picker.is_some());
+    assert!(app.status.contains("沒有可接續的對話 id"));
+
+    // 移動游標到 index 1 (ses_old，可接續)。按 Enter：
+    // 送出 Request::Resume，選擇器關閉，狀態提示已要求接續。
+    handle_key(&mut app, &mut w, kev(KeyCode::Down)).unwrap();
+    handle_key(&mut app, &mut w, kev(KeyCode::Enter)).unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.picker.is_none());
+    assert!(app.status.contains("已要求接續 worker/alpha"));
+
+    let mut line = String::new();
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(&mut peer), &mut line).unwrap();
+    let req: Request = serde_json::from_str(line.trim()).unwrap();
+    match req {
+        Request::Resume { session, prompt } => {
+            assert_eq!(session, "ses_old");
+            assert_eq!(prompt, None);
+        }
+        other => panic!("應送出 Resume，得到 {other:?}"),
+    }
 }
 
 #[test]

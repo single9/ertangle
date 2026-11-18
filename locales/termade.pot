@@ -2162,7 +2162,7 @@ msgid "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 a
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "[prompt]  接續選取的已結束 session (接回原對話，session 不變)"
+msgid "[prompt]  不帶參數開選擇器；有 prompt 時接續選取的 session"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -3494,6 +3494,14 @@ msgid "選擇團隊範本 (選完輸入目標需求)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
+msgid "沒有可接續的 session (已結束且具備對話 id)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
+msgid "接續 session (Enter 確認 · Esc 取消)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
 msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同一個工作目錄)"
 msgstr ""
 
@@ -3511,6 +3519,14 @@ msgstr ""
 
 #: crates/termade-tui/src/menu.rs
 msgid "沒有符合的 playbook"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
+msgid "已要求接續 {label}"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
+msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
 msgstr ""
 
 #: crates/termade-tui/src/mouse.rs
