@@ -1,6 +1,60 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.6.0] - 2026-11-18
+
+### 🚀 Features
+
+- *(tui,daemon)* Support role selection in tui and modernize collab prompt with role scope
+- *(observability)* Add TUI subagent & background process visibility with process group control
+- *(security)* Forward Claude approvals and redact secrets across MCP tools
+- *(git)* Add pre-merge validation, conflict resolution loop, and auto-review gatekeeper (T34)
+- *(collab)* Add inter-agent English protocol and zero pleasantries policy (T37)
+- *(tui,daemon,protocol)* Add diff file navigation, single-file folding, and hunk/file discard (T35)
+- *(core,daemon,tui,cli)* Add multi-agent playbooks and Markdown session export (T36)
+- *(tui)* Show project name in terminal window title
+- *(tui)* Show session status glyph in terminal window title
+- *(tui)* Show :web status in popup instead of status bar
+- *(web)* Project-scoped mobile companion with overview tab and fuller event mirroring
+- *(tui)* Add Project right panel and Grid center view
+- *(daemon)* Quota-aware spawn, QUOTA_WARN bus alerts and installable termade-ade skill
+- *(tui)* Add inject_skill settings toggle and :skill command (T42)
+- *(web)* Fetch model lists from daemon via list_models (T44)
+- *(tui)* Show :quota as a popup with per-window progress bars (T45)
+- *(collab)* Warn worktree agents that git stash is shared across worktrees
+- *(daemon)* Auto-resume on restart, shared cargo target for worktrees, early quota notice (T46)
+
+### 🐛 Bug Fixes
+
+- *(web)* Fix QR code format bits, interleaving, and terminal rendering; support query token and auth prompt
+- *(web)* Fix QR encoder so codes are scannable
+- *(adapter)* Avoid procps kill misparsing -<pgid> as -1
+- *(web)* Replace stale model catalog with TUI's Claude list (T43)
+- *(adapter)* Treat Claude allowed_warning rate limit as not reached
+- *(web)* Extend QR encoder to v9 for project-scoped URLs
+- *(web)* Distinguish user prompts from agent replies in transcript
+
+### 📚 Documentation
+
+- Update README, in-app help and tickets for role selection and pre-commit checks
+- *(tickets)* Add T32-T36 implementation specs
+- *(tickets)* Add T37 ticket for token-efficient inter-agent communication
+- *(readme)* Add Coordinator and Worker collaboration walkthrough
+- *(tickets)* Add T39-T43 and index T37
+- *(tickets)* Close T32 and link the T39 regression
+- *(tickets)* Mark implemented T33-T36 as done
+
+### 🎨 Styling
+
+- *(tui,daemon)* Format codebase and sync i18n catalogs
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Add pre-commit verification checklist and setup-hooks script
+- *(makefile)* Add pre-commit target for one-command verification
+- *(release)* Add prepare-release workflow and fix BSD sed in release-bump
+- *(release)* Fix empty bumped version in prepare-release and use English messages
+
 ## [0.5.0] - 2026-11-17
 
 ### 🚀 Features
