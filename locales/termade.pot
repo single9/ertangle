@@ -2074,7 +2074,7 @@ msgid "主要區塊"
 msgstr ""
 
 #: crates/termade-tui/src/clipboard.rs
-msgid "已複製{label} {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
+msgid "已複製{label} {lines} 行 ({backend})"
 msgstr ""
 
 #: crates/termade-tui/src/clipboard.rs crates/termade-tui/src/mouse.rs crates/termade-tui/src/mouse.rs
@@ -2470,7 +2470,7 @@ msgid "寫入匯出檔失敗：{e}"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
-msgid "已匯出至 {path} 並複製到剪貼簿"
+msgid "已匯出至 {path} 並複製到剪貼簿 ({backend})"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -3538,7 +3538,7 @@ msgid "已選取 {n} 個字元 (放開滑鼠複製)"
 msgstr ""
 
 #: crates/termade-tui/src/mouse.rs
-msgid "已複製輸入框選取內容 ({n} 個字元)"
+msgid "已複製輸入框選取內容 ({n} 個字元 · {backend})"
 msgstr ""
 
 #: crates/termade-tui/src/mouse.rs
@@ -3550,7 +3550,7 @@ msgid "選取範圍沒有文字"
 msgstr ""
 
 #: crates/termade-tui/src/mouse.rs
-msgid "已複製選取 {n} 行 (OSC 52；Shift+拖曳可原生選取)"
+msgid "已複製選取 {n} 行 ({backend})"
 msgstr ""
 
 #: crates/termade-tui/src/mouse.rs crates/termade-tui/src/mouse.rs

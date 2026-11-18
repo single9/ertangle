@@ -183,6 +183,82 @@ fn base64_matches_known_vectors() {
 }
 
 #[test]
+fn base64_utf8_roundtrip() {
+    use crate::clipboard::base64_decode;
+    let samples = [
+        "",
+        "f",
+        "fo",
+        "foo",
+        "註",
+        "Hello, World!",
+        "繁體中文 台灣軟體工程用語 (Terminal-native)",
+        "Multiline\nText\tWith\r\nSpecial\0Chars 🚀",
+    ];
+    for s in samples {
+        let enc = base64_encode(s.as_bytes());
+        let dec = base64_decode(&enc).expect("decode failed");
+        let roundtrip = String::from_utf8(dec).expect("valid utf-8");
+        assert_eq!(roundtrip, s);
+    }
+}
+
+#[test]
+fn choose_native_clipboard_backend() {
+    use crate::clipboard::{choose_native, ClipBackend};
+
+    // 1. 遠端環境 (SSH 或 tmux)：一律為 None，偏好使用 OSC 52
+    assert_eq!(choose_native(true, true, |_| true), None);
+    assert_eq!(choose_native(true, false, |_| true), None);
+
+    // 2. 本機 Wayland 環境：優先選擇 wl-copy
+    let have_all = |_bin: &str| true;
+    assert_eq!(
+        choose_native(false, true, have_all),
+        Some(ClipBackend::WlCopy)
+    );
+
+    // 本機 Wayland 但無 wl-copy：回退至 xclip
+    let no_wl = |bin: &str| bin != "wl-copy";
+    assert_eq!(choose_native(false, true, no_wl), Some(ClipBackend::Xclip));
+
+    // 本機 Wayland 無 wl-copy 且無 xclip：回退至 xsel
+    let xsel_only = |bin: &str| bin == "xsel";
+    assert_eq!(
+        choose_native(false, true, xsel_only),
+        Some(ClipBackend::Xsel)
+    );
+
+    // 本機 Wayland 但無任何工具：None
+    let have_none = |_bin: &str| false;
+    assert_eq!(choose_native(false, true, have_none), None);
+
+    // 3. 本機 X11 環境 (wayland = false)：忽略 wl-copy，優先選擇 xclip
+    assert_eq!(
+        choose_native(false, false, have_all),
+        Some(ClipBackend::Xclip)
+    );
+    assert_eq!(
+        choose_native(false, false, xsel_only),
+        Some(ClipBackend::Xsel)
+    );
+    assert_eq!(choose_native(false, false, have_none), None);
+}
+
+#[test]
+fn osc52_plain_and_tmux_wrapped_bytes() {
+    use crate::clipboard::osc52_sequence;
+
+    // Plain: \x1b]52;c;<base64>\x07
+    let plain = osc52_sequence("hello", false);
+    assert_eq!(plain, b"\x1b]52;c;aGVsbG8=\x07");
+
+    // Inside tmux: \x1bPtmux;\x1b\x1b]52;c;<base64>\x07\x1b\\
+    let tmux = osc52_sequence("hello", true);
+    assert_eq!(tmux, b"\x1bPtmux;\x1b\x1b]52;c;aGVsbG8=\x07\x1b\\");
+}
+
+#[test]
 fn main_pane_text_excludes_sidebars() {
     let mut app = sample_app(&["hello", "world"]);
     assert_eq!(main_pane_text(&app), "hello\nworld");

@@ -2086,8 +2086,8 @@ msgid "主要區塊"
 msgstr "main pane"
 
 #: crates/termade-tui/src/clipboard.rs
-msgid "已複製{label} {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
-msgstr "Copied {lines} lines of {label} (OSC 52; if it fails, Shift+drag to select)"
+msgid "已複製{label} {lines} 行 ({backend})"
+msgstr "Copied {lines} lines of {label} ({backend})"
 
 #: crates/termade-tui/src/clipboard.rs crates/termade-tui/src/mouse.rs
 msgid "複製失敗：{e}"
@@ -2483,8 +2483,8 @@ msgid "寫入匯出檔失敗：{e}"
 msgstr "Failed to write export file: {e}"
 
 #: crates/termade-tui/src/commands.rs
-msgid "已匯出至 {path} 並複製到剪貼簿"
-msgstr "Exported to {path} and copied to clipboard"
+msgid "已匯出至 {path} 並複製到剪貼簿 ({backend})"
+msgstr "Exported to {path} and copied to clipboard ({backend})"
 
 #: crates/termade-tui/src/commands.rs
 msgid "已匯出至 {path} (剪貼簿失敗：{e})"
@@ -3551,8 +3551,8 @@ msgid "已選取 {n} 個字元 (放開滑鼠複製)"
 msgstr "Selected {n} chars (release the mouse to copy)"
 
 #: crates/termade-tui/src/mouse.rs
-msgid "已複製輸入框選取內容 ({n} 個字元)"
-msgstr "Copied input selection ({n} chars)"
+msgid "已複製輸入框選取內容 ({n} 個字元 · {backend})"
+msgstr "Copied input selection ({n} chars · {backend})"
 
 #: crates/termade-tui/src/mouse.rs
 msgid "選取第 {from}–{to} 行 (放開滑鼠複製)"
@@ -3563,8 +3563,8 @@ msgid "選取範圍沒有文字"
 msgstr "Selection contains no text"
 
 #: crates/termade-tui/src/mouse.rs
-msgid "已複製選取 {n} 行 (OSC 52；Shift+拖曳可原生選取)"
-msgstr "Copied {n} selected lines (OSC 52; Shift+drag for native selection)"
+msgid "已複製選取 {n} 行 ({backend})"
+msgstr "Copied {n} selected lines ({backend})"
 
 #: crates/termade-tui/src/mouse.rs
 msgid "已開啟連結：{url}"
@@ -3971,20 +3971,20 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
 
-#~ msgid "已複製{label} {lines} 行 ({backend})"
-#~ msgstr "Copied {lines} lines of {label} ({backend})"
-
-#~ msgid "已匯出至 {path} 並複製到剪貼簿 ({backend})"
-#~ msgstr "Exported to {path} and copied to clipboard ({backend})"
-
-#~ msgid "已複製輸入框選取內容 ({n} 個字元 · {backend})"
-#~ msgstr "Copied input selection ({n} chars · {backend})"
-
-#~ msgid "已複製選取 {n} 行 ({backend})"
-#~ msgstr "Copied {n} selected lines ({backend})"
+#~ msgid "已複製{label} {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
+#~ msgstr "Copied {lines} lines of {label} (OSC 52; if it fails, Shift+drag to select)"
 
 #~ msgid "[prompt]  接續選取的已結束 session (接回原對話，session 不變)"
 #~ msgstr "[prompt]  Resume the selected ended session (same conversation, same session)"
+
+#~ msgid "已匯出至 {path} 並複製到剪貼簿"
+#~ msgstr "Exported to {path} and copied to clipboard"
+
+#~ msgid "已複製輸入框選取內容 ({n} 個字元)"
+#~ msgstr "Copied input selection ({n} chars)"
+
+#~ msgid "已複製選取 {n} 行 (OSC 52；Shift+拖曳可原生選取)"
+#~ msgstr "Copied {n} selected lines (OSC 52; Shift+drag for native selection)"
 
 #~ msgid "目前是命令模式：按 i 或 Enter 才能輸入文字"
 #~ msgstr "Normal mode: press i or Enter to type"

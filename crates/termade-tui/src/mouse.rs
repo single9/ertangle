@@ -136,10 +136,11 @@ pub(crate) fn handle_mouse(
                 return Ok(());
             }
             match write_clipboard(&text) {
-                Ok(()) => {
+                Ok(backend) => {
                     app.status = tr!(
-                        "已複製輸入框選取內容 ({n} 個字元)",
-                        n = text.chars().count()
+                        "已複製輸入框選取內容 ({n} 個字元 · {backend})",
+                        n = text.chars().count(),
+                        backend = backend
                     );
                 }
                 Err(e) => app.status = tr!("複製失敗：{e}", e = e),
@@ -173,10 +174,10 @@ pub(crate) fn handle_mouse(
                         app.status = tr!("選取範圍沒有文字");
                     } else {
                         match write_clipboard(&text) {
-                            Ok(()) => {
+                            Ok(backend) => {
                                 let n = text.lines().count().max(1);
                                 app.status =
-                                    tr!("已複製選取 {n} 行 (OSC 52；Shift+拖曳可原生選取)", n = n);
+                                    tr!("已複製選取 {n} 行 ({backend})", n = n, backend = backend);
                             }
                             Err(e) => app.status = tr!("複製失敗：{e}", e = e),
                         }

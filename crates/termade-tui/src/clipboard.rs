@@ -1,15 +1,126 @@
-//! 終端機剪貼簿輔助 (OSC 52)與區塊複製。
+//! 剪貼簿支援：原生工具鏈 (wl-copy / xclip / xsel)與 OSC 52 (支援 tmux passthrough)。
 
 use std::io::{self, Write};
 use tr::tr;
 
 use crate::app::{main_pane_text, visible_transcript, App, CenterView};
 
-/// 用 OSC 52 把文字寫進終端機剪貼簿 (SSH / tmux 下也可用，不需終端機原生選取)。
-pub(crate) fn write_clipboard(text: &str) -> io::Result<()> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ClipBackend {
+    WlCopy,
+    Xclip,
+    Xsel,
+    Osc52,
+}
+
+impl std::fmt::Display for ClipBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WlCopy => write!(f, "wl-copy"),
+            Self::Xclip => write!(f, "xclip"),
+            Self::Xsel => write!(f, "xsel"),
+            Self::Osc52 => write!(f, "OSC 52"),
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn choose_native(
+    remote: bool,
+    wayland: bool,
+    have: impl Fn(&str) -> bool,
+) -> Option<ClipBackend> {
+    if remote {
+        return None;
+    }
+    if wayland && have("wl-copy") {
+        return Some(ClipBackend::WlCopy);
+    }
+    if have("xclip") {
+        return Some(ClipBackend::Xclip);
+    }
+    if have("xsel") {
+        return Some(ClipBackend::Xsel);
+    }
+    None
+}
+
+pub(crate) fn osc52_sequence(text: &str, in_tmux: bool) -> Vec<u8> {
+    let b64 = base64_encode(text.as_bytes());
+    if in_tmux {
+        format!("\x1bPtmux;\x1b\x1b]52;c;{b64}\x07\x1b\\").into_bytes()
+    } else {
+        format!("\x1b]52;c;{b64}\x07").into_bytes()
+    }
+}
+
+fn is_remote() -> bool {
+    std::env::var_os("SSH_CONNECTION").is_some()
+        || std::env::var_os("SSH_TTY").is_some()
+        || std::env::var_os("TMUX").is_some()
+}
+
+fn is_tmux() -> bool {
+    std::env::var_os("TMUX").is_some()
+}
+
+fn is_wayland() -> bool {
+    std::env::var_os("WAYLAND_DISPLAY").is_some()
+}
+
+fn try_command(program: &str, args: &[&str], text: &str) -> bool {
+    use std::process::{Command, Stdio};
+    let mut child = match Command::new(program)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    if let Some(mut stdin) = child.stdin.take() {
+        if stdin.write_all(text.as_bytes()).is_err() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return false;
+        }
+    }
+
+    match child.wait() {
+        Ok(status) => status.success(),
+        Err(_) => false,
+    }
+}
+
+/// 將文字寫入系統剪貼簿。
+///
+/// 優先偵測環境：若為遠端 (SSH / tmux)則優先使用 OSC 52；否則優先嘗試本機工具 (wl-copy / xclip / xsel)，
+/// 失敗或不可用時回退至 OSC 52。
+pub(crate) fn write_clipboard(text: &str) -> io::Result<ClipBackend> {
+    let remote = is_remote();
+    let tmux = is_tmux();
+    let wayland = is_wayland();
+
+    if !remote {
+        if wayland && try_command("wl-copy", &[], text) {
+            return Ok(ClipBackend::WlCopy);
+        }
+        if try_command("xclip", &["-selection", "clipboard"], text) {
+            return Ok(ClipBackend::Xclip);
+        }
+        if try_command("xsel", &["--clipboard", "--input"], text) {
+            return Ok(ClipBackend::Xsel);
+        }
+    }
+
+    let seq = osc52_sequence(text, tmux);
     let mut out = io::stdout().lock();
-    write!(out, "\x1b]52;c;{}\x07", base64_encode(text.as_bytes()))?;
-    out.flush()
+    out.write_all(&seq)?;
+    out.flush()?;
+    Ok(ClipBackend::Osc52)
 }
 
 /// 最小 base64 編碼器 (OSC 52 需要；避免多拉一個相依性)。
@@ -34,6 +145,35 @@ pub(crate) fn base64_encode(data: &[u8]) -> String {
         });
     }
     out
+}
+
+/// 最小 base64 解碼器 (測試與驗證用)。
+#[allow(dead_code)]
+pub(crate) fn base64_decode(input: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    let mut buf = 0u32;
+    let mut bits = 0;
+    for &b in input.as_bytes() {
+        if b == b'=' {
+            break;
+        }
+        let val = match b {
+            b'A'..=b'Z' => b - b'A',
+            b'a'..=b'z' => b - b'a' + 26,
+            b'0'..=b'9' => b - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b' ' | b'\n' | b'\r' | b'\t' => continue,
+            _ => return None,
+        };
+        buf = (buf << 6) | (val as u32);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+        }
+    }
+    Some(out)
 }
 
 /// 把 transcript 的可見行切成訊息區塊：每個以 `❯ ` 開頭的使用者提示開啟新區塊，
@@ -103,12 +243,13 @@ pub(crate) fn copy_main_pane(app: &mut App, message: Option<usize>) {
     };
 
     match write_clipboard(&text) {
-        Ok(()) => {
+        Ok(backend) => {
             let lines = text.lines().count().max(1);
             app.status = tr!(
-                "已複製{label} {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)",
+                "已複製{label} {lines} 行 ({backend})",
                 label = label,
-                lines = lines
+                lines = lines,
+                backend = backend
             );
         }
         Err(e) => app.status = tr!("複製失敗：{e}", e = e),

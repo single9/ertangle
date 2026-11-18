@@ -1051,8 +1051,12 @@ pub(crate) fn export_session(app: &mut App, path: Option<&str>) {
     }
     let path = target.display().to_string();
     match crate::clipboard::write_clipboard(&md) {
-        Ok(()) => {
-            app.status = tr!("已匯出至 {path} 並複製到剪貼簿", path = path);
+        Ok(backend) => {
+            app.status = tr!(
+                "已匯出至 {path} 並複製到剪貼簿 ({backend})",
+                path = path,
+                backend = backend
+            );
         }
         Err(e) => {
             app.status = tr!("已匯出至 {path} (剪貼簿失敗：{e})", path = path, e = e);
