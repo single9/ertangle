@@ -156,6 +156,8 @@ pub struct CollabCfg {
     pub prompt_file: Option<String>,
     /// 在協作說明後附上 `termade-ade` skill 內文 (預設關閉；沒安裝 skill 的人也能拿到)。
     pub inject_skill: Option<bool>,
+    /// 在協作說明附上省 token 的工具使用建議 (預設關閉)。
+    pub token_hints: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -607,6 +609,9 @@ impl Config {
         }
         if local.collab.inject_skill.is_some() {
             out.collab.inject_skill = local.collab.inject_skill;
+        }
+        if local.collab.token_hints.is_some() {
+            out.collab.token_hints = local.collab.token_hints;
         }
         if local.collab.extra.is_some() {
             out.collab.extra = local.collab.extra;

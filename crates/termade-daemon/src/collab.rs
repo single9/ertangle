@@ -29,6 +29,15 @@ fn general_rules(out: &mut String) {
     );
 }
 
+/// `[collab] token_hints = true` 時附加的工具使用建議：每多一個回合都要重讀整段上下文，
+/// 所以重點是減少回合數與輸出量 (見 `docs/tickets/T47-agent-token-savings.md`)。
+const TOKEN_HINTS: &str = "Token economy (tool use): every extra turn re-reads the whole context, so fewer turns and smaller outputs save the most.\n\
+- Issue independent tool calls together in one turn instead of one per turn.\n\
+- Combine read-only probes (git status, git log, ls, head) into a single shell command.\n\
+- Limit output: use line ranges, `| head -n 50`, `git diff --stat`, `git log -n 20`; do not dump whole large files or logs.\n\
+- Do not re-read a file you already read unless it has changed.\n\
+- Prefer a one-line tool (rg, jq) over writing a throwaway script.";
+
 fn push_extra(out: &mut String, extra: &str) {
     let extra = extra.trim();
     if !extra.is_empty() {
@@ -161,6 +170,12 @@ pub fn for_session(
         return None;
     }
     let mut extra = extra_text(&cfg, me.map(|s| &s.role), project, global_dir);
+    if cfg.collab.token_hints == Some(true) {
+        if !extra.is_empty() {
+            extra.push_str("\n\n");
+        }
+        extra.push_str(TOKEN_HINTS);
+    }
     if cfg.collab.inject_skill == Some(true) {
         if !extra.is_empty() {
             extra.push_str("\n\n");
@@ -402,6 +417,29 @@ mod tests {
         );
         let w = collab_instructions(&sess("ses_w", "w", Role::Worker), None, "");
         assert!(!w.contains("Token economy"));
+    }
+
+    #[test]
+    fn token_hints_are_added_only_when_enabled() {
+        let global = temp_dir("collab-hints-g");
+        let repo = temp_dir("collab-hints-r");
+        let st = State::new();
+        let off = for_session(&st, "nobody", &global, &repo).unwrap();
+        assert!(!off.contains("Token economy (tool use)"));
+        std::fs::write(global.join("config.toml"), "[collab]\ntoken_hints = true\n").unwrap();
+        let on = for_session(&st, "nobody", &global, &repo).unwrap();
+        assert!(on.contains("Token economy (tool use)"), "{on}");
+        // 專案設定可以覆寫全域設定。
+        std::fs::write(
+            repo.join(".termade").join("config.toml"),
+            "[collab]\ntoken_hints = false\n",
+        )
+        .unwrap();
+        let local_off = for_session(&st, "nobody", &global, &repo).unwrap();
+        assert!(
+            !local_off.contains("Token economy (tool use)"),
+            "{local_off}"
+        );
     }
 
     #[test]

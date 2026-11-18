@@ -2979,6 +2979,13 @@ fn inject_skill_is_a_settings_toggle() {
 }
 
 #[test]
+fn token_hints_is_a_settings_toggle() {
+    use crate::settings::{Item, ITEMS};
+    assert!(ITEMS.contains(&Item::TokenHints));
+    assert!(Item::TokenHints.is_toggle());
+}
+
+#[test]
 fn quota_bar_fills_proportionally_and_clamps() {
     let (f, e) = crate::quota::bar(56.0, 20);
     assert_eq!((f.chars().count(), e.chars().count()), (11, 9));

@@ -450,7 +450,7 @@ termade skill show
 
 在 TUI 裡也可以用 `:skill install [claude|agents|codex] [global]` 安裝 (`:skill show` 查看狀態)。
 
-不想安裝時，可在 `:settings` 開啟「把 termade-ade skill 注入協作說明」，或在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。Claude 回報 `allowed_warning` (例如 7 天視窗超過 75%) 時，coordinator 會先收到較溫和的 `QUOTA_NOTICE`，標題列與 `:quota` 也會標示「⚠ 接近上限」。
+不想安裝時，可在 `:settings` 開啟「把 termade-ade skill 注入協作說明」，或在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。同樣地，`:settings` 的「把省 token 提示注入協作說明」(`[collab] token_hints = true`，預設關閉) 會附加幾條節省 token 的工具使用建議 (獨立呼叫放在同一回合、合併唯讀探查、限制輸出長度)；session 次要資訊列的 `N calls` 可用來比較開關前後的工具呼叫數。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。Claude 回報 `allowed_warning` (例如 7 天視窗超過 75%) 時，coordinator 會先收到較溫和的 `QUOTA_NOTICE`，標題列與 `:quota` 也會標示「⚠ 接近上限」。
 
 ### 中斷復原與編譯資源
 

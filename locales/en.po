@@ -3728,6 +3728,10 @@ msgid "把 termade-ade skill 注入協作說明"
 msgstr "Inject the termade-ade skill into collaboration instructions"
 
 #: crates/termade-tui/src/settings.rs
+msgid "把省 token 提示注入協作說明"
+msgstr "Inject token-saving hints into the collaboration instructions"
+
+#: crates/termade-tui/src/settings.rs
 msgid "Web 版支援 (Web UI)"
 msgstr "Web version support (Web UI)"
 

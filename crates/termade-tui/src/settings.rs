@@ -25,12 +25,13 @@ pub(crate) enum Item {
     SharedCargoTarget,
     CollabInstructions,
     InjectSkill,
+    TokenHints,
     WebCompanion,
     WebPort,
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 15] = [
+pub(crate) const ITEMS: [Item; 16] = [
     Item::DefaultAgent,
     Item::DefaultPermission,
     Item::TargetAgent,
@@ -43,6 +44,7 @@ pub(crate) const ITEMS: [Item; 15] = [
     Item::SharedCargoTarget,
     Item::CollabInstructions,
     Item::InjectSkill,
+    Item::TokenHints,
     Item::WebCompanion,
     Item::WebPort,
     Item::Language,
@@ -144,6 +146,7 @@ impl Item {
             Item::SharedCargoTarget => tr!("worktree 共用 cargo target (編譯排隊、不重複)"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
             Item::InjectSkill => tr!("把 termade-ade skill 注入協作說明"),
+            Item::TokenHints => tr!("把省 token 提示注入協作說明"),
             Item::WebCompanion => tr!("Web 版支援 (Web UI)"),
             Item::WebPort => tr!("Web 版連接埠 (Web Port)"),
             Item::Language => tr!("介面語言"),
@@ -167,6 +170,7 @@ impl Item {
             Item::SharedCargoTarget => on_off(c.agent_spawn.shared_cargo_target()),
             Item::CollabInstructions => on_off(c.collab.instructions != Some(false)),
             Item::InjectSkill => on_off(c.collab.inject_skill == Some(true)),
+            Item::TokenHints => on_off(c.collab.token_hints == Some(true)),
             Item::WebCompanion => {
                 if c.web.enabled == Some(false) {
                     "".into()
@@ -233,6 +237,7 @@ impl Item {
             Item::SpawnWorktree
             | Item::CollabInstructions
             | Item::InjectSkill
+            | Item::TokenHints
             | Item::AutoResume
             | Item::SharedCargoTarget => {
                 vec![pair("on", &tr!("開")), pair("off", &tr!("關"))]
@@ -303,6 +308,7 @@ impl Item {
             Item::SpawnWorktree
                 | Item::CollabInstructions
                 | Item::InjectSkill
+                | Item::TokenHints
                 | Item::AutoResume
                 | Item::SharedCargoTarget
         )
@@ -413,6 +419,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::SpawnMaxEffort => (&["agent_spawn"], "max_effort"),
         Item::CollabInstructions => (&["collab"], "instructions"),
         Item::InjectSkill => (&["collab"], "inject_skill"),
+        Item::TokenHints => (&["collab"], "token_hints"),
         Item::AutoResume => (&["agent_spawn"], "auto_resume"),
         Item::SharedCargoTarget => (&["agent_spawn"], "shared_cargo_target"),
         Item::WebCompanion | Item::WebPort => return,
