@@ -207,7 +207,7 @@ fn base64_utf8_roundtrip() {
 fn choose_native_clipboard_backend() {
     use crate::clipboard::{choose_native, ClipBackend};
 
-    // 1. 遠端環境 (SSH 或 tmux)：一律為 None，偏好使用 OSC 52
+    // 1. 遠端 SSH 環境：一律為 None，偏好使用 OSC 52
     assert_eq!(choose_native(true, true, |_| true), None);
     assert_eq!(choose_native(true, false, |_| true), None);
 

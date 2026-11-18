@@ -54,10 +54,10 @@ pub(crate) fn osc52_sequence(text: &str, in_tmux: bool) -> Vec<u8> {
     }
 }
 
+/// 只有 SSH 才算「遠端」。本機 tmux 仍可走原生工具 (X11/Wayland 剪貼簿與 tmux 無關)，
+/// 工具不可用時才回退到 tmux passthrough 的 OSC 52。
 fn is_remote() -> bool {
-    std::env::var_os("SSH_CONNECTION").is_some()
-        || std::env::var_os("SSH_TTY").is_some()
-        || std::env::var_os("TMUX").is_some()
+    std::env::var_os("SSH_CONNECTION").is_some() || std::env::var_os("SSH_TTY").is_some()
 }
 
 fn is_tmux() -> bool {
