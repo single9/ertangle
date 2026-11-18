@@ -157,17 +157,18 @@ impl Conn {
                 });
             }
             "tool_call_update" => {
+                // ACP 會用 pending／in_progress 逐步回報同一個工具；只有 completed／failed
+                // 才是結果。以前把「不是 completed」一律當失敗，導致每個成功的 shell 呼叫
+                // 都多印一行 `✗ 失敗`。
+                let Some(ok) = tool_update_ok(update) else {
+                    return;
+                };
                 let name = tool_name(update);
-                let status = update["status"].as_str().unwrap_or("");
-                let ok = Some(status == "completed");
-                let output = update
-                    .get("content")
-                    .filter(|c| !c.is_null())
-                    .map(|c| c.to_string());
+                let output = tool_result_text(update);
                 let _ = self.tx.send(AgentEvent::ToolCall {
                     name,
                     input: String::new(),
-                    ok,
+                    ok: Some(ok),
                     output,
                 });
             }
@@ -243,6 +244,49 @@ fn tool_name(update: &Value) -> String {
         .or_else(|| update["toolCallId"].as_str())
         .unwrap_or("tool")
         .to_string()
+}
+
+/// `tool_call_update` 的狀態：`Some(true)` 成功、`Some(false)` 失敗、`None` 只是進度。
+fn tool_update_ok(update: &Value) -> Option<bool> {
+    match update["status"].as_str().unwrap_or("") {
+        "completed" => Some(true),
+        "failed" => Some(false),
+        _ => None,
+    }
+}
+
+/// 取出 ACP `content` 裡的純文字 (`ToolCallContent::Content`)，逐字稿才不會顯示 JSON 外殼。
+/// 沒有文字內容時退回 `rawOutput`。
+fn tool_result_text(update: &Value) -> Option<String> {
+    let mut parts: Vec<&str> = Vec::new();
+    for item in update["content"].as_array().into_iter().flatten() {
+        if let Some(t) = item["content"]["text"]
+            .as_str()
+            .or_else(|| item["text"].as_str())
+            .filter(|t| !t.trim().is_empty())
+        {
+            parts.push(t);
+        }
+    }
+    let text = if parts.is_empty() {
+        match update.get("rawOutput") {
+            Some(Value::Null) | None => return None,
+            Some(v) => v.as_str().map_or_else(|| v.to_string(), str::to_string),
+        }
+    } else {
+        parts.join("\n")
+    };
+    Some(truncate_chars(&text, 4000))
+}
+
+/// 截斷過長的工具輸出，避免逐字稿與 event log 被整份 stdout 撐爆。
+fn truncate_chars(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max).collect();
+    out.push('…');
+    out
 }
 
 fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
@@ -685,5 +729,44 @@ mod model_tests {
         assert!(first.starts_with("[termade 協作說明]\n規則\n\n做任務 A"));
         let second = take_effective_prompt(&p, "做任務 B");
         assert_eq!(second, "做任務 B");
+    }
+
+    #[test]
+    fn tool_updates_only_report_final_states() {
+        assert_eq!(tool_update_ok(&json!({"status":"pending"})), None);
+        assert_eq!(tool_update_ok(&json!({"status":"in_progress"})), None);
+        assert_eq!(tool_update_ok(&json!({})), None);
+        assert_eq!(tool_update_ok(&json!({"status":"completed"})), Some(true));
+        assert_eq!(tool_update_ok(&json!({"status":"failed"})), Some(false));
+    }
+
+    #[test]
+    fn tool_result_text_unwraps_acp_content() {
+        let u = json!({"content":[{"type":"content","content":{"type":"text","text":"a\nb"}}]});
+        assert_eq!(tool_result_text(&u).as_deref(), Some("a\nb"));
+
+        let u = json!({"content":[
+            {"type":"content","content":{"type":"text","text":"x"}},
+            {"type":"content","content":{"type":"text","text":"y"}}]});
+        assert_eq!(tool_result_text(&u).as_deref(), Some("x\ny"));
+
+        assert_eq!(tool_result_text(&json!({})), None);
+        // diff 內容沒有純文字：不要硬印 JSON。
+        assert_eq!(
+            tool_result_text(&json!({"content":[{"type":"diff","path":"a.rs"}]})),
+            None
+        );
+        // 沒有 content 時退回 rawOutput。
+        assert_eq!(
+            tool_result_text(&json!({"rawOutput":{"exit":0}})).as_deref(),
+            Some("{\"exit\":0}")
+        );
+    }
+
+    #[test]
+    fn long_tool_output_is_truncated() {
+        let s = "x".repeat(10);
+        assert_eq!(truncate_chars(&s, 4), "xxxx…");
+        assert_eq!(truncate_chars("abc", 4), "abc");
     }
 }
