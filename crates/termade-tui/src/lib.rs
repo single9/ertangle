@@ -278,7 +278,8 @@ fn event_loop(
                         if let Some((seq_arc, epoch_arc)) = host_sync.get(&host) {
                             if let Some(h) = app.hosts.get(&host) {
                                 seq_arc.store(h.state.seq, Ordering::Relaxed);
-                                *epoch_arc.lock().unwrap() = h.daemon_epoch.clone();
+                                *epoch_arc.lock().unwrap_or_else(|e| e.into_inner()) =
+                                    h.daemon_epoch.clone();
                             }
                         }
                         dirty = true;

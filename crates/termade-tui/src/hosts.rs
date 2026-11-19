@@ -195,7 +195,10 @@ pub(crate) fn spawn_host_thread(
 
                         if let Ok(mut new_client) = spec.connect() {
                             let seq = shared_seq.load(Ordering::Relaxed);
-                            let epoch = shared_epoch.lock().unwrap().clone();
+                            let epoch = shared_epoch
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .clone();
                             let token = match &spec {
                                 HostConnectSpec::Local => termade_daemon::get_client_token(),
                                 HostConnectSpec::Tcp { token, .. } => token.clone(),

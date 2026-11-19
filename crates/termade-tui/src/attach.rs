@@ -16,7 +16,7 @@ const MAX_FILES: usize = 20_000;
 /// 不是 git repo 時退回走訪目錄 (略過隱藏目錄、target、node_modules)。結果快取 5 秒。
 pub(crate) fn project_files(root: &Path) -> Vec<String> {
     let cache = FILE_CACHE.get_or_init(Default::default);
-    if let Some((t, v)) = cache.lock().unwrap().get(root) {
+    if let Some((t, v)) = cache.lock().unwrap_or_else(|e| e.into_inner()).get(root) {
         if t.elapsed() < FILE_CACHE_TTL {
             return v.clone();
         }
@@ -43,7 +43,7 @@ pub(crate) fn project_files(root: &Path) -> Vec<String> {
     files.truncate(MAX_FILES);
     cache
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .insert(root.to_path_buf(), (Instant::now(), files.clone()));
     files
 }

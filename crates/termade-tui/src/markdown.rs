@@ -691,10 +691,11 @@ pub fn inline_with_links(
         let rest = &text[i..];
 
         if rest.starts_with('\\') && rest.len() > 1 {
-            let ch = rest[1..].chars().next().unwrap();
-            buf.push(ch);
-            i += 1 + ch.len_utf8();
-            continue;
+            if let Some(ch) = rest[1..].chars().next() {
+                buf.push(ch);
+                i += 1 + ch.len_utf8();
+                continue;
+            }
         }
 
         if rest.starts_with("**") || rest.starts_with("__") {
@@ -777,7 +778,9 @@ pub fn inline_with_links(
             }
         }
 
-        let ch = rest.chars().next().unwrap();
+        let Some(ch) = rest.chars().next() else {
+            break;
+        };
         buf.push(ch);
         i += ch.len_utf8();
     }
