@@ -3294,12 +3294,32 @@ fn kill_bg_proc_refuses_non_descendant_and_terminates_real_child() {
     };
     add_session(&shared, "s1", "w1", SessionStatus::Idle, ctl.as_ctl(), &cwd);
 
-    // 啟動一個真實的背景子處理程序 (sleep 30)
-    let mut child = Command::new("sleep")
-        .arg("30")
+    // 模擬 MCP 伺服器：agent 直接帶起、非 shell 的子處理程序，不應被列出或終止。
+    let mut mcp = Command::new("sleep")
+        .arg("31")
         .spawn()
-        .expect("spawn sleep failed");
-    let child_pid = child.id();
+        .expect("spawn mcp stand-in failed");
+    let mcp_pid = mcp.id();
+
+    // 模擬工具指令：shell wrapper 底下的真實背景處理程序 (`; :` 避免 shell 直接 exec)。
+    let mut wrapper = Command::new("sh")
+        .args(["-c", "sleep 30; :"])
+        .spawn()
+        .expect("spawn sh wrapper failed");
+    let wrapper_pid = wrapper.id();
+    let root = std::process::id();
+    let child_pid = (0..50)
+        .find_map(|_| {
+            let found = crate::procs::collect_tree(root)
+                .into_iter()
+                .find(|n| n.ppid == wrapper_pid && n.name == "sleep")
+                .map(|n| n.pid);
+            if found.is_none() {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            found
+        })
+        .expect("sleep under sh wrapper not found");
 
     let (tx, rx) = client_channel(None);
 
@@ -3323,7 +3343,28 @@ fn kill_bg_proc_refuses_non_descendant_and_terminates_real_child() {
     let procs = lock(&shared.inner).state.sessions["s1"].bg_procs.clone();
     assert!(
         procs.iter().any(|p| p.pid == child_pid),
-        "應在 session 的 bg_procs 中探測到子處理程序 PID {child_pid}"
+        "應在 session 的 bg_procs 中探測到子處理程序 PID {child_pid}：{procs:?}"
+    );
+    assert!(
+        !procs
+            .iter()
+            .any(|p| p.pid == mcp_pid || p.pid == wrapper_pid),
+        "MCP 伺服器與 shell wrapper 不應列為背景處理程序：{procs:?}"
+    );
+
+    // 2b. 終止 MCP 伺服器應被拒絕
+    shared.handle(
+        &tx,
+        Request::KillBgProc {
+            session: "s1".into(),
+            pid: Some(mcp_pid),
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(&frames[0], Frame::Error { .. }),
+        "應拒絕終止 MCP 伺服器：{frames:?}"
     );
 
     // 3. 呼叫 KillBgProc 終止該真實子處理程序
@@ -3338,9 +3379,12 @@ fn kill_bg_proc_refuses_non_descendant_and_terminates_real_child() {
     let frames: Vec<Frame> = rx.try_iter().collect();
     assert!(matches!(&frames[0], Frame::Ok { .. }));
 
-    // 等待子處理程序結束並確認被訊號終止
-    let status = child.wait().expect("wait child failed");
-    assert!(!status.success());
+    // sleep 被終止後 wrapper 會接著結束；MCP 替身必須仍在執行。
+    let status = wrapper.wait().expect("wait wrapper failed");
+    assert!(status.success() || status.code().is_some());
+    assert!(mcp.try_wait().unwrap().is_none(), "MCP 替身不應被終止");
+    let _ = mcp.kill();
+    let _ = mcp.wait();
 }
 
 #[test]

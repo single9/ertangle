@@ -6,64 +6,138 @@ use std::path::Path;
 use std::time::SystemTime;
 use termade_protocol::BgProc;
 
-/// 取得指定 root PID 的所有後代處理程序清單，並依規則過濾。
-pub fn scan_session_procs(root_pid: u32, is_busy: bool) -> Vec<BgProc> {
-    let pids = find_descendants(root_pid);
-    let mut procs = Vec::new();
+/// 一個處理程序在後代樹中的節點：PID、父 PID、名稱 (comm) 與命令列。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcNode {
+    pub pid: u32,
+    pub ppid: u32,
+    pub name: String,
+    pub cmdline: String,
+}
 
-    for pid in pids {
-        if let Some(proc) = inspect_proc(pid) {
-            // 過濾 termade mcp
-            if proc.cmdline.contains("termade mcp")
-                || (proc.cmdline.contains("termade") && proc.cmdline.contains("mcp"))
-            {
-                continue;
-            }
-            // 若 session 處於 Busy，過濾前台同步執行中常見的 shell wrapper
-            if is_busy {
-                let is_shell = matches!(proc.name.as_str(), "sh" | "bash" | "zsh");
-                let is_shell_exec = proc.cmdline.starts_with("sh -c")
-                    || proc.cmdline.starts_with("bash -c")
-                    || proc.cmdline.starts_with("/bin/sh -c")
-                    || proc.cmdline.starts_with("/bin/bash -c");
-                if is_shell && is_shell_exec {
-                    continue;
-                }
-            }
-            procs.push(proc);
+/// 是否為「shell 執行一段指令」的 wrapper (`sh -c …`、`/usr/bin/zsh -c …`、`bash -lc …`)。
+/// agent 的工具 (Claude 的 Bash、Codex 的 exec…) 都透過這種 wrapper 執行指令。
+pub fn is_shell_wrapper(name: &str, cmdline: &str) -> bool {
+    let mut argv = cmdline.split_whitespace();
+    let exe = argv.next().unwrap_or("");
+    let base = Path::new(exe)
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let is_shell = |s: &str| matches!(s, "sh" | "bash" | "zsh" | "dash" | "fish" | "ksh");
+    if !(is_shell(name) || is_shell(&base)) {
+        return false;
+    }
+    argv.take_while(|a| a.starts_with('-'))
+        .any(|a| !a.starts_with("--") && a.contains('c'))
+}
+
+/// agent 工具指令的子樹：agent 主處理程序的直接子處理程序中，屬於 shell wrapper 的那些及其所有後代。
+/// MCP 伺服器、LSP 等 agent 自己帶起來的基礎設施 (非 shell 的直接子處理程序) 整棵排除，
+/// 避免把使用者設定的其他程式列成背景處理程序，甚至被誤殺。
+pub fn tool_subtree(root_pid: u32, nodes: &[ProcNode]) -> Vec<&ProcNode> {
+    let mut keep: HashSet<u32> = nodes
+        .iter()
+        .filter(|n| n.ppid == root_pid && is_shell_wrapper(&n.name, &n.cmdline))
+        .map(|n| n.pid)
+        .collect();
+    // nodes 依走訪順序排列 (父節點必在子節點之前)，一次掃描即可擴展整棵子樹。
+    let mut out = Vec::new();
+    for n in nodes {
+        if keep.contains(&n.pid) || keep.contains(&n.ppid) {
+            keep.insert(n.pid);
+            out.push(n);
         }
     }
+    out
+}
 
+/// 要列給使用者看的處理程序：在工具子樹中穿過 shell wrapper，每條分支只取第一個「實際指令」，
+/// 不再列出它底下的 helper (例如瀏覽器的眾多子處理程序)。沒有子處理程序的 wrapper 在 session
+/// 閒置時仍列出 (可能是常駐的 shell 迴圈)；忙碌時則視為前景工具呼叫而略過。
+pub fn visible_tool_procs(root_pid: u32, nodes: &[ProcNode], is_busy: bool) -> Vec<u32> {
+    let subtree = tool_subtree(root_pid, nodes);
+    let pids: HashSet<u32> = subtree.iter().map(|n| n.pid).collect();
+    let is_wrapper: HashSet<u32> = subtree
+        .iter()
+        .filter(|n| is_shell_wrapper(&n.name, &n.cmdline))
+        .map(|n| n.pid)
+        .collect();
+    let has_child: HashSet<u32> = subtree.iter().map(|n| n.ppid).collect();
+    subtree
+        .iter()
+        .filter(|n| {
+            // 父節點必須是 root 或 wrapper：已列出的實際指令，其子孫不再重複列出。
+            let parent_ok =
+                n.ppid == root_pid || (pids.contains(&n.ppid) && is_wrapper.contains(&n.ppid));
+            if !parent_ok {
+                return false;
+            }
+            if is_wrapper.contains(&n.pid) {
+                return !is_busy && !has_child.contains(&n.pid);
+            }
+            true
+        })
+        .map(|n| n.pid)
+        .collect()
+}
+
+/// 取得指定 root PID 的背景處理程序清單 (只含 agent 工具指令啟動的處理程序)。
+pub fn scan_session_procs(root_pid: u32, is_busy: bool) -> Vec<BgProc> {
+    let nodes = collect_tree(root_pid);
+    let mut procs: Vec<BgProc> = visible_tool_procs(root_pid, &nodes, is_busy)
+        .into_iter()
+        .filter_map(inspect_proc)
+        .collect();
     procs.sort_by_key(|p| p.pid);
     procs
 }
 
-/// 檢查 target_pid 是否為 root_pid 的後代處理程序。
-pub fn is_descendant(root_pid: u32, target_pid: u32) -> bool {
-    if root_pid == target_pid {
-        return false;
-    }
-    find_descendants(root_pid).contains(&target_pid)
+/// 可以由使用者終止的 PID：只限 agent 工具指令的子樹，不含 MCP 伺服器等基礎設施。
+pub fn killable_pids(root_pid: u32) -> Vec<u32> {
+    let nodes = collect_tree(root_pid);
+    tool_subtree(root_pid, &nodes)
+        .into_iter()
+        .map(|n| n.pid)
+        .collect()
 }
 
-/// 找出 root_pid 的所有後代 PID (廣度優先走訪)。
-pub fn find_descendants(root_pid: u32) -> Vec<u32> {
-    let mut stack = vec![root_pid];
-    let mut descendants = Vec::new();
+/// 檢查 target_pid 是否為 root_pid 工具指令子樹中的處理程序 (可安全終止)。
+pub fn is_killable(root_pid: u32, target_pid: u32) -> bool {
+    target_pid != root_pid && killable_pids(root_pid).contains(&target_pid)
+}
+
+/// 走訪 root_pid 的後代樹，回傳每個節點 (父節點一定排在子節點之前)。
+pub fn collect_tree(root_pid: u32) -> Vec<ProcNode> {
+    let mut queue = std::collections::VecDeque::from([root_pid]);
+    let mut nodes = Vec::new();
     let mut visited = HashSet::new();
     visited.insert(root_pid);
 
-    while let Some(curr) = stack.pop() {
-        let children = get_children_pids(curr);
-        for child in children {
+    while let Some(curr) = queue.pop_front() {
+        for child in get_children_pids(curr) {
             if visited.insert(child) {
-                stack.push(child);
-                descendants.push(child);
+                queue.push_back(child);
+                let (name, cmdline) = proc_name_and_cmdline(child);
+                nodes.push(ProcNode {
+                    pid: child,
+                    ppid: curr,
+                    name,
+                    cmdline,
+                });
             }
         }
     }
 
-    descendants
+    nodes
+}
+
+/// 讀取處理程序名稱與命令列 (Linux 讀 /proc，其他平台呼叫 ps)。
+fn proc_name_and_cmdline(pid: u32) -> (String, String) {
+    match inspect_proc(pid) {
+        Some(p) => (p.name, p.cmdline),
+        None => (String::new(), String::new()),
+    }
 }
 
 /// 取得單一處理程序的直接子處理程序清單。
@@ -238,6 +312,66 @@ pub fn parse_etime(s: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn node(pid: u32, ppid: u32, name: &str, cmdline: &str) -> ProcNode {
+        ProcNode {
+            pid,
+            ppid,
+            name: name.into(),
+            cmdline: cmdline.into(),
+        }
+    }
+
+    #[test]
+    fn shell_wrapper_detection() {
+        assert!(is_shell_wrapper(
+            "zsh",
+            "/usr/bin/zsh -c source snap.sh && eval 'ls'"
+        ));
+        assert!(is_shell_wrapper("bash", "bash -lc npm run dev"));
+        assert!(is_shell_wrapper("bash", "/bin/bash --login -c make"));
+        assert!(!is_shell_wrapper("bash", "bash"));
+        assert!(!is_shell_wrapper("bash", "bash script.sh"));
+        assert!(!is_shell_wrapper("node", "node -c x"));
+    }
+
+    #[test]
+    fn visible_procs_skip_mcp_servers_wrappers_and_helpers() {
+        let root = 100;
+        let nodes = vec![
+            // agent 帶起的 MCP 伺服器與它的子處理程序：整棵排除
+            node(101, root, "siacheh", "/opt/siacheh mcp --project x"),
+            node(
+                102,
+                root,
+                "termade",
+                "/home/u/.local/bin/termade mcp --session s",
+            ),
+            node(110, 101, "sh", "sh -c helper"),
+            // 工具指令：wrapper → node → 瀏覽器 helper
+            node(
+                103,
+                root,
+                "zsh",
+                "/usr/bin/zsh -c source snap && eval 'node probe.js'",
+            ),
+            node(104, 103, "node", "node probe.js"),
+            node(105, 104, "chrome", "chrome --headless"),
+            node(106, 105, "chrome", "chrome --type=renderer"),
+            // 背景工作：巢狀 wrapper 後才是實際指令
+            node(107, root, "bash", "bash -c (npm run dev &)"),
+            node(108, 107, "sh", "sh -c vite"),
+            node(109, 108, "vite", "node vite"),
+            // 沒有子處理程序的 wrapper (常駐 shell 迴圈)
+            node(111, root, "sh", "sh -c while true; do :; done"),
+        ];
+        assert_eq!(visible_tool_procs(root, &nodes, false), vec![104, 109, 111]);
+        // 忙碌時無子處理程序的 wrapper 視為前景工具呼叫
+        assert_eq!(visible_tool_procs(root, &nodes, true), vec![104, 109]);
+
+        let killable: Vec<u32> = tool_subtree(root, &nodes).iter().map(|n| n.pid).collect();
+        assert_eq!(killable, vec![103, 104, 105, 106, 107, 108, 109, 111]);
+    }
 
     #[test]
     fn parse_etime_formats() {

@@ -1302,8 +1302,8 @@ pub(crate) fn handle_kill_bg_proc(
     let sig = if force { "-KILL" } else { "-TERM" };
 
     if let Some(target_pid) = pid {
-        // 驗證 target_pid 確實屬於該 Session 的後代處理程序樹
-        if !crate::procs::is_descendant(root_pid, target_pid) {
+        // 只允許終止該 session 工具指令啟動的處理程序；MCP 伺服器等基礎設施不在此列。
+        if !crate::procs::is_killable(root_pid, target_pid) {
             let _ = reply.send(Frame::error(tr!(
                 "PID {pid} 不屬於 session {sid} 的後代處理程序",
                 pid = target_pid,
@@ -1321,9 +1321,8 @@ pub(crate) fn handle_kill_bg_proc(
             return;
         }
     } else {
-        // pid: None 代表清理該 Session 底下所有背景子處理程序
-        let descendants = crate::procs::find_descendants(root_pid);
-        for dpid in descendants {
+        // pid: None 代表清理該 Session 工具指令啟動的所有處理程序 (不含 MCP 伺服器等基礎設施)
+        for dpid in crate::procs::killable_pids(root_pid) {
             let _ = termade_adapter::signal_pid(dpid, sig);
         }
     }
