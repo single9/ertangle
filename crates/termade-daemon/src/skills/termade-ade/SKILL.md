@@ -26,7 +26,7 @@ After sending `TASK_DONE`, stop your turn immediately.
 2. Give workers self-contained prompts: exact files, line ranges, acceptance checks, so they do not re-explore.
 3. Prefer cheaper default models/effort for mechanical work; do not self-select expensive ones.
 4. Check quota with `termade_whoami` before spawning. Spawn can be rejected or switched to a fallback agent when quota is high.
-5. On `QUOTA_WARN`: stop spawning, tell workers to commit and report, then finish inline or wait for reset.
+5. On `QUOTA_WARN <agent>`: stop spawning `<agent>` workers (switch to another agent with available quota if needed) and have active `<agent>` workers commit and report.
 6. Reuse an idle worker with `termade_task_create` instead of spawning a new session.
 7. Wait with `termade_wait`; never poll.
 

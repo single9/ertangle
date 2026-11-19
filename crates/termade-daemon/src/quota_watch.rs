@@ -28,14 +28,57 @@ pub(crate) fn live_pressure(q: &Quota, now_ms: u64) -> f32 {
 /// agent 自己回報「接近上限」(Claude `allowed_warning`) 時的提早提醒：比 `QUOTA_WARN` 溫和。
 pub(crate) fn quota_notice_body(agent: &str, used: f32) -> String {
     format!(
-        "QUOTA_NOTICE {agent} {used:.0}% (provider warning): avoid spawning new workers unless necessary; finish current tasks and commit progress."
+        "QUOTA_NOTICE {agent} {used:.0}% (provider warning): avoid spawning new {agent} workers unless necessary (prefer other agents with available quota); finish current {agent} tasks and commit progress."
     )
 }
 
 pub(crate) fn quota_warn_body(agent: &str, used: f32) -> String {
     format!(
-        "QUOTA_WARN {agent} {used:.0}%: stop spawning new workers, checkpoint/commit work now, report status."
+        "QUOTA_WARN {agent} {used:.0}%: stop spawning new {agent} workers (other agents with available quota may still be used); if you or your active workers run on {agent}, checkpoint/commit work now and report status."
     )
+}
+
+/// 判斷某個 session 是否需要收到 `agent` 的額度警告 / 提醒：
+/// - 必須是 live 狀態。
+/// - `only_coordinators = true` (用於 `QUOTA_NOTICE`) 時，僅通知角色為 Coordinator 且 (自身是該 `agent`，或子樹內有 live 的該 `agent` session)。
+/// - `only_coordinators = false` (用於 `QUOTA_WARN`) 時，通知所有自身為該 `agent` 的 live session，以及子樹內有 live 的該 `agent` session 的 Coordinator。
+pub(crate) fn should_notify_quota(
+    s: &termade_core::Session,
+    all_sessions: &std::collections::BTreeMap<SessionId, termade_core::Session>,
+    agent: &str,
+    only_coordinators: bool,
+) -> bool {
+    if !s.status.is_live() {
+        return false;
+    }
+    if only_coordinators && s.role != termade_core::Role::Coordinator {
+        return false;
+    }
+    if s.kind.id() == agent {
+        return true;
+    }
+    if s.role == termade_core::Role::Coordinator {
+        return all_sessions.values().any(|other| {
+            if !other.status.is_live() || other.kind.id() != agent {
+                return false;
+            }
+            // 沿著 parent 往上找是否屬於此 coordinator 的子樹
+            let mut cur = other.parent.as_deref();
+            let mut depth = 0;
+            while let Some(pid) = cur {
+                if pid == s.id {
+                    return true;
+                }
+                cur = all_sessions.get(pid).and_then(|p| p.parent.as_deref());
+                depth += 1;
+                if depth > 32 {
+                    break;
+                }
+            }
+            false
+        });
+    }
+    false
 }
 
 /// 子 agent spawn 前的額度檢查結果。
@@ -268,13 +311,16 @@ impl Shared {
             if !lock_set(&self.quota_warned).insert(notice_key) {
                 return;
             }
-            let coordinators: Vec<SessionId> = lock(&self.inner)
-                .state
-                .sessions
-                .values()
-                .filter(|s| s.status.is_live() && s.role == termade_core::Role::Coordinator)
-                .map(|s| s.id.clone())
-                .collect();
+            let coordinators: Vec<SessionId> = {
+                let inner = lock(&self.inner);
+                inner
+                    .state
+                    .sessions
+                    .values()
+                    .filter(|s| should_notify_quota(s, &inner.state.sessions, &quota.agent, true))
+                    .map(|s| s.id.clone())
+                    .collect()
+            };
             let body = quota_notice_body(&quota.agent, used);
             for rid in coordinators {
                 let _ = self.deliver_message(
@@ -297,17 +343,17 @@ impl Shared {
             .filter(|s| s.kind.id() == quota.agent && s.status.is_live())
             .map(|s| s.id.clone())
             .collect();
-        // 即時通知：該 agent 的 session 與所有執行中的 coordinator (透過匯流排，能喚醒 termade_wait)。
-        let recipients: Vec<SessionId> = lock(&self.inner)
-            .state
-            .sessions
-            .values()
-            .filter(|s| {
-                s.status.is_live()
-                    && (s.kind.id() == quota.agent || s.role == termade_core::Role::Coordinator)
-            })
-            .map(|s| s.id.clone())
-            .collect();
+        // 即時通知：該 agent 的 session 與相關 coordinator (透過匯流排，能喚醒 termade_wait)。
+        let recipients: Vec<SessionId> = {
+            let inner = lock(&self.inner);
+            inner
+                .state
+                .sessions
+                .values()
+                .filter(|s| should_notify_quota(s, &inner.state.sessions, &quota.agent, false))
+                .map(|s| s.id.clone())
+                .collect()
+        };
         let body = quota_warn_body(&quota.agent, used);
         for rid in recipients {
             let _ = self.deliver_message(
@@ -475,7 +521,192 @@ mod tests {
     fn quota_warn_body_format() {
         assert_eq!(
             quota_warn_body("claude", 91.4),
-            "QUOTA_WARN claude 91%: stop spawning new workers, checkpoint/commit work now, report status."
+            "QUOTA_WARN claude 91%: stop spawning new claude workers (other agents with available quota may still be used); if you or your active workers run on claude, checkpoint/commit work now and report status."
         );
+    }
+
+    #[test]
+    fn should_notify_quota_filters_unrelated_coordinators() {
+        use termade_core::{AgentKind, Role, Session, SessionStatus};
+
+        fn make_sess(
+            id: &str,
+            kind: AgentKind,
+            role: Role,
+            parent: Option<&str>,
+            live: bool,
+        ) -> Session {
+            Session {
+                id: id.into(),
+                kind,
+                label: id.into(),
+                cwd: "/tmp".into(),
+                branch: None,
+                role,
+                status: if live {
+                    SessionStatus::Idle
+                } else {
+                    SessionStatus::Exited
+                },
+                model: None,
+                cost: Default::default(),
+                parent: parent.map(|s| s.into()),
+                created_ms: 0,
+                transport: String::new(),
+                status_note: None,
+                repo_root: None,
+                permission: Default::default(),
+                context: None,
+                native_id: None,
+                budget_usd: None,
+                over_budget: false,
+                handed_off_to: None,
+                effort: None,
+                slash_commands: Vec::new(),
+                active_tools: Vec::new(),
+                bg_procs: Vec::new(),
+                tool_calls: 0,
+            }
+        }
+
+        let mut all_sessions = BTreeMap::new();
+
+        // 1. A claude worker and a claude coordinator
+        let claude_worker = make_sess("ses_cw", AgentKind::ClaudeCode, Role::Worker, None, true);
+        let claude_coord = make_sess(
+            "ses_cc",
+            AgentKind::ClaudeCode,
+            Role::Coordinator,
+            None,
+            true,
+        );
+        all_sessions.insert(claude_worker.id.clone(), claude_worker.clone());
+        all_sessions.insert(claude_coord.id.clone(), claude_coord.clone());
+
+        // Both match QUOTA_WARN (only_coordinators = false)
+        assert!(should_notify_quota(
+            &claude_worker,
+            &all_sessions,
+            "claude",
+            false
+        ));
+        assert!(should_notify_quota(
+            &claude_coord,
+            &all_sessions,
+            "claude",
+            false
+        ));
+        // QUOTA_NOTICE (only_coordinators = true): only coordinator matches
+        assert!(!should_notify_quota(
+            &claude_worker,
+            &all_sessions,
+            "claude",
+            true
+        ));
+        assert!(should_notify_quota(
+            &claude_coord,
+            &all_sessions,
+            "claude",
+            true
+        ));
+
+        // 2. An antigravity coordinator with a live claude child worker
+        let agy_coord_with_claude = make_sess(
+            "ses_ac1",
+            AgentKind::Antigravity,
+            Role::Coordinator,
+            None,
+            true,
+        );
+        let child_claude_worker = make_sess(
+            "ses_ccw",
+            AgentKind::ClaudeCode,
+            Role::Worker,
+            Some("ses_ac1"),
+            true,
+        );
+        all_sessions.insert(
+            agy_coord_with_claude.id.clone(),
+            agy_coord_with_claude.clone(),
+        );
+        all_sessions.insert(child_claude_worker.id.clone(), child_claude_worker.clone());
+
+        assert!(should_notify_quota(
+            &agy_coord_with_claude,
+            &all_sessions,
+            "claude",
+            false
+        ));
+        assert!(should_notify_quota(
+            &agy_coord_with_claude,
+            &all_sessions,
+            "claude",
+            true
+        ));
+
+        // 3. An antigravity coordinator with only antigravity child workers, or no workers, or exited claude worker
+        let agy_coord_solo = make_sess(
+            "ses_ac2",
+            AgentKind::Antigravity,
+            Role::Coordinator,
+            None,
+            true,
+        );
+        all_sessions.insert(agy_coord_solo.id.clone(), agy_coord_solo.clone());
+        assert!(!should_notify_quota(
+            &agy_coord_solo,
+            &all_sessions,
+            "claude",
+            false
+        ));
+        assert!(!should_notify_quota(
+            &agy_coord_solo,
+            &all_sessions,
+            "claude",
+            true
+        ));
+
+        let agy_child_worker = make_sess(
+            "ses_aw",
+            AgentKind::Antigravity,
+            Role::Worker,
+            Some("ses_ac2"),
+            true,
+        );
+        all_sessions.insert(agy_child_worker.id.clone(), agy_child_worker.clone());
+        assert!(!should_notify_quota(
+            &agy_coord_solo,
+            &all_sessions,
+            "claude",
+            false
+        ));
+        assert!(!should_notify_quota(
+            &agy_coord_solo,
+            &all_sessions,
+            "claude",
+            true
+        ));
+
+        // Exited claude worker under agy_coord_solo
+        let exited_claude = make_sess(
+            "ses_ex_c",
+            AgentKind::ClaudeCode,
+            Role::Worker,
+            Some("ses_ac2"),
+            false,
+        );
+        all_sessions.insert(exited_claude.id.clone(), exited_claude.clone());
+        assert!(!should_notify_quota(
+            &agy_coord_solo,
+            &all_sessions,
+            "claude",
+            false
+        ));
+        assert!(!should_notify_quota(
+            &agy_coord_solo,
+            &all_sessions,
+            "claude",
+            true
+        ));
     }
 }

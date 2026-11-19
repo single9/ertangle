@@ -81,7 +81,7 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
         out.push_str(
             "- Coordination: Spawn workers using termade_spawn and schedule dependencies with termade_task_create (via depends_on); use termade_wait to await replies, do not poll.\n\
              - Budget & Models: Sessions spawned via termade_spawn get independent workspaces by default. Do not self-select expensive models or effort; use defaults unless needed. Ask the user before using high-tier models. If usage exceeds configured limits, the system will prompt for confirmation.\n\
-             - Token economy: Spawn the fewest workers; do small tasks inline. Give self-contained prompts with exact files/line ranges so workers do not re-explore. Prefer cheaper default models for mechanical work. Check quota via termade_whoami before spawning; when `QUOTA_WARN` arrives, stop spawning and have workers commit and report. Reuse an idle worker via termade_task_create instead of spawning a new one.\n",
+             - Token economy: Spawn the fewest workers; do small tasks inline. Give self-contained prompts with exact files/line ranges so workers do not re-explore. Prefer cheaper default models for mechanical work. Check quota via termade_whoami before spawning; when `QUOTA_WARN <agent>` arrives, stop spawning `<agent>` workers (other agents with available quota can still be used) and have active `<agent>` sessions commit and report. Reuse an idle worker via termade_task_create instead of spawning a new one.\n",
         );
     } else {
         let report_target = if has_parent {
