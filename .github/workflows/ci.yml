@@ -44,5 +44,8 @@ jobs:
           key: xtr-0.1.11
       # xtr 是 AGPL-3.0 的開發工具，只在 CI 執行，不連結進專案。
       - run: command -v xtr || cargo install xtr --version 0.1.11 --locked
-      - run: sudo apt-get update && sudo apt-get install -y gettext
+      - run: |
+          if ! command -v msgfmt >/dev/null || ! command -v msgmerge >/dev/null; then
+            sudo apt-get -o Acquire::Retries=5 update && sudo apt-get -o Acquire::Retries=5 install -y gettext
+          fi
       - run: make i18n-check
