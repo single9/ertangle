@@ -1,6 +1,6 @@
 # T52：SAST 靜態安全分析修復 (WebSocket 長度上限、常數時間比對、Web 檔案存取隔離、DOM XSS 與暫存檔安全)
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 
