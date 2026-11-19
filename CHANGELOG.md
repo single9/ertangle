@@ -1,6 +1,56 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.7.0] - 2026-11-19
+
+### 🚀 Features
+
+- *(core)* Count tool calls per session and show them in the TUI
+- *(collab)* Add [collab] token_hints setting and TUI toggle (T47)
+- *(tui)* Compact session sidebar, copyable input, normal-mode hint
+- *(tui)* Add resume picker for previously opened sessions (T47)
+- *(tui)* Add native clipboard backend chain with tmux passthrough (T48)
+- *(session)* Support archiving and resuming removed historical sessions
+- *(spawn)* Resolve agent kind from request, role, parent, and defaults
+- *(adapter,tui)* Report ACP rate-limit errors as quota reached and clarify empty quota rows (T51)
+- *(handoff)* Allow role and parent identity change via handoff
+
+### 🐛 Bug Fixes
+
+- *(adapter)* Stop reporting in-progress ACP tool updates as failures
+- *(core)* Drop content-free JSON from tool summaries
+- *(tui)* Expand picker width to 72 columns for resume labels (T47)
+- *(tui)* Prefer native clipboard tools in local tmux sessions
+- *(tui)* Make Tab completion match the command hint popup
+- *(adapter)* Clear ACP rate-limit quota after a successful turn (T51)
+- *(web)* Read flattened event records so live updates apply
+- *(handoff)* Only treat role changes as promotion and permission reset (T50)
+- *(render)* Render markdown tables on web and wrap long TUI table cells
+- *(transcript)* Label prompts sent by agents and termade apart from the user
+- *(web)* Stop the chat transcript flickering while agents stream
+
+### 📚 Documentation
+
+- *(tickets)* Add T47 agent token savings plan
+- Add domain glossary, ADR 0001 and tickets T49/T50
+- *(tickets)* Mark T49 ready-for-agent
+- *(tickets)* Add T51 for Antigravity quota reporting
+- *(tickets)* Note account constraint on T51
+
+### ⚡ Performance
+
+- *(tui)* Optimize transcript rendering for long sessions with incremental cache
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Dispatch release workflow when tag is pushed with GITHUB_TOKEN
+- *(release)* Read RELEASE_TOKEN via env in step condition
+- *(i18n)* Use 自動完成 for completion terminology
+
+### I18n
+
+- *(settings)* Shorten English settings labels
+
 ## [0.6.0] - 2026-11-18
 
 ### 🚀 Features
