@@ -454,12 +454,22 @@ pub fn tool_definitions() -> Vec<Value> {
                     "dry_run": {
                         "type": "boolean",
                         "description": "If true, only report files to commit and fast-forwardability without modifying the workspace"
+                    },
+                    "strategy": {
+                        "type": "string",
+                        "description": "Merge strategy: merge | squash | rebase (default: merge)",
+                        "enum": ["merge", "squash", "rebase"]
                     }
                 },
                 "required": ["session"]
             }
         }),
     ]
+}
+
+pub(crate) fn parse_merge_strategy(s: Option<&str>) -> MergeStrategy {
+    s.and_then(|val| val.parse::<MergeStrategy>().ok())
+        .unwrap_or(MergeStrategy::Merge)
 }
 
 fn roundtrip(req: &Request) -> Result<Frame> {
@@ -842,11 +852,12 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .to_string();
             let dry_run = args["dry_run"].as_bool().unwrap_or(false);
             let resolve = args["resolve"].as_bool().unwrap_or(false);
+            let strategy = parse_merge_strategy(args["strategy"].as_str());
             match roundtrip(&Request::WorktreeMerge {
                 session: target,
                 dry_run,
                 resolve,
-                strategy: MergeStrategy::Merge,
+                strategy,
             })? {
                 Frame::Ok { note } => Ok(json!({ "ok": true, "note": note })),
                 other => bail!("unexpected response: {other:?}"),
@@ -1112,5 +1123,36 @@ mod approval_tests {
             serde_json::from_str(approval_response(false, &input).as_str().unwrap()).unwrap();
         assert_eq!(deny["behavior"], "deny");
         assert!(deny["message"].is_string());
+    }
+}
+
+#[cfg(test)]
+mod merge_strategy_tests {
+    use super::*;
+
+    #[test]
+    fn parse_merge_strategy_cases() {
+        assert_eq!(parse_merge_strategy(None), MergeStrategy::Merge);
+        assert_eq!(parse_merge_strategy(Some("merge")), MergeStrategy::Merge);
+        assert_eq!(parse_merge_strategy(Some("squash")), MergeStrategy::Squash);
+        assert_eq!(parse_merge_strategy(Some("SQUASH")), MergeStrategy::Squash);
+        assert_eq!(parse_merge_strategy(Some("rebase")), MergeStrategy::Rebase);
+        assert_eq!(parse_merge_strategy(Some("Rebase")), MergeStrategy::Rebase);
+        assert_eq!(parse_merge_strategy(Some("invalid")), MergeStrategy::Merge);
+    }
+
+    #[test]
+    fn mcp_tools_list_termade_merge_has_strategy_schema() {
+        let tools = tool_definitions();
+        let merge_tool = tools
+            .iter()
+            .find(|t| t["name"] == "termade_merge")
+            .expect("termade_merge tool must exist");
+        let props = &merge_tool["inputSchema"]["properties"];
+        assert_eq!(props["strategy"]["type"], "string");
+        assert_eq!(
+            props["strategy"]["enum"],
+            json!(["merge", "squash", "rebase"])
+        );
     }
 }
