@@ -27,6 +27,8 @@ const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
 const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 
 struct Conn {
+    /// 這個 adapter 代表的 agent id (額度事件的 `agent` 欄位)。
+    agent: String,
     /// 我們自己的 session id (事件關聯用)。
     session_id: String,
     /// agent 回傳的 ACP session id (prompt / cancel 用)。
@@ -127,6 +129,11 @@ impl Conn {
                         used,
                         window: update["size"].as_u64(),
                     });
+                }
+            }
+            "error" => {
+                if let Some(q) = rate_limit_quota(&self.agent, &update.to_string()) {
+                    let _ = self.tx.send(AgentEvent::Quota(q));
                 }
             }
             "agent_message_chunk" => {
@@ -289,6 +296,34 @@ fn truncate_chars(s: &str, max: usize) -> String {
     out
 }
 
+/// 錯誤文字是否為限流／額度用完 (`RESOURCE_EXHAUSTED`、HTTP 429、`quota exceeded`、`rate limit`)。
+fn is_rate_limit_error(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("resource_exhausted")
+        || lower.contains("quota exceeded")
+        || lower.contains("rate limit")
+        || lower.contains("rate_limit")
+    {
+        return true;
+    }
+    // 獨立的 `429` (前後不是數字)，避免誤判 `4290` 之類。
+    let b = lower.as_bytes();
+    lower.match_indices("429").any(|(i, _)| {
+        (i == 0 || !b[i - 1].is_ascii_digit()) && b.get(i + 3).is_none_or(|c| !c.is_ascii_digit())
+    })
+}
+
+/// 限流錯誤 → 「額度已用完」的 `Quota` (沒有百分比，只標記 `reached`)；其他錯誤回 `None`。
+fn rate_limit_quota(agent: &str, error_text: &str) -> Option<termade_core::Quota> {
+    is_rate_limit_error(error_text).then(|| termade_core::Quota {
+        agent: agent.to_string(),
+        windows: Vec::new(),
+        reached: true,
+        warning: false,
+        updated_ms: termade_core::now_millis(),
+    })
+}
+
 fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
     for line in stdout.lines() {
         let Ok(line) = line else { break };
@@ -342,6 +377,9 @@ impl AgentControl for AcpControl {
                 tracing::warn!("ACP prompt 失敗：{e}");
                 if termade_core::looks_like_limit(&e.to_string()) {
                     let _ = conn.tx.send(AgentEvent::Limited(e.to_string()));
+                }
+                if let Some(q) = rate_limit_quota(&conn.agent, &e.to_string()) {
+                    let _ = conn.tx.send(AgentEvent::Quota(q));
                 }
             }
         });
@@ -559,6 +597,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| tr!("取得 stdout 失敗"))?;
 
     let conn = Arc::new(Conn {
+        agent: spec.kind.id().to_string(),
         session_id: spec.id.clone(),
         acp_session: Mutex::new(String::new()),
         stdin: Mutex::new(stdin),
@@ -768,5 +807,37 @@ mod model_tests {
         let s = "x".repeat(10);
         assert_eq!(truncate_chars(&s, 4), "xxxx…");
         assert_eq!(truncate_chars("abc", 4), "abc");
+    }
+}
+
+#[cfg(test)]
+mod rate_limit_tests {
+    use super::*;
+
+    #[test]
+    fn detects_rate_limit_errors() {
+        let samples = [
+            r#"`session/prompt` 失敗：{"code":-32000,"message":"RESOURCE_EXHAUSTED: Quota exceeded for metric"}"#,
+            r#"{"code":429,"message":"Too Many Requests"}"#,
+            r#"{"message":"You have hit the rate limit"}"#,
+            r#"{"sessionUpdate":"error","error":{"message":"HTTP 429"}}"#,
+        ];
+        for s in samples {
+            let q = rate_limit_quota("antigravity", s).expect(s);
+            assert!(q.reached);
+            assert_eq!(q.agent, "antigravity");
+            assert!(q.windows.is_empty());
+        }
+    }
+
+    #[test]
+    fn ignores_other_errors() {
+        for s in [
+            r#"{"code":-32603,"message":"internal error"}"#,
+            r#"{"message":"tokens used: 14290"}"#,
+            r#"{"message":"invalid params"}"#,
+        ] {
+            assert!(rate_limit_quota("antigravity", s).is_none(), "{s}");
+        }
     }
 }

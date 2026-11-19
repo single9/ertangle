@@ -44,3 +44,4 @@ Not confirmed: whether accounts that authenticate through a GCP project (Vertex)
 ## Comments
 
 - 2026-11-19: The account available locally is an enterprise account authenticated through a GCP project, which may only surface limits as 429 errors. The user will provide a separate personal account for researching per-user quota sources (1–3). Keep this ticket at `needs-info` until that account is available.
+- 2026-11-19: Implementation steps 3 and 4 done: the generic ACP adapter maps rate-limit errors (`RESOURCE_EXHAUSTED`, HTTP 429, "quota exceeded", "rate limit") from prompt failures and `session/update` error payloads to `AgentEvent::Quota { reached: true }` (agent id from the adapter kind, e.g. `antigravity`); the `:quota` popup shows a generic "no quota data reported" line for agents without data. Steps 1-2 (usage sources) remain open.

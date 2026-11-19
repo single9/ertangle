@@ -3700,8 +3700,8 @@ msgid " 處理程序與 Subagent 監控 ({label}) "
 msgstr " Process & Subagent Monitor ({label}) "
 
 #: crates/termade-tui/src/quota.rs
-msgid "尚無額度資料 (只有 claude、codex 會回報，執行過一個回合後才有)"
-msgstr "No quota data yet (only claude and codex report it, after one turn)"
+msgid "此 agent 尚未回報額度資料"
+msgstr "No quota data reported by this agent yet"
 
 #: crates/termade-tui/src/quota.rs
 msgid "⚠ 接近上限"
@@ -3986,6 +3986,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "尚無額度資料 (只有 claude、codex 會回報，執行過一個回合後才有)"
+#~ msgstr "No quota data yet (only claude and codex report it, after one turn)"
 
 #~ msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)"
 #~ msgstr "Resume a finished session: after the agent process died or the daemon restarted, continue the original conversation (the session id stays the same)"
