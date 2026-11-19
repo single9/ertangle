@@ -373,11 +373,18 @@ pub fn supports_structured(kind: &AgentKind) -> bool {
 /// 檢查對應的結構化 agent 執行檔是否已安裝於本機 `$PATH`。
 pub fn is_installed(kind: &AgentKind) -> bool {
     match kind {
-        AgentKind::OpenCode | AgentKind::Antigravity => kind
-            .acp_command()
-            .is_some_and(|(prog, _)| which(prog).is_some()),
         AgentKind::ClaudeCode => agent_bin("claude", "TERMADE_CLAUDE_BIN").is_some(),
-        AgentKind::Codex => which("codex").is_some(),
+        _ => is_installed_with(kind, |prog| which(prog).is_some()),
+    }
+}
+
+fn is_installed_with<F: Fn(&str) -> bool>(kind: &AgentKind, has_bin: F) -> bool {
+    match kind {
+        AgentKind::OpenCode | AgentKind::Antigravity => {
+            kind.acp_command().is_some_and(|(prog, _)| has_bin(prog))
+        }
+        AgentKind::ClaudeCode => has_bin("claude"),
+        AgentKind::Codex => has_bin("codex"),
         AgentKind::Custom(_) => false,
     }
 }
@@ -445,5 +452,26 @@ mod tests {
     fn which_finds_sh_and_misses_nonsense() {
         assert!(which("sh").is_some());
         assert!(which("definitely-not-a-real-binary-xyz").is_none());
+    }
+
+    #[test]
+    fn is_installed_checks_each_agent_binary() {
+        let only_agy_and_claude = |bin: &str| matches!(bin, "agy" | "claude");
+        assert!(is_installed_with(
+            &AgentKind::Antigravity,
+            only_agy_and_claude
+        ));
+        assert!(is_installed_with(
+            &AgentKind::ClaudeCode,
+            only_agy_and_claude
+        ));
+        assert!(!is_installed_with(
+            &AgentKind::OpenCode,
+            only_agy_and_claude
+        ));
+        assert!(!is_installed_with(&AgentKind::Codex, only_agy_and_claude));
+        assert!(!is_installed_with(&AgentKind::Custom("foo".into()), |_| {
+            true
+        }));
     }
 }
