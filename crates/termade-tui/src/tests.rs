@@ -2320,6 +2320,44 @@ fn resume_picker_lists_ended_filters_and_resumes() {
         }
         other => panic!("應送出 Resume，得到 {other:?}"),
     }
+
+    // 4. 將 ses_old 移除 (`SessionRemoved`) 後，應進入 archived_sessions，且仍可在選擇器與 `:resume` 找到並接續
+    app.state.apply(&termade_core::Record {
+        seq: 10,
+        ts: now,
+        event: termade_core::Event::SessionRemoved {
+            session: "ses_old".into(),
+        },
+    });
+    assert!(!app.state.sessions.contains_key("ses_old"));
+    assert!(app.state.archived_sessions.contains_key("ses_old"));
+
+    crate::menu::start_resume_picker(&mut app);
+    let picker = app.picker.as_ref().unwrap();
+    assert!(
+        picker
+            .items
+            .iter()
+            .any(|(lbl, id)| id == "ses_old" && lbl.contains("[封存]") && lbl.ends_with("  ↻")),
+        "已移除的歷史 session 應出現在選擇器中：{:?}",
+        picker.items
+    );
+    app.picker = None;
+    app.mode = Mode::Normal;
+
+    // 支援直接 `:resume worker/alpha 繼續修 bug`
+    execute_command(&mut app, &mut w, "resume worker/alpha 繼續修 bug").unwrap();
+    assert_eq!(app.pending_select.as_deref(), Some("ses_old"));
+    let mut line2 = String::new();
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(&mut peer), &mut line2).unwrap();
+    let req2: Request = serde_json::from_str(line2.trim()).unwrap();
+    match req2 {
+        Request::Resume { session, prompt } => {
+            assert_eq!(session, "ses_old");
+            assert_eq!(prompt.as_deref(), Some("繼續修 bug"));
+        }
+        other => panic!("應送出封存 session 的 Resume，得到 {other:?}"),
+    }
 }
 
 #[test]

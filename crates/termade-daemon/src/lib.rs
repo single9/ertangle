@@ -414,8 +414,10 @@ impl Shared {
                 })
                 .collect()
         };
+        let mut orphan_ids = HashSet::new();
         let mut to_resume = Vec::new();
         for (sid, resumable, auto) in orphans {
+            orphan_ids.insert(sid.clone());
             shared.emit(Event::SessionStatus {
                 session: sid.clone(),
                 status: SessionStatus::Failed,
@@ -455,13 +457,13 @@ impl Shared {
                 items: Vec::new(),
             });
         }
-        shared.prune_ended_sessions(now_millis());
+        shared.prune_ended_sessions(now_millis(), &orphan_ids);
         Ok(shared)
     }
 
-    /// 重啟還原後，清掉超過 1 小時且已結束、又沒有 worktree 分支的 session (log 仍完整保留)。
-    /// 否則歷史上所有 session 都會一直堆在清單裡。
-    pub(crate) fn prune_ended_sessions(&self, now_ms: u64) {
+    /// 重啟還原後，將早已結束超過 1 小時且沒有 worktree 分支的舊 session 封存至 `archived_sessions`。
+    /// 本次重啟才中斷的孤兒 session (`orphan_ids`) 不清除，保留在活動清單供自動或手動接續。
+    pub(crate) fn prune_ended_sessions(&self, now_ms: u64, orphan_ids: &HashSet<SessionId>) {
         const KEEP_ENDED_MS: u64 = 3600 * 1000;
         let mut inner = lock(&self.inner);
         let stale: Vec<SessionId> = inner
@@ -469,16 +471,15 @@ impl Shared {
             .sessions
             .values()
             .filter(|s| {
-                !s.status.is_live()
+                !orphan_ids.contains(&s.id)
+                    && !s.status.is_live()
                     && s.branch.is_none()
                     && now_ms.saturating_sub(s.created_ms) > KEEP_ENDED_MS
             })
             .map(|s| s.id.clone())
             .collect();
         for id in stale {
-            inner.state.sessions.remove(&id);
-            inner.state.transcripts.remove(&id);
-            inner.state.queues.remove(&id);
+            inner.state.archive_session(&id);
         }
     }
 

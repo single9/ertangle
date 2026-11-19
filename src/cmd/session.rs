@@ -231,7 +231,51 @@ pub(crate) fn cmd_kill(session: String) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn cmd_resume(session: String, text: Vec<String>) -> Result<()> {
+pub(crate) fn cmd_resume(session: Option<String>, list: bool, text: Vec<String>) -> Result<()> {
+    if list || session.is_none() {
+        let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
+            bail!("{}", tr!("未取得快照"));
+        };
+        let mut rows: Vec<(&termade_core::Session, bool)> = state
+            .sessions
+            .values()
+            .filter(|s| !s.status.is_live() && s.native_id.is_some())
+            .map(|s| (s, false))
+            .chain(
+                state
+                    .archived_sessions
+                    .values()
+                    .filter(|s| s.native_id.is_some())
+                    .map(|s| (s, true)),
+            )
+            .collect();
+        rows.sort_by_key(|a| std::cmp::Reverse(a.0.created_ms));
+        if rows.is_empty() {
+            println!("{}", tr!("沒有可接續的已結束或歷史 session"));
+            return Ok(());
+        }
+        for (s, is_archived) in rows {
+            let tag = if is_archived {
+                tr!("已移除")
+            } else {
+                tr!("已結束")
+            };
+            let model = s.model.as_deref().unwrap_or("-");
+            let note = s.status_note.as_deref().unwrap_or("");
+            println!(
+                "{:<16} {:<20} {:<12} {:<22} [{}] {} {}",
+                s.id,
+                s.label,
+                s.kind.id(),
+                model,
+                tag,
+                s.cwd,
+                note
+            );
+        }
+        return Ok(());
+    }
+    let session = session.unwrap_or_default();
     let prompt = Some(join(text)).filter(|t| !t.trim().is_empty());
     match roundtrip(&Request::Resume { session, prompt })? {
         Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| tr!("已接續"))),

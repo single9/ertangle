@@ -319,6 +319,8 @@ pub(crate) struct App {
     pub(crate) quota_agents: Vec<String>,
     /// 標題列額度摘要的位置 (點擊開啟 `:quota`)。
     pub(crate) quota_area: Rect,
+    /// 等待接續還原後自動聚焦的 session id。
+    pub(crate) pending_select: Option<SessionId>,
     pub(crate) should_quit: bool,
 }
 
@@ -419,7 +421,20 @@ impl App {
             ps_modal: None,
             quota_agents: Vec::new(),
             quota_area: Rect::default(),
+            pending_select: None,
             should_quit: false,
+        }
+    }
+
+    /// 若 `session` 目前在可見清單中則立即選取；否則記在 `pending_select`，待 `SessionStarted` 事件送達時自動聚焦。
+    pub(crate) fn select_or_pend(&mut self, session: &str) {
+        let vis = self.visible_sessions();
+        if let Some(idx) = vis.iter().position(|(_, id)| id == session) {
+            self.selected = idx;
+            self.pending_select = None;
+            self.sync_active_host_from_selection();
+        } else {
+            self.pending_select = Some(session.to_string());
         }
     }
 
@@ -681,6 +696,18 @@ impl App {
                     if matches!(record.event, termade_core::Event::BusMessage { .. }) {
                         let dropped = (before + 1).saturating_sub(self.state.messages.len());
                         self.bus_seen = self.bus_seen.saturating_sub(dropped);
+                    }
+                    if let termade_core::Event::SessionStarted { session } = &record.event {
+                        if self.pending_select.as_deref() == Some(session.id.as_str()) {
+                            if self.scope_here && session.project_root() != self.home_project {
+                                self.scope_here = false;
+                            }
+                            let vis = self.visible_sessions();
+                            if let Some(idx) = vis.iter().position(|(_, id)| id == &session.id) {
+                                self.selected = idx;
+                            }
+                            self.pending_select = None;
+                        }
                     }
                     self.clamp_selection();
                 }

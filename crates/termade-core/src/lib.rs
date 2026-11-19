@@ -830,6 +830,10 @@ pub struct Record {
 
 /// transcript 每個 session 最多保留的行數 (避免長對話吃記憶體)。
 pub const TRANSCRIPT_CAP: usize = 4000;
+/// 已移除但具 `native_id` 的歷史 session 保留上限 (供接續選擇器瀏覽)。
+pub const ARCHIVED_SESSIONS_CAP: usize = 100;
+/// 封存歷史 session 保留的逐字稿行數上限。
+pub const ARCHIVED_TRANSCRIPT_CAP: usize = 200;
 /// bus 訊息保留上限。
 pub const MESSAGE_CAP: usize = 1000;
 /// artifact 保留上限。
@@ -843,6 +847,9 @@ fn default_true() -> bool {
 pub struct State {
     pub seq: Seq,
     pub sessions: BTreeMap<SessionId, Session>,
+    /// 已從清單移除但具備 `native_id` 的歷史 session (供接續原對話)。
+    #[serde(default)]
+    pub archived_sessions: BTreeMap<SessionId, Session>,
     pub tasks: BTreeMap<TaskId, Task>,
     pub messages: Vec<BusMessage>,
     #[serde(default)]
@@ -869,6 +876,7 @@ impl Default for State {
         State {
             seq: 0,
             sessions: BTreeMap::new(),
+            archived_sessions: BTreeMap::new(),
             tasks: BTreeMap::new(),
             messages: Vec::new(),
             artifacts: Vec::new(),
@@ -895,6 +903,57 @@ impl State {
         }
     }
 
+    /// 將已結束的 session 從活動清單移出；若具備 `native_id` 則封存至 `archived_sessions` 供日後接續。
+    pub fn archive_session(&mut self, session: &str) {
+        if let Some(mut s) = self.sessions.remove(session) {
+            if s.native_id.is_some() {
+                s.status = SessionStatus::Exited;
+                s.active_tools.clear();
+                s.bg_procs.clear();
+                let need_summary = s
+                    .status_note
+                    .as_deref()
+                    .is_none_or(|n| n.is_empty() || n.contains(":resume"));
+                if need_summary {
+                    if let Some(last_prompt) = self
+                        .transcripts
+                        .get(session)
+                        .and_then(|buf| buf.iter().rev().find_map(|line| line.strip_prefix("❯ ")))
+                    {
+                        let snippet: String = last_prompt.trim().chars().take(80).collect();
+                        if !snippet.is_empty() {
+                            s.status_note = Some(snippet);
+                        }
+                    }
+                }
+                if let Some(buf) = self.transcripts.get_mut(session) {
+                    while buf.len() > ARCHIVED_TRANSCRIPT_CAP {
+                        buf.pop_front();
+                    }
+                }
+                self.archived_sessions.insert(session.to_string(), s);
+                while self.archived_sessions.len() > ARCHIVED_SESSIONS_CAP {
+                    let Some(oldest_id) = self
+                        .archived_sessions
+                        .values()
+                        .min_by_key(|a| (a.created_ms, a.id.clone()))
+                        .map(|a| a.id.clone())
+                    else {
+                        break;
+                    };
+                    self.archived_sessions.remove(&oldest_id);
+                    self.transcripts.remove(&oldest_id);
+                }
+            } else {
+                self.transcripts.remove(session);
+            }
+        } else {
+            self.transcripts.remove(session);
+        }
+        self.queues.remove(session);
+        self.pending_permissions.retain(|_, p| p.session != session);
+    }
+
     /// 把一個事件套用到狀態上。`rec.seq` 會更新 `self.seq`。
     pub fn apply(&mut self, rec: &Record) {
         self.seq = self.seq.max(rec.seq);
@@ -904,6 +963,7 @@ impl State {
                 self.seq = rec.seq;
             }
             Event::SessionStarted { session } => {
+                self.archived_sessions.remove(&session.id);
                 self.sessions.insert(session.id.clone(), session.clone());
             }
             Event::SessionStatus { session, status } => {
@@ -947,11 +1007,7 @@ impl State {
                 }
             }
             Event::SessionRemoved { session } => {
-                self.sessions.remove(session);
-                self.transcripts.remove(session);
-                self.queues.remove(session);
-                self.pending_permissions
-                    .retain(|_, p| &p.session != session);
+                self.archive_session(session);
             }
             Event::SessionModel { session, model } => {
                 if let Some(s) = self.sessions.get_mut(session) {
@@ -1272,6 +1328,61 @@ impl State {
                     .max_by_key(|s| s.created_ms)
             })
             .map(|s| s.id.clone())
+    }
+
+    /// 以 `id`、`label` 或 `native_id` 尋找供 `:resume` 使用的目標 session；回傳 `(Session, is_archived)`。
+    pub fn resolve_resumable_session(&self, id_or_label: &str) -> Option<(Session, bool)> {
+        let needle = id_or_label.trim().trim_start_matches('@');
+        if needle.is_empty() {
+            return None;
+        }
+        if let Some(s) = self.sessions.get(needle) {
+            return Some((s.clone(), false));
+        }
+        if let Some(s) = self.archived_sessions.get(needle) {
+            return Some((s.clone(), true));
+        }
+        if let Some(s) = self
+            .sessions
+            .values()
+            .filter(|s| s.label == needle && !s.status.is_live())
+            .max_by_key(|s| s.created_ms)
+        {
+            return Some((s.clone(), false));
+        }
+        if let Some(s) = self
+            .archived_sessions
+            .values()
+            .filter(|s| s.label == needle)
+            .max_by_key(|s| s.created_ms)
+        {
+            return Some((s.clone(), true));
+        }
+        if let Some(s) = self
+            .sessions
+            .values()
+            .filter(|s| s.label == needle)
+            .max_by_key(|s| s.created_ms)
+        {
+            return Some((s.clone(), false));
+        }
+        if let Some(s) = self
+            .sessions
+            .values()
+            .filter(|s| s.native_id.as_deref() == Some(needle))
+            .max_by_key(|s| s.created_ms)
+        {
+            return Some((s.clone(), false));
+        }
+        if let Some(s) = self
+            .archived_sessions
+            .values()
+            .filter(|s| s.native_id.as_deref() == Some(needle))
+            .max_by_key(|s| s.created_ms)
+        {
+            return Some((s.clone(), true));
+        }
+        None
     }
 
     /// 沿 `handed_off_to` 走到最後一個接手者；遇到環或超過 16 層就停在目前這個。
@@ -2777,5 +2888,63 @@ mod attachment_tests {
         });
         assert!(!st.sessions["s1"].over_budget);
         assert_eq!(st.sessions["s1"].budget_usd, Some(10.0));
+    }
+
+    #[test]
+    fn removed_resumable_session_is_archived_and_resolvable() {
+        let mut st = State::new();
+        let mut s = crate::tests::sample_session("ses_arch");
+        s.label = "worker/arch".into();
+        s.native_id = Some("nat-arch-1".into());
+        st.apply(&Record {
+            seq: 1,
+            ts: 100,
+            event: Event::SessionStarted { session: s },
+        });
+        st.apply(&Record {
+            seq: 2,
+            ts: 101,
+            event: Event::UserPrompt {
+                session: "ses_arch".into(),
+                text: "請幫我檢查這份報表".into(),
+            },
+        });
+        st.apply(&Record {
+            seq: 3,
+            ts: 102,
+            event: Event::SessionRemoved {
+                session: "ses_arch".into(),
+            },
+        });
+        assert!(!st.sessions.contains_key("ses_arch"));
+        let arch = st
+            .archived_sessions
+            .get("ses_arch")
+            .expect("具備 native_id 的已移除 session 應被封存");
+        assert_eq!(arch.status, SessionStatus::Exited);
+        assert_eq!(arch.status_note.as_deref(), Some("請幫我檢查這份報表"));
+        assert!(
+            st.transcripts.contains_key("ses_arch"),
+            "封存的 session 應保留逐字稿"
+        );
+
+        for query in ["ses_arch", "worker/arch", "nat-arch-1"] {
+            let (found, is_arch) = st
+                .resolve_resumable_session(query)
+                .unwrap_or_else(|| panic!("應能以 {query} 解析封存的 session"));
+            assert!(is_arch);
+            assert_eq!(found.id, "ses_arch");
+        }
+
+        // 再次啟動 (接續) 時應從 archived_sessions 移除並回到 sessions。
+        st.apply(&Record {
+            seq: 4,
+            ts: 103,
+            event: Event::SessionStarted {
+                session: arch.clone(),
+            },
+        });
+        assert!(!st.archived_sessions.contains_key("ses_arch"));
+        assert!(st.sessions.contains_key("ses_arch"));
     }
 }

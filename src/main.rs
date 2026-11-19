@@ -173,9 +173,13 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
-    /// 接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)
+    /// 接續已結束或已移除的歷史 session：用原本的對話繼續 (session id 不變)；搭配 --list 列出可接續的歷史 session
     Resume {
-        session: String,
+        /// 要接續的 session id、label 或原生對話 id；搭配 --list 可省略
+        session: Option<String>,
+        /// 列出所有可接續的已結束與歷史封存 session
+        #[arg(long, short = 'l')]
+        list: bool,
         /// 接續後立刻送出的 prompt (可省略)
         text: Vec<String>,
     },
@@ -548,7 +552,11 @@ fn main() -> Result<()> {
             all,
             force,
         } => cmd_bg_kill(session, pid, all, force),
-        Cmd::Resume { session, text } => cmd_resume(session, text),
+        Cmd::Resume {
+            session,
+            list,
+            text,
+        } => cmd_resume(session, list, text),
         Cmd::Sleep { session } => cmd_sleep(session),
         Cmd::Wake { session } => cmd_wake(session),
         Cmd::Model {

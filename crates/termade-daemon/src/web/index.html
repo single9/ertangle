@@ -2268,6 +2268,7 @@
         daemonEpoch = frame.epoch;
       } else if (op === "snapshot") {
         state = frame.state;
+        if (!state.archived_sessions) state.archived_sessions = {};
         if (!state.transcripts) state.transcripts = {};
         if (!state.queues) state.queues = {};
         if (!state.messages) state.messages = [];
@@ -2301,6 +2302,7 @@
       const kind = event.kind;
 
       if (kind === "session_started") {
+        if (state.archived_sessions) delete state.archived_sessions[event.session.id];
         state.sessions[event.session.id] = event.session;
         if (!state.transcripts[event.session.id]) state.transcripts[event.session.id] = [];
       } else if (kind === "session_status") {
@@ -2352,8 +2354,15 @@
           state.sessions[event.session].status_note = event.note;
         }
       } else if (kind === "session_removed") {
+        const removed = state.sessions[event.session];
+        if (removed && removed.native_id) {
+          if (!state.archived_sessions) state.archived_sessions = {};
+          removed.status = "exited";
+          state.archived_sessions[event.session] = removed;
+        } else {
+          delete state.transcripts[event.session];
+        }
         delete state.sessions[event.session];
-        delete state.transcripts[event.session];
         delete state.queues[event.session];
         if (activeSession === event.session) {
           activeSession = pickSession(curScope()) || Object.keys(state.sessions)[0] || null;
@@ -3080,6 +3089,12 @@
         const card = ev.target.closest("[data-sid]");
         if (!card) return;
         if (act && act.dataset.act === "settings") openSessionSettings(card.dataset.sid);
+        else if (act && act.dataset.act === "resume") {
+          if (ws) {
+            ws.send(JSON.stringify({ op: "resume", session: card.dataset.sid }));
+            showToast("已發送接續請求…");
+          }
+        }
         else selectSession(card.dataset.sid);
       };
 
@@ -3089,7 +3104,7 @@
         countSub.innerText = `共 ${sids.length} 個 Session • 跨 ${projects.length} 個專案`;
       }
 
-      if (sids.length === 0) {
+      if (sids.length === 0 && Object.keys(state.archived_sessions || {}).length === 0) {
         container.innerHTML = `
           <div style="text-align:center; color:var(--text-dim); padding:32px 16px;">
             <div style="font-size:14px; margin-bottom:8px;">目前尚無任何 Session</div>
@@ -3149,6 +3164,56 @@
         `;
         container.appendChild(item);
       });
+
+      const archIds = Object.keys(state.archived_sessions || {}).filter(id => {
+        const s = state.archived_sessions[id];
+        return s && s.native_id && inScope(s);
+      }).sort((a, b) => ((state.archived_sessions[b] || {}).created_ms || 0) - ((state.archived_sessions[a] || {}).created_ms || 0));
+
+      if (archIds.length > 0) {
+        const details = document.createElement("details");
+        details.style.cssText = "margin-top:14px; border-top:1px solid var(--border); padding-top:10px;";
+        const sum = document.createElement("summary");
+        sum.style.cssText = "cursor:pointer; font-size:12px; color:var(--text-dim); padding:4px 2px; user-select:none;";
+        sum.innerText = `歷史封存 Session (${archIds.length} 個可接續)`;
+        details.appendChild(sum);
+        archIds.forEach(id => {
+          const s = state.archived_sessions[id];
+          const pName = getProjectName(s);
+          const shortModel = shortenModelName(s.model) || s.kind || "agent";
+          const item = document.createElement("div");
+          item.className = "session-card";
+          item.style.marginTop = "8px";
+          item.style.opacity = "0.85";
+          item.dataset.sid = id;
+          item.innerHTML = `
+            <div class="session-card-header">
+              <div class="session-card-context">
+                <span class="session-card-project">${escapeHtml(pName)}</span>
+                <span class="session-card-dot">•</span>
+                <span class="session-card-model">${escapeHtml(shortModel)}</span>
+              </div>
+              <span class="header-status-tag">已封存</span>
+            </div>
+            <div class="session-card-body">
+              <span class="session-card-title">${escapeHtml(s.label || id)}</span>
+              ${s.status_note ? `<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">${escapeHtml(s.status_note)}</div>` : ""}
+            </div>
+            <div class="session-card-footer">
+              <div class="session-card-stats">
+                <span class="session-kind-badge">${escapeHtml(s.kind || "agent")}</span>
+              </div>
+              <div class="session-card-actions" onclick="event.stopPropagation()">
+                <button class="session-open-btn" data-act="resume" style="background:var(--yellow); color:#000; border:none;">
+                  <span>接續對話 (Resume)</span>
+                </button>
+              </div>
+            </div>
+          `;
+          details.appendChild(item);
+        });
+        container.appendChild(details);
+      }
     }
 
     function renderQuota() {

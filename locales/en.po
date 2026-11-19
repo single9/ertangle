@@ -216,6 +216,10 @@ msgid "列出所有協作任務"
 msgstr "List all collaboration tasks"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "列出所有可接續的已結束與歷史封存 session"
+msgstr "List all resumable ended and archived sessions"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "列出所有由 termade 管理的 git worktree (M3)"
 msgstr "List all git worktrees managed by termade (M3)"
 
@@ -396,8 +400,8 @@ msgid "接手的 agent，可加 `:model`，例如 codex、claude:sonnet"
 msgstr "The agent taking over; may include `:model`, e.g. codex, claude:sonnet"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)"
-msgstr "Resume a finished session: after the agent process died or the daemon restarted, continue the original conversation (the session id stays the same)"
+msgid "接續已結束或已移除的歷史 session：用原本的對話繼續 (session id 不變)；搭配 --list 列出可接續的歷史 session"
+msgstr "Resume an ended or archived session: continue the original conversation (session id stays the same); use --list to list resumable sessions"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "接續後立刻送出的 prompt (可省略)"
@@ -544,6 +548,10 @@ msgid "補全腳本用的查詢 (不會啟動 daemon)"
 msgstr "Query used by completion scripts (does not start the daemon)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "要接續的 session id、label 或原生對話 id；搭配 --list 可省略"
+msgstr "Session id, label, or native conversation id to resume; may be omitted with --list"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "要終止的背景處理程序 PID (未指定且有 --all 則終止全部)"
 msgstr "PID of the background process to terminate (terminates all if omitted and --all is set)"
 
@@ -677,16 +685,24 @@ msgid "(排隊為空)"
 msgstr "(queue is empty)"
 
 #: src/cmd/session.rs
+msgid "沒有可接續的已結束或歷史 session"
+msgstr "No resumable ended or archived sessions"
+
+#: src/cmd/session.rs
+msgid "已移除"
+msgstr "Removed"
+
+#: src/cmd/session.rs crates/termade-core/src/lib.rs
+msgid "已結束"
+msgstr "Exited"
+
+#: src/cmd/session.rs
 msgid "已接續"
 msgstr "Resumed"
 
 #: src/cmd/session.rs
 msgid "已交接"
 msgstr "Handed off"
-
-#: src/cmd/session.rs
-msgid "已移除"
-msgstr "Removed"
 
 #: src/cmd/session.rs
 msgid "已休眠"
@@ -1146,10 +1162,6 @@ msgstr "awaiting approval"
 #: crates/termade-core/src/lib.rs crates/termade-tui/src/menu.rs
 msgid "休眠"
 msgstr "Sleep"
-
-#: crates/termade-core/src/lib.rs
-msgid "已結束"
-msgstr "Exited"
 
 #: crates/termade-core/src/lib.rs
 msgid "{name} 已重置"
@@ -2354,10 +2366,6 @@ msgstr "Enter the goal and press Enter to start playbook {name}"
 msgid "已送出結束"
 msgstr "Kill sent"
 
-#: crates/termade-tui/src/commands.rs
-msgid "已要求接續"
-msgstr "Resume requested"
-
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
 msgid "已送出中斷"
 msgstr "Interrupt sent"
@@ -2449,6 +2457,10 @@ msgstr "shutdown stops the shared daemon and ends {n} running sessions ({others}
 #: crates/termade-tui/src/commands.rs
 msgid "已要求結束本專案 {n} 個執行中的 session"
 msgstr "Requested stop of {n} running sessions in this project"
+
+#: crates/termade-tui/src/commands.rs
+msgid "已要求接續"
+msgstr "Resume requested"
 
 #: crates/termade-tui/src/commands.rs
 msgid "未知的命令：/{verb} (沒有選取的 session 可轉發)"
@@ -3511,6 +3523,10 @@ msgid "沒有可接續的 session (已結束且具備對話 id)"
 msgstr "No resumable sessions (ended and with conversation id)"
 
 #: crates/termade-tui/src/menu.rs
+msgid "封存"
+msgstr "archived"
+
+#: crates/termade-tui/src/menu.rs
 msgid "接續 session (Enter 確認 · Esc 取消)"
 msgstr "Resume session (Enter to confirm · Esc to cancel)"
 
@@ -3970,6 +3986,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)"
+#~ msgstr "Resume a finished session: after the agent process died or the daemon restarted, continue the original conversation (the session id stays the same)"
 
 #~ msgid "已複製{label} {lines} 行 (OSC 52；失敗時可用 Shift+拖曳選取)"
 #~ msgstr "Copied {lines} lines of {label} (OSC 52; if it fails, Shift+drag to select)"

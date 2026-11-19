@@ -3474,3 +3474,39 @@ fn worktree_sessions_share_one_cargo_target_only_in_cargo_repos() {
     assert_eq!(f(&s), None, "沒有 worktree 分支");
     let _ = std::fs::remove_dir_all(&repo);
 }
+
+#[test]
+fn restart_preserves_old_live_orphans_and_archives_stale_ended_sessions() {
+    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("termade-prune")));
+    let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    let old_ts = now_millis().saturating_sub(7200 * 1000);
+
+    // 1. 雖然建立超過 2 小時，但重啟當下仍在執行中的 session (不應被 prune 刪掉)
+    let mut live_old = restart_session("ses-live-old", SessionStatus::Idle);
+    live_old.created_ms = old_ts;
+    live_old.native_id = Some("nat-live-old".into());
+    first.emit(Event::SessionStarted { session: live_old });
+
+    // 2. 早已結束且超過 2 小時的 session (重啟後應移至 archived_sessions，仍可被查詢接續)
+    let mut ended_old = restart_session("ses-ended-old", SessionStatus::Exited);
+    ended_old.created_ms = old_ts;
+    ended_old.native_id = Some("nat-ended-old".into());
+    first.emit(Event::SessionStarted { session: ended_old });
+
+    first.flush_log();
+    drop(first);
+
+    let second =
+        Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    let inner = lock(&second.inner);
+    assert!(
+        inner.state.sessions.contains_key("ses-live-old"),
+        "重啟當下才中斷的孤兒 session 不該因建立時間超過 1 小時被清除"
+    );
+    assert!(!inner.state.sessions.contains_key("ses-ended-old"));
+    assert!(
+        inner.state.archived_sessions.contains_key("ses-ended-old"),
+        "早已結束的舊 session 應移入 archived_sessions 保留接續能力"
+    );
+    let _ = std::fs::remove_file(&log);
+}

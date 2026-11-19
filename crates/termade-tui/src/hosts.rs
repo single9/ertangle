@@ -108,7 +108,12 @@ impl HostRouter {
     pub fn update_from_app(&mut self, app: &App) {
         self.active_host = app.active_host.clone();
         for (host_name, host_data) in &app.hosts {
-            for sid in host_data.state.sessions.keys() {
+            for sid in host_data
+                .state
+                .sessions
+                .keys()
+                .chain(host_data.state.archived_sessions.keys())
+            {
                 self.session_to_host.insert(sid.clone(), host_name.clone());
             }
         }
@@ -119,10 +124,13 @@ impl HostRouter {
             Request::Prompt { session, .. }
             | Request::Cancel { session }
             | Request::Kill { session }
+            | Request::KillBgProc { session, .. }
+            | Request::Resume { session, .. }
             | Request::Sleep { session }
             | Request::Wake { session }
             | Request::SessionRemove { session, .. }
             | Request::SessionConfig { session, .. }
+            | Request::SessionBudget { session, .. }
             | Request::WorktreeDiff { session }
             | Request::WorktreeDiscard { session, .. }
             | Request::WorktreeMerge { session, .. }

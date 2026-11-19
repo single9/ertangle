@@ -455,18 +455,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             }
         }
         "resume" => {
-            if rest.is_empty() {
-                crate::menu::start_resume_picker(app);
-            } else if let Some(id) = app.selected_id() {
-                send(
-                    writer,
-                    &Request::Resume {
-                        session: id,
-                        prompt: Some(rest.to_string()),
-                    },
-                )?;
-                app.status = tr!("已要求接續");
-            }
+            resume_command(app, writer, rest)?;
         }
         "cancel" => {
             if let Some(id) = app.selected_id() {
@@ -866,6 +855,53 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             app.should_quit = true;
         }
         other => forward_native(app, writer, other, rest)?,
+    }
+    Ok(())
+}
+
+/// 處理 `:resume`：不帶參數 (或 `--list`) 時開啟接續選擇器；
+/// 帶參數時若首個詞對應已結束或已封存的 session id／label／native_id，則以該 session 為目標，其餘作為 prompt。
+fn resume_command(app: &mut App, writer: &mut HostRouter, rest: &str) -> Result<()> {
+    let rest = rest.trim();
+    if rest.is_empty() || rest == "--list" || rest == "-l" || rest == "--pick" {
+        crate::menu::start_resume_picker(app);
+        return Ok(());
+    }
+    let resolve_known = |token: &str| -> Option<String> {
+        for h in app.hosts.values() {
+            if let Some((s, is_arch)) = h.state.resolve_resumable_session(token) {
+                if is_arch || !s.status.is_live() {
+                    return Some(s.id);
+                }
+            }
+        }
+        if let Some((s, is_arch)) = app.state.resolve_resumable_session(token) {
+            if is_arch || !s.status.is_live() {
+                return Some(s.id);
+            }
+        }
+        None
+    };
+    let mut parts = rest.splitn(2, char::is_whitespace);
+    let first = parts.next().unwrap_or("");
+    let after = parts
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let (target, prompt) = if let Some(sid) = resolve_known(first) {
+        (Some(sid), after)
+    } else if first.starts_with("ses_") {
+        (Some(first.to_string()), after)
+    } else {
+        (app.selected_id(), Some(rest.to_string()))
+    };
+    if let Some(session) = target {
+        app.select_or_pend(&session);
+        send(writer, &Request::Resume { session, prompt })?;
+        app.status = tr!("已要求接續");
+    } else {
+        app.status = tr!("沒有選取的 session");
     }
     Ok(())
 }

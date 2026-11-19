@@ -535,16 +535,23 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 接續：讓已結束的 session 用 agent 原生的對話 id 接回原對話，沿用同一個 termade session id。
+/// 接續：讓已結束或已封存的 session 用 agent 原生的對話 id 接回原對話，沿用同一個 termade session id。
 pub(crate) fn resume_session(
     shared: &Arc<Shared>,
-    sid: &str,
+    sid_or_label: &str,
     prompt: Option<String>,
 ) -> anyhow::Result<String> {
-    let Some(s) = lock(&shared.inner).state.sessions.get(sid).cloned() else {
-        bail!("{}", tr!("找不到 session {session}", session = sid));
+    let Some((mut s, is_archived)) = lock(&shared.inner)
+        .state
+        .resolve_resumable_session(sid_or_label)
+    else {
+        bail!(
+            "{}",
+            tr!("找不到 session {session}", session = sid_or_label)
+        );
     };
-    if s.status.is_live() {
+    let sid = s.id.clone();
+    if s.status.is_live() && !is_archived {
         bail!("{}", tr!("{label} 仍在執行，不需要接續", label = s.label));
     }
     let Some(native_id) = s.native_id.clone() else {
@@ -556,16 +563,27 @@ pub(crate) fn resume_session(
             )
         );
     };
-    let cwd = PathBuf::from(&s.cwd);
+    let mut cwd = PathBuf::from(&s.cwd);
     if !cwd.is_dir() {
-        bail!(
-            "{}",
-            tr!(
-                "{label} 的工作目錄 {cwd} 已不存在，無法接續",
-                label = s.label,
-                cwd = s.cwd
-            )
-        );
+        if let Some(root) = s
+            .repo_root
+            .as_deref()
+            .map(PathBuf::from)
+            .filter(|p| p.is_dir())
+        {
+            cwd = root;
+            s.cwd = cwd.to_string_lossy().to_string();
+            s.branch = None;
+        } else {
+            bail!(
+                "{}",
+                tr!(
+                    "{label} 的工作目錄 {cwd} 已不存在，無法接續",
+                    label = s.label,
+                    cwd = s.cwd
+                )
+            );
+        }
     }
     // 交接後新舊 session 共用同一個 worktree；不要讓兩個 agent 同時改同一個目錄。
     if let Some(user) = s
@@ -598,8 +616,12 @@ pub(crate) fn resume_session(
     } else {
         Default::default()
     };
+    if is_archived {
+        s.status = SessionStatus::Starting;
+        shared.emit(Event::SessionStarted { session: s.clone() });
+    }
     let launch = Launch {
-        id: sid.to_string(),
+        id: sid.clone(),
         kind: s.kind.clone(),
         cwd,
         transport: termade_protocol::Transport::Structured,
@@ -610,11 +632,16 @@ pub(crate) fn resume_session(
         resume: Some(native_id),
         cost_base,
     };
-    launch_session(shared, launch)?;
+    if let Err(e) = launch_session(shared, launch) {
+        if is_archived {
+            shared.emit(Event::SessionRemoved { session: sid });
+        }
+        return Err(e);
+    }
     // 清掉「可用 :resume 接續」之類的舊說明。
     if s.status_note.is_some() {
         shared.emit(Event::SessionNote {
-            session: sid.to_string(),
+            session: sid,
             note: String::new(),
         });
     }
@@ -627,8 +654,7 @@ pub(crate) fn handle_resume(
     session: String,
     prompt: Option<String>,
 ) {
-    let sid = shared.resolve_session(&session);
-    match resume_session(shared, &sid, prompt) {
+    match resume_session(shared, &session, prompt) {
         Ok(label) => {
             let _ = reply.send(Frame::ok_note(tr!("已接續 {label}", label = label)));
         }

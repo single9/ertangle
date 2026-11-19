@@ -516,35 +516,79 @@ pub(crate) fn format_compact_age(now_ms: u64, created_ms: u64) -> String {
 }
 
 pub(crate) fn start_resume_picker(app: &mut App) {
-    let mut ended: Vec<&termade_core::Session> = app
+    let mut ended: Vec<(&termade_core::Session, bool)> = Vec::new();
+    // 收集本機與多主機的已結束及封存歷史 session
+    for (host_name, h) in &app.hosts {
+        if app.host_filter.as_ref().is_some_and(|f| f != host_name) {
+            continue;
+        }
+        for s in h.state.sessions.values().filter(|s| !s.status.is_live()) {
+            if !ended.iter().any(|(existing, _)| existing.id == s.id) {
+                ended.push((s, false));
+            }
+        }
+        for s in h
+            .state
+            .archived_sessions
+            .values()
+            .filter(|s| s.native_id.is_some())
+        {
+            if !ended.iter().any(|(existing, _)| existing.id == s.id) {
+                ended.push((s, true));
+            }
+        }
+    }
+    for s in app.state.sessions.values().filter(|s| !s.status.is_live()) {
+        if !ended.iter().any(|(existing, _)| existing.id == s.id) {
+            ended.push((s, false));
+        }
+    }
+    for s in app
         .state
-        .sessions
+        .archived_sessions
         .values()
-        .filter(|s| !s.status.is_live())
-        .collect();
+        .filter(|s| s.native_id.is_some())
+    {
+        if !ended.iter().any(|(existing, _)| existing.id == s.id) {
+            ended.push((s, true));
+        }
+    }
+
     if ended.is_empty() {
         app.status = tr!("沒有可接續的 session (已結束且具備對話 id)");
         return;
     }
-    ended.sort_by_key(|a| std::cmp::Reverse(a.created_ms));
+    ended.sort_by_key(|(a, _)| std::cmp::Reverse(a.created_ms));
     let now_ms = termade_core::now_millis();
     let items: Vec<(String, String)> = ended
         .into_iter()
-        .map(|s| {
+        .map(|(s, is_archived)| {
             let kind_model = match &s.model {
                 Some(m) if !m.is_empty() => format!("{}:{}", s.kind.id(), m),
                 _ => s.kind.id().to_string(),
             };
             let age = format_compact_age(now_ms, s.created_ms);
             let resumable = if s.native_id.is_some() { "↻" } else { "–" };
-            let label = format!(
-                "{} {}  {}  {}  {}",
-                s.status.glyph(),
-                s.label,
-                kind_model,
-                age,
-                resumable
-            );
+            let label = if is_archived {
+                let tag = tr!("封存");
+                format!(
+                    "{} {} [{tag}]  {}  {}  {}",
+                    s.status.glyph(),
+                    s.label,
+                    kind_model,
+                    age,
+                    resumable
+                )
+            } else {
+                format!(
+                    "{} {}  {}  {}  {}",
+                    s.status.glyph(),
+                    s.label,
+                    kind_model,
+                    age,
+                    resumable
+                )
+            };
             (label, s.id.clone())
         })
         .collect();
@@ -725,9 +769,24 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                     let Some(id) = chosen else {
                         return Ok(());
                     };
-                    if let Some(s) = app.state.sessions.get(&id) {
+                    let found = app
+                        .state
+                        .sessions
+                        .get(&id)
+                        .or_else(|| app.state.archived_sessions.get(&id))
+                        .or_else(|| {
+                            app.hosts.values().find_map(|h| {
+                                h.state
+                                    .sessions
+                                    .get(&id)
+                                    .or_else(|| h.state.archived_sessions.get(&id))
+                            })
+                        })
+                        .cloned();
+                    if let Some(s) = found {
                         let label = s.label.clone();
                         if !s.status.is_live() && s.native_id.is_some() {
+                            app.select_or_pend(&id);
                             crate::send(
                                 writer,
                                 &termade_protocol::Request::Resume {

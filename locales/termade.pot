@@ -61,7 +61,7 @@ msgid "未知的 agent：{kind} (opencode/claude/codex/antigravity，可加 `:mo
 ""
 msgstr ""
 
-#: src/cmd/cost.rs src/cmd/cost.rs src/cmd/export.rs src/cmd/export.rs src/cmd/export.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/task.rs
+#: src/cmd/cost.rs src/cmd/cost.rs src/cmd/export.rs src/cmd/export.rs src/cmd/export.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/session.rs src/cmd/task.rs
 msgid "未取得快照"
 msgstr ""
 
@@ -219,6 +219,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "列出所有協作任務"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "列出所有可接續的已結束與歷史封存 session"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -402,7 +406,7 @@ msgid "接手的 agent，可加 `:model`，例如 codex、claude:sonnet"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)"
+msgid "接續已結束或已移除的歷史 session：用原本的對話繼續 (session id 不變)；搭配 --list 列出可接續的歷史 session"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -550,6 +554,10 @@ msgid "補全腳本用的查詢 (不會啟動 daemon)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "要接續的 session id、label 或原生對話 id；搭配 --list 可省略"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "要終止的背景處理程序 PID (未指定且有 --all 則終止全部)"
 msgstr ""
 
@@ -682,15 +690,23 @@ msgid "(排隊為空)"
 msgstr ""
 
 #: src/cmd/session.rs
+msgid "沒有可接續的已結束或歷史 session"
+msgstr ""
+
+#: src/cmd/session.rs src/cmd/session.rs
+msgid "已移除"
+msgstr ""
+
+#: src/cmd/session.rs crates/termade-core/src/lib.rs
+msgid "已結束"
+msgstr ""
+
+#: src/cmd/session.rs
 msgid "已接續"
 msgstr ""
 
 #: src/cmd/session.rs
 msgid "已交接"
-msgstr ""
-
-#: src/cmd/session.rs
-msgid "已移除"
 msgstr ""
 
 #: src/cmd/session.rs
@@ -1143,10 +1159,6 @@ msgstr ""
 
 #: crates/termade-core/src/lib.rs crates/termade-tui/src/menu.rs
 msgid "休眠"
-msgstr ""
-
-#: crates/termade-core/src/lib.rs
-msgid "已結束"
 msgstr ""
 
 #: crates/termade-core/src/lib.rs
@@ -2097,7 +2109,7 @@ msgstr ""
 msgid "已送出 prompt"
 msgstr ""
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs crates/termade-tui/src/ps.rs
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs crates/termade-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr ""
 
@@ -2341,10 +2353,6 @@ msgstr ""
 msgid "已送出結束"
 msgstr ""
 
-#: crates/termade-tui/src/commands.rs
-msgid "已要求接續"
-msgstr ""
-
 #: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
 msgid "已送出中斷"
 msgstr ""
@@ -2435,6 +2443,10 @@ msgstr ""
 
 #: crates/termade-tui/src/commands.rs
 msgid "已要求結束本專案 {n} 個執行中的 session"
+msgstr ""
+
+#: crates/termade-tui/src/commands.rs
+msgid "已要求接續"
 msgstr ""
 
 #: crates/termade-tui/src/commands.rs
@@ -3495,6 +3507,10 @@ msgstr ""
 
 #: crates/termade-tui/src/menu.rs
 msgid "沒有可接續的 session (已結束且具備對話 id)"
+msgstr ""
+
+#: crates/termade-tui/src/menu.rs
+msgid "封存"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
