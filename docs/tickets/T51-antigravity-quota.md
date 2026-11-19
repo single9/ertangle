@@ -40,3 +40,7 @@ Not confirmed: whether accounts that authenticate through a GCP project (Vertex)
 - An Antigravity session that hits a rate limit marks the quota as reached and can trigger auto-handoff.
 - Unit tests parse captured ACP samples (fixtures checked in, with personal data removed).
 - `make pre-commit` passes.
+
+## Comments
+
+- 2026-11-19: The account available locally is an enterprise account authenticated through a GCP project, which may only surface limits as 429 errors. The user will provide a separate personal account for researching per-user quota sources (1–3). Keep this ticket at `needs-info` until that account is available.
