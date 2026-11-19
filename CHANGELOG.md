@@ -1,6 +1,17 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.7.1] - 2026-11-19
+
+### 🚀 Features
+
+- *(web)* Compact, readable tool call list
+
+### 🐛 Bug Fixes
+
+- *(procs)* List and kill only processes started by agent tools
+- *(web)* Show every tool call in the expanded tool list
+
 ## [0.7.0] - 2026-11-19
 
 ### 🚀 Features
