@@ -1183,7 +1183,7 @@ msgstr "{name} reset"
 msgid "{name} {pct}% (重置 {remaining})"
 msgstr "{name} {pct}% (resets in {remaining})"
 
-#: crates/termade-core/src/lib.rs crates/termade-tui/src/quota.rs
+#: crates/termade-core/src/lib.rs
 msgid "✗額度已滿"
 msgstr "✗quota full"
 
@@ -2827,6 +2827,10 @@ msgid " (尚無 session，按 n 建立)"
 msgstr " (no sessions yet, press n to create one)"
 
 #: crates/termade-tui/src/draw.rs
+msgid "剩{pct}%"
+msgstr "{pct}% left"
+
+#: crates/termade-tui/src/draw.rs
 msgid "  bus:{n} 未讀"
 msgstr "  bus:{n} unread"
 
@@ -3740,6 +3744,10 @@ msgid "此 agent 尚未回報額度資料"
 msgstr "No quota data reported by this agent yet"
 
 #: crates/termade-tui/src/quota.rs
+msgid "✗ 額度已滿"
+msgstr "✗ quota reached"
+
+#: crates/termade-tui/src/quota.rs
 msgid "⚠ 接近上限"
 msgstr "⚠ near limit"
 
@@ -3756,12 +3764,16 @@ msgid "{t} 後重置"
 msgstr "resets in {t}"
 
 #: crates/termade-tui/src/quota.rs
+msgid "剩 {pct}%"
+msgstr "{pct}% left"
+
+#: crates/termade-tui/src/quota.rs
 msgid "找不到已安裝的 agent"
 msgstr "No installed agents found"
 
 #: crates/termade-tui/src/quota.rs
-msgid "Agent 額度"
-msgstr "Agent quotas"
+msgid "Agent 額度 (剩餘)"
+msgstr "Agent Quotas (Remaining)"
 
 #: crates/termade-tui/src/search.rs
 msgid "這個視圖不支援搜尋 (逐字稿與 Diff 才有)"
@@ -4030,6 +4042,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "Agent 額度"
+#~ msgstr "Agent quotas"
 
 #~ msgid "尚無額度資料 (只有 claude、codex 會回報，執行過一個回合後才有)"
 #~ msgstr "No quota data yet (only claude and codex report it, after one turn)"

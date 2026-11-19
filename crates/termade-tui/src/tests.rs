@@ -3478,11 +3478,11 @@ fn quota_popup_lines_show_bars_resets_and_missing_data() {
     let l = text(crate::quota::agent_lines("claude", Some(&q), now));
     assert_eq!(l.len(), 3, "{l:?}");
     assert!(
-        l[1].contains("5h") && l[1].contains("█") && l[1].contains("56%"),
+        l[1].contains("5h") && l[1].contains("█") && l[1].contains("44%"),
         "{l:?}"
     );
-    // 已過重置時間的視窗歸零。
-    assert!(l[2].contains("7d") && l[2].contains("  0%"), "{l:?}");
+    // 已過重置時間的視窗恢復為 100% 剩餘額度。
+    assert!(l[2].contains("7d") && l[2].contains("100%"), "{l:?}");
     let mut w = q.clone();
     w.warning = true;
     assert!(text(crate::quota::agent_lines("claude", Some(&w), now))[0].contains("⚠"));
@@ -3514,7 +3514,7 @@ fn quota_popup_renders_and_header_click_area_is_set() {
     app.mode = Mode::Quota;
     let out = render(&mut app);
     assert!(
-        out.contains("claude") && out.contains("codex") && out.contains("42%"),
+        out.contains("claude") && out.contains("codex") && out.contains("58%"),
         "{out}"
     );
     assert!(app.quota_area.width > 0, "標題列額度摘要應可點擊");

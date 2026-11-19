@@ -740,13 +740,10 @@ pub(crate) fn tab(label: &str, active: bool) -> Span<'static> {
     }
 }
 
-/// 標題列的額度摘要：每個 agent 一段，用量 ≥70% 變黃、≥90% 或已滿變紅。
-fn quota_span(app: &App) -> Span<'static> {
+/// 標題列的額度摘要：每個 agent 各自依剩餘額度上色，剩餘 ≤30% 變黃、≤10% 或已滿變紅。
+fn quota_spans(app: &App) -> Vec<Span<'static>> {
     let now = termade_core::now_millis();
-    let mut text = String::new();
-    let mut worst = 0.0f32;
-    let mut reached = false;
-    let mut warning = false;
+    let mut spans = Vec::new();
     for q in app.state.quotas.values() {
         // 已過重置時間的視窗不再算數。
         let live: Vec<_> = q
@@ -757,24 +754,29 @@ fn quota_span(app: &App) -> Span<'static> {
         if live.is_empty() {
             continue;
         }
-        let used = live.iter().map(|w| w.used_percent).fold(0.0, f32::max);
-        worst = worst.max(used);
-        reached |= q.reached;
-        warning |= q.warning;
         let w = live
             .iter()
             .max_by(|a, b| a.used_percent.total_cmp(&b.used_percent))
             .unwrap();
-        text.push_str(&format!("  {}:{} {:.0}%", q.agent, w.name, w.used_percent));
+        let rem = (100.0 - w.used_percent).clamp(0.0, 100.0);
+        let color = if q.reached || rem <= 10.0 {
+            Color::Red
+        } else if rem <= 30.0 || q.warning {
+            Color::Yellow
+        } else {
+            Color::Gray
+        };
+        let short = match q.agent.as_str() {
+            "antigravity" => "agy",
+            other => other,
+        };
+        let pct_label = tr!("剩{pct}%", pct = format!("{rem:.0}"));
+        spans.push(Span::styled(
+            format!("  {short}:{} {pct_label}", w.name),
+            Style::default().fg(color),
+        ));
     }
-    let color = if reached || worst >= 90.0 {
-        Color::Red
-    } else if worst >= 70.0 || warning {
-        Color::Yellow
-    } else {
-        Color::DarkGray
-    };
-    Span::styled(text, Style::default().fg(color))
+    spans
 }
 
 pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
@@ -842,7 +844,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
 
     let tabs = Line::from(tab_spans);
 
-    let stats = Line::from(vec![
+    let mut stat_spans = vec![
         Span::styled("  cost ", Style::default().fg(Color::DarkGray)),
         Span::styled(
             format!("${:.4}", cost.usd),
@@ -852,7 +854,11 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
             format!("  ({} in / {} out)", cost.input_tokens, cost.output_tokens),
             Style::default().fg(Color::DarkGray),
         ),
-        quota_span(app),
+    ];
+    let q_start = stat_spans.len();
+    stat_spans.extend(quota_spans(app));
+    let q_end = stat_spans.len();
+    stat_spans.extend([
         Span::styled(
             if app.unread_bus() > 0 {
                 tr!("  bus:{n} 未讀", n = app.unread_bus())
@@ -882,10 +888,11 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
     ]);
+    let stats = Line::from(stat_spans);
 
-    // 額度摘要 (第 4 段) 的位置，給滑鼠點擊開啟 `:quota` 浮層。
-    let before: usize = stats.spans[..3].iter().map(|s| s.width()).sum();
-    let qw = stats.spans[3].width();
+    // 額度摘要的位置，給滑鼠點擊開啟 `:quota` 浮層。
+    let before: usize = stats.spans[..q_start].iter().map(|s| s.width()).sum();
+    let qw: usize = stats.spans[q_start..q_end].iter().map(|s| s.width()).sum();
     app.quota_area = if qw > 0 && area.height > 1 {
         Rect::new(
             area.x + before as u16,

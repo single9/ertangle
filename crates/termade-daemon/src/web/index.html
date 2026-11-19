@@ -3459,6 +3459,15 @@
       }
     }
 
+    function formatQuotaDuration(ms) {
+      if (ms <= 0) return "已重置";
+      const mins = Math.floor(ms / 60000);
+      if (mins < 1) return "<1m";
+      if (mins < 60) return `${mins}m`;
+      if (mins < 1440) return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}m`;
+      return `${Math.floor(mins / 1440)}d${Math.floor((mins % 1440) / 60)}h`;
+    }
+
     function renderQuota() {
       const qc = document.getElementById("quota-container");
       if (!state.quotas || Object.keys(state.quotas).length === 0) {
@@ -3467,16 +3476,43 @@
       }
       qc.style.display = "block";
       qc.innerHTML = "";
+      const now = Date.now();
       for (const k in state.quotas) {
         const q = state.quotas[k];
         const card = document.createElement("div");
         card.className = "quota-card";
+        const badge = q.reached
+          ? `<span style="color:var(--red);">✗ 額度已滿</span>`
+          : q.warning
+            ? `<span style="color:var(--yellow);">⚠ 接近上限</span>`
+            : `<span style="color:var(--text-dim); font-weight:400;">正常</span>`;
+        const rows = (q.windows || []).map(w => {
+          const resetPast = w.resets_at_ms != null && w.resets_at_ms <= now;
+          const rem = resetPast ? 100 : Math.max(0, Math.min(100, 100 - (w.used_percent || 0)));
+          const color = rem <= 10 ? "var(--red)" : rem <= 30 ? "var(--yellow)" : "var(--green, #4ade80)";
+          const resetText = w.resets_at_ms == null
+            ? ""
+            : resetPast
+              ? "已重置"
+              : `${formatQuotaDuration(w.resets_at_ms - now)} 後重置`;
+          return `
+            <div style="margin-top:6px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:3px;">
+                <span>${escapeHtml(w.name)}</span>
+                <span><strong style="color:${color};">剩 ${Math.round(rem)}%</strong>${resetText ? ` <span style="color:var(--text-dim);">· ${escapeHtml(resetText)}</span>` : ""}</span>
+              </div>
+              <div style="height:5px; background:#1e293b; border-radius:999px; overflow:hidden;">
+                <div style="width:${rem.toFixed(1)}%; height:100%; background:${color}; border-radius:999px;"></div>
+              </div>
+            </div>
+          `;
+        }).join("");
         card.innerHTML = `
           <div class="quota-title">
-            <span>${escapeHtml(q.agent || k)} 額度指標</span>
-            <span>${q.pct != null ? q.pct + "%" : "正常"}</span>
+            <span>${escapeHtml(q.agent || k)}</span>
+            ${badge}
           </div>
-          <div style="color:var(--text-dim); font-size:11px;">重置時間：${q.reset_at || "未設定"}</div>
+          ${rows || `<div style="color:var(--text-dim); font-size:11px;">尚無視窗明細</div>`}
         `;
         qc.appendChild(card);
       }

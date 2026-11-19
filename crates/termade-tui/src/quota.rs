@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph};
 use termade_core::{format_remaining, AgentKind, Quota};
 use tr::tr;
 
@@ -40,11 +40,11 @@ pub(crate) fn handle_key(app: &mut App, key: KeyEvent) {
     }
 }
 
-/// 用量對應的顏色：<70% 綠、<90% 黃、其餘紅。
-fn level_color(pct: f32) -> Color {
-    if pct >= 90.0 {
+/// 剩餘量對應的顏色：≤10% 紅、≤30% 黃、其餘綠。
+fn level_color_remaining(rem: f32) -> Color {
+    if rem <= 10.0 {
         Color::Red
-    } else if pct >= 70.0 {
+    } else if rem <= 30.0 {
         Color::Yellow
     } else {
         Color::Green
@@ -60,21 +60,30 @@ pub(crate) fn bar(pct: f32, cells: usize) -> (String, String) {
 /// 一個 agent 的區塊 (標題列 + 每個視窗一列)。
 pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Vec<Line<'static>> {
     let mut out = Vec::new();
-    let mut head = vec![Span::styled(
-        agent.to_string(),
-        Style::default().add_modifier(Modifier::BOLD),
-    )];
     let Some(q) = quota else {
-        head.push(Span::styled(
-            format!("  {}", tr!("此 agent 尚未回報額度資料")),
-            Style::default().fg(Color::DarkGray),
-        ));
-        out.push(Line::from(head));
+        out.push(Line::from(vec![
+            Span::styled(
+                agent.to_string(),
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  {}", tr!("此 agent 尚未回報額度資料")),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
         return out;
     };
+    let mut head = vec![Span::styled(
+        agent.to_string(),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )];
     if q.reached {
         head.push(Span::styled(
-            format!("  {}", tr!("✗額度已滿")),
+            format!("  {}", tr!("✗ 額度已滿")),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ));
     } else if q.warning {
@@ -87,7 +96,7 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
     }
     head.push(Span::styled(
         format!(
-            "  {}",
+            "  ·  {}",
             tr!(
                 "{ago} 前更新",
                 ago = format_remaining(now_ms.saturating_sub(q.updated_ms))
@@ -109,22 +118,29 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
             Some(r) => Some(tr!("{t} 後重置", t = format_remaining(r - now_ms))),
             None => None,
         };
-        // 已過重置時間的視窗用量已歸零，不再顯示舊的百分比。
-        let pct = match w.resets_at_ms {
-            Some(r) if r <= now_ms => 0.0,
-            _ => w.used_percent,
+        // 已過重置時間的視窗視為已恢復 100% 剩餘額度。
+        let rem = match w.resets_at_ms {
+            Some(r) if r <= now_ms => 100.0,
+            _ => (100.0 - w.used_percent).clamp(0.0, 100.0),
         };
-        let (fill, empty) = bar(pct, BAR_CELLS);
-        let color = level_color(pct);
+        let (fill, empty) = bar(rem, BAR_CELLS);
+        let color = level_color_remaining(rem);
+        let pct_label = tr!("剩 {pct}%", pct = format!("{rem:>3.0}"));
         let mut spans = vec![
-            Span::raw(format!("  {:<width$}", w.name, width = name_w)),
+            Span::styled(
+                format!("  {:<width$}  ", w.name, width = name_w),
+                Style::default().fg(Color::White),
+            ),
             Span::styled(fill, Style::default().fg(color)),
             Span::styled(empty, Style::default().fg(Color::DarkGray)),
-            Span::styled(format!(" {pct:>3.0}%"), Style::default().fg(color)),
+            Span::styled(
+                format!("  {pct_label}"),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ),
         ];
         if let Some(r) = reset {
             spans.push(Span::styled(
-                format!("  {r}"),
+                format!("  ·  {r}"),
                 Style::default().fg(Color::Gray),
             ));
         }
@@ -155,8 +171,8 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &App) {
     )));
 
     let full = f.area();
-    let w = 72.min(full.width);
-    let h = (lines.len() as u16 + 2).min(full.height);
+    let w = 74.min(full.width);
+    let h = (lines.len() as u16 + 4).min(full.height);
     let area = Rect::new(
         full.x + full.width.saturating_sub(w) / 2,
         full.y + full.height.saturating_sub(h) / 2,
@@ -166,9 +182,10 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &App) {
     f.render_widget(Clear, area);
     let block = Block::default()
         .borders(Borders::ALL)
+        .padding(Padding::new(2, 2, 1, 1))
         .border_style(Style::default().fg(Color::Cyan))
         .title(Span::styled(
-            format!(" {} ", tr!("Agent 額度")),
+            format!(" {} ", tr!("Agent 額度 (剩餘)")),
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
