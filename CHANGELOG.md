@@ -1,6 +1,39 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.8.0] - 2026-11-19
+
+### 🚀 Features
+
+- *(adapter,tui)* Report Antigravity quota via agy -p /quota (T51)
+- *(tui,web)* Show remaining quota percentages and improve readability
+- *(tui,web)* Add quota agent tabs, clearer labels, and pre-select resume target
+- *(settings)* Configurable worker agent order with sectioned settings panel
+
+### 🐛 Bug Fixes
+
+- *(tui)* Sort agents with reported quota ahead of unreported ones
+- *(tui)* Check PATH for opencode and agy in quota popup
+- *(security)* Harden WebSocket frame limit, token comparison, file serving, XSS, and temp files (T52)
+- *(daemon)* Scope QUOTA_WARN notifications and instructions to the affected agent (T53)
+- *(codex)* Support mcp elicitation approval and enable network in bwrap sandbox
+- *(codex)* Pass daemon socket to mcp and fall back from broken bwrap sandbox
+- *(codex)* Use TOML dotted path for mcp_servers.termade.env.TERMADE_SOCKET
+
+### 📚 Documentation
+
+- *(tickets)* Add T52 for SAST security hardening
+- *(tickets)* Add T53 for agent-scoped QUOTA_WARN and mark T52 done
+- *(tickets)* Mark T53 as done
+
+### 🧪 Testing
+
+- *(adapter)* Verify is_installed checks binary presence per agent
+
+### ⚙️ Miscellaneous Tasks
+
+- Retry apt-get when installing gettext in i18n job
+
 ## [0.7.1] - 2026-11-19
 
 ### 🚀 Features
