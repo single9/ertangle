@@ -25,6 +25,50 @@ pub const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-haiku-4-5", "Claude Haiku 4.5"),
 ];
 
+/// 在 `timeout` 內執行指令並取回 stdout，逾時或啟動失敗回 `None`。
+/// 必須一邊等行程一邊把 stdout 讀走：`codex debug models` 的輸出可達數百 KB，
+/// 若等行程結束才讀，pipe 被填滿後行程會卡住，直到逾時被殺掉而得到空清單。
+fn capture_stdout(bin: &str, args: &[&str], timeout: std::time::Duration) -> Option<String> {
+    use std::process::Stdio;
+
+    let mut child = std::process::Command::new(bin)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let reader = child.stdout.take().map(|so| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut so = so;
+            let mut bytes = Vec::new();
+            let ok = so.read_to_end(&mut bytes).is_ok();
+            let _ = tx.send(if ok {
+                String::from_utf8_lossy(&bytes).into_owned()
+            } else {
+                String::new()
+            });
+        });
+        rx
+    });
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            _ => {
+                let _ = child.kill();
+                return None;
+            }
+        }
+    }
+    reader.and_then(|rx| rx.recv_timeout(std::time::Duration::from_secs(1)).ok())
+}
+
 /// 向 agent 的 CLI 查詢可用 model (`opencode models`、`agy models`)，最多等 8 秒。
 /// 輸出每行第一欄是 model id，後面 (以 tab 分隔)是顯示名稱。
 pub fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
@@ -34,33 +78,9 @@ pub fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
         AgentKind::Codex => ("codex", &["debug", "models"]),
         _ => return Vec::new(),
     };
-    let Ok(mut child) = std::process::Command::new(bin)
-        .args(args)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    else {
+    let Some(out) = capture_stdout(bin, args, std::time::Duration::from_secs(8)) else {
         return Vec::new();
     };
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if std::time::Instant::now() < deadline => {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            _ => {
-                let _ = child.kill();
-                return Vec::new();
-            }
-        }
-    }
-    let mut out = String::new();
-    if let Some(mut so) = child.stdout.take() {
-        use std::io::Read;
-        let _ = so.read_to_string(&mut out);
-    }
     match kind {
         AgentKind::Codex => parse_codex_models(&out),
         // agy 的清單把 effort 寫進 model id (`xxx-high`)，但 ACP 的 model 與 effort 是分開的選項。
@@ -149,4 +169,23 @@ pub fn parse_models(out: &str) -> Vec<(String, String)> {
             Some((label, id.to_string()))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `codex debug models` 的輸出遠大於 pipe buffer；若等行程結束才讀，
+    /// 行程會卡在寫入而永遠不結束，最後回傳空清單。
+    #[cfg(unix)]
+    #[test]
+    fn capture_stdout_drains_large_output() {
+        let out = capture_stdout(
+            "sh",
+            &["-c", "yes x | head -c 200000"],
+            std::time::Duration::from_secs(8),
+        )
+        .expect("命令應成功執行");
+        assert!(out.len() >= 200_000, "只讀到 {} bytes", out.len());
+    }
 }
