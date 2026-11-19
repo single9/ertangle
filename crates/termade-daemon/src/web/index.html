@@ -2297,8 +2297,9 @@
 
     function applyRecord(record) {
       state.seq = record.seq;
-      const event = record.event;
-      if (!event) return;
+      // daemon 的 Record 以 `#[serde(flatten)]` 序列化：事件欄位 (kind、session…) 直接在頂層，沒有 `event` 包裝。
+      const event = record.event || record;
+      if (!event.kind) return;
       const kind = event.kind;
 
       if (kind === "session_started") {
@@ -2348,6 +2349,10 @@
       } else if (kind === "session_effort") {
         if (state.sessions[event.session]) {
           state.sessions[event.session].effort = event.effort;
+        }
+      } else if (kind === "session_native_id") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].native_id = event.native_id;
         }
       } else if (kind === "session_note") {
         if (state.sessions[event.session]) {

@@ -2463,6 +2463,24 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn record_wire_format_is_flat() {
+        // Web 版 (`web/index.html` 的 applyRecord) 依賴事件欄位在頂層；改成巢狀會讓即時更新全部失效。
+        let r = Record {
+            seq: 7,
+            ts: 1,
+            event: Event::Output {
+                session: "s1".into(),
+                text: "hi".into(),
+            },
+        };
+        let v: serde_json::Value = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["seq"], 7);
+        assert_eq!(v["kind"], "output");
+        assert_eq!(v["session"], "s1");
+        assert!(v.get("event").is_none());
+    }
+
+    #[test]
     fn tool_calls_count_only_start_events() {
         let mut st = State::new();
         st.apply(&rec(
