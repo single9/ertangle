@@ -4,6 +4,15 @@
 
 All git commit messages **MUST** be written in **English** following standard Conventional Commits format (e.g. `feat(scope): description`, `fix(scope): description`, `refactor(scope): description`, `chore: description`, etc.). Do **NOT** write git commit messages in Chinese.
 
+## Rust Code Standards (mandatory)
+
+All Rust code in this repo **MUST** follow [docs/agents/rust-conventions.md](docs/agents/rust-conventions.md). Summary:
+
+1. **No panicking unwrap/expect in production code**: handle `Option` / `Result` with `?`, `match`, `if let`, `let-else`, `ok_or_else`, or safe defaults. `unwrap()` / `expect()` are allowed only in `#[cfg(test)]` modules and `tests/`, or for proven-infallible constants with a written reason. For poisoned `Mutex`, prefer `lock().unwrap_or_else(|e| e.into_inner())`.
+2. **No `unsafe` by default**: prefer safe crates (e.g. `nix`) or refactor first. If unavoidable, keep the block minimal and add a `// SAFETY:` comment explaining every invariant; document the reason in the commit message.
+3. **Clean Code**: small focused functions, meaningful names, early returns over deep nesting, minimal `clone()`, comments that explain why, Rustdoc on public APIs.
+4. **Tests**: every behavior change needs unit tests, including error paths; run `make pre-commit` and `cargo test -p <crate>` before committing.
+
 ## Inter-Agent Communication Protocol
 
 All inter-agent messages sent via `termade send` / `termade_send` or `termade ask` / `termade_ask` **MUST** use a concise, structured **English** protocol to minimize token consumption and prevent unproductive turn wakeups:
