@@ -54,7 +54,7 @@
 | [T46](T46-auto-resume-shared-target-quota-notice.md) | daemon 重啟自動接續、worktree 共用 cargo target、額度提早提醒 (已完成) | P2 | T01, T14, T38 |
 | [T47](T47-agent-token-savings.md) | 降低 Agent 的 token 用量：長對話提醒、省 token 提示、注入內容瘦身 (待人工確認) | P2 | T38, T42 |
 | [T49](T49-spawn-agent-kind-resolution.md) | Resolve the agent kind of a spawn from config and the parent instead of hard-coding opencode (已完成) | P2 | — |
-| [T50](T50-handoff-identity-change.md) | Change a session's identity (role and parent) through a handoff | P2 | T49 |
+| [T50](T50-handoff-identity-change.md) | Change a session's identity (role and parent) through a handoff (已完成) | P2 | T49 |
 | [T51](T51-antigravity-quota.md) | Show the quota of Gemini (Antigravity) sessions | P2 | — |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。

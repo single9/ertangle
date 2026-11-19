@@ -34,6 +34,15 @@ pub enum Transport {
     Pty,
 }
 
+/// 交接時對父 session 的變更。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParentChange {
+    Keep,
+    None,
+    Session(SessionId),
+}
+
 /// 建立 session 的請求。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpawnRequest {
@@ -46,7 +55,7 @@ pub struct SpawnRequest {
     #[serde(default)]
     pub label: Option<String>,
     #[serde(default)]
-    pub role: Role,
+    pub role: Option<Role>,
     /// 啟動後立刻送出的第一個 prompt。
     #[serde(default)]
     pub prompt: Option<String>,
@@ -139,6 +148,12 @@ pub enum Request {
         /// 額外補充給接手者的說明。
         #[serde(default)]
         note: Option<String>,
+        #[serde(default)]
+        role: Option<Role>,
+        #[serde(default)]
+        parent: Option<ParentChange>,
+        #[serde(default)]
+        force: bool,
     },
     /// 結束 session 並殺掉處理程序。
     Kill {
@@ -422,7 +437,7 @@ mod tests {
             kind: Some(AgentKind::OpenCode),
             cwd: Some("/tmp".into()),
             label: Some("worker".into()),
-            role: Role::Worker,
+            role: Some(Role::Worker),
             prompt: Some("hi".into()),
             worktree: false,
             transport: Transport::Auto,
@@ -468,6 +483,54 @@ mod tests {
     fn old_spawn_json_without_model_still_parses() {
         let req: Request = serde_json::from_str(r#"{"op":"spawn","kind":"claude_code"}"#).unwrap();
         let Request::Spawn(s) = req else { panic!() };
-        assert!(s.model.is_none() && s.args.is_empty() && s.budget_usd.is_none());
+        assert!(
+            s.model.is_none() && s.args.is_empty() && s.budget_usd.is_none() && s.role.is_none()
+        );
+    }
+
+    #[test]
+    fn handoff_json_roundtrip_and_defaults() {
+        let req: Request =
+            serde_json::from_str(r#"{"op":"handoff","session":"s1","kind":"claude_code"}"#)
+                .unwrap();
+        let Request::Handoff {
+            session,
+            role,
+            parent,
+            force,
+            ..
+        } = req
+        else {
+            panic!()
+        };
+        assert_eq!(session, "s1");
+        assert!(role.is_none());
+        assert!(parent.is_none());
+        assert!(!force);
+
+        let req_with_fields = Request::Handoff {
+            session: "s1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: Some("opus".into()),
+            effort: None,
+            note: None,
+            role: Some(Role::Coordinator),
+            parent: Some(ParentChange::None),
+            force: true,
+        };
+        let line = encode_line(&req_with_fields).unwrap();
+        let back: Request = decode_line(line.trim()).unwrap();
+        let Request::Handoff {
+            role,
+            parent,
+            force,
+            ..
+        } = back
+        else {
+            panic!()
+        };
+        assert_eq!(role, Some(Role::Coordinator));
+        assert_eq!(parent, Some(ParentChange::None));
+        assert!(force);
     }
 }

@@ -305,6 +305,10 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
 pub(crate) enum PickStage {
     Agent,
     Model(AgentKind),
+    HandoffRole {
+        kind: AgentKind,
+        model: Option<String>,
+    },
     /// 選擇多 Agent 團隊範本。
     Playbook,
     /// 選擇要接續的已結束 session。
@@ -625,6 +629,9 @@ fn finish_picker(
                 model: model.clone(),
                 effort,
                 note: None,
+                role: None,
+                parent: None,
+                force: false,
             },
         )?;
         app.status = tr!(
@@ -659,7 +666,14 @@ fn finish_picker(
     app.input.clear();
     app.input_cursor = 0;
     app.spawn_worktree = false;
-    app.spawn_role = Role::Worker;
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cfg = termade_daemon::config::Config::load(&termade_daemon::config_dir(), &cwd);
+    app.spawn_role = cfg
+        .defaults
+        .role
+        .as_deref()
+        .map(Role::parse)
+        .unwrap_or(Role::Coordinator);
     app.spawn_permission = None;
     app.spawn_bypass_armed = false;
     Ok(())
@@ -748,11 +762,106 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         None if !custom.is_empty() => Some(custom),
                         None => None,
                     };
+                    if app.handoff_from.is_some() {
+                        let src_id = app.handoff_from.clone().unwrap();
+                        let cur_role = app
+                            .state
+                            .sessions
+                            .get(&src_id)
+                            .map(|s| s.role.clone())
+                            .unwrap_or(Role::Worker);
+                        let is_coord = cur_role == Role::Coordinator;
+                        let running_children_count = app
+                            .state
+                            .sessions
+                            .values()
+                            .filter(|s| s.parent.as_deref() == Some(&src_id) && s.status.is_live())
+                            .count();
+                        let role_choices = [Role::Coordinator, Role::Worker, Role::Reviewer];
+                        let mut items = Vec::new();
+                        let mut default_idx = 0;
+                        for (i, r) in role_choices.iter().enumerate() {
+                            if *r == cur_role {
+                                default_idx = i;
+                            }
+                            let label = if is_coord
+                                && *r != Role::Coordinator
+                                && running_children_count > 0
+                            {
+                                tr!(
+                                    "{role} (警告：仍有 {count} 個執行中子 session)",
+                                    role = r.id(),
+                                    count = running_children_count
+                                )
+                            } else {
+                                r.id().to_string()
+                            };
+                            items.push((label, r.id().to_string()));
+                        }
+                        p.title = tr!("交接後的角色 (Enter 確認 · Esc 取消)");
+                        p.items = items;
+                        p.filter.clear();
+                        p.cursor = default_idx;
+                        p.pending = None;
+                        p.loading = false;
+                        p.group_effort = false;
+                        p.stage = PickStage::HandoffRole { kind, model };
+                        return Ok(());
+                    }
                     app.spawn_variants = model
                         .as_deref()
                         .and_then(|m| p.variants.get(m).cloned())
                         .unwrap_or_default();
                     finish_picker(app, writer, kind, model, None)?;
+                }
+                PickStage::HandoffRole { kind, model } => {
+                    let chosen_role_str = chosen.unwrap_or_else(|| {
+                        if custom.is_empty() {
+                            "worker".into()
+                        } else {
+                            custom
+                        }
+                    });
+                    let new_role = Role::parse(&chosen_role_str);
+                    app.picker = None;
+                    app.mode = Mode::Normal;
+                    if let Some(src) = app.handoff_from.take() {
+                        let is_coord = app
+                            .state
+                            .sessions
+                            .get(&src)
+                            .is_some_and(|s| s.role == Role::Coordinator);
+                        let has_running_children = app
+                            .state
+                            .sessions
+                            .values()
+                            .any(|s| s.parent.as_deref() == Some(&src) && s.status.is_live());
+                        let force =
+                            is_coord && new_role != Role::Coordinator && has_running_children;
+                        crate::send(
+                            writer,
+                            &termade_protocol::Request::Handoff {
+                                session: src,
+                                kind: kind.clone(),
+                                model: model.clone(),
+                                effort: None,
+                                note: None,
+                                role: Some(new_role.clone()),
+                                parent: None,
+                                force,
+                            },
+                        )?;
+                        app.status = tr!(
+                            "已要求交接給 {target} (角色：{role})",
+                            target = format!(
+                                "{}{}",
+                                kind.id(),
+                                model.map(|m| format!(":{m}")).unwrap_or_default()
+                            ),
+                            role = new_role.id()
+                        );
+                        app.spawn_variants.clear();
+                    }
                 }
                 PickStage::Playbook => {
                     let Some(name) = chosen.filter(|n| !n.is_empty()) else {

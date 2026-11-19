@@ -104,7 +104,12 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             model,
             effort,
             note,
-        } => session::handle_handoff(shared, reply, session, kind, model, effort, note),
+            role,
+            parent,
+            force,
+        } => session::handle_handoff(
+            shared, reply, session, kind, model, effort, note, role, parent, force,
+        ),
         Request::SessionRemove { session, force } => {
             session::handle_remove(shared, reply, session, force)
         }

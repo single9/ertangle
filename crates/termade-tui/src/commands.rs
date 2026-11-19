@@ -426,6 +426,9 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                     model,
                     effort: None,
                     note,
+                    role: None,
+                    parent: None,
+                    force: false,
                 },
             )?;
             app.status = tr!("已要求交接給 {kind}", kind = kind);
@@ -1241,7 +1244,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
                 .ok()
                 .map(|p| p.to_string_lossy().to_string()),
             label: None,
-            role,
+            role: Some(role),
             prompt,
             worktree: app.spawn_worktree,
             transport: Transport::Auto,

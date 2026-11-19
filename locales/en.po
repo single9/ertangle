@@ -352,6 +352,10 @@ msgid "強制刪除 (即使有未 commit 變更或未合併分支)"
 msgstr "Force removal (even with uncommitted changes or an unmerged branch)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "強制執行 (例如在仍有執行中子 session 時降級 coordinator)"
+msgstr "Force execution (e.g. when demoting a coordinator with running child sessions)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "強制終止 (SIGKILL)"
 msgstr "Force kill (SIGKILL)"
 
@@ -556,8 +560,8 @@ msgid "要終止的背景處理程序 PID (未指定且有 --all 則終止全部
 msgstr "PID of the background process to terminate (terminates all if omitted and --all is set)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "角色：coordinator / worker / reviewer / tester (預設 worker)"
-msgstr "Role: coordinator / worker / reviewer / tester (default worker)"
+msgid "角色：coordinator / worker / reviewer / tester (省略時無 parent 依 [defaults] role，有 parent 則 worker)"
+msgstr "Role: coordinator / worker / reviewer / tester (when omitted: [defaults] role without parent, worker with parent)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "訊息種類：chat (預設)/ handoff / question / answer / status / artifact"
@@ -570,6 +574,14 @@ msgstr "Set or raise the given session's cost limit (USD)"
 #: src/cmd/helptext/help_strings.rs
 msgid "說明備註"
 msgstr "Description or notes"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "變更父 session：<session_id|none|keep>"
+msgstr "Change parent session: <session_id|none|keep>"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "變更角色：coordinator / worker / reviewer"
+msgstr "Change role: coordinator / worker / reviewer"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "讓 session 休眠 (停止處理程序但保留對話紀錄，可隨時喚醒)"
@@ -1540,6 +1552,10 @@ msgid "(依 agent_spawn.worktree 使用獨立 worktree)"
 msgstr " (using a dedicated worktree per agent_spawn.worktree)"
 
 #: crates/termade-daemon/src/handlers/session.rs
+msgid " (權限：{perm})"
+msgstr " (permission: {perm})"
+
+#: crates/termade-daemon/src/handlers/session.rs
 msgid "啟動 agent 失敗：{e}"
 msgstr "Failed to start agent: {e}"
 
@@ -1595,6 +1611,14 @@ msgstr "Failed to send prompt: {e}"
 #: crates/termade-daemon/src/handlers/session.rs
 msgid "已清空 {count} 則排隊 prompt"
 msgstr "Cleared {count} queued prompt(s)"
+
+#: crates/termade-daemon/src/handlers/session.rs
+msgid "無法將仍有執行中子 session 的 coordinator 降級；請先結束子 session 或加上 --force"
+msgstr "Cannot demote a coordinator with running child sessions; end the child sessions first or pass --force"
+
+#: crates/termade-daemon/src/handlers/session.rs
+msgid "已交接給 {kind} (角色變更為 {role})"
+msgstr "Handed off to {kind} (role changed to {role})"
 
 #: crates/termade-daemon/src/handlers/session.rs
 msgid "已交接給 {kind}"
@@ -3547,6 +3571,18 @@ msgid "{agent} 的 model (輸入可過濾；無符合時 Enter 使用輸入值)"
 msgstr "Model for {agent} (type to filter; Enter uses the typed value if nothing matches)"
 
 #: crates/termade-tui/src/menu.rs
+msgid "{role} (警告：仍有 {count} 個執行中子 session)"
+msgstr "{role} (warning: {count} running child session(s) remain)"
+
+#: crates/termade-tui/src/menu.rs
+msgid "交接後的角色 (Enter 確認 · Esc 取消)"
+msgstr "Role after handoff (Enter to confirm · Esc to cancel)"
+
+#: crates/termade-tui/src/menu.rs
+msgid "已要求交接給 {target} (角色：{role})"
+msgstr "Requested handoff to {target} (role: {role})"
+
+#: crates/termade-tui/src/menu.rs
 msgid "沒有符合的 playbook"
 msgstr "No matching playbook"
 
@@ -3760,6 +3796,10 @@ msgid "預設 agent"
 msgstr "Default agent"
 
 #: crates/termade-tui/src/settings.rs
+msgid "預設角色"
+msgstr "Default role"
+
+#: crates/termade-tui/src/settings.rs
 msgid "預設權限"
 msgstr "Default permission"
 
@@ -3826,6 +3866,10 @@ msgstr "Language"
 #: crates/termade-tui/src/settings.rs
 msgid "未設定"
 msgstr "Not set"
+
+#: crates/termade-tui/src/settings.rs
+msgid "未設定 (coordinator)"
+msgstr "Not set (coordinator)"
 
 #: crates/termade-tui/src/settings.rs
 msgid "未設定 (auto)"
@@ -3986,6 +4030,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "角色：coordinator / worker / reviewer / tester (預設 worker)"
+#~ msgstr "Role: coordinator / worker / reviewer / tester (default worker)"
 
 #~ msgid "接續已結束的 session：agent 處理程序死掉或 daemon 重啟後，用原本的對話繼續 (session id 不變)"
 #~ msgstr "Resume a finished session: after the agent process died or the daemon restarted, continue the original conversation (the session id stays the same)"

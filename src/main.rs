@@ -98,9 +98,9 @@ enum Cmd {
         /// 易讀標籤 (例如 worker/backend；未指定時自動產生)
         #[arg(long)]
         label: Option<String>,
-        /// 角色：coordinator / worker / reviewer / tester (預設 worker)
-        #[arg(long, default_value = "worker")]
-        role: String,
+        /// 角色：coordinator / worker / reviewer / tester (省略時無 parent 依 [defaults] role，有 parent 則 worker)
+        #[arg(long)]
+        role: Option<String>,
         /// 在獨立的 git worktree 中執行 (M3)
         #[arg(long)]
         worktree: bool,
@@ -207,6 +207,15 @@ enum Cmd {
         /// 補充給接手者的說明
         #[arg(long)]
         note: Option<String>,
+        /// 變更角色：coordinator / worker / reviewer
+        #[arg(long)]
+        role: Option<String>,
+        /// 變更父 session：<session_id|none|keep>
+        #[arg(long)]
+        parent: Option<String>,
+        /// 強制執行 (例如在仍有執行中子 session 時降級 coordinator)
+        #[arg(long)]
+        force: bool,
     },
     /// 從清單移除已結束的 session (有 worktree 分支時需已合併，或加 --force)
     Rm {
@@ -570,7 +579,10 @@ fn main() -> Result<()> {
             to,
             effort,
             note,
-        } => cmd_handoff(session, to, effort, note),
+            role,
+            parent,
+            force,
+        } => cmd_handoff(session, to, effort, note, role, parent, force),
         Cmd::Send {
             to,
             channel,

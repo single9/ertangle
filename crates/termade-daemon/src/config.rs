@@ -15,6 +15,7 @@ use tr::tr;
 #[serde(default)]
 pub struct Defaults {
     pub agent: Option<String>,
+    pub role: Option<String>,
     pub permission: Option<String>,
     /// agent 經 MCP／帶 `parent` spawn 時的權限上限。
     pub max_agent_permission: Option<String>,
@@ -530,6 +531,9 @@ impl Config {
         if local.defaults.agent.is_some() {
             out.defaults.agent = local.defaults.agent;
         }
+        if local.defaults.role.is_some() {
+            out.defaults.role = local.defaults.role;
+        }
         if local.defaults.permission.is_some() {
             out.defaults.permission = local.defaults.permission;
         }
@@ -708,7 +712,7 @@ impl Config {
                     kind: Some(kind),
                     cwd: None,
                     label: Some(label),
-                    role,
+                    role: Some(role),
                     prompt: Some(prompt),
                     worktree: m.worktree,
                     transport: Default::default(),
@@ -775,6 +779,24 @@ impl Config {
             Config::load_file(&global_dir.join("config.toml")),
             Config::load_file(&cwd.join(".termade").join("config.toml")),
         )
+    }
+
+    /// 決定一次 spawn 實際使用的 role (先符合者勝)：
+    /// 請求指定 > (無 parent 則 `defaults.role`，未設定為 coordinator；有 parent 則 worker)。
+    pub fn resolve_role(&self, requested: Option<&Role>, has_parent: bool) -> Role {
+        if let Some(r) = requested {
+            return r.clone();
+        }
+        if has_parent {
+            Role::Worker
+        } else {
+            self.defaults
+                .role
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .map(Role::parse)
+                .unwrap_or(Role::Coordinator)
+        }
     }
 
     /// 決定一次 spawn 實際使用的 agent kind (先符合者勝)：
@@ -1345,10 +1367,10 @@ enabled = false
 
         let spawns = merged.playbook_spawns("tdd", "  修好登入功能  ").unwrap();
         assert_eq!(spawns.len(), 2);
-        assert_eq!(spawns[0].role, Role::Coordinator);
+        assert_eq!(spawns[0].role, Some(Role::Coordinator));
         assert_eq!(spawns[0].label.as_deref(), Some("tdd/coord"));
         assert_eq!(spawns[0].prompt.as_deref(), Some("協調：修好登入功能"));
-        assert_eq!(spawns[1].role, Role::Reviewer);
+        assert_eq!(spawns[1].role, Some(Role::Reviewer));
         assert_eq!(spawns[1].label.as_deref(), Some("tdd/reviewer"));
         assert!(spawns[1].worktree);
         // 沒有 prompt 的成員直接以目標需求開場。
@@ -1359,7 +1381,7 @@ enabled = false
             .playbook_spawns("tdd-pair", "寫功能")
             .unwrap();
         assert_eq!(builtin.len(), 3);
-        assert_eq!(builtin[0].role, Role::Coordinator);
+        assert_eq!(builtin[0].role, Some(Role::Coordinator));
         assert!(builtin[0].prompt.as_deref().unwrap().contains("寫功能"));
         assert!(builtin
             .iter()
@@ -1422,5 +1444,37 @@ model = "haiku"
             None,
         );
         assert_eq!(r.model.as_deref(), Some("o3"));
+    }
+
+    #[test]
+    fn resolve_role_defaults() {
+        // 1. 請求指定最優先
+        let empty = Config::parse("").unwrap();
+        assert_eq!(
+            empty.resolve_role(Some(&Role::Reviewer), false),
+            Role::Reviewer
+        );
+        assert_eq!(
+            empty.resolve_role(Some(&Role::Reviewer), true),
+            Role::Reviewer
+        );
+
+        // 2. 有 parent 時未指定角色預設為 worker
+        assert_eq!(empty.resolve_role(None, true), Role::Worker);
+
+        // 3. 無 parent 時工廠預設為 coordinator
+        assert_eq!(empty.resolve_role(None, false), Role::Coordinator);
+
+        // 4. defaults.role 覆寫無 parent 時的預設
+        let with_default = Config::parse(
+            r#"
+[defaults]
+role = "reviewer"
+"#,
+        )
+        .unwrap();
+        assert_eq!(with_default.resolve_role(None, false), Role::Reviewer);
+        // 但有 parent 時依然是 worker
+        assert_eq!(with_default.resolve_role(None, true), Role::Worker);
     }
 }

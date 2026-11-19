@@ -146,6 +146,9 @@ fn spawn_prompt_output_shutdown() {
         model: None,
         effort: None,
         note: Some("先看測試".into()),
+        role: None,
+        parent: None,
+        force: false,
     })
     .unwrap();
     loop {

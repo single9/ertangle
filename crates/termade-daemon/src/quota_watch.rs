@@ -368,6 +368,9 @@ impl Shared {
                 model,
                 None,
                 Some("自動交接：原 agent 額度用完".into()),
+                None,
+                None,
+                false,
             );
         });
     }
