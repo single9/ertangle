@@ -197,8 +197,8 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             session,
             dry_run,
             resolve,
-            ..
-        } => worktree::handle_merge(shared, reply, session, dry_run, resolve),
+            strategy,
+        } => worktree::handle_merge(shared, reply, session, dry_run, resolve, strategy),
         Request::WorktreePr {
             session,
             title,

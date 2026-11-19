@@ -1,6 +1,7 @@
 //! Git／worktree 輔助函式：建立、狀態、diff、auto-commit、merge、PR、gc。
 
 use super::*;
+use termade_protocol::MergeStrategy;
 use tr::tr;
 
 /// 在 `repo` 建立一個 worktree，回傳 (路徑, 分支)。
@@ -185,21 +186,20 @@ impl std::fmt::Display for MergeConflict {
 
 impl std::error::Error for MergeConflict {}
 
-/// 在 session 的 worktree 執行 `git merge <target_branch> --no-commit` 產生衝突標記，並回傳衝突檔案清單。
-pub(crate) fn prepare_conflict_in_worktree(
-    wt_dir: &Path,
-    target_branch: &str,
-) -> Result<Vec<String>> {
-    let _ = git_output(wt_dir, &["merge", "--no-commit", target_branch])?;
-    let out = git_output(wt_dir, &["diff", "--name-only", "--diff-filter=U"])?;
-    let mut files: Vec<String> = String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect();
+/// 從指定工作目錄收集衝突檔案清單。
+fn collect_conflicts(dir: &Path) -> Vec<String> {
+    let mut files = Vec::new();
+    if let Ok(out) = git_output(dir, &["diff", "--name-only", "--diff-filter=U"]) {
+        files.extend(
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
+        );
+    }
     if files.is_empty() {
-        if let Ok(st) = git_output(wt_dir, &["status", "--porcelain"]) {
+        if let Ok(st) = git_output(dir, &["status", "--porcelain"]) {
             for line in String::from_utf8_lossy(&st.stdout).lines() {
                 let bytes = line.as_bytes();
                 if bytes.len() >= 4 {
@@ -211,7 +211,16 @@ pub(crate) fn prepare_conflict_in_worktree(
             }
         }
     }
-    Ok(files)
+    files
+}
+
+/// 在 session 的 worktree 執行 `git merge <target_branch> --no-commit` 產生衝突標記，並回傳衝突檔案清單。
+pub(crate) fn prepare_conflict_in_worktree(
+    wt_dir: &Path,
+    target_branch: &str,
+) -> Result<Vec<String>> {
+    let _ = git_output(wt_dir, &["merge", "--no-commit", target_branch])?;
+    Ok(collect_conflicts(wt_dir))
 }
 
 fn run_pre_merge_command(wt_dir: &Path, cmd: &str) -> Result<()> {
@@ -322,15 +331,44 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
     Ok(())
 }
 
-/// 把 session 的 worktree 分支合併回主工作區。
+/// 把 session 的 worktree 分支合併回主工作區 (預設一般合併)。
+#[allow(dead_code)]
 pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool) -> Result<String> {
     merge_worktree_with(main_repo, session, dry_run, None)
 }
 
-/// 帶自訂前置驗證指令 (如測試時覆寫，避免多執行緒共用設定檔競爭) 的合併實作。
+/// 帶自訂前置驗證指令 (如測試時覆寫，避免多執行緒共用設定檔競爭) 的合併實作 (預設一般合併)。
+#[allow(dead_code)]
 pub(crate) fn merge_worktree_with(
     main_repo: &Path,
     session: &Session,
+    dry_run: bool,
+    pre_merge_cmd_override: Option<&str>,
+) -> Result<String> {
+    merge_worktree_strategy_with(
+        main_repo,
+        session,
+        MergeStrategy::Merge,
+        dry_run,
+        pre_merge_cmd_override,
+    )
+}
+
+/// 帶指定合併策略的 entry point。
+pub(crate) fn merge_worktree_strategy(
+    main_repo: &Path,
+    session: &Session,
+    strategy: MergeStrategy,
+    dry_run: bool,
+) -> Result<String> {
+    merge_worktree_strategy_with(main_repo, session, strategy, dry_run, None)
+}
+
+/// 帶自訂前置驗證指令與指定合併策略的合併實作。
+pub(crate) fn merge_worktree_strategy_with(
+    main_repo: &Path,
+    session: &Session,
+    strategy: MergeStrategy,
     dry_run: bool,
     pre_merge_cmd_override: Option<&str>,
 ) -> Result<String> {
@@ -408,7 +446,8 @@ pub(crate) fn merge_worktree_with(
             )
         };
         return Ok(tr!(
-            "[dry-run] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}",
+            "[dry-run] [{strategy}] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}",
+            strategy = strategy,
             branch = branch,
             label = session.label,
             target = target,
@@ -432,41 +471,133 @@ pub(crate) fn merge_worktree_with(
             run_pre_merge_command(wt_dir, cmd)?;
         }
     }
-    let out = git_output(main_repo, &["merge", "--no-edit", branch])?;
-    if !out.status.success() {
-        let conflicts = git_output(main_repo, &["diff", "--name-only", "--diff-filter=U"])
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .lines()
-                    .map(str::to_string)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        let _ = git_output(main_repo, &["merge", "--abort"]);
-        let detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        if conflicts.is_empty() {
-            bail!(
-                "{}",
-                tr!(
-                    "合併 {branch} 到 {target} 失敗，已還原：{detail}",
-                    branch = branch,
-                    target = target,
-                    detail = detail
-                )
-            );
+
+    match strategy {
+        MergeStrategy::Merge => {
+            let out = git_output(main_repo, &["merge", "--no-edit", branch])?;
+            if !out.status.success() {
+                let conflicts = collect_conflicts(main_repo);
+                let _ = git_output(main_repo, &["merge", "--abort"]);
+                let detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                if conflicts.is_empty() {
+                    bail!(
+                        "{}",
+                        tr!(
+                            "合併 {branch} 到 {target} 失敗，已還原：{detail}",
+                            branch = branch,
+                            target = target,
+                            detail = detail
+                        )
+                    );
+                }
+                return Err(anyhow::Error::new(MergeConflict {
+                    branch: branch.to_string(),
+                    target,
+                    files: conflicts,
+                }));
+            }
+            Ok(tr!(
+                "已將 {branch} ({label})合併進 {target}",
+                branch = branch,
+                label = session.label,
+                target = target
+            ))
         }
-        return Err(anyhow::Error::new(MergeConflict {
-            branch: branch.to_string(),
-            target,
-            files: conflicts,
-        }));
+        MergeStrategy::Squash => {
+            let out = git_output(main_repo, &["merge", "--squash", "--no-edit", branch])?;
+            if !out.status.success() {
+                let conflicts = collect_conflicts(main_repo);
+                let _ = git_output(main_repo, &["reset", "--hard", "HEAD"]);
+                let detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                if conflicts.is_empty() {
+                    bail!(
+                        "{}",
+                        tr!(
+                            "合併 {branch} 到 {target} 失敗，已還原：{detail}",
+                            branch = branch,
+                            target = target,
+                            detail = detail
+                        )
+                    );
+                }
+                return Err(anyhow::Error::new(MergeConflict {
+                    branch: branch.to_string(),
+                    target,
+                    files: conflicts,
+                }));
+            }
+            let diff_cached = git_output(main_repo, &["diff", "--cached", "--quiet"])?;
+            if diff_cached.status.success() {
+                return Ok(tr!(
+                    "{branch} ({label}) 已是最新狀態，無需合併",
+                    branch = branch,
+                    label = session.label
+                ));
+            }
+            let commit_msg = format!("chore(worktree): squash merge {branch}");
+            let commit_out = git_output(main_repo, &["commit", "-m", &commit_msg])?;
+            if !commit_out.status.success() {
+                let detail = String::from_utf8_lossy(&commit_out.stderr)
+                    .trim()
+                    .to_string();
+                bail!("{}", tr!("squash commit 失敗：{detail}", detail = detail));
+            }
+            Ok(tr!(
+                "已將 {branch} ({label})合併進 {target}",
+                branch = branch,
+                label = session.label,
+                target = target
+            ))
+        }
+        MergeStrategy::Rebase => {
+            if !wt_dir.is_dir() {
+                bail!("{}", tr!("worktree 目錄不存在：{cwd}", cwd = session.cwd));
+            }
+            let rebase_out = git_output(wt_dir, &["rebase", &target])?;
+            if !rebase_out.status.success() {
+                let conflicts = collect_conflicts(wt_dir);
+                let _ = git_output(wt_dir, &["rebase", "--abort"]);
+                let detail = String::from_utf8_lossy(&rebase_out.stderr)
+                    .trim()
+                    .to_string();
+                if conflicts.is_empty() {
+                    bail!(
+                        "{}",
+                        tr!(
+                            "rebase {branch} 至 {target} 失敗，已還原：{detail}",
+                            branch = branch,
+                            target = target,
+                            detail = detail
+                        )
+                    );
+                }
+                return Err(anyhow::Error::new(MergeConflict {
+                    branch: branch.to_string(),
+                    target,
+                    files: conflicts,
+                }));
+            }
+            let ff_out = git_output(main_repo, &["merge", "--ff-only", branch])?;
+            if !ff_out.status.success() {
+                let detail = String::from_utf8_lossy(&ff_out.stderr).trim().to_string();
+                bail!(
+                    "{}",
+                    tr!(
+                        "快轉合併 {branch} 到 {target} 失敗：{detail}",
+                        branch = branch,
+                        target = target,
+                        detail = detail
+                    )
+                );
+            }
+            Ok(tr!(
+                "已將 {branch} ({label})合併進 {target}",
+                branch = branch,
+                label = session.label,
+                target = target
+            ))
+        }
     }
-    Ok(tr!(
-        "已將 {branch} ({label})合併進 {target}",
-        branch = branch,
-        label = session.label,
-        target = target
-    ))
 }
 
 /// 透過 `gh pr create` 建立 Pull Request。

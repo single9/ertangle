@@ -1407,15 +1407,35 @@ msgid "待提交檔案 ({count})：{files}"
 msgstr ""
 
 #: crates/termade-daemon/src/git.rs
-msgid "[dry-run] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
+msgid "[dry-run] [{strategy}] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
 msgstr ""
 
-#: crates/termade-daemon/src/git.rs
+#: crates/termade-daemon/src/git.rs crates/termade-daemon/src/git.rs
 msgid "合併 {branch} 到 {target} 失敗，已還原：{detail}"
 msgstr ""
 
-#: crates/termade-daemon/src/git.rs
+#: crates/termade-daemon/src/git.rs crates/termade-daemon/src/git.rs crates/termade-daemon/src/git.rs
 msgid "已將 {branch} ({label})合併進 {target}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "{branch} ({label}) 已是最新狀態，無需合併"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "squash commit 失敗：{detail}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "worktree 目錄不存在：{cwd}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "rebase {branch} 至 {target} 失敗，已還原：{detail}"
+msgstr ""
+
+#: crates/termade-daemon/src/git.rs
+msgid "快轉合併 {branch} 到 {target} 失敗：{detail}"
 msgstr ""
 
 #: crates/termade-daemon/src/git.rs

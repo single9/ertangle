@@ -1413,8 +1413,8 @@ msgid "待提交檔案 ({count})：{files}"
 msgstr "pending files ({count}): {files}"
 
 #: crates/termade-daemon/src/git.rs
-msgid "[dry-run] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
-msgstr "[dry-run] Merge {branch} ({label}) into {target}: {ff_desc}, {pending_desc}"
+msgid "[dry-run] [{strategy}] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
+msgstr "[dry-run] [{strategy}] Merge {branch} ({label}) into {target}: {ff_desc}, {pending_desc}"
 
 #: crates/termade-daemon/src/git.rs
 msgid "合併 {branch} 到 {target} 失敗，已還原：{detail}"
@@ -1423,6 +1423,26 @@ msgstr "Merging {branch} into {target} failed and was rolled back: {detail}"
 #: crates/termade-daemon/src/git.rs
 msgid "已將 {branch} ({label})合併進 {target}"
 msgstr "Merged {branch} ({label}) into {target}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "{branch} ({label}) 已是最新狀態，無需合併"
+msgstr "{branch} ({label}) is already up to date; nothing to merge"
+
+#: crates/termade-daemon/src/git.rs
+msgid "squash commit 失敗：{detail}"
+msgstr "Squash commit failed: {detail}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "worktree 目錄不存在：{cwd}"
+msgstr "Worktree directory does not exist: {cwd}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "rebase {branch} 至 {target} 失敗，已還原：{detail}"
+msgstr "Rebasing {branch} onto {target} failed and was rolled back: {detail}"
+
+#: crates/termade-daemon/src/git.rs
+msgid "快轉合併 {branch} 到 {target} 失敗：{detail}"
+msgstr "Fast-forward merge of {branch} into {target} failed: {detail}"
 
 #: crates/termade-daemon/src/git.rs
 msgid "此 session 沒有獨立分支，無法建立 PR"
@@ -4098,6 +4118,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "[dry-run] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
+#~ msgstr "[dry-run] Merge {branch} ({label}) into {target}: {ff_desc}, {pending_desc}"
 
 #~ msgid "Agent 額度"
 #~ msgstr "Agent quotas"
