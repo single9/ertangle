@@ -176,12 +176,12 @@ pub(crate) fn base64_decode(input: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// 把 transcript 的可見行切成訊息區塊：每個以 `❯ ` 開頭的使用者提示開啟新區塊，
-/// 其後續行 (直到下一個 `❯ `)視為同一則訊息內容；最前面若有非 `❯` 行則自成第一則。
+/// 把 transcript 的可見行切成訊息區塊：每個 prompt (使用者的 `❯ ` 或其他來源的 `» [來源] `)開啟新區塊，
+/// 其後續行 (直到下一個 prompt)視為同一則訊息內容；最前面若有非 prompt 行則自成第一則。
 fn transcript_messages(lines: &[String]) -> Vec<Vec<String>> {
     let mut msgs: Vec<Vec<String>> = Vec::new();
     for line in lines {
-        if line.starts_with("❯ ") || msgs.is_empty() {
+        if termade_core::parse_prompt_line(line).is_some() || msgs.is_empty() {
             msgs.push(vec![line.clone()]);
         } else {
             msgs.last_mut().unwrap().push(line.clone());

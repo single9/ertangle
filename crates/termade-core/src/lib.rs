@@ -740,10 +740,14 @@ pub enum Event {
         from: SessionId,
         to: SessionId,
     },
-    /// 使用者送出的 prompt (顯示在逐字稿，讓對話有上下文)。
+    /// 送給 agent 的 prompt (顯示在逐字稿，讓對話有上下文)。
     UserPrompt {
         session: SessionId,
         text: String,
+        /// 誰送的：`None` = 使用者；否則是送出的 agent session id，或 [`PROMPT_FROM_TERMADE`]
+        /// (daemon 自己產生的提醒、通知與交接簡報)。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<String>,
     },
     /// agent 的文字輸出 (串流 chunk 或整行)。
     Output {
@@ -830,6 +834,22 @@ pub struct Record {
 
 /// transcript 每個 session 最多保留的行數 (避免長對話吃記憶體)。
 pub const TRANSCRIPT_CAP: usize = 4000;
+/// `UserPrompt.from` 的值：daemon 自己產生的 prompt (未讀提醒、衝突通知、交接簡報、自動接續)。
+pub const PROMPT_FROM_TERMADE: &str = "termade";
+/// 逐字稿中使用者 prompt 的第一行前綴。
+pub const USER_PROMPT_MARK: &str = "❯ ";
+/// 逐字稿中非使用者 (其他 agent 或 termade) 送來的 prompt 第一行前綴，後面接 `[來源] `。
+pub const OTHER_PROMPT_MARK: &str = "» ";
+
+/// 逐字稿的一行若是 prompt 的第一行，回傳 (來源名稱，`None` = 使用者；prompt 文字)。
+pub fn parse_prompt_line(line: &str) -> Option<(Option<&str>, &str)> {
+    if let Some(rest) = line.strip_prefix(USER_PROMPT_MARK) {
+        return Some((None, rest));
+    }
+    let rest = line.strip_prefix(OTHER_PROMPT_MARK)?.strip_prefix('[')?;
+    let (name, text) = rest.split_once("] ")?;
+    Some((Some(name), text))
+}
 /// 已移除但具 `native_id` 的歷史 session 保留上限 (供接續選擇器瀏覽)。
 pub const ARCHIVED_SESSIONS_CAP: usize = 100;
 /// 封存歷史 session 保留的逐字稿行數上限。
@@ -915,11 +935,11 @@ impl State {
                     .as_deref()
                     .is_none_or(|n| n.is_empty() || n.contains(":resume"));
                 if need_summary {
-                    if let Some(last_prompt) = self
-                        .transcripts
-                        .get(session)
-                        .and_then(|buf| buf.iter().rev().find_map(|line| line.strip_prefix("❯ ")))
-                    {
+                    if let Some(last_prompt) = self.transcripts.get(session).and_then(|buf| {
+                        buf.iter()
+                            .rev()
+                            .find_map(|line| parse_prompt_line(line).map(|(_, t)| t))
+                    }) {
                         let snippet: String = last_prompt.trim().chars().take(80).collect();
                         if !snippet.is_empty() {
                             s.status_note = Some(snippet);
@@ -1048,14 +1068,30 @@ impl State {
                     s.handed_off_to = Some(to.clone());
                 }
             }
-            Event::UserPrompt { session, text } => {
+            Event::UserPrompt {
+                session,
+                text,
+                from,
+            } => {
+                // 第一行加上前綴：使用者是 `❯ `，其他來源是 `» [來源] ` (agent 以 label 顯示)；
+                // 多行 prompt 的後續行縮排對齊。
+                let head = match from {
+                    None => USER_PROMPT_MARK.to_string(),
+                    Some(f) => {
+                        let name = self
+                            .sessions
+                            .get(f)
+                            .map(|s| s.label.clone())
+                            .unwrap_or_else(|| f.clone());
+                        format!("{OTHER_PROMPT_MARK}[{name}] ")
+                    }
+                };
                 let buf = self.transcripts.entry(session.clone()).or_default();
-                // 第一行加上 `❯ ` 前綴；多行 prompt 的後續行縮排對齊。
                 let text = text.trim_end_matches('\n');
                 if !text.is_empty() {
                     for (i, line) in text.split('\n').enumerate() {
                         if i == 0 {
-                            buf.push_back(format!("❯ {line}"));
+                            buf.push_back(format!("{head}{line}"));
                         } else {
                             buf.push_back(format!("  {line}"));
                         }
@@ -2463,6 +2499,48 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn prompts_from_others_are_marked_with_source() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::UserPrompt {
+                session: "w".into(),
+                text: "do it".into(),
+                from: Some("ghost".into()),
+            },
+        ));
+        st.apply(&rec(
+            2,
+            Event::UserPrompt {
+                session: "w".into(),
+                text: "提醒\n第二行".into(),
+                from: Some(PROMPT_FROM_TERMADE.into()),
+            },
+        ));
+        st.apply(&rec(
+            3,
+            Event::UserPrompt {
+                session: "w".into(),
+                text: "mine".into(),
+                from: None,
+            },
+        ));
+        let t: Vec<&str> = st.transcripts["w"].iter().map(String::as_str).collect();
+        assert_eq!(
+            t,
+            ["» [ghost] do it", "» [termade] 提醒", "  第二行", "❯ mine"]
+        );
+        assert_eq!(parse_prompt_line(t[0]), Some((Some("ghost"), "do it")));
+        assert_eq!(parse_prompt_line(t[3]), Some((None, "mine")));
+        assert_eq!(parse_prompt_line("» quote"), None);
+        assert_eq!(parse_prompt_line("plain"), None);
+        // 舊事件沒有 `from`：視為使用者。
+        let old: Event =
+            serde_json::from_str(r#"{"kind":"user_prompt","session":"w","text":"x"}"#).unwrap();
+        assert!(matches!(old, Event::UserPrompt { from: None, .. }));
+    }
+
+    #[test]
     fn record_wire_format_is_flat() {
         // Web 版 (`web/index.html` 的 applyRecord) 依賴事件欄位在頂層；改成巢狀會讓即時更新全部失效。
         let r = Record {
@@ -2642,6 +2720,7 @@ pub(crate) mod tests {
             Event::UserPrompt {
                 session: "root".into(),
                 text: "API key: sk-1234567890abcdefghijklmnop".into(),
+                from: None,
             },
         ));
         st.apply(&rec(
@@ -2925,6 +3004,7 @@ mod attachment_tests {
             event: Event::UserPrompt {
                 session: "ses_arch".into(),
                 text: "請幫我檢查這份報表".into(),
+                from: None,
             },
         });
         st.apply(&Record {

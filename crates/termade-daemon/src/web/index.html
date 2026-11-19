@@ -346,6 +346,26 @@
       align-items: flex-start;
       gap: 6px;
     }
+    .turn-peer {
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .peer-tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: #fde68a;
+      background: rgba(217, 119, 6, 0.15);
+      border: 1px solid rgba(217, 119, 6, 0.35);
+      padding: 1px 8px;
+      border-radius: 4px;
+    }
+    /* 與 .bubble-agent 併用 (沿用其 Markdown 樣式)，以較高的選擇器權重覆寫外觀 */
+    .bubble-agent.bubble-peer {
+      background: rgba(217, 119, 6, 0.08);
+      color: var(--text);
+      border: 1px dashed rgba(217, 119, 6, 0.4);
+      border-radius: 4px 18px 18px 18px;
+    }
     .turn-system {
       align-items: center;
       margin: 4px 0;
@@ -2420,7 +2440,13 @@
         // 與 core/TUI 一致：第一行 `❯ `，後續行兩個空格縮排，讓分組邏輯可正確辨識多行 prompt。
         const parts = String(event.text).split("\n");
         if (parts[parts.length - 1] === "") parts.pop();
-        parts.forEach((l, i) => state.transcripts[event.session].push(`${i === 0 ? "❯" : " "} ${l}`));
+        // 非使用者 (其他 agent 或 termade) 送的 prompt 以 `» [來源] ` 標示，與 core 的 fold 一致。
+        let head = "❯ ";
+        if (event.from) {
+          const src = state.sessions[event.from];
+          head = `» [${src ? src.label : event.from}] `;
+        }
+        parts.forEach((l, i) => state.transcripts[event.session].push(i === 0 ? `${head}${l}` : `  ${l}`));
         if (event.session === activeSession) renderCurrentChatTranscript();
       } else if (kind === "output") {
         if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
@@ -2469,7 +2495,10 @@
       function flushUser() {
         if (currentUserTurn) {
           if (currentUserTurn.parts.length > 0) {
-            turns.push({ type: "user", text: currentUserTurn.parts.join("\n") });
+            const text = currentUserTurn.parts.join("\n");
+            turns.push(currentUserTurn.from
+              ? { type: "peer", from: currentUserTurn.from, text }
+              : { type: "user", text });
           }
           currentUserTurn = null;
         }
@@ -2480,12 +2509,15 @@
         if (raw == null) continue;
         const line = String(raw);
 
-        // core/TUI 以 `❯ ` 標記使用者 prompt；舊版 web 即時事件用 `> `，兩者都要辨識，
-        // 否則從 snapshot 載入的歷史 prompt 會被當成 agent 文字，與回覆混在一起。
-        if (line.startsWith("❯ ") || line.startsWith("> ")) {
+        // core/TUI 以 `❯ ` 標記使用者 prompt、`» [來源] ` 標記其他 agent 或 termade 送的 prompt。
+        // `> ` 是 agent 回覆中的 Markdown 引言，不是使用者訊息。
+        const peer = line.match(/^» \[([^\]]*)\] (.*)$/);
+        if (line.startsWith("❯ ") || peer) {
           flushAgent();
           flushUser();
-          currentUserTurn = { parts: [line.substring(2)] };
+          currentUserTurn = peer
+            ? { from: peer[1], parts: [peer[2]] }
+            : { from: null, parts: [line.substring(2)] };
         } else if (currentUserTurn && line.startsWith("  ") && !line.startsWith("  ✓") && !line.startsWith("  ✗")) {
           // 多行 prompt 的後續行：core 以兩個空格縮排對齊。
           currentUserTurn.parts.push(line.substring(2));
@@ -2561,6 +2593,19 @@
               <span class="user-tag">你</span>
             </div>
             <div class="turn-bubble bubble-user">
+              <div class="bubble-content">${renderSimpleMarkdown(turn.text)}</div>
+            </div>
+          `;
+          box.appendChild(row);
+        } else if (turn.type === "peer") {
+          const row = document.createElement("div");
+          row.className = "chat-turn turn-peer";
+          const who = turn.from === "termade" ? "termade 通知" : `來自 ${turn.from}`;
+          row.innerHTML = `
+            <div class="turn-header">
+              <span class="peer-tag">${escapeHtml(who)}</span>
+            </div>
+            <div class="turn-bubble bubble-agent bubble-peer">
               <div class="bubble-content">${renderSimpleMarkdown(turn.text)}</div>
             </div>
           `;

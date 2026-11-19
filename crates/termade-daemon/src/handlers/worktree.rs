@@ -149,9 +149,21 @@ pub(crate) fn handle_merge(
                                 );
 
                                 let send_res = if shared.control(&s.id).is_some() {
-                                    send_prompt(shared, &s.id, &prompt, &[])
+                                    send_prompt(
+                                        shared,
+                                        &s.id,
+                                        &prompt,
+                                        &[],
+                                        Some(termade_core::PROMPT_FROM_TERMADE),
+                                    )
                                 } else if s.native_id.is_some() {
-                                    resume_session(shared, &s.id, Some(prompt)).map(|_| ())
+                                    resume_session(
+                                        shared,
+                                        &s.id,
+                                        Some(prompt),
+                                        Some(termade_core::PROMPT_FROM_TERMADE.to_string()),
+                                    )
+                                    .map(|_| ())
                                 } else {
                                     Err(anyhow::anyhow!(tr!(
                                         "session {label} 已結束且無對話 id，無法自動接續解衝突",

@@ -26,12 +26,22 @@ pub(crate) fn build_handoff_brief(
         .map(|t| t.iter().collect())
         .unwrap_or_default();
 
-    // 使用者 prompt 在 transcript 裡以 `❯ ` 開頭 (多行的後續行縮排兩格)。
+    // prompt 在 transcript 裡以 `❯ ` (使用者) 或 `» [來源] ` (其他 agent／termade) 開頭，
+    // 多行的後續行縮排兩格。agent 建立的 session 原始任務來自父 session，也要算進來。
     let mut prompts: Vec<String> = Vec::new();
+    let mut skipping = false;
     for l in &lines {
-        if let Some(first) = l.strip_prefix("❯ ") {
+        if let Some((from, first)) = termade_core::parse_prompt_line(l) {
+            // termade 自己的提醒／通知不是任務，略過 (後續行也一併略過)。
+            if from == Some(termade_core::PROMPT_FROM_TERMADE) {
+                skipping = true;
+                continue;
+            }
+            skipping = false;
             prompts.push(first.to_string());
-        } else if l.starts_with("  ")
+        } else if !l.starts_with("  ") {
+            skipping = false;
+        } else if !skipping
             && !prompts.is_empty()
             && !l.starts_with("  ✓")
             && !l.starts_with("  ✗")
@@ -232,6 +242,21 @@ mod tests {
         assert!(b.contains("先修失敗的測試"));
         assert!(b.contains("M src/zip.rs") && b.contains("termade/s1"));
         assert!(b.contains("✗ 3 failed"));
+    }
+
+    #[test]
+    fn brief_takes_task_from_parent_and_skips_termade_notices() {
+        let mut st = State::new();
+        let t = st.transcripts.entry("s1".into()).or_default();
+        t.push_back("» [coord/a] 實作 T49".into());
+        t.push_back("  照票上的步驟".into());
+        t.push_back("» [termade] [termade 未讀訊息提醒] 你忙碌時收到 1 則訊息".into());
+        t.push_back("  請呼叫 termade_inbox 查看".into());
+        let s = sess();
+        let b = build_handoff_brief(&st, &s, "", None, &[], &s.role, s.parent.as_deref(), &[]);
+        assert!(b.contains("## 原始任務\n實作 T49\n照票上的步驟"), "{b}");
+        assert!(!b.contains("照票上的步驟\n請呼叫"), "{b}");
+        assert!(!b.contains("## 後續指示"), "{b}");
     }
 
     #[test]

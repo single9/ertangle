@@ -438,7 +438,12 @@ impl Shared {
                 std::thread::sleep(Duration::from_secs(1));
                 for sid in to_resume {
                     let prompt = Some(AUTO_RESUME_PROMPT.to_string());
-                    let note = match handlers::session::resume_session(&sh, &sid, prompt) {
+                    let note = match handlers::session::resume_session(
+                        &sh,
+                        &sid,
+                        prompt,
+                        Some(termade_core::PROMPT_FROM_TERMADE.to_string()),
+                    ) {
                         Ok(_) => auto_resumed_note(),
                         Err(e) => tr!("daemon 重啟後自動接續失敗：{e}", e = e),
                     };
@@ -722,7 +727,7 @@ impl Shared {
         let Some(item) = popped else {
             return false;
         };
-        match handlers::session::send_prompt(self, sid, &item.text, &item.attachments) {
+        match handlers::session::send_prompt(self, sid, &item.text, &item.attachments, None) {
             Ok(()) => {
                 let items: Vec<String> = {
                     let inner = lock(&self.inner);

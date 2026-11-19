@@ -21,6 +21,8 @@ pub const THOUGHT: Color = Color::Rgb(128, 132, 152);
 pub const TOOL: Color = Color::Rgb(224, 184, 96);
 pub const REVIEW: Color = Color::Rgb(198, 122, 206);
 pub const PROMPT: Color = Color::Rgb(126, 222, 160);
+/// 其他 agent 或 termade 送來的 prompt (不是使用者自己送的)。
+pub const PEER_PROMPT: Color = Color::Rgb(222, 184, 110);
 pub const LINK: Color = Color::Rgb(112, 172, 255);
 pub const HEADING: Color = Color::Rgb(122, 202, 255);
 pub const BULLET: Color = Color::Rgb(122, 202, 255);
@@ -151,8 +153,16 @@ fn render_line_with_links(
     if line.trim().is_empty() {
         return (Line::raw(String::new()), Vec::new());
     }
-    if let Some(rest) = line.strip_prefix("❯ ") {
-        return prefixed_with_links("❯ ", rest, PROMPT, false);
+    if let Some((from, rest)) = termade_core::parse_prompt_line(line) {
+        return match from {
+            None => prefixed_with_links(termade_core::USER_PROMPT_MARK, rest, PROMPT, false),
+            Some(name) => prefixed_with_links(
+                &format!("{}[{name}] ", termade_core::OTHER_PROMPT_MARK),
+                rest,
+                PEER_PROMPT,
+                false,
+            ),
+        };
     }
     if let Some(rest) = line.strip_prefix("💭 ") {
         return prefixed_with_links("💭 ", rest, THOUGHT, true);
@@ -1032,6 +1042,21 @@ mod tests {
                 contents(line).join("")
             );
         }
+    }
+
+    #[test]
+    fn peer_prompt_is_styled_apart_from_user_prompt() {
+        let mut r = Renderer::new();
+        let out = r.render(&plain("» [coord/a] do it\n❯ mine"), 80);
+        let fg = |l: &Line<'_>, text: &str| {
+            l.spans
+                .iter()
+                .find(|s| s.content.contains(text))
+                .and_then(|s| s.style.fg)
+        };
+        assert_eq!(contents(&out[0]).join(""), "» [coord/a] do it");
+        assert_eq!(fg(&out[0], "do it"), Some(PEER_PROMPT));
+        assert_eq!(fg(&out[1], "mine"), Some(PROMPT));
     }
 
     #[test]

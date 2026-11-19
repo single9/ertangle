@@ -534,15 +534,23 @@ fn test_web_companion_custom_port() {
     let _ = fs::remove_dir_all(&root);
 }
 
-/// 網頁版必須把 core/TUI 的 `❯ ` 與舊版 web 的 `> ` 都當成使用者 prompt 標記，
-/// 並在使用者氣泡顯示「你」標籤，否則歷史訊息會被併進 agent 回覆而難以區分。
+/// 網頁版只把 core/TUI 的 `❯ ` 當成使用者 prompt；`» [來源] ` 是其他 agent 或 termade 送的，
+/// `> ` 是 agent 回覆裡的 Markdown 引言。使用者氣泡顯示「你」標籤，其他來源另用標籤。
 #[test]
 fn test_web_transcript_marks_user_prompts() {
     const HTML: &str = include_str!("../src/web/index.html");
 
     assert!(
-        HTML.contains("line.startsWith(\"❯ \") || line.startsWith(\"> \")"),
-        "分組邏輯必須同時辨識 ❯ 與 > 標記"
+        HTML.contains("if (line.startsWith(\"❯ \") || peer)"),
+        "分組邏輯必須辨識 ❯ 與 » [來源] 標記"
+    );
+    assert!(
+        !HTML.contains("line.startsWith(\"> \")"),
+        "`> ` 是 Markdown 引言，不能當成使用者 prompt"
+    );
+    assert!(
+        HTML.contains("class=\"peer-tag\""),
+        "其他來源的 prompt 必須有自己的標籤"
     );
     assert!(
         HTML.contains("class=\"user-tag\">你<"),

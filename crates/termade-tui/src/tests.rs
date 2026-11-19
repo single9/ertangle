@@ -160,6 +160,7 @@ fn user_prompt_is_echoed_in_transcript() {
         event: termade_core::Event::UserPrompt {
             session: "ses_test".into(),
             text: "fix the tests\nsecond line 中文".into(),
+            from: None,
         },
     });
 

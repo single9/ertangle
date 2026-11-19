@@ -319,7 +319,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         status: SessionStatus::Starting,
         model: resolved.model.clone(),
         cost: Default::default(),
-        parent,
+        parent: parent.clone(),
         created_ms: now_millis(),
         transport: String::new(),
         status_note: None,
@@ -347,6 +347,12 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         resolved,
         permission,
         prompt: spawn.prompt.clone(),
+        // 交接簡報是 termade 組的；agent 建立的 session 初始 prompt 來自父 session；其餘是使用者。
+        prompt_from: if spawn.inherit_from.is_some() {
+            Some(termade_core::PROMPT_FROM_TERMADE.to_string())
+        } else {
+            parent.clone()
+        },
         attachments: spawn.attachments.clone(),
         resume: None,
         cost_base: Default::default(),
@@ -410,6 +416,8 @@ struct Launch {
     resolved: config::Resolved,
     permission: termade_core::PermissionPolicy,
     prompt: Option<String>,
+    /// 初始 prompt 的來源 (`UserPrompt.from`)：`None` = 使用者。
+    prompt_from: Option<String>,
     attachments: Vec<termade_core::Attachment>,
     /// 接續用的 agent 原生對話 id；`None` 表示開新對話。
     resume: Option<String>,
@@ -428,6 +436,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
         resolved,
         permission,
         prompt,
+        prompt_from,
         attachments,
         resume,
         cost_base,
@@ -524,6 +533,7 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
             shared.emit(Event::UserPrompt {
                 session: id.clone(),
                 text: with_attachment_summary(prompt, &attachments),
+                from: prompt_from.clone(),
             });
         }
     }
@@ -556,6 +566,7 @@ pub(crate) fn resume_session(
     shared: &Arc<Shared>,
     sid_or_label: &str,
     prompt: Option<String>,
+    prompt_from: Option<String>,
 ) -> anyhow::Result<String> {
     let Some((mut s, is_archived)) = lock(&shared.inner)
         .state
@@ -644,6 +655,7 @@ pub(crate) fn resume_session(
         resolved,
         permission: s.permission,
         prompt: prompt.filter(|p| !p.trim().is_empty()),
+        prompt_from,
         attachments: vec![],
         resume: Some(native_id),
         cost_base,
@@ -670,7 +682,7 @@ pub(crate) fn handle_resume(
     session: String,
     prompt: Option<String>,
 ) {
-    match resume_session(shared, &session, prompt) {
+    match resume_session(shared, &session, prompt, None) {
         Ok(label) => {
             let _ = reply.send(Frame::ok_note(tr!("已接續 {label}", label = label)));
         }
@@ -690,6 +702,7 @@ pub(crate) fn send_prompt(
     sid: &str,
     text: &str,
     attachments: &[termade_core::Attachment],
+    from: Option<&str>,
 ) -> anyhow::Result<()> {
     let Some((sid, ctl)) = shared.control(sid) else {
         anyhow::bail!("{}", tr!("找不到 session {session}", session = sid));
@@ -707,6 +720,7 @@ pub(crate) fn send_prompt(
         shared.emit(Event::UserPrompt {
             session: sid.clone(),
             text: with_attachment_summary(text, attachments),
+            from: from.map(str::to_string),
         });
         if was_idle {
             shared.emit(Event::SessionStatus {
@@ -827,7 +841,7 @@ pub(crate) fn handle_prompt(
         }
     }
 
-    match send_prompt(shared, &sid, &text, &clean_attachments) {
+    match send_prompt(shared, &sid, &text, &clean_attachments, None) {
         Ok(()) => {
             let _ = reply.send(Frame::ok());
         }

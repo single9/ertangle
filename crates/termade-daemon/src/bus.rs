@@ -402,7 +402,15 @@ impl Shared {
             );
             (ids, text)
         };
-        if handlers::session::send_prompt(self, sid, &text, &[]).is_err() {
+        if handlers::session::send_prompt(
+            self,
+            sid,
+            &text,
+            &[],
+            Some(termade_core::PROMPT_FROM_TERMADE),
+        )
+        .is_err()
+        {
             lock(&self.inner).pending_nudge.insert(sid.clone(), ids);
         }
     }
