@@ -3555,6 +3555,15 @@ fn quota_popup_renders_and_header_click_area_is_set() {
         .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
         .collect();
     assert!(agy_text.contains("Claude / GPT (5h)"), "{agy_text}");
+
+    // `quota::open` 應將有回報額度的 agent 排在前面，沒有資料的 (如 opencode) 排在後面。
+    crate::quota::open(&mut app);
+    if let (Some(cl_pos), Some(oc_pos)) = (
+        app.quota_agents.iter().position(|a| a == "claude"),
+        app.quota_agents.iter().position(|a| a == "opencode"),
+    ) {
+        assert!(cl_pos < oc_pos, "{:?}", app.quota_agents);
+    }
 }
 
 fn generate_realistic_transcript(target_lines: usize) -> Vec<String> {

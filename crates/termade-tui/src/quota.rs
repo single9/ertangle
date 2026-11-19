@@ -27,6 +27,8 @@ pub(crate) fn open(app: &mut App) {
             agents.push(id.clone());
         }
     }
+    // 已回報額度的 agent 排在前面，尚未回報資料者 (如 opencode) 往後排。
+    agents.sort_by_key(|id| !app.state.quotas.contains_key(id));
     app.quota_agents = agents;
     app.quota_tab = 0;
     app.mode = Mode::Quota;
