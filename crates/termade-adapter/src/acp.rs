@@ -27,6 +27,10 @@ const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
 const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 
 struct Conn {
+    /// 這個 adapter 代表的 agent id (額度事件的 `agent` 欄位)。
+    agent: String,
+    /// 已送出 `reached=true` 的限流額度、尚未被成功回合清除。
+    limited: std::sync::atomic::AtomicBool,
     /// 我們自己的 session id (事件關聯用)。
     session_id: String,
     /// agent 回傳的 ACP session id (prompt / cancel 用)。
@@ -103,7 +107,20 @@ impl Conn {
         );
         self.flush_stream();
         let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
+        if res.is_ok() {
+            if let Some(q) = recovered_quota(&self.agent, &self.limited) {
+                let _ = self.tx.send(AgentEvent::Quota(q));
+            }
+        }
         res.map(|_| ())
+    }
+
+    /// 錯誤文字若是限流就送出 `reached=true` 並記下旗標 (之後成功的回合會清除)。
+    fn report_rate_limit(&self, error_text: &str) {
+        if let Some(q) = rate_limit_quota(&self.agent, error_text) {
+            self.limited.store(true, Ordering::SeqCst);
+            let _ = self.tx.send(AgentEvent::Quota(q));
+        }
     }
 
     fn on_update(&self, msg: &Value) {
@@ -128,6 +145,9 @@ impl Conn {
                         window: update["size"].as_u64(),
                     });
                 }
+            }
+            "error" => {
+                self.report_rate_limit(&update.to_string());
             }
             "agent_message_chunk" => {
                 if let Some(t) = update["content"]["text"].as_str() {
@@ -289,6 +309,50 @@ fn truncate_chars(s: &str, max: usize) -> String {
     out
 }
 
+/// 錯誤文字是否為限流／額度用完 (`RESOURCE_EXHAUSTED`、HTTP 429、`quota exceeded`、`rate limit`)。
+fn is_rate_limit_error(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("resource_exhausted")
+        || lower.contains("quota exceeded")
+        || lower.contains("rate limit")
+        || lower.contains("rate_limit")
+    {
+        return true;
+    }
+    // 獨立的 `429` (前後不是數字)，避免誤判 `4290` 之類。
+    let b = lower.as_bytes();
+    lower.match_indices("429").any(|(i, _)| {
+        (i == 0 || !b[i - 1].is_ascii_digit()) && b.get(i + 3).is_none_or(|c| !c.is_ascii_digit())
+    })
+}
+
+/// 限流錯誤 → 「額度已用完」的 `Quota` (沒有百分比，只標記 `reached`)；其他錯誤回 `None`。
+fn rate_limit_quota(agent: &str, error_text: &str) -> Option<termade_core::Quota> {
+    is_rate_limit_error(error_text).then(|| termade_core::Quota {
+        agent: agent.to_string(),
+        windows: Vec::new(),
+        reached: true,
+        warning: false,
+        updated_ms: termade_core::now_millis(),
+    })
+}
+
+/// 回合成功後：若先前標記過限流，回傳解除 (`reached=false`) 的額度並清旗標；否則 `None`。
+fn recovered_quota(
+    agent: &str,
+    limited: &std::sync::atomic::AtomicBool,
+) -> Option<termade_core::Quota> {
+    limited
+        .swap(false, Ordering::SeqCst)
+        .then(|| termade_core::Quota {
+            agent: agent.to_string(),
+            windows: Vec::new(),
+            reached: false,
+            warning: false,
+            updated_ms: termade_core::now_millis(),
+        })
+}
+
 fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
     for line in stdout.lines() {
         let Ok(line) = line else { break };
@@ -343,6 +407,7 @@ impl AgentControl for AcpControl {
                 if termade_core::looks_like_limit(&e.to_string()) {
                     let _ = conn.tx.send(AgentEvent::Limited(e.to_string()));
                 }
+                conn.report_rate_limit(&e.to_string());
             }
         });
         Ok(())
@@ -559,6 +624,8 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| tr!("取得 stdout 失敗"))?;
 
     let conn = Arc::new(Conn {
+        agent: spec.kind.id().to_string(),
+        limited: std::sync::atomic::AtomicBool::new(false),
         session_id: spec.id.clone(),
         acp_session: Mutex::new(String::new()),
         stdin: Mutex::new(stdin),
@@ -768,5 +835,48 @@ mod model_tests {
         let s = "x".repeat(10);
         assert_eq!(truncate_chars(&s, 4), "xxxx…");
         assert_eq!(truncate_chars("abc", 4), "abc");
+    }
+}
+
+#[cfg(test)]
+mod rate_limit_tests {
+    use super::*;
+
+    #[test]
+    fn detects_rate_limit_errors() {
+        let samples = [
+            r#"`session/prompt` 失敗：{"code":-32000,"message":"RESOURCE_EXHAUSTED: Quota exceeded for metric"}"#,
+            r#"{"code":429,"message":"Too Many Requests"}"#,
+            r#"{"message":"You have hit the rate limit"}"#,
+            r#"{"sessionUpdate":"error","error":{"message":"HTTP 429"}}"#,
+        ];
+        for s in samples {
+            let q = rate_limit_quota("antigravity", s).expect(s);
+            assert!(q.reached);
+            assert_eq!(q.agent, "antigravity");
+            assert!(q.windows.is_empty());
+        }
+    }
+
+    #[test]
+    fn recovery_clears_limit_once() {
+        let flag = std::sync::atomic::AtomicBool::new(false);
+        assert!(recovered_quota("antigravity", &flag).is_none());
+        flag.store(true, Ordering::SeqCst);
+        let q = recovered_quota("antigravity", &flag).expect("reset");
+        assert!(!q.reached && !q.warning && q.windows.is_empty());
+        assert_eq!(q.agent, "antigravity");
+        assert!(recovered_quota("antigravity", &flag).is_none());
+    }
+
+    #[test]
+    fn ignores_other_errors() {
+        for s in [
+            r#"{"code":-32603,"message":"internal error"}"#,
+            r#"{"message":"tokens used: 14290"}"#,
+            r#"{"message":"invalid params"}"#,
+        ] {
+            assert!(rate_limit_quota("antigravity", s).is_none(), "{s}");
+        }
     }
 }

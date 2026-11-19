@@ -66,10 +66,7 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
     )];
     let Some(q) = quota else {
         head.push(Span::styled(
-            format!(
-                "  {}",
-                tr!("尚無額度資料 (只有 claude、codex 會回報，執行過一個回合後才有)")
-            ),
+            format!("  {}", tr!("此 agent 尚未回報額度資料")),
             Style::default().fg(Color::DarkGray),
         ));
         out.push(Line::from(head));
