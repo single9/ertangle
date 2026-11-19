@@ -1131,6 +1131,163 @@ fn pre_merge_command_blocks_and_allows_merge() {
 }
 
 #[test]
+fn merge_squash_happy_path() {
+    let repo = temp_repo("sq_happy");
+    let s = wt_session(&repo, "s_sq");
+    let wt = Path::new(&s.cwd);
+    fs::write(wt.join("sq1.txt"), "part 1\n").unwrap();
+    git(wt, &["add", "sq1.txt"]);
+    git(wt, &["commit", "-m", "first wt commit"]);
+    fs::write(wt.join("sq2.txt"), "part 2\n").unwrap();
+    git(wt, &["add", "sq2.txt"]);
+    git(wt, &["commit", "-m", "second wt commit"]);
+
+    let head_before = git(&repo, &["rev-parse", "HEAD"]);
+    let res =
+        merge_worktree_strategy(&repo, &s, termade_protocol::MergeStrategy::Squash, false).unwrap();
+    assert!(res.contains("已將"), "{res}");
+    assert!(repo.join("sq1.txt").exists());
+    assert!(repo.join("sq2.txt").exists());
+
+    // 驗證只有單一 squash commit 被建立，且為 conventional commit 格式
+    let log = git(&repo, &["log", "-n", "1", "--format=%s"]);
+    assert_eq!(
+        log,
+        format!(
+            "chore(worktree): squash merge {}",
+            s.branch.as_deref().unwrap()
+        )
+    );
+    let parent_count = git(&repo, &["rev-list", "--parents", "-n", "1", "HEAD"]);
+    let parents: Vec<&str> = parent_count.split_whitespace().collect();
+    assert_eq!(parents.len(), 2);
+    assert_eq!(parents[1], head_before);
+
+    // 驗證第二次 squash 呼叫回傳已是最新狀態，不報錯
+    let res2 =
+        merge_worktree_strategy(&repo, &s, termade_protocol::MergeStrategy::Squash, false).unwrap();
+    assert!(res2.contains("已是最新狀態"), "{res2}");
+}
+
+#[test]
+fn merge_rebase_happy_path() {
+    let repo = temp_repo("rb_happy");
+    let s = wt_session(&repo, "s_rb");
+    let wt = Path::new(&s.cwd);
+
+    // 主分支推進一個 commit
+    fs::write(repo.join("main_adv.txt"), "main branch advancement\n").unwrap();
+    git(&repo, &["add", "main_adv.txt"]);
+    git(&repo, &["commit", "-m", "advance main"]);
+    let main_head = git(&repo, &["rev-parse", "HEAD"]);
+
+    // worktree 分支新增檔案
+    fs::write(wt.join("rb_feat.txt"), "rebased feature\n").unwrap();
+    git(wt, &["add", "rb_feat.txt"]);
+    git(wt, &["commit", "-m", "feature commit"]);
+
+    let res =
+        merge_worktree_strategy(&repo, &s, termade_protocol::MergeStrategy::Rebase, false).unwrap();
+    assert!(res.contains("已將"), "{res}");
+    assert!(repo.join("main_adv.txt").exists());
+    assert!(repo.join("rb_feat.txt").exists());
+
+    // 驗證主分支透過 fast-forward 併入，形成線性歷史 (最新提交的 parent 就是 main_head)
+    let parent = git(&repo, &["rev-parse", "HEAD~1"]);
+    assert_eq!(parent, main_head);
+    assert!(!has_uncommitted(&repo).unwrap());
+}
+
+#[test]
+fn rebase_conflict_is_aborted() {
+    let repo = temp_repo("rb_conflict");
+    let s = wt_session(&repo, "s_rb_c");
+    let wt = Path::new(&s.cwd);
+
+    fs::write(wt.join("a.txt"), "branch change\n").unwrap();
+    fs::write(repo.join("a.txt"), "main conflict change\n").unwrap();
+    git(&repo, &["commit", "-qam", "main conflict commit"]);
+
+    let head_before = git(&repo, &["rev-parse", "HEAD"]);
+    let res = merge_worktree_strategy(&repo, &s, termade_protocol::MergeStrategy::Rebase, false);
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    let err_str = err.to_string();
+    assert!(err_str.contains("a.txt"), "{err_str}");
+    assert!(err.downcast_ref::<MergeConflict>().is_some());
+
+    // 驗證主分支與 worktree 均已乾淨還原，未殘留 rebase 狀態
+    assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head_before);
+    assert!(!repo.join(".git/rebase-merge").exists());
+    assert!(!wt.join(".git/rebase-merge").exists());
+    assert!(!has_uncommitted(&repo).unwrap());
+}
+
+#[test]
+fn merge_rebase_resolve_loop_delegates_to_session() {
+    let repo = temp_repo("rb_resolve");
+    let sa = wt_session(&repo, "sa_r");
+    let sb = wt_session(&repo, "sb_r");
+    let wta = Path::new(&sa.cwd);
+    let wtb = Path::new(&sb.cwd);
+
+    fs::write(wta.join("conflict.txt"), "branch A change\n").unwrap();
+    fs::write(wtb.join("conflict.txt"), "branch B change\n").unwrap();
+
+    // 先合進 A
+    merge_worktree(&repo, &sa, false).unwrap();
+
+    let shared = test_shared();
+    let b_ctl = MockCtl::default();
+    {
+        let mut inner = shared.inner.lock().unwrap();
+        inner.state.sessions.insert(sb.id.clone(), sb.clone());
+        inner.sessions.insert(
+            sb.id.clone(),
+            SessionEntry {
+                ctl: b_ctl.as_ctl(),
+                run: new_id("run"),
+            },
+        );
+    }
+
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::WorktreeMerge {
+            session: sb.id.clone(),
+            dry_run: false,
+            resolve: true,
+            strategy: termade_protocol::MergeStrategy::Rebase,
+        },
+    );
+
+    let frame = rx.rx.recv().unwrap();
+    match frame {
+        Frame::Ok { note: Some(n) } => {
+            assert!(n.contains("委派") || n.contains("conflict.txt"), "{n}");
+        }
+        other => panic!("預期 Frame::Ok(note)，得到 {other:?}"),
+    }
+
+    // 驗證 B 工作區包含衝突標記
+    let content_b = fs::read_to_string(wtb.join("conflict.txt")).unwrap();
+    assert!(
+        content_b.contains("<<<<<<<"),
+        "B 工作區應含衝突標記：{content_b}"
+    );
+
+    // 驗證 B Session 收到 strategy-aware 的 prompt，包含 rebase --continue
+    let inputs = b_ctl.inputs();
+    assert!(!inputs.is_empty(), "B session 應收到 prompt");
+    assert!(
+        inputs.iter().any(|i| i.contains("rebase --continue")),
+        "Prompt 應指引執行 git rebase --continue：{:?}",
+        inputs
+    );
+}
+
+#[test]
 fn task_review_status_notifies_and_wakes_reviewer() {
     let shared = test_shared();
     let dir = temp_cwd();
