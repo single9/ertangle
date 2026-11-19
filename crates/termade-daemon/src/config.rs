@@ -19,6 +19,8 @@ pub struct Defaults {
     pub permission: Option<String>,
     /// agent 經 MCP／帶 `parent` spawn 時的權限上限。
     pub max_agent_permission: Option<String>,
+    /// worker (agent 自己建立的子 session) 沒被指定 agent 時，依序挑第一個已安裝的 (例如 `["codex", "claude"]`)。
+    pub worker_order: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -540,6 +542,9 @@ impl Config {
         if local.defaults.max_agent_permission.is_some() {
             out.defaults.max_agent_permission = local.defaults.max_agent_permission;
         }
+        if !local.defaults.worker_order.is_empty() {
+            out.defaults.worker_order = local.defaults.worker_order;
+        }
         for (k, v) in local.agents {
             let e = out.agents.entry(k).or_default();
             if v.bin.is_some() {
@@ -800,7 +805,8 @@ impl Config {
     }
 
     /// 決定一次 spawn 實際使用的 agent kind (先符合者勝)：
-    /// 請求指定 > `roles.<role>.agent` > 父 session 的 kind (僅 agent 建立時) > `defaults.agent` > opencode。
+    /// 請求指定 > `roles.<role>.agent` > (僅 worker)`defaults.worker_order` 第一個已安裝的 >
+    /// 父 session 的 kind (僅 agent 建立時) > `defaults.agent` > opencode。
     /// 無法辨識的設定值會略過，往下一層找。
     pub fn resolve_kind(
         &self,
@@ -808,12 +814,37 @@ impl Config {
         role: &Role,
         parent_kind: Option<&AgentKind>,
     ) -> AgentKind {
+        self.resolve_kind_with(requested, role, parent_kind, termade_adapter::is_installed)
+    }
+
+    /// 同 [`Config::resolve_kind`]，安裝檢查可注入 (測試用)。
+    pub fn resolve_kind_with(
+        &self,
+        requested: Option<&AgentKind>,
+        role: &Role,
+        parent_kind: Option<&AgentKind>,
+        installed: impl Fn(&AgentKind) -> bool,
+    ) -> AgentKind {
         requested
             .cloned()
             .or_else(|| self.role_agent(role))
+            .or_else(|| {
+                (*role == Role::Worker)
+                    .then(|| self.worker_pick(&installed))
+                    .flatten()
+            })
             .or_else(|| parent_kind.cloned())
             .or_else(|| self.defaults.agent.as_deref().and_then(AgentKind::parse))
             .unwrap_or(AgentKind::OpenCode)
+    }
+
+    /// `defaults.worker_order` 中第一個可辨識且已安裝的 agent。
+    fn worker_pick(&self, installed: &impl Fn(&AgentKind) -> bool) -> Option<AgentKind> {
+        self.defaults
+            .worker_order
+            .iter()
+            .filter_map(|s| AgentKind::parse(s))
+            .find(|k| installed(k))
     }
 
     /// `roles.<role>.agent` 釘選的 kind。
@@ -1389,6 +1420,40 @@ enabled = false
 
         assert!(merged.playbook_spawns("nope", "x").is_err());
         assert!(merged.playbook_spawns("tdd", "  ").is_err());
+    }
+
+    #[test]
+    fn worker_order_picks_first_installed() {
+        let c = Config::parse(
+            r#"
+[defaults]
+agent = "claude"
+worker_order = ["codex", "bogus", "opencode"]
+"#,
+        )
+        .unwrap();
+        let (oc, cl, cx) = (AgentKind::OpenCode, AgentKind::ClaudeCode, AgentKind::Codex);
+        let all = |_: &AgentKind| true;
+        let no_codex = |k: &AgentKind| *k != AgentKind::Codex;
+        let none = |_: &AgentKind| false;
+        // worker：依順序挑第一個已安裝的，蓋過父 session 與 defaults.agent。
+        assert_eq!(c.resolve_kind_with(None, &Role::Worker, Some(&cl), all), cx);
+        assert_eq!(
+            c.resolve_kind_with(None, &Role::Worker, Some(&cl), no_codex),
+            oc
+        );
+        // 都沒裝：回到父 session。
+        assert_eq!(
+            c.resolve_kind_with(None, &Role::Worker, Some(&cl), none),
+            cl
+        );
+        // 請求指定仍最優先；非 worker 不受影響。
+        assert_eq!(c.resolve_kind_with(Some(&oc), &Role::Worker, None, all), oc);
+        assert_eq!(c.resolve_kind_with(None, &Role::Reviewer, None, all), cl);
+        // repo 設定非空時整份覆寫。
+        let local = Config::parse("[defaults]\nworker_order = [\"opencode\"]").unwrap();
+        let m = Config::layered(c, local);
+        assert_eq!(m.defaults.worker_order, vec!["opencode"]);
     }
 
     #[test]

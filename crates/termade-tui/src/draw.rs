@@ -326,7 +326,11 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
     };
     let full = f.area();
     let w = full.width.saturating_sub(6).clamp(40, 100);
-    let h = (crate::settings::ITEMS.len() as u16 + 5).min(full.height);
+    let sections = crate::settings::ITEMS
+        .iter()
+        .filter(|i| i.section().is_some())
+        .count() as u16;
+    let h = (crate::settings::ITEMS.len() as u16 + sections + 5).min(full.height);
     let area = Rect::new(
         full.x + full.width.saturating_sub(w) / 2,
         full.y + full.height.saturating_sub(h) / 2,
@@ -338,10 +342,17 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
         .map(|i| UnicodeWidthStr::width(i.label(s).as_str()))
         .max()
         .unwrap_or(20);
-    let mut lines: Vec<Line> = crate::settings::ITEMS
-        .iter()
-        .enumerate()
-        .map(|(i, item)| {
+    let mut lines: Vec<Line> = Vec::new();
+    for (i, item) in crate::settings::ITEMS.iter().enumerate() {
+        if let Some(title) = item.section() {
+            lines.push(Line::from(Span::styled(
+                format!(" ── {title} ──"),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )));
+        }
+        lines.push({
             let label = item.label(s);
             let pad = label_w.saturating_sub(UnicodeWidthStr::width(label.as_str()));
             let value = item.display(s);
@@ -360,8 +371,8 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
                 Span::styled(format!(" {label}{}  ", " ".repeat(pad)), base),
                 Span::styled(value, base.fg(Color::Yellow)),
             ])
-        })
-        .collect();
+        });
+    }
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
         tr!(" ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"),

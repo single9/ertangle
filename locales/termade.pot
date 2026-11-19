@@ -2617,7 +2617,7 @@ msgstr ""
 msgid "已將預設 {key} 設為 {value} ({path})，新建立的 session 起生效"
 msgstr ""
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/settings.rs
+#: crates/termade-tui/src/commands.rs crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
 msgid "寫入設定失敗：{e}"
 msgstr ""
 
@@ -3799,6 +3799,34 @@ msgid "搜尋 {current}/{total}"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "新 session 預設值"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "Worker 啟動順序 (agent 建立子 session 時依序挑第一個已安裝的)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "各 agent 的預設值"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "agent 自行建立 session 的防呆"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "協作說明"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "Web 版"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "介面"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
 msgid "預設 agent"
 msgstr ""
 
@@ -3808,6 +3836,22 @@ msgstr ""
 
 #: crates/termade-tui/src/settings.rs
 msgid "預設權限"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "第 1 順位"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "第 2 順位"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "第 3 順位"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "第 4 順位"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
@@ -3870,7 +3914,7 @@ msgstr ""
 msgid "介面語言"
 msgstr ""
 
-#: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
+#: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
 msgid "未設定"
 msgstr ""
 
@@ -3938,6 +3982,10 @@ msgstr ""
 msgid "自動 (依 LANG 環境變數)"
 msgstr ""
 
+#: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
+msgid "已儲存到 {path} (新建立的 session 起生效)"
+msgstr ""
+
 #: crates/termade-tui/src/settings.rs
 msgid "已關閉 Web 版並儲存至 {path}"
 msgstr ""
@@ -3956,10 +4004,6 @@ msgstr ""
 
 #: crates/termade-tui/src/settings.rs
 msgid "載入翻譯失敗：{e}"
-msgstr ""
-
-#: crates/termade-tui/src/settings.rs
-msgid "已儲存到 {path} (新建立的 session 起生效)"
 msgstr ""
 
 #: crates/termade-tui/src/tasks.rs crates/termade-tui/src/tasks.rs

@@ -16,6 +16,10 @@ pub(crate) enum Item {
     DefaultAgent,
     DefaultRole,
     DefaultPermission,
+    WorkerOrder1,
+    WorkerOrder2,
+    WorkerOrder3,
+    WorkerOrder4,
     TargetAgent,
     Model,
     Effort,
@@ -32,10 +36,14 @@ pub(crate) enum Item {
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 17] = [
+pub(crate) const ITEMS: [Item; 21] = [
     Item::DefaultAgent,
     Item::DefaultRole,
     Item::DefaultPermission,
+    Item::WorkerOrder1,
+    Item::WorkerOrder2,
+    Item::WorkerOrder3,
+    Item::WorkerOrder4,
     Item::TargetAgent,
     Item::Model,
     Item::Effort,
@@ -53,6 +61,15 @@ pub(crate) const ITEMS: [Item; 17] = [
 ];
 
 const AGENTS: [&str; 4] = ["opencode", "claude", "codex", "antigravity"];
+
+/// 已安裝的內建 agent (設定面板只列這些)。
+fn installed_agents() -> Vec<&'static str> {
+    AGENTS
+        .iter()
+        .copied()
+        .filter(|a| AgentKind::parse(a).is_some_and(|k| termade_adapter::is_installed(&k)))
+        .collect()
+}
 
 type LiveModels =
     std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<(String, String)>>>>;
@@ -75,7 +92,7 @@ pub(crate) struct Settings {
     pub cfg: Config,
 }
 
-fn config_path() -> std::path::PathBuf {
+pub(crate) fn config_path() -> std::path::PathBuf {
     termade_daemon::config_dir().join("config.toml")
 }
 
@@ -131,11 +148,42 @@ impl Settings {
 const LIVE_KINDS: [&str; 3] = ["opencode", "antigravity", "codex"];
 
 impl Item {
+    /// 這個項目是分區的第一列時，回傳分區標題 (設定面板在它上方畫標題列)。
+    pub(crate) fn section(self) -> Option<String> {
+        Some(match self {
+            Item::DefaultAgent => tr!("新 session 預設值"),
+            Item::WorkerOrder1 => {
+                tr!("Worker 啟動順序 (agent 建立子 session 時依序挑第一個已安裝的)")
+            }
+            Item::TargetAgent => tr!("各 agent 的預設值"),
+            Item::SpawnWorktree => tr!("agent 自行建立 session 的防呆"),
+            Item::CollabInstructions => tr!("協作說明"),
+            Item::WebCompanion => tr!("Web 版"),
+            Item::Language => tr!("介面"),
+            _ => return None,
+        })
+    }
+
+    /// Worker 順位欄位的索引 (0 起算)。
+    fn worker_slot(self) -> Option<usize> {
+        match self {
+            Item::WorkerOrder1 => Some(0),
+            Item::WorkerOrder2 => Some(1),
+            Item::WorkerOrder3 => Some(2),
+            Item::WorkerOrder4 => Some(3),
+            _ => None,
+        }
+    }
+
     pub(crate) fn label(self, s: &Settings) -> String {
         match self {
             Item::DefaultAgent => tr!("預設 agent"),
             Item::DefaultRole => tr!("預設角色"),
             Item::DefaultPermission => tr!("預設權限"),
+            Item::WorkerOrder1 => tr!("第 1 順位"),
+            Item::WorkerOrder2 => tr!("第 2 順位"),
+            Item::WorkerOrder3 => tr!("第 3 順位"),
+            Item::WorkerOrder4 => tr!("第 4 順位"),
             Item::TargetAgent => tr!("下面兩項設定的對象 agent"),
             Item::Model if s.loading_models() => {
                 tr!("{agent} 的預設 model (清單載入中…)", agent = s.agent)
@@ -164,6 +212,10 @@ impl Item {
             Item::DefaultAgent => c.defaults.agent.clone().unwrap_or_default(),
             Item::DefaultRole => c.defaults.role.clone().unwrap_or_default(),
             Item::DefaultPermission => c.defaults.permission.clone().unwrap_or_default(),
+            Item::WorkerOrder1 | Item::WorkerOrder2 | Item::WorkerOrder3 | Item::WorkerOrder4 => {
+                let n = self.worker_slot().unwrap_or(0);
+                c.defaults.worker_order.get(n).cloned().unwrap_or_default()
+            }
             Item::TargetAgent => s.agent.clone(),
             Item::Model => agent.and_then(|a| a.model.clone()).unwrap_or_default(),
             Item::Effort => agent.and_then(|a| a.effort.clone()).unwrap_or_default(),
@@ -197,9 +249,15 @@ impl Item {
     fn choices(self, s: &Settings) -> Vec<(String, String)> {
         let pair = |v: &str, l: &str| (v.to_string(), l.to_string());
         let mut out = match self {
+            Item::WorkerOrder1 | Item::WorkerOrder2 | Item::WorkerOrder3 | Item::WorkerOrder4 => {
+                // 只列已安裝的；已存的值就算沒裝，下方的「清單外的值」邏輯仍會補上。
+                let mut v = vec![pair("", &tr!("未設定"))];
+                v.extend(installed_agents().into_iter().map(|a| pair(a, a)));
+                v
+            }
             Item::DefaultAgent => {
                 let mut v = vec![pair("", &tr!("未設定"))];
-                v.extend(AGENTS.iter().map(|a| pair(a, a)));
+                v.extend(installed_agents().into_iter().map(|a| pair(a, a)));
                 v
             }
             Item::DefaultRole => vec![
@@ -214,7 +272,7 @@ impl Item {
                 pair("auto", &tr!("auto：自動核准一般動作")),
                 pair("bypass", &tr!("bypass：完全不問")),
             ],
-            Item::TargetAgent => AGENTS.iter().map(|a| pair(a, a)).collect(),
+            Item::TargetAgent => installed_agents().into_iter().map(|a| pair(a, a)).collect(),
             Item::Model => {
                 let kind = AgentKind::parse(&s.agent);
                 let mut v = vec![pair("", &tr!("未設定 (agent 自己的預設)"))];
@@ -355,6 +413,33 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         return;
     }
     let path = config_path();
+    if let Some(slot) = item.worker_slot() {
+        let mut order = s.cfg.defaults.worker_order.clone();
+        order.resize(order.len().max(slot + 1), String::new());
+        order[slot] = value;
+        // 空位與重複的 agent 去掉，保留相對順序。
+        let mut seen = std::collections::HashSet::new();
+        order.retain(|a| !a.is_empty() && seen.insert(a.clone()));
+        let toml_value = (!order.is_empty()).then(|| {
+            termade_daemon::config::TomlValue::Array(
+                order
+                    .into_iter()
+                    .map(termade_daemon::config::TomlValue::String)
+                    .collect(),
+            )
+        });
+        app.status = match Config::set_toml(&path, &["defaults"], "worker_order", toml_value) {
+            Ok(()) => {
+                s.cfg = Config::load_file(&path);
+                tr!(
+                    "已儲存到 {path} (新建立的 session 起生效)",
+                    path = path.display()
+                )
+            }
+            Err(e) => tr!("寫入設定失敗：{e}", e = e),
+        };
+        return;
+    }
     if item == Item::WebCompanion {
         let (enabled_val, addr_val) = if value.is_empty() {
             (
@@ -438,6 +523,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::Model => (&["agents", ""], "model"),
         Item::Effort => (&["agents", ""], "effort"),
         Item::TargetAgent => return,
+        Item::WorkerOrder1 | Item::WorkerOrder2 | Item::WorkerOrder3 | Item::WorkerOrder4 => return,
     };
     let agent = s.agent.clone();
     let mut tbl: Vec<&str> = table.to_vec();

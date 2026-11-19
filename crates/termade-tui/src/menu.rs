@@ -463,7 +463,14 @@ pub(crate) fn start_handoff_picker(app: &mut App) {
 
 pub(crate) fn start_spawn_picker(app: &mut App) {
     app.handoff_from = None;
-    let items = AgentKind::builtins()
+    // 使用者設定的 worker 順序排前面，其餘維持內建順序。
+    let order = termade_daemon::config::Config::load_file(&crate::settings::config_path())
+        .defaults
+        .worker_order;
+    let rank = |id: &str| order.iter().position(|o| o == id).unwrap_or(usize::MAX);
+    let mut kinds = AgentKind::builtins().to_vec();
+    kinds.sort_by_key(|k| rank(k.id()));
+    let items = kinds
         .iter()
         .map(|k| (k.id().to_string(), k.id().to_string()))
         .collect();
