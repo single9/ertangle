@@ -40,14 +40,18 @@ impl Conn {
     fn send_raw(&self, v: &Value) -> Result<()> {
         let mut line = serde_json::to_string(v)?;
         line.push('\n');
-        let mut w = self.stdin.lock().unwrap();
+        let mut w = self.stdin.lock().unwrap_or_else(|e| e.into_inner());
         w.write_all(line.as_bytes())?;
         w.flush()?;
         Ok(())
     }
 
     fn flush_stream(&self) {
-        let text = self.stream.lock().unwrap().flush();
+        let text = self
+            .stream
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .flush();
         if !text.is_empty() {
             let _ = self.tx.send(AgentEvent::Output(text));
         }
@@ -110,7 +114,11 @@ impl Conn {
                     "text_delta" => {
                         if let Some(t) = delta["text"].as_str() {
                             self.saw_delta.store(true, Ordering::SeqCst);
-                            let out = self.stream.lock().unwrap().push("msg", t);
+                            let out = self
+                                .stream
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push("msg", t);
                             if !out.is_empty() {
                                 let _ = self.tx.send(AgentEvent::Output(out));
                             }
@@ -118,7 +126,11 @@ impl Conn {
                     }
                     "thinking_delta" => {
                         if let Some(t) = delta["thinking"].as_str() {
-                            let out = self.stream.lock().unwrap().push("think", t);
+                            let out = self
+                                .stream
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push("think", t);
                             if !out.is_empty() {
                                 let _ = self.tx.send(AgentEvent::Output(out));
                             }
@@ -346,23 +358,27 @@ impl AgentControl for ClaudeControl {
     }
 
     fn pid(&self) -> Option<u32> {
-        Some(self.child.lock().unwrap().id())
+        Some(self.child.lock().unwrap_or_else(|e| e.into_inner()).id())
     }
 
     fn kill(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
-        self.child.lock().unwrap().kill().ok();
+        self.child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .kill()
+            .ok();
         Ok(())
     }
 
     fn sleep(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         crate::signal_pgid(pid, "-STOP").or_else(|_| crate::signal_pid(pid, "-STOP"))
     }
 
     fn wake(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         crate::signal_pgid(pid, "-CONT").or_else(|_| crate::signal_pid(pid, "-CONT"))
     }
 
@@ -557,7 +573,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             // try_wait 輪詢：不能在阻塞 wait 期間握著鎖，否則 kill() 會死鎖。
             let code = loop {
                 let status = {
-                    let mut c = child.lock().unwrap();
+                    let mut c = child.lock().unwrap_or_else(|e| e.into_inner());
                     c.try_wait()
                 };
                 match status {

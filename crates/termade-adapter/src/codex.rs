@@ -49,7 +49,7 @@ impl Conn {
     fn write(&self, v: &Value) -> Result<()> {
         let mut line = serde_json::to_string(v)?;
         line.push('\n');
-        let mut w = self.stdin.lock().unwrap();
+        let mut w = self.stdin.lock().unwrap_or_else(|e| e.into_inner());
         w.write_all(line.as_bytes())?;
         w.flush()?;
         Ok(())
@@ -59,7 +59,10 @@ impl Conn {
     fn call(&self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (s, r) = mpsc::channel();
-        self.pending.lock().unwrap().insert(id, s);
+        self.pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, s);
         self.write(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))?;
         let msg = r
             .recv_timeout(timeout)
@@ -74,7 +77,11 @@ impl Conn {
     }
 
     fn flush_stream(&self) {
-        let text = self.stream.lock().unwrap().flush();
+        let text = self
+            .stream
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .flush();
         if !text.is_empty() {
             let _ = self.tx.send(AgentEvent::Output(text));
         }
@@ -89,7 +96,12 @@ impl Conn {
         if let Some(id) = msg.get("id") {
             if msg.get("method").is_none() {
                 let id = id.as_i64().unwrap_or(-1);
-                if let Some(s) = self.pending.lock().unwrap().remove(&id) {
+                if let Some(s) = self
+                    .pending
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&id)
+                {
                     let _ = s.send(msg);
                 }
                 return;
@@ -145,18 +157,20 @@ impl Conn {
             }
             other => {
                 // 不認識的請求一律回錯誤，避免 Codex 卡住等我們。
+                let id = msg.get("id").cloned().unwrap_or(Value::Null);
                 let _ = self.write(&json!({
-                    "jsonrpc":"2.0","id":msg["id"],
+                    "jsonrpc":"2.0","id":id,
                     "error":{"code":-32601,"message":format!("termade 不支援 {other}")}
                 }));
                 return;
             }
         };
         let req = new_id("perm");
+        let id = msg.get("id").cloned().unwrap_or(Value::Null);
         self.perms
             .lock()
-            .unwrap()
-            .insert(req.clone(), json!({"id": msg["id"], "kind": kind.as_str()}));
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(req.clone(), json!({"id": id, "kind": kind.as_str()}));
         let _ = self.tx.send(AgentEvent::Permission(PermissionRequest {
             req,
             session: self.session_id.clone(),
@@ -169,7 +183,11 @@ impl Conn {
         match method {
             "item/agentMessage/delta" => {
                 if let Some(d) = p["delta"].as_str() {
-                    let out = self.stream.lock().unwrap().push("msg", d);
+                    let out = self
+                        .stream
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push("msg", d);
                     if !out.is_empty() {
                         let _ = self.tx.send(AgentEvent::Output(out));
                     }
@@ -182,7 +200,11 @@ impl Conn {
                     "textDelta"
                 };
                 if let Some(d) = p[key].as_str() {
-                    let out = self.stream.lock().unwrap().push("think", d);
+                    let out = self
+                        .stream
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push("think", d);
                     if !out.is_empty() {
                         let _ = self.tx.send(AgentEvent::Output(out));
                     }
@@ -190,9 +212,9 @@ impl Conn {
             }
             "turn/started" => {
                 if let Some(id) = p["turn"]["id"].as_str() {
-                    *self.turn.lock().unwrap() = id.to_string();
+                    *self.turn.lock().unwrap_or_else(|e| e.into_inner()) = id.to_string();
                 }
-                *self.last_error.lock().unwrap() = None;
+                *self.last_error.lock().unwrap_or_else(|e| e.into_inner()) = None;
                 let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
             }
             "turn/completed" => {
@@ -231,7 +253,7 @@ impl Conn {
             }
             "thread/started" => {
                 if let Some(id) = p["thread"]["id"].as_str() {
-                    *self.thread.lock().unwrap() = id.to_string();
+                    *self.thread.lock().unwrap_or_else(|e| e.into_inner()) = id.to_string();
                 }
             }
             "error" => {
@@ -251,7 +273,7 @@ impl Conn {
     fn report_error(&self, err: &Value) {
         let text = error_text(err);
         {
-            let mut last = self.last_error.lock().unwrap();
+            let mut last = self.last_error.lock().unwrap_or_else(|e| e.into_inner());
             if last.as_deref() == Some(text.as_str()) {
                 return;
             }
@@ -369,7 +391,12 @@ struct CodexControl {
 
 impl CodexControl {
     fn thread_id(&self) -> Result<String> {
-        let t = self.conn.thread.lock().unwrap().clone();
+        let t = self
+            .conn
+            .thread
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if t.is_empty() {
             bail!("{}", tr!("codex thread 尚未就緒"));
         }
@@ -389,7 +416,11 @@ impl AgentControl for CodexControl {
             "threadId": thread_id,
             "input": turn_input(text, atts)
         });
-        let (m, e) = self.overrides.lock().unwrap().clone();
+        let (m, e) = self
+            .overrides
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some(m) = m {
             params["model"] = json!(m);
         }
@@ -405,7 +436,7 @@ impl AgentControl for CodexControl {
         if let Some(e) = effort {
             crate::check_effort(e)?;
         }
-        let mut o = self.overrides.lock().unwrap();
+        let mut o = self.overrides.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(m) = model {
             o.0 = Some(m.to_string());
         }
@@ -417,7 +448,12 @@ impl AgentControl for CodexControl {
 
     fn cancel(&self) -> Result<()> {
         let thread_id = self.thread_id()?;
-        let turn_id = self.conn.turn.lock().unwrap().clone();
+        let turn_id = self
+            .conn
+            .turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if turn_id.is_empty() {
             return Ok(());
         }
@@ -430,32 +466,41 @@ impl AgentControl for CodexControl {
     }
 
     fn pid(&self) -> Option<u32> {
-        Some(self.child.lock().unwrap().id())
+        Some(self.child.lock().unwrap_or_else(|e| e.into_inner()).id())
     }
 
     fn kill(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
-        self.child.lock().unwrap().kill().ok();
+        self.child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .kill()
+            .ok();
         Ok(())
     }
 
     fn sleep(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         crate::signal_pgid(pid, "-STOP").or_else(|_| crate::signal_pid(pid, "-STOP"))
     }
 
     fn wake(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         crate::signal_pgid(pid, "-CONT").or_else(|_| crate::signal_pid(pid, "-CONT"))
     }
 
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()> {
-        let entry = self.conn.perms.lock().unwrap().remove(req);
+        let entry = self
+            .conn
+            .perms
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(req);
         let Some(entry) = entry else {
             bail!("{}", tr!("未知的核准請求：{req}", req = req));
         };
-        let id = entry["id"].clone();
+        let id = entry.get("id").cloned().unwrap_or(Value::Null);
         let kind = match entry["kind"].as_str() {
             Some("file") => ApprovalKind::File,
             Some("mcp_elicitation") => ApprovalKind::McpElicitation,
@@ -618,7 +663,10 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 }
             }
             // stdout 關閉＝處理程序已結束：丟掉等待中的請求，握手不必乾等逾時。
-            conn.pending.lock().unwrap().clear();
+            conn.pending
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clear();
         });
     }
 
@@ -629,7 +677,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         std::thread::spawn(move || {
             let code = loop {
                 let status = {
-                    let mut c = child.lock().unwrap();
+                    let mut c = child.lock().unwrap_or_else(|e| e.into_inner());
                     c.try_wait()
                 };
                 match status {
@@ -666,7 +714,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .as_str()
         .with_context(|| tr!("`{method}` 未回傳 thread id", method = method))?
         .to_string();
-    *conn.thread.lock().unwrap() = tid.clone();
+    *conn.thread.lock().unwrap_or_else(|e| e.into_inner()) = tid.clone();
     let _ = tx.send(AgentEvent::NativeId(tid));
     if let Some(model) = started["model"].as_str() {
         let _ = tx.send(AgentEvent::Model(model.to_string()));
