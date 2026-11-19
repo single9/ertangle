@@ -2135,7 +2135,7 @@ fn resume_command_sends_request_and_is_discoverable() {
     assert_eq!(app.mode, Mode::Pick);
     assert!(app.picker.is_some());
 
-    // Tab 補全表與 Space 選單都找得到，且 session 層的快捷鍵不重複。
+    // Tab 自動完成表與 Space 選單都找得到，且 session 層的快捷鍵不重複。
     assert!(crate::commands::COMMANDS
         .iter()
         .any(|(n, _)| *n == "resume"));
@@ -2417,6 +2417,23 @@ fn hints_include_selected_sessions_native_commands() {
     app.input = "mod".into();
     let h = crate::commands::hints_with_native(&app);
     assert_eq!(h.iter().filter(|(n, _)| n == "model").count(), 1);
+
+    // Tab 自動完成和提示浮層用同一份候選：agent 原生指令也能補完
+    app.input = "compa".into();
+    crate::input::complete_command_for_test(&mut app);
+    assert_eq!(app.input, "compact ");
+    // `/`、`:` 前綴與前導空白保留，照樣補完
+    app.input = "/compa".into();
+    crate::input::complete_command_for_test(&mut app);
+    assert_eq!(app.input, "/compact ");
+    app.input = " :conte".into();
+    crate::input::complete_command_for_test(&mut app);
+    assert_eq!(app.input, " :context ");
+    // 多個候選：補到共同前綴
+    app.input = "/co".into();
+    crate::input::complete_command_for_test(&mut app);
+    assert!(app.input.starts_with("/co"), "{}", app.input);
+    assert!(app.status.contains("compact"), "{}", app.status);
 }
 
 #[test]
@@ -2439,10 +2456,13 @@ fn set_command_offers_argument_candidates() {
     assert_eq!(cands(&app, "effort zz"), Vec::<String>::new());
     assert!(cands(&app, "set agent c").contains(&"claude".to_string()));
 
-    // Tab 補全：唯一候選補完並加空白
+    // Tab 自動完成：唯一候選補完並加空白
     app.input = "set perm".into();
     crate::input::complete_command_for_test(&mut app);
     assert_eq!(app.input, "set permission ");
+    app.input = "/set perm".into();
+    crate::input::complete_command_for_test(&mut app);
+    assert_eq!(app.input, "/set permission ");
 }
 
 #[test]

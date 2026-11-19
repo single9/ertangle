@@ -238,7 +238,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             app.mode = Mode::Command;
             app.input.clear();
             app.input_cursor = 0;
-            app.status = tr!("命令 (Tab 補全)：spawn rm clean kill merge diff gc task …");
+            app.status = tr!("命令 (Tab 自動完成)：spawn rm clean kill merge diff gc task …");
         }
         KeyCode::Enter if app.view == CenterView::Grid => app.view = CenterView::Transcript,
         KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
@@ -464,6 +464,10 @@ pub(crate) fn handle_input_mode(
             app.status = tr!("角色 = {role}", role = app.spawn_role.id());
         }
         KeyCode::Tab if app.mode == Mode::Command => complete_command(app),
+        // 輸入框以 `/` 開頭時送出會當成命令 (`submit_prompt_or_route`)，Tab 也照命令自動完成。
+        KeyCode::Tab if app.mode == Mode::Prompt && app.input.trim_start().starts_with('/') => {
+            complete_command(app)
+        }
         KeyCode::Tab if matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) => {
             complete_attachment_path(app)
         }
@@ -627,7 +631,7 @@ fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
     app.status = tr!("已選 {path}", path = path);
 }
 
-/// 游標前的 `@路徑` 做 Tab 補全：唯一符合就補完，多個則補到共同前綴並列出候選。
+/// 游標前的 `@路徑` 做 Tab 自動完成：唯一符合就補完，多個則補到共同前綴並列出候選。
 fn complete_attachment_path(app: &mut App) {
     let chars: Vec<char> = app.input.chars().collect();
     let cur = app.input_cursor.min(chars.len());
@@ -670,48 +674,41 @@ fn complete_attachment_path(app: &mut App) {
     }
 }
 
-/// `:` 命令列的 Tab 補全：輸入的第一個字若只符合一個命令就補完；多個則補到共同前綴並列出候選。
+/// `:` 命令列的 Tab 自動完成：輸入的第一個字若只符合一個命令就補完；多個則補到共同前綴並列出候選。
 #[cfg(test)]
 pub(crate) fn complete_command_for_test(app: &mut App) {
     complete_command(app)
 }
 
 fn complete_command(app: &mut App) {
-    if app.input.contains(char::is_whitespace) {
+    // 和提示浮層 (`hints_with_native`)一致：忽略前導空白與 `/`、`:` 前綴，
+    // 候選也包含選取 session 的 agent 原生指令。前綴原樣保留。
+    let body = app.input.trim_start().trim_start_matches(['/', ':']);
+    if body.contains(char::is_whitespace) {
         complete_arg(app);
         return;
     }
-    let cands: Vec<&str> = crate::commands::COMMANDS
-        .iter()
-        .map(|(n, _)| *n)
-        .filter(|c| c.starts_with(app.input.as_str()))
+    let lead = app.input[..app.input.len() - body.len()].to_string();
+    let cands: Vec<String> = crate::commands::hints_with_native(app)
+        .into_iter()
+        .map(|(n, _)| n)
+        .filter(|n| n.starts_with(body))
         .collect();
     match cands.len() {
         0 => {}
         1 => {
-            app.input = format!("{} ", cands[0]);
+            app.input = format!("{lead}{} ", cands[0]);
             app.input_cursor = app.input.chars().count();
         }
         _ => {
-            let first = cands[0];
-            let mut common = first.len();
-            for c in &cands {
-                common = common.min(
-                    first
-                        .bytes()
-                        .zip(c.bytes())
-                        .take_while(|(a, b)| a == b)
-                        .count(),
-                );
-            }
-            app.input = first[..common].to_string();
+            app.input = format!("{lead}{}", crate::attach::common_prefix(&cands));
             app.input_cursor = app.input.chars().count();
-            app.status = format!("候選：{}", cands.join(" "));
+            app.status = tr!("候選：{list}", list = cands.join(" "));
         }
     }
 }
 
-/// 命令參數的 Tab 補全：唯一候選就補完 (後面補空白，若還有下一個參數可接著打)，多個補到共同前綴並列出。
+/// 命令參數的 Tab 自動完成：唯一候選就補完 (後面補空白，若還有下一個參數可接著打)，多個補到共同前綴並列出。
 fn complete_arg(app: &mut App) {
     let Some((cur, cands)) = crate::commands::arg_candidates(app, &app.input) else {
         return;
