@@ -549,6 +549,35 @@
       color: var(--text);
     }
 
+    /* Markdown 表格：窄螢幕時橫向捲動，儲存格內文字換行 */
+    .chat-table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      margin: 8px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chat-table {
+      border-collapse: collapse;
+      font-size: 13px;
+      line-height: 1.45;
+      min-width: 100%;
+    }
+    .chat-table th, .chat-table td {
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      vertical-align: top;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      min-width: 3em;
+      max-width: 28em;
+    }
+    .chat-table th {
+      background: rgba(255, 255, 255, 0.05);
+      font-weight: 600;
+      color: var(--text);
+    }
+    .chat-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+
     /* 標題、引言與分隔線 */
     .chat-h1 { font-size: 16px; font-weight: 700; margin: 12px 0 6px 0; color: var(--text); }
     .chat-h2 { font-size: 15px; font-weight: 700; margin: 10px 0 5px 0; color: var(--text); }
@@ -2614,6 +2643,47 @@
         return `%%%CODE_BLOCK_${idx}%%%`;
       });
 
+      // 1b. 抽離表格 (GFM：表頭列 + 分隔列 + 資料列)；儲存格內容各自以行內 Markdown 渲染。
+      const tables = [];
+      {
+        const lines = src.split("\n");
+        const outLines = [];
+        let i = 0;
+        while (i < lines.length) {
+          if (isMdTableRow(lines[i]) && i + 1 < lines.length && isMdTableSep(lines[i + 1])) {
+            const header = splitMdTableRow(lines[i]);
+            const aligns = splitMdTableRow(lines[i + 1]).map(c => {
+              const l = c.startsWith(":"), r = c.endsWith(":");
+              return l && r ? "center" : (r ? "right" : "left");
+            });
+            const body = [];
+            let j = i + 2;
+            while (j < lines.length && isMdTableRow(lines[j])) {
+              body.push(splitMdTableRow(lines[j]));
+              j++;
+            }
+            const cell = (tag, text, c) =>
+              `<${tag} style="text-align:${aligns[c] || "left"}">${renderMarkdownInline(text)}</${tag}>`;
+            let html = `<div class="chat-table-wrap"><table class="chat-table"><thead><tr>`;
+            header.forEach((h, c) => { html += cell("th", h, c); });
+            html += `</tr></thead><tbody>`;
+            body.forEach(row => {
+              html += "<tr>";
+              header.forEach((_, c) => { html += cell("td", row[c] || "", c); });
+              html += "</tr>";
+            });
+            html += `</tbody></table></div>`;
+            outLines.push(`%%%TABLE_${tables.length}%%%`);
+            tables.push(html);
+            i = j;
+          } else {
+            outLines.push(lines[i]);
+            i++;
+          }
+        }
+        src = outLines.join("\n");
+      }
+
       // 2. 抽離行內程式碼
       src = src.replace(/`([^`\n]+)`/g, (match, code) => {
         const idx = inlineCodes.length;
@@ -2686,7 +2756,46 @@
         safe = safe.replace(`%%%CODE_BLOCK_${i}%%%`, blockHtml);
       });
 
+      // 13. 還原表格 (連同前後的換行一起替換，避免多出空白行)
+      tables.forEach((html, i) => {
+        safe = safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), html);
+      });
+
       return `<p>${safe}</p>`;
+    }
+
+    // 表格儲存格：只處理行內語法 (程式碼、連結、粗斜體、刪除線)。
+    function renderMarkdownInline(text) {
+      const html = renderMarkdown(String(text).replace(/\\\|/g, "|"));
+      return html.replace(/^<p>/, "").replace(/<\/p>$/, "");
+    }
+
+    function isMdTableRow(line) {
+      const t = String(line).trim();
+      return t.length >= 2 && t.includes("|");
+    }
+
+    function isMdTableSep(line) {
+      const cells = splitMdTableRow(line);
+      return cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c.trim()));
+    }
+
+    // 依 `|` 切儲存格；行內程式碼中的 `|` 與跳脫的 `\|` 不切。
+    function splitMdTableRow(line) {
+      let t = String(line).trim();
+      if (t.startsWith("|")) t = t.slice(1);
+      if (t.endsWith("|") && !t.endsWith("\\|")) t = t.slice(0, -1);
+      const cells = [];
+      let cur = "", inCode = false, escaped = false;
+      for (const ch of t) {
+        if (escaped) { cur += ch; escaped = false; continue; }
+        if (ch === "\\") { cur += ch; escaped = true; continue; }
+        if (ch === "`") { inCode = !inCode; cur += ch; continue; }
+        if (ch === "|" && !inCode) { cells.push(cur.trim()); cur = ""; continue; }
+        cur += ch;
+      }
+      cells.push(cur.trim());
+      return cells;
     }
 
     const renderSimpleMarkdown = renderMarkdown;

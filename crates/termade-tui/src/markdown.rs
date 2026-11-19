@@ -562,17 +562,26 @@ fn render_table<S: AsRef<str>>(rows: &[S], sep: &str, width: usize) -> Vec<Line<
         }
     }
 
-    let mut out = vec![
-        clip(table_row(&header, &widths, &aligns, true), width),
-        clip(table_sep(&widths), width),
-    ];
-    for row in &body {
-        out.push(clip(table_row(row, &widths, &aligns, false), width));
+    // 儲存格放不下時在欄內換行 (不截斷)；任一列換成多行時，資料列之間加分隔線方便分辨。
+    let head_lines = table_row(&header, &widths, &aligns, true);
+    let body_lines: Vec<Vec<Line<'static>>> = body
+        .iter()
+        .map(|row| table_row(row, &widths, &aligns, false))
+        .collect();
+    let multiline = body_lines.iter().any(|r| r.len() > 1);
+    let mut out: Vec<Line<'static>> = head_lines.into_iter().map(|l| clip(l, width)).collect();
+    out.push(clip(table_sep(&widths), width));
+    for (i, row) in body_lines.into_iter().enumerate() {
+        if multiline && i > 0 {
+            out.push(clip(table_sep(&widths), width));
+        }
+        out.extend(row.into_iter().map(|l| clip(l, width)));
     }
     out
 }
 
 /// 硬裁切一行到 `width` 個顯示欄位 (超出時以 `…` 收尾)，保留各 span 樣式。
+/// 表格只在可用寬度連框線都放不下時才會用到。
 fn clip(line: Line<'static>, width: usize) -> Line<'static> {
     if spans_width(&line.spans) <= width {
         line
@@ -581,36 +590,57 @@ fn clip(line: Line<'static>, width: usize) -> Line<'static> {
     }
 }
 
-fn table_row(cells: &[String], widths: &[usize], aligns: &[Align], header: bool) -> Line<'static> {
+/// 一列表格：每個儲存格依欄寬換行，回傳的行數等於最高的儲存格。
+fn table_row(
+    cells: &[String],
+    widths: &[usize],
+    aligns: &[Align],
+    header: bool,
+) -> Vec<Line<'static>> {
     let style = if header {
         Style::default().fg(HEADING).add_modifier(Modifier::BOLD)
     } else {
         Style::default()
     };
     let rule = Style::default().fg(RULE);
-    let mut spans = Vec::new();
-    for (c, w) in widths.iter().enumerate() {
-        let cell = cells.get(c).map(String::as_str).unwrap_or("");
-        let cell_spans = truncate_spans(inline(cell, style), *w);
-        let cw = spans_width(&cell_spans);
-        let pad = w.saturating_sub(cw);
-        let (left, right) = match aligns[c] {
-            Align::Left => (0, pad),
-            Align::Right => (pad, 0),
-            Align::Center => (pad / 2, pad - pad / 2),
-        };
-        spans.push(Span::styled("│ ", rule));
-        if left > 0 {
-            spans.push(Span::raw(" ".repeat(left)));
-        }
-        spans.extend(cell_spans);
-        if right > 0 {
-            spans.push(Span::raw(" ".repeat(right)));
-        }
-        spans.push(Span::styled(" ", rule));
-    }
-    spans.push(Span::styled("│", rule));
-    Line::from(spans)
+    let wrapped: Vec<Vec<Line<'static>>> = widths
+        .iter()
+        .enumerate()
+        .map(|(c, w)| {
+            let cell = cells.get(c).map(String::as_str).unwrap_or("");
+            wrap_line(Line::from(inline(cell, style)), *w)
+        })
+        .collect();
+    let height = wrapped.iter().map(Vec::len).max().unwrap_or(1).max(1);
+    (0..height)
+        .map(|r| {
+            let mut spans = Vec::new();
+            for (c, w) in widths.iter().enumerate() {
+                let cell_spans = wrapped[c]
+                    .get(r)
+                    .map(|l| l.spans.clone())
+                    .unwrap_or_default();
+                let cw = spans_width(&cell_spans);
+                let pad = w.saturating_sub(cw);
+                let (left, right) = match aligns[c] {
+                    Align::Left => (0, pad),
+                    Align::Right => (pad, 0),
+                    Align::Center => (pad / 2, pad - pad / 2),
+                };
+                spans.push(Span::styled("│ ", rule));
+                if left > 0 {
+                    spans.push(Span::raw(" ".repeat(left)));
+                }
+                spans.extend(cell_spans);
+                if right > 0 {
+                    spans.push(Span::raw(" ".repeat(right)));
+                }
+                spans.push(Span::styled(" ", rule));
+            }
+            spans.push(Span::styled("│", rule));
+            Line::from(spans)
+        })
+        .collect()
 }
 
 fn table_sep(widths: &[usize]) -> Line<'static> {
@@ -1002,6 +1032,30 @@ mod tests {
                 contents(line).join("")
             );
         }
+    }
+
+    #[test]
+    fn table_wraps_long_cells_instead_of_truncating() {
+        let mut r = Renderer::new();
+        let long = "這是一段很長的說明文字，在窄的終端機裡應該換行而不是被截成省略號";
+        let src = plain(&format!(
+            "| 票 | 說明 |\n|---|---|\n| T1 | {long} |\n| T2 | 短 |"
+        ));
+        let out = r.render(&src, 30);
+        let all: String = out.iter().map(|l| contents(l).join("")).collect();
+        assert!(!all.contains('…'), "content truncated: {all}");
+        // 拿掉框線與空白後，長內容的每個字都還在。
+        let body: String = all.chars().filter(|c| !"│├┼┤─ ".contains(*c)).collect();
+        assert!(body.contains(long), "content lost: {body}");
+        for line in &out {
+            assert!(line_width(line) <= 30, "{:?}", contents(line).join(""));
+        }
+        // 多行列之間有分隔線：表頭、表頭分隔、T1 多行、分隔、T2。
+        let seps = out
+            .iter()
+            .filter(|l| contents(l).join("").starts_with('├'))
+            .count();
+        assert_eq!(seps, 2);
     }
 
     fn line_width(line: &Line<'_>) -> usize {
