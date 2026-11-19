@@ -21,6 +21,17 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// 啟動 stdio MCP server。
 pub fn run(session_override: Option<String>) -> Result<()> {
+    run_with_socket(session_override, None)
+}
+
+/// 啟動 stdio MCP server (可指定 socket 路徑)。
+pub fn run_with_socket(
+    session_override: Option<String>,
+    socket_override: Option<std::path::PathBuf>,
+) -> Result<()> {
+    if let Some(sock) = socket_override {
+        std::env::set_var("TERMADE_SOCKET", sock);
+    }
     let session = session_override
         .or_else(|| std::env::var("TERMADE_SESSION").ok())
         .unwrap_or_else(|| "human".to_string());

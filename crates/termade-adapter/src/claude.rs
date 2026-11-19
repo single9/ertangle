@@ -488,11 +488,16 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     cmd.args(base_args(&spec));
     cmd.args(permission_args(&spec));
     if let Some(exe) = &spec.mcp_exe {
+        let mut args = vec!["mcp".to_string(), "--session".to_string(), spec.id.clone()];
+        if let Some((_, sock)) = spec.env.iter().find(|(k, _)| k == "TERMADE_SOCKET") {
+            args.push("--socket".to_string());
+            args.push(sock.clone());
+        }
         let mcp_cfg = json!({
             "mcpServers": {
                 "termade": {
                     "command": exe.to_string_lossy(),
-                    "args": ["mcp", "--session", &spec.id]
+                    "args": args
                 }
             }
         });

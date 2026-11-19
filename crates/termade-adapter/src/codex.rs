@@ -528,19 +528,41 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let mut cmd = Command::new(prog);
     cmd.arg("app-server");
     cmd.args(spec.permission.codex_flags());
-    // 預設讓 workspace-write sandbox 具備網路存取，避免 Linux 上 bwrap --unshare-net 觸發
-    // `loopback: Failed RTM_NEWADDR: Operation not permitted`
-    cmd.args(["-c", "sandbox_workspace_write.network_access=true"]);
+    let sandbox = resolve_codex_sandbox(&spec, is_bwrap_usable());
+    if sandbox == "danger-full-access" {
+        cmd.args(["-c", "sandbox_mode=\"danger-full-access\""]);
+    } else {
+        // 預設讓 workspace-write sandbox 具備網路存取，避免 Linux 上 bwrap --unshare-net 觸發
+        // `loopback: Failed RTM_NEWADDR: Operation not permitted`
+        cmd.args(["-c", "sandbox_workspace_write.network_access=true"]);
+    }
     if let Some(exe) = &spec.mcp_exe {
+        let sock_opt = spec
+            .env
+            .iter()
+            .find(|(k, _)| k == "TERMADE_SOCKET")
+            .map(|(_, v)| v.as_str());
+
+        let mut mcp_args = vec![
+            "\"mcp\"".to_string(),
+            format!("\"--session\",{:?}", spec.id),
+        ];
+        if let Some(sock) = sock_opt {
+            mcp_args.push(format!("\"--socket\",{:?}", sock));
+        }
+
         cmd.args([
             "-c",
             &format!("mcp_servers.termade.command={:?}", exe.to_string_lossy()),
             "-c",
-            &format!(
-                "mcp_servers.termade.args=[\"mcp\",\"--session\",{:?}]",
-                spec.id
-            ),
+            &format!("mcp_servers.termade.args=[{}]", mcp_args.join(",")),
         ]);
+        if let Some(sock) = sock_opt {
+            cmd.args([
+                "-c",
+                &format!("mcp_servers.termade.env={{\"TERMADE_SOCKET\":{:?}}}", sock),
+            ]);
+        }
         if spec.permission.auto_approves() {
             cmd.args(["-c", "apps.termade.default_tools_approval_mode=\"auto\""]);
         }
@@ -724,6 +746,56 @@ fn thread_open_params(spec: &SessionSpec) -> Value {
     p
 }
 
+/// 檢查 Linux 上 bwrap 是否可正常建立 user namespace 與 sandbox。
+///
+/// 在 Ubuntu 24.04+ 等啟用 `kernel.apparmor_restrict_unprivileged_userns = 1` 的環境下，
+/// 未經 AppArmor profile 授權的 bwrap 會在建立 uid map 時失敗 (`Permission denied`)。
+/// 遇到此情況應退回 `danger-full-access`，避免 Codex 在每次執行指令時因 bwrap 失敗中斷。
+#[cfg(target_os = "linux")]
+pub fn is_bwrap_usable() -> bool {
+    static CACHE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *CACHE.get_or_init(|| {
+        if let Ok(val) =
+            std::fs::read_to_string("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+        {
+            if val.trim() == "1" {
+                return false;
+            }
+        }
+        std::process::Command::new("bwrap")
+            .args(["--ro-bind", "/", "/", "--", "true"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn is_bwrap_usable() -> bool {
+    true
+}
+
+/// 解析 Codex 使用的 sandbox 模式。
+///
+/// 若 `spec.sandbox` 已顯式指定，則予以尊重；若為 `None`，在 `bwrap` 無法正常執行或
+/// `permission` 為 `Bypass` 時退回 `"danger-full-access"`，否則依據 `read_only`
+/// 決定為 `"read-only"` 或 `"workspace-write"`。
+pub fn resolve_codex_sandbox(spec: &SessionSpec, bwrap_ok: bool) -> String {
+    if let Some(s) = &spec.sandbox {
+        return s.clone();
+    }
+    if !bwrap_ok || spec.permission == termade_core::PermissionPolicy::Bypass {
+        "danger-full-access".to_string()
+    } else if spec.read_only {
+        "read-only".to_string()
+    } else {
+        "workspace-write".to_string()
+    }
+}
+
 fn thread_start_params(spec: &SessionSpec) -> Value {
     let mut p = json!({
         "cwd": spec.cwd.to_string_lossy(),
@@ -742,18 +814,8 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
         config["model_reasoning_effort"] = json!(e);
     }
     p["config"] = config;
-    let sandbox = if spec.read_only {
-        Some("read-only".to_string())
-    } else if let Some(s) = &spec.sandbox {
-        Some(s.clone())
-    } else if spec.permission == termade_core::PermissionPolicy::Bypass {
-        Some("danger-full-access".to_string())
-    } else {
-        Some("workspace-write".to_string())
-    };
-    if let Some(s) = sandbox {
-        p["sandbox"] = json!(s);
-    }
+    let sandbox = resolve_codex_sandbox(spec, is_bwrap_usable());
+    p["sandbox"] = json!(sandbox);
     if let Some(inst) = spec.system_append.as_deref().filter(|s| !s.is_empty()) {
         p["developerInstructions"] = json!(inst);
     }
@@ -852,6 +914,7 @@ mod tests {
         );
         assert!(p.get("developerInstructions").is_none());
         let mut ro = spec.clone();
+        ro.sandbox = Some("read-only".into());
         ro.read_only = true;
         assert_eq!(thread_start_params(&ro)["sandbox"], "read-only");
 
@@ -874,6 +937,57 @@ mod tests {
         let p_ro = thread_start_params(&ro);
         assert_eq!(p_ro["sandbox"], "read-only");
         assert_eq!(p_ro["developerInstructions"], "collab");
+    }
+
+    #[test]
+    fn codex_sandbox_resolution() {
+        let spec = SessionSpec {
+            id: "s".into(),
+            kind: termade_core::AgentKind::Codex,
+            cwd: "/tmp".into(),
+            transport: termade_protocol::Transport::Structured,
+            bin: None,
+            args: vec![],
+            model: Some("m1".into()),
+            effort: Some("high".into()),
+            allowed_tools: vec![],
+            disallowed_tools: vec![],
+            read_only: false,
+            sandbox: None,
+            env: vec![],
+            permission: termade_core::PermissionPolicy::Auto,
+            mcp_exe: None,
+            system_append: None,
+            initial_prompt: None,
+            initial_attachments: vec![],
+            resume: None,
+            cols: 80,
+            rows: 24,
+        };
+
+        // bwrap_ok = true: 依照 read_only 與 permission 決定
+        assert_eq!(resolve_codex_sandbox(&spec, true), "workspace-write");
+        let mut ro = spec.clone();
+        ro.read_only = true;
+        assert_eq!(resolve_codex_sandbox(&ro, true), "read-only");
+        let mut bypass = spec.clone();
+        bypass.permission = termade_core::PermissionPolicy::Bypass;
+        assert_eq!(resolve_codex_sandbox(&bypass, true), "danger-full-access");
+
+        // bwrap_ok = false: AppArmor / userns 限制時退回 danger-full-access
+        assert_eq!(resolve_codex_sandbox(&spec, false), "danger-full-access");
+        assert_eq!(resolve_codex_sandbox(&ro, false), "danger-full-access");
+        assert_eq!(resolve_codex_sandbox(&bypass, false), "danger-full-access");
+
+        // 顯式設定 spec.sandbox 時始終尊重
+        let mut explicit = spec.clone();
+        explicit.sandbox = Some("workspace-write".into());
+        assert_eq!(resolve_codex_sandbox(&explicit, true), "workspace-write");
+        assert_eq!(resolve_codex_sandbox(&explicit, false), "workspace-write");
+
+        explicit.sandbox = Some("read-only".into());
+        assert_eq!(resolve_codex_sandbox(&explicit, true), "read-only");
+        assert_eq!(resolve_codex_sandbox(&explicit, false), "read-only");
     }
 
     #[test]

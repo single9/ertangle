@@ -6,6 +6,7 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     termade_core::tr_noop!("Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)"),
     termade_core::tr_noop!("Session id 或標籤"),
     termade_core::tr_noop!("Web 版自訂連接埠 (預設 7421)"),
+    termade_core::tr_noop!("daemon socket 路徑 (預設讀取 TERMADE_SOCKET 環境變數或標準 runtime 路徑)"),
     termade_core::tr_noop!("stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)"),
     termade_core::tr_noop!("termade — 終端機原生的多 agent 開發環境"),
     termade_core::tr_noop!("中斷正在執行的 turn"),

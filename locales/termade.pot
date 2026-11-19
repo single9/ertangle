@@ -178,6 +178,10 @@ msgid "Web 版自訂連接埠 (預設 7421)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "daemon socket 路徑 (預設讀取 TERMADE_SOCKET 環境變數或標準 runtime 路徑)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)"
 msgstr ""
 

@@ -70,6 +70,9 @@ enum Cmd {
         /// 此 MCP server 代表的 session id (預設讀 TERMADE_SESSION 環境變數)
         #[arg(long)]
         session: Option<String>,
+        /// daemon socket 路徑 (預設讀取 TERMADE_SOCKET 環境變數或標準 runtime 路徑)
+        #[arg(long)]
+        socket: Option<PathBuf>,
     },
     /// 顯示目前環境變數指定的 session 資訊
     Whoami {
@@ -523,7 +526,7 @@ fn main() -> Result<()> {
             insecure_listen_public,
         ),
         Cmd::RemoteInfo { json } => cmd_remote_info(json),
-        Cmd::Mcp { session } => termade_daemon::mcp::run(session),
+        Cmd::Mcp { session, socket } => termade_daemon::mcp::run_with_socket(session, socket),
         Cmd::Whoami { session, json } => cmd_whoami(session, json),
         Cmd::Sessions { json } => cmd_sessions(json),
         Cmd::Spawn {

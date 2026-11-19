@@ -729,12 +729,19 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     );
 
     let mcp_servers = match &spec.mcp_exe {
-        Some(exe) => json!([{
-            "name": "termade",
-            "command": exe.to_string_lossy(),
-            "args": ["mcp", "--session", &spec.id],
-            "env": []
-        }]),
+        Some(exe) => {
+            let mut args = vec!["mcp".to_string(), "--session".to_string(), spec.id.clone()];
+            if let Some((_, sock)) = spec.env.iter().find(|(k, _)| k == "TERMADE_SOCKET") {
+                args.push("--socket".to_string());
+                args.push(sock.clone());
+            }
+            json!([{
+                "name": "termade",
+                "command": exe.to_string_lossy(),
+                "args": args,
+                "env": []
+            }])
+        }
         None => json!([]),
     };
     // 只有宣告 `loadSession` 的 agent 之後才接得回來。
