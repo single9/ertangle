@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：CLI、TUI、MCP、daemon Git helper　相依：—
 
-Status: doing
+Status: done
 
 ## 問題
 
@@ -33,3 +33,11 @@ Status: doing
 - TUI `:merge --squash` / `--rebase` 與 MCP `strategy` 參數皆可選擇策略。
 - 三種策略的衝突都可被 `--resolve` 接手，且 rebase 衝突不會殘留 rebase 狀態。
 - `make pre-commit`、`make i18n-check` 與完整 `make test` 成功。
+
+## 完成紀錄
+
+- `66e7eb3` protocol: 新增 `MergeStrategy` 與 `Request::WorktreeMerge.strategy`，預設 `merge`。
+- `592c945` CLI / TUI / MCP: 新增 `--strategy`、`:merge --squash` / `--rebase` 與 MCP `strategy` 參數及解析測試。
+- `fe3d1d4` daemon: 實作三種策略、`--resolve` 的策略導向提示，以及 squash / rebase / 衝突還原測試。
+- `e56861f` 新增本 ticket；coordinator 補上 README、CLI 說明與多國語系目錄。
+- 三個策略分支已合併回 `main`，完整測試全數通過。

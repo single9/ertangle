@@ -356,6 +356,7 @@ enum Cmd {
         /// 若發生衝突，自動保留標記於 worktree 並委派 agent 解衝突
         #[arg(long)]
         resolve: bool,
+        /// 合併策略：merge (預設，保留提交記錄)、squash (壓成單一提交)、rebase (線性歷史)
         #[arg(long, default_value = "merge", value_parser = ["merge", "squash", "rebase"])]
         strategy: String,
     },

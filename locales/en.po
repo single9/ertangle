@@ -260,6 +260,10 @@ msgid "只重播序號大於此值的事件"
 msgstr "Replay only events with a sequence number greater than this value"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "合併策略：merge (預設，保留提交記錄)、squash (壓成單一提交)、rebase (線性歷史)"
+msgstr "Merge strategy: merge (default, keeps commit history), squash (single commit), rebase (linear history)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "同時綁定 TCP 位址供遠端連線 (例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token)"
 msgstr "Also bind a TCP address for remote connections (e.g. 127.0.0.1:7420; SSH forwarding is recommended; requires a token)"
 
