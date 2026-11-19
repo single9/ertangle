@@ -3899,6 +3899,82 @@ fn t50_promotion_returns_tasks_to_todo_and_notifies_parent() {
 }
 
 #[test]
+fn t50_handoff_without_role_change_keeps_tasks_and_permission() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl: Arc<dyn AgentControl> = Arc::new(MockCtl::default());
+    add_session(
+        &shared,
+        "p1",
+        "coord/p1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    add_session(
+        &shared,
+        "c2",
+        "coord/c2",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        let p = inner.state.sessions.get_mut("p1").unwrap();
+        p.role = Role::Coordinator;
+        p.permission = termade_core::PermissionPolicy::Bypass;
+        let c = inner.state.sessions.get_mut("c2").unwrap();
+        // 已經是 coordinator、有 parent、手動 bypass：一般交接不算晉升，也不改權限。
+        c.role = Role::Coordinator;
+        c.parent = Some("p1".into());
+        c.permission = termade_core::PermissionPolicy::Bypass;
+        let task = termade_core::Task {
+            id: "tsk_2".into(),
+            title: "t".into(),
+            detail: String::new(),
+            status: TaskStatus::Doing,
+            assignee: Some("c2".into()),
+            created_by: Some("p1".into()),
+            updated_ms: 1000,
+            depends_on: vec![],
+        };
+        inner.state.tasks.insert(task.id.clone(), task);
+    }
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Handoff {
+            session: "c2".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: None,
+            parent: Some(termade_protocol::ParentChange::Keep),
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(frames.first(), Some(Frame::Ok { .. })),
+        "{frames:?}"
+    );
+    let t = lock(&shared.inner).state.tasks["tsk_2"].clone();
+    assert_eq!(t.status, TaskStatus::Doing);
+    assert_eq!(t.assignee.as_deref(), Some("c2"));
+    let inner = lock(&shared.inner);
+    let succ = inner.state.sessions["c2"].handed_off_to.clone().unwrap();
+    assert_eq!(
+        inner.state.sessions[&succ].permission,
+        termade_core::PermissionPolicy::Bypass
+    );
+    drop(inner);
+    kill_all_sessions(&shared);
+}
+
+#[test]
 fn t50_permission_re_resolved_when_role_changes() {
     setup_fake_claude();
     let shared = test_shared();
@@ -3954,7 +4030,7 @@ fn t50_permission_re_resolved_when_role_changes() {
     let successor1 = lock(&shared.inner).state.sessions[&successor1_id].clone();
     assert_eq!(successor1.permission, PermissionPolicy::Ask);
 
-    // 2. 原 session 有手動 bypass 時，交接不繼承 bypass
+    // 2. 原 session 有手動 bypass 且角色變更時，不繼承 bypass (角色不變的情況見 t50_handoff_without_role_change_keeps_tasks_and_permission)
     add_session(
         &shared,
         "w2",
@@ -3978,7 +4054,7 @@ fn t50_permission_re_resolved_when_role_changes() {
             model: None,
             effort: None,
             note: None,
-            role: None, // 角色不變
+            role: Some(Role::Reviewer),
             parent: None,
             force: false,
         },
@@ -3993,8 +4069,8 @@ fn t50_permission_re_resolved_when_role_changes() {
         .clone()
         .unwrap();
     let successor2 = lock(&shared.inner).state.sessions[&successor2_id].clone();
-    // 應退回 worker 設定檔的 auto，而非繼承 bypass
-    assert_eq!(successor2.permission, PermissionPolicy::Auto);
+    // 應依 reviewer 設定重新解析，而非繼承 bypass
+    assert_eq!(successor2.permission, PermissionPolicy::Ask);
     kill_all_sessions(&shared);
 }
 

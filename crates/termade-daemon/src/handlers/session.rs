@@ -8,8 +8,8 @@ use anyhow::bail;
 
 use termade_adapter::{spawn as spawn_adapter, AgentEvent, SessionSpec};
 use termade_core::{
-    now_millis, Artifact, BusMessage, Cost, Decision, Event, MsgKind, PermissionPolicy, Role,
-    Session, SessionStatus, Target, Task, TaskStatus,
+    now_millis, Artifact, BusMessage, Cost, Decision, Event, MsgKind, Role, Session, SessionStatus,
+    Target, Task, TaskStatus,
 };
 use termade_protocol::{Frame, ParentChange, SpawnRequest};
 use tr::tr;
@@ -979,7 +979,7 @@ pub(crate) fn handle_handoff(
 
     // 晉升 worker 為 coordinator (Decision 5)：
     // 指派給舊 session 的未完成任務退回 todo (無負責人)，並送 TASK_BLOCKED 給舊 parent
-    if old_parent.is_some() && new_role == Role::Coordinator {
+    if role_changed && old_parent.is_some() && new_role == Role::Coordinator {
         let parent_id = old_parent.clone().unwrap();
         let open_tasks: Vec<Task> = {
             let inner = lock(&shared.inner);
@@ -1082,8 +1082,9 @@ pub(crate) fn handle_handoff(
         });
     }
 
-    // 權限繼承 (Decision 4)：角色變更或原 session 為手動 bypass 時不繼承，交由 handle_spawn 重新解析
-    let permission = if role_changed || src.permission == PermissionPolicy::Bypass {
+    // 權限繼承 (Decision 4)：角色變更時不繼承 (包含手動 bypass)，交由 handle_spawn 依新角色重新解析；
+    // 角色不變的交接 (含額度自動交接) 維持原本的權限。
+    let permission = if role_changed {
         None
     } else {
         Some(src.permission)
