@@ -597,12 +597,17 @@ pub(crate) fn start_resume_picker(app: &mut App) {
         })
         .collect();
 
+    let cursor = app
+        .selected_id()
+        .and_then(|sel| items.iter().position(|(_, id)| id == &sel))
+        .unwrap_or(0);
+
     app.picker = Some(Picker {
         stage: PickStage::Resume,
         title: tr!("接續 session (Enter 確認 · Esc 取消)"),
         items,
         filter: String::new(),
-        cursor: 0,
+        cursor,
         pending: None,
         loading: false,
         group_effort: false,

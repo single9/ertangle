@@ -2781,7 +2781,7 @@ msgstr ""
 msgid "連線網址："
 msgstr ""
 
-#: crates/termade-tui/src/draw.rs crates/termade-tui/src/quota.rs
+#: crates/termade-tui/src/draw.rs
 msgid "按 Esc、Enter、Space 或 q 關閉"
 msgstr ""
 
@@ -3756,6 +3756,14 @@ msgstr ""
 
 #: crates/termade-tui/src/quota.rs
 msgid "找不到已安裝的 agent"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "全部"
+msgstr ""
+
+#: crates/termade-tui/src/quota.rs
+msgid "Tab / ← → 切換 agent · Esc / q 關閉"
 msgstr ""
 
 #: crates/termade-tui/src/quota.rs

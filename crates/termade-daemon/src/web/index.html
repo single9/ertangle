@@ -3468,6 +3468,21 @@
       return `${Math.floor(mins / 1440)}d${Math.floor((mins % 1440) / 60)}h`;
     }
 
+    function formatQuotaLabel(agent, name) {
+      if (agent === "antigravity") {
+        const map = {
+          "5h": "Gemini (5h)",
+          "7d": "Gemini (7d)",
+          "argon-5h": "Gemini 4 Argon (5h)",
+          "argon-7d": "Gemini 4 Argon (7d)",
+          "3p-5h": "Claude / GPT (5h)",
+          "3p-7d": "Claude / GPT (7d)"
+        };
+        if (map[name]) return map[name];
+      }
+      return name;
+    }
+
     function renderQuota() {
       const qc = document.getElementById("quota-container");
       if (!state.quotas || Object.keys(state.quotas).length === 0) {
@@ -3498,7 +3513,7 @@
           return `
             <div style="margin-top:6px;">
               <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:3px;">
-                <span>${escapeHtml(w.name)}</span>
+                <span>${escapeHtml(formatQuotaLabel(q.agent || k, w.name))}</span>
                 <span><strong style="color:${color};">剩 ${Math.round(rem)}%</strong>${resetText ? ` <span style="color:var(--text-dim);">· ${escapeHtml(resetText)}</span>` : ""}</span>
               </div>
               <div style="height:5px; background:#1e293b; border-radius:999px; overflow:hidden;">

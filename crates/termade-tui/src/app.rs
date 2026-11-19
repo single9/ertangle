@@ -317,6 +317,8 @@ pub(crate) struct App {
     pub(crate) ps_modal: Option<crate::ps::PsModal>,
     /// `:quota` 浮層要列出的 agent (開啟時偵測)。
     pub(crate) quota_agents: Vec<String>,
+    /// `:quota` 浮層目前的頁籤索引 (`0` = 全部，`1..` = 個別 agent)。
+    pub(crate) quota_tab: usize,
     /// 標題列額度摘要的位置 (點擊開啟 `:quota`)。
     pub(crate) quota_area: Rect,
     /// 等待接續還原後自動聚焦的 session id。
@@ -425,6 +427,7 @@ impl App {
             qr_modal: None,
             ps_modal: None,
             quota_agents: Vec::new(),
+            quota_tab: 0,
             quota_area: Rect::default(),
             pending_select: None,
             should_quit: false,

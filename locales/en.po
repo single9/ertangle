@@ -2794,7 +2794,7 @@ msgstr " (loading…)"
 msgid "連線網址："
 msgstr "URL: "
 
-#: crates/termade-tui/src/draw.rs crates/termade-tui/src/quota.rs
+#: crates/termade-tui/src/draw.rs
 msgid "按 Esc、Enter、Space 或 q 關閉"
 msgstr "Press Esc, Enter, Space or q to close"
 
@@ -3770,6 +3770,14 @@ msgstr "{pct}% left"
 #: crates/termade-tui/src/quota.rs
 msgid "找不到已安裝的 agent"
 msgstr "No installed agents found"
+
+#: crates/termade-tui/src/quota.rs
+msgid "全部"
+msgstr "All"
+
+#: crates/termade-tui/src/quota.rs
+msgid "Tab / ← → 切換 agent · Esc / q 關閉"
+msgstr "Tab / ← → switch agent · Esc / q close"
 
 #: crates/termade-tui/src/quota.rs
 msgid "Agent 額度 (剩餘)"

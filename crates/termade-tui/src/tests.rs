@@ -2278,6 +2278,18 @@ fn resume_picker_lists_ended_filters_and_resumes() {
     assert!(picker.items[1]
         .0
         .starts_with("✓ worker/alpha  claude:sonnet  "));
+
+    // 若左側已選中某個可接續的 session，開啟 popup 時游標應預設停在該項。
+    let old_idx = app
+        .session_ids()
+        .iter()
+        .position(|id| id == "ses_old")
+        .unwrap();
+    app.selected = old_idx;
+    crate::menu::start_resume_picker(&mut app);
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.cursor, 1);
+    assert_eq!(picker.items[picker.cursor].1, "ses_old");
     assert!(picker.items[1].0.ends_with("  ↻"));
 
     // 測試輸入過濾 (typing filter)
@@ -3518,6 +3530,31 @@ fn quota_popup_renders_and_header_click_area_is_set() {
         "{out}"
     );
     assert!(app.quota_area.width > 0, "標題列額度摘要應可點擊");
+
+    // 切換到第 1 個 agent 頁籤 (claude)，只顯示 claude。
+    crate::quota::handle_key(&mut app, KeyEvent::from(KeyCode::Tab));
+    assert_eq!(app.quota_tab, 1);
+    let out_tab1 = render(&mut app);
+    assert!(out_tab1.contains("58%"), "{out_tab1}");
+
+    // 驗證 antigravity 視窗名稱轉為易讀標籤。
+    let agy_q = Quota {
+        agent: "antigravity".into(),
+        windows: vec![QuotaWindow {
+            name: "3p-5h".into(),
+            used_percent: 10.0,
+            resets_at_ms: Some(now + 3_600_000),
+        }],
+        reached: false,
+        warning: false,
+        updated_ms: now,
+    };
+    let agy_lines = crate::quota::agent_lines("antigravity", Some(&agy_q), now);
+    let agy_text: String = agy_lines
+        .iter()
+        .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
+        .collect();
+    assert!(agy_text.contains("Claude / GPT (5h)"), "{agy_text}");
 }
 
 fn generate_realistic_transcript(target_lines: usize) -> Vec<String> {

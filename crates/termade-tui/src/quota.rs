@@ -28,15 +28,23 @@ pub(crate) fn open(app: &mut App) {
         }
     }
     app.quota_agents = agents;
+    app.quota_tab = 0;
     app.mode = Mode::Quota;
 }
 
 pub(crate) fn handle_key(app: &mut App, key: KeyEvent) {
-    if matches!(
-        key.code,
-        KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char(' ')
-    ) {
-        app.mode = Mode::Normal;
+    let tabs = app.quota_agents.len() + 1;
+    match key.code {
+        KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => {
+            app.quota_tab = (app.quota_tab + 1) % tabs;
+        }
+        KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => {
+            app.quota_tab = (app.quota_tab + tabs - 1) % tabs;
+        }
+        KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char(' ') => {
+            app.mode = Mode::Normal;
+        }
+        _ => {}
     }
 }
 
@@ -55,6 +63,22 @@ fn level_color_remaining(rem: f32) -> Color {
 pub(crate) fn bar(pct: f32, cells: usize) -> (String, String) {
     let filled = ((pct.clamp(0.0, 100.0) / 100.0) * cells as f32).round() as usize;
     ("█".repeat(filled), "░".repeat(cells - filled))
+}
+
+/// 將內部視窗代號轉成易讀的顯示名稱 (例如 Antigravity 的 `3p-*` 標示為 `Claude / GPT`)。
+fn window_label(agent: &str, name: &str) -> String {
+    if agent == "antigravity" {
+        return match name {
+            "5h" => "Gemini (5h)".into(),
+            "7d" => "Gemini (7d)".into(),
+            "argon-5h" => "Gemini 4 Argon (5h)".into(),
+            "argon-7d" => "Gemini 4 Argon (7d)".into(),
+            "3p-5h" => "Claude / GPT (5h)".into(),
+            "3p-7d" => "Claude / GPT (7d)".into(),
+            other => other.into(),
+        };
+    }
+    name.into()
 }
 
 /// 一個 agent 的區塊 (標題列 + 每個視窗一列)。
@@ -105,14 +129,18 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
         Style::default().fg(Color::DarkGray),
     ));
     out.push(Line::from(head));
-    let name_w = q
+    let labels: Vec<String> = q
         .windows
         .iter()
-        .map(|w| w.name.chars().count())
+        .map(|w| window_label(agent, &w.name))
+        .collect();
+    let name_w = labels
+        .iter()
+        .map(|l| l.chars().count())
         .max()
         .unwrap_or(4)
         .max(4);
-    for w in &q.windows {
+    for (w, label) in q.windows.iter().zip(labels.iter()) {
         let reset = match w.resets_at_ms {
             Some(r) if r <= now_ms => Some(tr!("已重置")),
             Some(r) => Some(tr!("{t} 後重置", t = format_remaining(r - now_ms))),
@@ -128,7 +156,7 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
         let pct_label = tr!("剩 {pct}%", pct = format!("{rem:>3.0}"));
         let mut spans = vec![
             Span::styled(
-                format!("  {:<width$}  ", w.name, width = name_w),
+                format!("  {label:<width$}  ", width = name_w),
                 Style::default().fg(Color::White),
             ),
             Span::styled(fill, Style::default().fg(color)),
@@ -157,21 +185,51 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &App) {
             tr!("找不到已安裝的 agent"),
             Style::default().fg(Color::DarkGray),
         )));
-    }
-    for (i, agent) in app.quota_agents.iter().enumerate() {
-        if i > 0 {
-            lines.push(Line::from(""));
+    } else {
+        let active = app.quota_tab.min(app.quota_agents.len());
+        let mut tab_spans: Vec<Span<'static>> = Vec::new();
+        for idx in 0..=app.quota_agents.len() {
+            if idx > 0 {
+                tab_spans.push(Span::raw(" "));
+            }
+            let title = if idx == 0 {
+                tr!("全部")
+            } else {
+                app.quota_agents[idx - 1].clone()
+            };
+            let style = if idx == active {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Gray)
+            };
+            tab_spans.push(Span::styled(format!(" {title} "), style));
         }
-        lines.extend(agent_lines(agent, app.state.quotas.get(agent), now));
+        lines.push(Line::from(tab_spans));
+        lines.push(Line::from(""));
+
+        let visible: Vec<&String> = if active == 0 {
+            app.quota_agents.iter().collect()
+        } else {
+            vec![&app.quota_agents[active - 1]]
+        };
+        for (i, agent) in visible.iter().enumerate() {
+            if i > 0 {
+                lines.push(Line::from(""));
+            }
+            lines.extend(agent_lines(agent, app.state.quotas.get(*agent), now));
+        }
     }
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        tr!("按 Esc、Enter、Space 或 q 關閉"),
+        tr!("Tab / ← → 切換 agent · Esc / q 關閉"),
         Style::default().fg(Color::DarkGray),
     )));
 
     let full = f.area();
-    let w = 74.min(full.width);
+    let w = 78.min(full.width);
     let h = (lines.len() as u16 + 4).min(full.height);
     let area = Rect::new(
         full.x + full.width.saturating_sub(w) / 2,
