@@ -29,6 +29,8 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 struct Conn {
     /// 這個 adapter 代表的 agent id (額度事件的 `agent` 欄位)。
     agent: String,
+    /// 已送出 `reached=true` 的限流額度、尚未被成功回合清除。
+    limited: std::sync::atomic::AtomicBool,
     /// 我們自己的 session id (事件關聯用)。
     session_id: String,
     /// agent 回傳的 ACP session id (prompt / cancel 用)。
@@ -105,7 +107,20 @@ impl Conn {
         );
         self.flush_stream();
         let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
+        if res.is_ok() {
+            if let Some(q) = recovered_quota(&self.agent, &self.limited) {
+                let _ = self.tx.send(AgentEvent::Quota(q));
+            }
+        }
         res.map(|_| ())
+    }
+
+    /// 錯誤文字若是限流就送出 `reached=true` 並記下旗標 (之後成功的回合會清除)。
+    fn report_rate_limit(&self, error_text: &str) {
+        if let Some(q) = rate_limit_quota(&self.agent, error_text) {
+            self.limited.store(true, Ordering::SeqCst);
+            let _ = self.tx.send(AgentEvent::Quota(q));
+        }
     }
 
     fn on_update(&self, msg: &Value) {
@@ -132,9 +147,7 @@ impl Conn {
                 }
             }
             "error" => {
-                if let Some(q) = rate_limit_quota(&self.agent, &update.to_string()) {
-                    let _ = self.tx.send(AgentEvent::Quota(q));
-                }
+                self.report_rate_limit(&update.to_string());
             }
             "agent_message_chunk" => {
                 if let Some(t) = update["content"]["text"].as_str() {
@@ -324,6 +337,22 @@ fn rate_limit_quota(agent: &str, error_text: &str) -> Option<termade_core::Quota
     })
 }
 
+/// 回合成功後：若先前標記過限流，回傳解除 (`reached=false`) 的額度並清旗標；否則 `None`。
+fn recovered_quota(
+    agent: &str,
+    limited: &std::sync::atomic::AtomicBool,
+) -> Option<termade_core::Quota> {
+    limited
+        .swap(false, Ordering::SeqCst)
+        .then(|| termade_core::Quota {
+            agent: agent.to_string(),
+            windows: Vec::new(),
+            reached: false,
+            warning: false,
+            updated_ms: termade_core::now_millis(),
+        })
+}
+
 fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
     for line in stdout.lines() {
         let Ok(line) = line else { break };
@@ -378,9 +407,7 @@ impl AgentControl for AcpControl {
                 if termade_core::looks_like_limit(&e.to_string()) {
                     let _ = conn.tx.send(AgentEvent::Limited(e.to_string()));
                 }
-                if let Some(q) = rate_limit_quota(&conn.agent, &e.to_string()) {
-                    let _ = conn.tx.send(AgentEvent::Quota(q));
-                }
+                conn.report_rate_limit(&e.to_string());
             }
         });
         Ok(())
@@ -598,6 +625,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 
     let conn = Arc::new(Conn {
         agent: spec.kind.id().to_string(),
+        limited: std::sync::atomic::AtomicBool::new(false),
         session_id: spec.id.clone(),
         acp_session: Mutex::new(String::new()),
         stdin: Mutex::new(stdin),
@@ -828,6 +856,17 @@ mod rate_limit_tests {
             assert_eq!(q.agent, "antigravity");
             assert!(q.windows.is_empty());
         }
+    }
+
+    #[test]
+    fn recovery_clears_limit_once() {
+        let flag = std::sync::atomic::AtomicBool::new(false);
+        assert!(recovered_quota("antigravity", &flag).is_none());
+        flag.store(true, Ordering::SeqCst);
+        let q = recovered_quota("antigravity", &flag).expect("reset");
+        assert!(!q.reached && !q.warning && q.windows.is_empty());
+        assert_eq!(q.agent, "antigravity");
+        assert!(recovered_quota("antigravity", &flag).is_none());
     }
 
     #[test]
