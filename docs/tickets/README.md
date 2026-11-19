@@ -57,7 +57,7 @@
 | [T50](T50-handoff-identity-change.md) | Change a session's identity (role and parent) through a handoff (已完成) | P2 | T49 |
 | [T51](T51-antigravity-quota.md) | Show the quota of Gemini (Antigravity) sessions (已完成) | P2 | — |
 | [T52](T52-sast-security-hardening.md) | SAST 靜態安全分析修復 (WebSocket 長度上限、常數時間比對、Web 檔案存取隔離、DOM XSS 與暫存檔安全) (已完成) | P1 | — |
-| [T53](T53-agent-scoped-quota-warn.md) | 額度警告 (`QUOTA_WARN` / `QUOTA_NOTICE`) 依 Agent 種類精準分發與明確化訊息語意 | P2 | T38, T46 |
+| [T53](T53-agent-scoped-quota-warn.md) | 額度警告 (`QUOTA_WARN` / `QUOTA_NOTICE`) 依 Agent 種類精準分發與明確化訊息語意 (已完成) | P2 | T38, T46 |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 

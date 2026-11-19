@@ -1,6 +1,6 @@
 # T53：額度警告 (`QUOTA_WARN` / `QUOTA_NOTICE`) 依 Agent 種類精準分發與明確化訊息語意
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 
