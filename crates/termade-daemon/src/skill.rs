@@ -50,12 +50,14 @@ pub fn uninstall(base: &Path, target: &str) -> std::io::Result<Option<PathBuf>> 
     let path = skill_path(base, target).ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "unknown skill target")
     })?;
-    let dir = path.parent().unwrap().to_path_buf();
+    let Some(dir) = path.parent() else {
+        return Ok(None);
+    };
     if !dir.exists() {
         return Ok(None);
     }
-    std::fs::remove_dir_all(&dir)?;
-    Ok(Some(dir))
+    std::fs::remove_dir_all(dir)?;
+    Ok(Some(dir.to_path_buf()))
 }
 
 #[cfg(test)]
@@ -86,6 +88,27 @@ mod tests {
             assert!(uninstall(&t, target).unwrap().is_none());
         }
         assert!(install(&t, "bogus").is_err());
+        assert!(uninstall(&t, "bogus").is_err());
         let _ = std::fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn skill_path_handling() {
+        let base = Path::new("/tmp/test_dir");
+        assert_eq!(
+            skill_path(base, "claude"),
+            Some(base.join(".claude/skills/termade-ade/SKILL.md"))
+        );
+        assert_eq!(
+            skill_path(base, "agents"),
+            Some(base.join(".agents/skills/termade-ade/SKILL.md"))
+        );
+        assert_eq!(
+            skill_path(base, "codex"),
+            Some(base.join(".codex/skills/termade-ade/SKILL.md"))
+        );
+        assert_eq!(skill_path(base, "unknown"), None);
+        assert_eq!(skill_path(base, ""), None);
+        assert!(uninstall(base, "unknown").is_err());
     }
 }

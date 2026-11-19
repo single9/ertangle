@@ -67,7 +67,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     let label = spawn
         .label
         .clone()
-        .unwrap_or_else(|| format!("{}/{}", role.id(), &id[4..8]));
+        .unwrap_or_else(|| format!("{}/{}", role.id(), id.get(4..8).unwrap_or(&id)));
     // 沒指定 kind：依 roles.<role>.agent → 父 session 的 kind → defaults.agent → opencode 決定。
     let parent_kind = parent.as_ref().and_then(|pid| {
         lock(&shared.inner)
@@ -993,31 +993,32 @@ pub(crate) fn handle_handoff(
 
     // 晉升 worker 為 coordinator (Decision 5)：
     // 指派給舊 session 的未完成任務退回 todo (無負責人)，並送 TASK_BLOCKED 給舊 parent
-    if role_changed && old_parent.is_some() && new_role == Role::Coordinator {
-        let parent_id = old_parent.clone().unwrap();
-        let open_tasks: Vec<Task> = {
-            let inner = lock(&shared.inner);
-            inner
-                .state
-                .tasks
-                .values()
-                .filter(|t| t.assignee.as_deref() == Some(&sid) && t.status != TaskStatus::Done)
-                .cloned()
-                .collect()
-        };
-        for mut task in open_tasks {
-            task.status = TaskStatus::Todo;
-            task.assignee = None;
-            task.updated_ms = now_millis();
-            shared.emit(Event::TaskChanged { task: task.clone() });
-            let body = format!("TASK_BLOCKED {} promoted to coordinator by user", task.id);
-            let _ = shared.deliver_message(
-                Some(sid.clone()),
-                Target::Direct(parent_id.clone()),
-                MsgKind::Chat,
-                body,
-                None,
-            );
+    if role_changed && new_role == Role::Coordinator {
+        if let Some(parent_id) = &old_parent {
+            let open_tasks: Vec<Task> = {
+                let inner = lock(&shared.inner);
+                inner
+                    .state
+                    .tasks
+                    .values()
+                    .filter(|t| t.assignee.as_deref() == Some(&sid) && t.status != TaskStatus::Done)
+                    .cloned()
+                    .collect()
+            };
+            for mut task in open_tasks {
+                task.status = TaskStatus::Todo;
+                task.assignee = None;
+                task.updated_ms = now_millis();
+                shared.emit(Event::TaskChanged { task: task.clone() });
+                let body = format!("TASK_BLOCKED {} promoted to coordinator by user", task.id);
+                let _ = shared.deliver_message(
+                    Some(sid.clone()),
+                    Target::Direct(parent_id.clone()),
+                    MsgKind::Chat,
+                    body,
+                    None,
+                );
+            }
         }
     }
 
