@@ -370,6 +370,18 @@ pub fn supports_structured(kind: &AgentKind) -> bool {
     }
 }
 
+/// 檢查對應的結構化 agent 執行檔是否已安裝於本機 `$PATH`。
+pub fn is_installed(kind: &AgentKind) -> bool {
+    match kind {
+        AgentKind::OpenCode | AgentKind::Antigravity => kind
+            .acp_command()
+            .is_some_and(|(prog, _)| which(prog).is_some()),
+        AgentKind::ClaudeCode => agent_bin("claude", "TERMADE_CLAUDE_BIN").is_some(),
+        AgentKind::Codex => which("codex").is_some(),
+        AgentKind::Custom(_) => false,
+    }
+}
+
 /// 依 agent 種類啟動對應的原生結構化 adapter。
 fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     match spec.kind {

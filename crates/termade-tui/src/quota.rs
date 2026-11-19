@@ -18,7 +18,7 @@ const BAR_CELLS: usize = 20;
 pub(crate) fn open(app: &mut App) {
     let mut agents: Vec<String> = AgentKind::builtins()
         .iter()
-        .filter(|k| termade_adapter::supports_structured(k))
+        .filter(|k| termade_adapter::is_installed(k))
         .map(|k| k.id().to_string())
         .collect();
     // 有回報過額度但不在本機 (例如遠端 daemon) 的 agent 也列出來。
