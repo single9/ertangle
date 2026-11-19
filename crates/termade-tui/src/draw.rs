@@ -765,10 +765,12 @@ fn quota_spans(app: &App) -> Vec<Span<'static>> {
         if live.is_empty() {
             continue;
         }
-        let w = live
+        let Some(w) = live
             .iter()
             .max_by(|a, b| a.used_percent.total_cmp(&b.used_percent))
-            .unwrap();
+        else {
+            continue;
+        };
         let rem = (100.0 - w.used_percent).clamp(0.0, 100.0);
         let color = if q.reached || rem <= 10.0 {
             Color::Red
@@ -1307,66 +1309,70 @@ pub(crate) fn update_transcript_cache(
         false
     };
 
+    let mut incremental_done = false;
     if can_incremental {
-        let c = app.md_cache.as_mut().unwrap();
-        c.lines.truncate(c.prefix_lines_count);
-        c.links.truncate(c.prefix_links_count);
+        if let Some(c) = app.md_cache.as_mut() {
+            c.lines.truncate(c.prefix_lines_count);
+            c.links.truncate(c.prefix_links_count);
 
-        let tail_start = c.prefix_raw_len;
-        let tail_end = buf.len();
+            let tail_start = c.prefix_raw_len;
+            let tail_end = buf.len();
 
-        let (tail_lines, tail_links) = render_transcript_slice(
-            buf.range(tail_start..tail_end),
-            app.raw_md,
-            app.show_thoughts,
-            app.show_tools,
-            active,
-            width,
-            c.prefix_lines_count,
-        );
+            let (tail_lines, tail_links) = render_transcript_slice(
+                buf.range(tail_start..tail_end),
+                app.raw_md,
+                app.show_thoughts,
+                app.show_tools,
+                active,
+                width,
+                c.prefix_lines_count,
+            );
 
-        c.lines.extend(tail_lines);
-        c.links.extend(tail_links);
-        c.stamp = curr_stamp;
+            c.lines.extend(tail_lines);
+            c.links.extend(tail_links);
+            c.stamp = curr_stamp;
 
-        // 若 tail 累積超過 32 行，嘗試將新的安全邊界納入前綴
-        if buf.len() > c.prefix_raw_len + 32 {
-            let new_safe = find_safe_boundary(buf);
-            if new_safe > c.prefix_raw_len {
-                let (mid_lines, mid_links) = render_transcript_slice(
-                    buf.range(c.prefix_raw_len..new_safe),
-                    app.raw_md,
-                    app.show_thoughts,
-                    app.show_tools,
-                    &[],
-                    width,
-                    c.prefix_lines_count,
-                );
-                c.lines.truncate(c.prefix_lines_count);
-                c.links.truncate(c.prefix_links_count);
-                c.prefix_lines_count += mid_lines.len();
-                c.prefix_links_count += mid_links.len();
-                c.lines.extend(mid_lines);
-                c.links.extend(mid_links);
+            // 若 tail 累積超過 32 行，嘗試將新的安全邊界納入前綴
+            if buf.len() > c.prefix_raw_len + 32 {
+                let new_safe = find_safe_boundary(buf);
+                if new_safe > c.prefix_raw_len {
+                    let (mid_lines, mid_links) = render_transcript_slice(
+                        buf.range(c.prefix_raw_len..new_safe),
+                        app.raw_md,
+                        app.show_thoughts,
+                        app.show_tools,
+                        &[],
+                        width,
+                        c.prefix_lines_count,
+                    );
+                    c.lines.truncate(c.prefix_lines_count);
+                    c.links.truncate(c.prefix_links_count);
+                    c.prefix_lines_count += mid_lines.len();
+                    c.prefix_links_count += mid_links.len();
+                    c.lines.extend(mid_lines);
+                    c.links.extend(mid_links);
 
-                c.prefix_raw_len = new_safe;
-                c.prefix_last_len = buf[new_safe - 1].len();
-                c.prefix_last_hash = fnv1a(buf[new_safe - 1].as_bytes());
+                    c.prefix_raw_len = new_safe;
+                    c.prefix_last_len = buf[new_safe - 1].len();
+                    c.prefix_last_hash = fnv1a(buf[new_safe - 1].as_bytes());
 
-                let (new_tail_lines, new_tail_links) = render_transcript_slice(
-                    buf.range(new_safe..buf.len()),
-                    app.raw_md,
-                    app.show_thoughts,
-                    app.show_tools,
-                    active,
-                    width,
-                    c.prefix_lines_count,
-                );
-                c.lines.extend(new_tail_lines);
-                c.links.extend(new_tail_links);
+                    let (new_tail_lines, new_tail_links) = render_transcript_slice(
+                        buf.range(new_safe..buf.len()),
+                        app.raw_md,
+                        app.show_thoughts,
+                        app.show_tools,
+                        active,
+                        width,
+                        c.prefix_lines_count,
+                    );
+                    c.lines.extend(new_tail_lines);
+                    c.links.extend(new_tail_links);
+                }
             }
+            incremental_done = true;
         }
-    } else {
+    }
+    if !incremental_done {
         let safe_boundary = find_safe_boundary(buf);
         let (lines, links, prefix_lines_count, prefix_links_count) = if safe_boundary > 0 {
             let (mut p_lines, mut p_links) = render_transcript_slice(

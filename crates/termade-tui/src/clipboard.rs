@@ -183,8 +183,8 @@ fn transcript_messages(lines: &[String]) -> Vec<Vec<String>> {
     for line in lines {
         if termade_core::parse_prompt_line(line).is_some() || msgs.is_empty() {
             msgs.push(vec![line.clone()]);
-        } else {
-            msgs.last_mut().unwrap().push(line.clone());
+        } else if let Some(last) = msgs.last_mut() {
+            last.push(line.clone());
         }
     }
     msgs.retain(|m| m.iter().any(|l| !l.trim().is_empty()));

@@ -1091,8 +1091,7 @@ pub(crate) fn visible_transcript<'a>(
         }
     }
 
-    if !active_tools.is_empty() {
-        let tool = active_tools.last().unwrap();
+    if let Some(tool) = active_tools.last() {
         let elapsed_secs = (termade_core::now_millis().saturating_sub(tool.started_ms)) / 1000;
         let tag = if tool.is_subagent {
             "subagent"

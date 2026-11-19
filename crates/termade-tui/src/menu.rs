@@ -774,8 +774,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         None if !custom.is_empty() => Some(custom),
                         None => None,
                     };
-                    if app.handoff_from.is_some() {
-                        let src_id = app.handoff_from.clone().unwrap();
+                    if let Some(src_id) = app.handoff_from.clone() {
                         let cur_role = app
                             .state
                             .sessions

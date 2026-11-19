@@ -2134,7 +2134,9 @@ pub fn redact_secrets(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        let rest = &input[i..];
+        let Some(rest) = input.get(i..) else {
+            break;
+        };
         if let Some(pref) = PREFIXES.iter().find(|&&p| rest.starts_with(p)) {
             let after = &rest[pref.len()..];
             let token_len = after
@@ -2148,7 +2150,9 @@ pub fn redact_secrets(input: &str) -> String {
                 continue;
             }
         }
-        let ch = rest.chars().next().unwrap();
+        let Some(ch) = rest.chars().next() else {
+            break;
+        };
         out.push(ch);
         i += ch.len_utf8();
     }
@@ -2356,6 +2360,24 @@ pub(crate) mod tests {
         assert!(scrubbed.contains("sk-<REDACTED>"));
         assert!(scrubbed.contains("ghp_<REDACTED>"));
         assert!(!scrubbed.contains("1234567890abcdefghij"));
+    }
+
+    #[test]
+    fn redact_secrets_tricky_input() {
+        assert_eq!(redact_secrets(""), "");
+        assert_eq!(redact_secrets("sk-short"), "sk-short");
+        assert_eq!(
+            redact_secrets("金鑰 sk-1234567890abcdefghij 結束"),
+            "金鑰 sk-<REDACTED> 結束"
+        );
+        assert_eq!(
+            redact_secrets("🦀 ghp_1234567890abcdefghij 🦀"),
+            "🦀 ghp_<REDACTED> 🦀"
+        );
+        assert_eq!(redact_secrets("sk-"), "sk-");
+        assert_eq!(redact_secrets("ghp_12345678901"), "ghp_12345678901");
+        assert_eq!(redact_secrets("ghp_123456789012"), "ghp_<REDACTED>");
+        assert_eq!(redact_secrets("xoxb-123456789012"), "xoxb-<REDACTED>");
     }
 
     #[test]
