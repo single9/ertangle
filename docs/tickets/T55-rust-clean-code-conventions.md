@@ -2,7 +2,7 @@
 
 優先度：P2　範圍：全專案 Rust 程式碼　相依：—
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 
@@ -33,6 +33,14 @@ Status: ready-for-agent
 ## 驗收條件
 
 - `AGENTS.md` 與 `docs/agents/rust-conventions.md` 包含並連結完整的 Rust 寫作慣例。
-- production 程式碼不再對外部輸入或 I/O 直接 `unwrap()` / `expect()`；`unsafe` 要嘛消除，要嘛有 `// SAFETY:` 註解與commit說明。
+- production 程式碼不再對外部輸入或 I/O 直接 `unwrap()` / `expect()`；`unsafe` 要嘛消除，要嘛有 `// SAFETY:` 註解與 commit 說明。
 - `make pre-commit` 與 `make test` 成功；已知的 gpg 簽章環境問題不視為程式碼失敗。
 - 新增或修改的錯誤路徑都有對應測試。
+
+## 完成紀錄
+
+- `5aa21f1` docs(agents): 新增 `docs/agents/rust-conventions.md`、`AGENTS.md` 規範摘要與本 ticket。
+- `c12b913` fix(daemon): 移除 production unwrap；`server.rs` 改用 `nix::unistd::geteuid()`，刪除唯一的 `unsafe` 與 FFI 宣告。
+- `f4a25ed` refactor(core,tui): `redact_secrets` 與 TUI 繪製路徑改用 `let-else` / `if let` / `match`，並補 `redact_secrets` 測試。
+- `80e053f` refactor(adapter): ACP/Codex/Claude/PTY/stderr 的鎖與 JSON 取值改為安全降級；新增 `extract_request_id` 純函式與測試。
+- 三個 worker 分支已合併回 `main`；`make pre-commit` 與完整 `make test` 均成功。
