@@ -90,6 +90,43 @@ pub struct SpawnRequest {
     pub budget_usd: Option<f64>,
 }
 
+/// 將 worktree 分支併回主分支時使用的策略。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeStrategy {
+    /// 保留分支提交 record 的一般合併 (預設)。
+    #[default]
+    Merge,
+    /// 把所有變更壓成主分支上的單一提交。
+    Squash,
+    /// 先把分支 rebase 到主分支，再快轉主分支。
+    Rebase,
+}
+
+impl std::fmt::Display for MergeStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Merge => "merge",
+            Self::Squash => "squash",
+            Self::Rebase => "rebase",
+        };
+        f.write_str(name)
+    }
+}
+
+impl std::str::FromStr for MergeStrategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "merge" => Ok(Self::Merge),
+            "squash" => Ok(Self::Squash),
+            "rebase" => Ok(Self::Rebase),
+            _ => Err(format!("unknown merge strategy: {s} (merge/squash/rebase)")),
+        }
+    }
+}
+
 /// client → daemon。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -297,6 +334,9 @@ pub enum Request {
         dry_run: bool,
         #[serde(default)]
         resolve: bool,
+        /// 合併策略；舊 client 省略時為 `merge`。
+        #[serde(default)]
+        strategy: MergeStrategy,
     },
     /// 為某個 session 的分支建立 Pull Request (透過 `gh`)。
     WorktreePr {
@@ -430,6 +470,45 @@ pub fn decode_line<T: for<'de> Deserialize<'de>>(line: &str) -> serde_json::Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merge_strategy_parses_and_defaults_to_merge() {
+        assert_eq!(
+            "merge".parse::<MergeStrategy>().unwrap(),
+            MergeStrategy::Merge
+        );
+        assert_eq!(
+            "SQUASH".parse::<MergeStrategy>().unwrap(),
+            MergeStrategy::Squash
+        );
+        assert_eq!(
+            "rebase".parse::<MergeStrategy>().unwrap(),
+            MergeStrategy::Rebase
+        );
+        assert!("bogus".parse::<MergeStrategy>().is_err());
+        assert_eq!(MergeStrategy::default(), MergeStrategy::Merge);
+        assert_eq!(MergeStrategy::Squash.to_string(), "squash");
+
+        let line = encode_line(&Request::WorktreeMerge {
+            session: "s1".into(),
+            dry_run: false,
+            resolve: false,
+            strategy: MergeStrategy::Rebase,
+        })
+        .unwrap();
+        let back: Request = decode_line(line.trim()).unwrap();
+        let Request::WorktreeMerge { strategy, .. } = back else {
+            panic!("expected WorktreeMerge")
+        };
+        assert_eq!(strategy, MergeStrategy::Rebase);
+
+        let legacy = r#"{"op":"worktree_merge","session":"s1"}"#;
+        let back: Request = decode_line(legacy).unwrap();
+        let Request::WorktreeMerge { strategy, .. } = back else {
+            panic!("expected WorktreeMerge")
+        };
+        assert_eq!(strategy, MergeStrategy::Merge);
+    }
 
     #[test]
     fn request_roundtrip() {

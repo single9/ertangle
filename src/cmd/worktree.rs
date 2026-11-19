@@ -1,7 +1,7 @@
 //! Worktree 與程式碼審查子命令 (worktrees、diff、review、merge、pr、gc)。
 
 use anyhow::{bail, Result};
-use termade_protocol::{Frame, Request};
+use termade_protocol::{Frame, MergeStrategy, Request};
 use tr::tr;
 
 use super::{join, roundtrip};
@@ -53,6 +53,7 @@ pub(crate) fn cmd_merge(session: String, dry_run: bool, resolve: bool) -> Result
         session,
         dry_run,
         resolve,
+        strategy: MergeStrategy::Merge,
     })?;
     if let Frame::Ok { note } = frame {
         println!("{}", note.unwrap_or_else(|| tr!("已合併至 main")));

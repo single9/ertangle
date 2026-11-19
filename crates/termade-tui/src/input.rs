@@ -3,7 +3,7 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use termade_core::{Decision, MsgKind, PermissionPolicy, Role, SessionStatus, Target};
-use termade_protocol::Request;
+use termade_protocol::{MergeStrategy, Request};
 use tr::tr;
 
 use crate::app::{
@@ -205,6 +205,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
                         session: id,
                         dry_run: false,
                         resolve: false,
+                        strategy: MergeStrategy::Merge,
                     },
                 )?;
             }

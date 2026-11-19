@@ -1071,6 +1071,7 @@ fn merge_resolve_loop_delegates_to_session() {
             session: sb.id.clone(),
             dry_run: false,
             resolve: true,
+            strategy: termade_protocol::MergeStrategy::Merge,
         },
     );
 

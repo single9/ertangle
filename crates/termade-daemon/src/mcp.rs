@@ -14,7 +14,7 @@ use termade_core::{
     AgentKind, ArtifactKind, Decision, MsgKind, PermissionPolicy, Role, SessionId, Target,
     TaskStatus,
 };
-use termade_protocol::{Frame, Request, SpawnRequest, Transport};
+use termade_protocol::{Frame, MergeStrategy, Request, SpawnRequest, Transport};
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -846,6 +846,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 session: target,
                 dry_run,
                 resolve,
+                strategy: MergeStrategy::Merge,
             })? {
                 Frame::Ok { note } => Ok(json!({ "ok": true, "note": note })),
                 other => bail!("unexpected response: {other:?}"),

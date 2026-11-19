@@ -2,7 +2,7 @@
 
 use anyhow::{bail, Result};
 use termade_core::{AgentKind, Decision, MsgKind, PermissionPolicy, Role, Target};
-use termade_protocol::{Request, SpawnRequest, Transport};
+use termade_protocol::{MergeStrategy, Request, SpawnRequest, Transport};
 use tr::tr;
 
 use crate::app::{toggle_scope, toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode};
@@ -562,6 +562,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                         session: s,
                         dry_run,
                         resolve,
+                        strategy: MergeStrategy::Merge,
                     },
                 )?;
             }
