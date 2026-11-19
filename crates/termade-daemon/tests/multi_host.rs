@@ -73,7 +73,7 @@ fn test_multi_host_aggregation_and_routing() {
     // 3. 在遠端建立 Session
     remote_client
         .send(&Request::Spawn(SpawnRequest {
-            kind: AgentKind::ClaudeCode,
+            kind: Some(AgentKind::ClaudeCode),
             cwd: Some(root.to_string_lossy().to_string()),
             label: Some("remote_s1".into()),
             role: Default::default(),

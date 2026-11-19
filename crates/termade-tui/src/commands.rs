@@ -1002,11 +1002,11 @@ pub(crate) fn launch_playbook(
         app.status = tr!("playbook {name} 沒有成員", name = name);
         return Ok(());
     }
-    for req in &spawns {
-        if !agent_available(&req.kind) {
+    for kind in spawns.iter().filter_map(|req| req.kind.as_ref()) {
+        if !agent_available(kind) {
             app.status = tr!(
                 "agent {kind} 未安裝；無法啟動 playbook {name}",
-                kind = req.kind.id(),
+                kind = kind.id(),
                 name = name
             );
             return Ok(());
@@ -1236,7 +1236,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
     send(
         writer,
         &Request::Spawn(SpawnRequest {
-            kind: kind.clone(),
+            kind: Some(kind.clone()),
             cwd: std::env::current_dir()
                 .ok()
                 .map(|p| p.to_string_lossy().to_string()),

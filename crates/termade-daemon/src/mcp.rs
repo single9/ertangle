@@ -322,7 +322,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 "properties": {
                     "kind": {
                         "type": "string",
-                        "description": "Agent kind: opencode | claude | codex | antigravity (default: opencode)"
+                        "description": "Agent kind: opencode | claude | codex | antigravity. If omitted, resolved in order: [roles.<role>] agent in config, then your own agent kind (parent), then [defaults] agent, then opencode. The model is not inherited."
                     },
                     "prompt": {
                         "type": "string",
@@ -700,9 +700,13 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
         }
 
         "termade_spawn" => {
-            let kind_str = args["kind"].as_str().unwrap_or("opencode");
-            let kind = AgentKind::parse(kind_str)
-                .with_context(|| format!("unknown agent kind: {kind_str}"))?;
+            let kind = match args["kind"].as_str() {
+                None => None,
+                Some(kind_str) => Some(
+                    AgentKind::parse(kind_str)
+                        .with_context(|| format!("unknown agent kind: {kind_str}"))?,
+                ),
+            };
             let prompt = args["prompt"]
                 .as_str()
                 .context("missing required parameter `prompt`")?

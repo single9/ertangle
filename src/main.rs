@@ -87,8 +87,8 @@ enum Cmd {
     /// 建立新的 agent session
     Spawn {
         /// Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)
-        #[arg(long, default_value = "opencode", value_parser = KindParser)]
-        kind: String,
+        #[arg(long, value_parser = KindParser)]
+        kind: Option<String>,
         /// 啟動後立刻送出的 prompt
         #[arg(long)]
         prompt: Option<String>,

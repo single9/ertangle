@@ -41,7 +41,7 @@ fn spawn_prompt_output_shutdown() {
     })
     .unwrap();
     c.send(&Request::Spawn(SpawnRequest {
-        kind: AgentKind::ClaudeCode,
+        kind: Some(AgentKind::ClaudeCode),
         cwd: Some(root.to_string_lossy().to_string()),
         label: Some("e2e".into()),
         role: Default::default(),
@@ -74,7 +74,7 @@ fn spawn_prompt_output_shutdown() {
     let spawn_with = |parent: Option<String>, perm| {
         let mut cl = Client::connect().unwrap();
         cl.send(&Request::Spawn(SpawnRequest {
-            kind: AgentKind::ClaudeCode,
+            kind: Some(AgentKind::ClaudeCode),
             cwd: Some(root.to_string_lossy().to_string()),
             label: None,
             role: Default::default(),
@@ -322,7 +322,7 @@ fn resume_keeps_session_transcript_branch_and_cost(root: &std::path::Path) {
     git(&repo, &["commit", "-q", "-m", "init"]);
 
     request_ok(&Request::Spawn(SpawnRequest {
-        kind: AgentKind::ClaudeCode,
+        kind: Some(AgentKind::ClaudeCode),
         cwd: Some(repo.to_string_lossy().to_string()),
         label: Some("res".into()),
         role: Default::default(),

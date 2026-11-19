@@ -32,13 +32,13 @@ pub(crate) fn cmd_playbook(name: String, goal: Vec<String>) -> Result<()> {
     }
 
     // 啟動前先檢查所有成員，避免留下建立到一半的團隊。
-    for req in &spawns {
-        if !agent_available(&req.kind) {
+    for kind in spawns.iter().filter_map(|req| req.kind.as_ref()) {
+        if !agent_available(kind) {
             bail!(
                 "{}",
                 tr!(
                     "agent {kind} 未安裝；無法啟動 playbook {name}",
-                    kind = req.kind.id(),
+                    kind = kind.id(),
                     name = name
                 )
             );

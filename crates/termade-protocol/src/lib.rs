@@ -37,7 +37,9 @@ pub enum Transport {
 /// 建立 session 的請求。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpawnRequest {
-    pub kind: AgentKind,
+    /// `None` = 由 daemon 依 role／父 session／預設設定決定 (見 `Config::resolve_kind`)。
+    #[serde(default)]
+    pub kind: Option<AgentKind>,
     /// 工作目錄；`None` = daemon 的預設 (通常是 daemon 的 cwd)。
     #[serde(default)]
     pub cwd: Option<String>,
@@ -417,7 +419,7 @@ mod tests {
     #[test]
     fn request_roundtrip() {
         let req = Request::Spawn(SpawnRequest {
-            kind: AgentKind::OpenCode,
+            kind: Some(AgentKind::OpenCode),
             cwd: Some("/tmp".into()),
             label: Some("worker".into()),
             role: Role::Worker,
@@ -437,7 +439,7 @@ mod tests {
         assert!(line.ends_with('\n'));
         let back: Request = decode_line(line.trim()).unwrap();
         match back {
-            Request::Spawn(s) => assert_eq!(s.kind, AgentKind::OpenCode),
+            Request::Spawn(s) => assert_eq!(s.kind, Some(AgentKind::OpenCode)),
             _ => panic!("wrong variant"),
         }
     }

@@ -88,7 +88,7 @@ pub(crate) fn cmd_sessions(json: bool) -> Result<()> {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn cmd_spawn(
-    kind: String,
+    kind: Option<String>,
     prompt: Option<String>,
     cwd: Option<String>,
     label: Option<String>,
@@ -104,17 +104,23 @@ pub(crate) fn cmd_spawn(
     extra: Vec<String>,
 ) -> Result<()> {
     // `claude:opus` 形式同時指定 model；`--model` 優先。
-    let (kind_str, kind_model) = match kind.split_once(':') {
-        Some((k, m)) if !m.is_empty() => (k.to_string(), Some(m.to_string())),
-        _ => (kind.clone(), None),
+    let (kind_str, kind_model) = match kind.as_deref() {
+        None => (None, None),
+        Some(k) => match k.split_once(':') {
+            Some((k, m)) if !m.is_empty() => (Some(k.to_string()), Some(m.to_string())),
+            _ => (Some(k.to_string()), None),
+        },
     };
     let model = model.or(kind_model);
-    let kind = AgentKind::parse(&kind_str).with_context(|| {
-        tr!(
-            "未知的 agent：{kind_str} (opencode/claude/codex/antigravity)",
-            kind_str = kind_str
-        )
-    })?;
+    let kind = match kind_str {
+        None => None,
+        Some(kind_str) => Some(AgentKind::parse(&kind_str).with_context(|| {
+            tr!(
+                "未知的 agent：{kind_str} (opencode/claude/codex/antigravity)",
+                kind_str = kind_str
+            )
+        })?),
+    };
     let transport = match transport.as_str() {
         "auto" => Transport::Auto,
         "structured" | "acp" => Transport::Structured,

@@ -68,8 +68,17 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         cwd.clone()
     };
     let cfg = config::Config::load(&global_dir, &cfg_dir);
+    // 沒指定 kind：依 roles.<role>.agent → 父 session 的 kind → defaults.agent → opencode 決定。
+    let parent_kind = parent.as_ref().and_then(|pid| {
+        lock(&shared.inner)
+            .state
+            .sessions
+            .get(pid)
+            .map(|s| s.kind.clone())
+    });
+    let mut kind = cfg.resolve_kind(spawn.kind.as_ref(), &role, parent_kind.as_ref());
     let mut resolved = cfg.resolve(
-        &spawn.kind,
+        &kind,
         &role,
         spawn.model.as_deref(),
         spawn.effort.as_deref(),
@@ -88,7 +97,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             .warn_percent
             .unwrap_or(crate::quota_watch::DEFAULT_WARN_PERCENT);
         match crate::quota_watch::check_spawn_quota(
-            &spawn.kind,
+            &kind,
             &quotas,
             &cfg.handoff.fallback,
             warn,
@@ -96,13 +105,13 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         ) {
             crate::quota_watch::SpawnQuota::Ok(n) => spawn_note = n,
             crate::quota_watch::SpawnQuota::Fallback(k, m, n) => {
-                spawn.kind = k;
+                kind = k;
                 if m.is_some() {
                     spawn.model = m;
                 }
                 spawn_note = Some(n);
                 resolved = cfg.resolve(
-                    &spawn.kind,
+                    &kind,
                     &role,
                     spawn.model.as_deref(),
                     spawn.effort.as_deref(),
@@ -129,7 +138,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             let detail = tr!(
                 "agent {pid} 要建立 {kind} session：model={model} effort={effort}\n原因：{reasons}\n任務：{task}",
                 pid = pid,
-                kind = spawn.kind,
+                kind = kind,
                 model = resolved.model.clone().unwrap_or_else(|| tr!("預設")),
                 effort = resolved.effort.clone().unwrap_or_else(|| tr!("預設")),
                 reasons = reasons,
@@ -298,7 +307,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
 
     let session = Session {
         id: id.clone(),
-        kind: spawn.kind.clone(),
+        kind: kind.clone(),
         label,
         cwd: cwd.to_string_lossy().to_string(),
         branch,
@@ -328,7 +337,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     });
     let launch = Launch {
         id: id.clone(),
-        kind: spawn.kind.clone(),
+        kind: kind.clone(),
         cwd,
         transport: spawn.transport,
         resolved,
@@ -980,7 +989,7 @@ pub(crate) fn handle_handoff(
         shared,
         reply,
         SpawnRequest {
-            kind: kind.clone(),
+            kind: Some(kind.clone()),
             cwd: Some(src.cwd.clone()),
             label: Some(format!("{}→{}", src.label, kind.id())),
             role: src.role.clone(),

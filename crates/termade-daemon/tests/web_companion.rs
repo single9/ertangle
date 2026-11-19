@@ -287,7 +287,7 @@ fn test_web_companion_http_and_websocket() {
         let mut admin = Client::connect().unwrap();
         admin
             .send(&Request::Spawn(SpawnRequest {
-                kind: AgentKind::ClaudeCode,
+                kind: Some(AgentKind::ClaudeCode),
                 cwd: Some(root.to_string_lossy().to_string()),
                 label: Some("web_s1".into()),
                 role: Default::default(),

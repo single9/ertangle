@@ -2755,7 +2755,7 @@ fn submit_spawn_parses_role_flag_coordinator_and_short_flag() {
     match req1 {
         Request::Spawn(spawn) => {
             assert_eq!(spawn.role, Role::Coordinator);
-            assert_eq!(spawn.kind, AgentKind::ClaudeCode);
+            assert_eq!(spawn.kind, Some(AgentKind::ClaudeCode));
             assert_eq!(spawn.model.as_deref(), Some("opus"));
             assert_eq!(spawn.prompt.as_deref(), Some("plan the work"));
         }
@@ -2771,7 +2771,7 @@ fn submit_spawn_parses_role_flag_coordinator_and_short_flag() {
     match req2 {
         Request::Spawn(spawn) => {
             assert_eq!(spawn.role, Role::Reviewer);
-            assert_eq!(spawn.kind, AgentKind::OpenCode);
+            assert_eq!(spawn.kind, Some(AgentKind::OpenCode));
             assert_eq!(spawn.prompt.as_deref(), Some("review the diff"));
         }
         other => panic!("unexpected req: {other:?}"),

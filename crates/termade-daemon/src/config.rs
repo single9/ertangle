@@ -705,7 +705,7 @@ impl Config {
                     .unwrap_or("{{goal}}")
                     .replace("{{goal}}", goal);
                 Ok(SpawnRequest {
-                    kind,
+                    kind: Some(kind),
                     cwd: None,
                     label: Some(label),
                     role,
@@ -777,6 +777,31 @@ impl Config {
         )
     }
 
+    /// 決定一次 spawn 實際使用的 agent kind (先符合者勝)：
+    /// 請求指定 > `roles.<role>.agent` > 父 session 的 kind (僅 agent 建立時) > `defaults.agent` > opencode。
+    /// 無法辨識的設定值會略過，往下一層找。
+    pub fn resolve_kind(
+        &self,
+        requested: Option<&AgentKind>,
+        role: &Role,
+        parent_kind: Option<&AgentKind>,
+    ) -> AgentKind {
+        requested
+            .cloned()
+            .or_else(|| self.role_agent(role))
+            .or_else(|| parent_kind.cloned())
+            .or_else(|| self.defaults.agent.as_deref().and_then(AgentKind::parse))
+            .unwrap_or(AgentKind::OpenCode)
+    }
+
+    /// `roles.<role>.agent` 釘選的 kind。
+    fn role_agent(&self, role: &Role) -> Option<AgentKind> {
+        self.roles
+            .get(role.id())
+            .and_then(|r| r.agent.as_deref())
+            .and_then(AgentKind::parse)
+    }
+
     /// 套用四層覆寫順序，決定一次 spawn 實際的 model／參數／環境。
     pub fn resolve(
         &self,
@@ -791,7 +816,13 @@ impl Config {
         let role_cfg = self.roles.get(role.id());
         let model = req_model
             .map(str::to_string)
-            .or_else(|| role_cfg.and_then(|r| r.model.clone()))
+            .or_else(|| {
+                // 角色的 model 只在角色未釘選 agent、或釘選的就是這個 kind 時才適用。
+                let compatible = self.role_agent(role).is_none_or(|k| &k == kind);
+                role_cfg
+                    .filter(|_| compatible)
+                    .and_then(|r| r.model.clone())
+            })
             .or_else(|| agent.and_then(|a| a.model.clone()));
         let effort = req_effort
             .map(str::to_string)
@@ -1336,5 +1367,60 @@ enabled = false
 
         assert!(merged.playbook_spawns("nope", "x").is_err());
         assert!(merged.playbook_spawns("tdd", "  ").is_err());
+    }
+
+    #[test]
+    fn resolve_kind_layers() {
+        let c = Config::parse(
+            r#"
+[defaults]
+agent = "claude"
+[roles.reviewer]
+agent = "codex"
+"#,
+        )
+        .unwrap();
+        let (oc, cl, cx) = (AgentKind::OpenCode, AgentKind::ClaudeCode, AgentKind::Codex);
+        // 1. 請求指定最優先 (蓋過 role、父 session、defaults)。
+        assert_eq!(c.resolve_kind(Some(&oc), &Role::Reviewer, Some(&cl)), oc);
+        // 2. roles.<role>.agent 蓋過父 session 與 defaults。
+        assert_eq!(c.resolve_kind(None, &Role::Reviewer, Some(&oc)), cx);
+        // 3. 父 session 的 kind 蓋過 defaults.agent。
+        assert_eq!(c.resolve_kind(None, &Role::Worker, Some(&oc)), oc);
+        // 4. defaults.agent。
+        assert_eq!(c.resolve_kind(None, &Role::Worker, None), cl);
+        // 5. 全部都沒設定 → opencode。
+        let empty = Config::parse("").unwrap();
+        assert_eq!(empty.resolve_kind(None, &Role::Worker, None), oc);
+    }
+
+    #[test]
+    fn role_model_ignored_when_role_pins_other_agent() {
+        let c = Config::parse(
+            r#"
+[agents.codex]
+model = "gpt-x"
+[roles.worker]
+agent = "claude"
+model = "haiku"
+"#,
+        )
+        .unwrap();
+        // 角色釘選 claude：kind 為 claude 時 role 的 model 適用。
+        let r = c.resolve(&AgentKind::ClaudeCode, &Role::Worker, None, None, &[], None);
+        assert_eq!(r.model.as_deref(), Some("haiku"));
+        // kind 被請求成 codex：haiku 不相容，退回 agents.codex.model。
+        let r = c.resolve(&AgentKind::Codex, &Role::Worker, None, None, &[], None);
+        assert_eq!(r.model.as_deref(), Some("gpt-x"));
+        // 請求明確指定 model 仍最優先。
+        let r = c.resolve(
+            &AgentKind::Codex,
+            &Role::Worker,
+            Some("o3"),
+            None,
+            &[],
+            None,
+        );
+        assert_eq!(r.model.as_deref(), Some("o3"));
     }
 }

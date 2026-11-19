@@ -282,7 +282,7 @@ mod tests {
     use crate::{Cli, Cmd};
     use clap::Parser;
 
-    fn spawn_args(args: &[&str]) -> (String, String, Option<String>, Option<String>) {
+    fn spawn_args(args: &[&str]) -> (Option<String>, String, Option<String>, Option<String>) {
         let mut argv = vec!["termade", "spawn"];
         argv.extend_from_slice(args);
         match Cli::try_parse_from(argv).map(|c| c.cmd) {
@@ -336,9 +336,9 @@ mod tests {
             "Claude",
             "claude:opus",
         ] {
-            assert_eq!(spawn_args(&["--kind", kind]).0, kind);
+            assert_eq!(spawn_args(&["--kind", kind]).0.as_deref(), Some(kind));
         }
-        assert_eq!(spawn_args(&[]).0, "opencode");
+        assert!(spawn_args(&[]).0.is_none());
         assert!(Cli::try_parse_from(["termade", "spawn", "--kind", "nope"]).is_err());
         assert!(Cli::try_parse_from(["termade", "handoff", "s1", "--to", "agy:pro"]).is_ok());
         assert!(Cli::try_parse_from(["termade", "handoff", "s1", "--to", "nope"]).is_err());

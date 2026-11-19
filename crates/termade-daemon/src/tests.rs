@@ -1888,7 +1888,7 @@ fn failed_spawn_leaves_no_session() {
     shared.handle(
         &tx,
         Request::Spawn(termade_protocol::SpawnRequest {
-            kind: AgentKind::ClaudeCode,
+            kind: Some(AgentKind::ClaudeCode),
             cwd: Some(std::env::temp_dir().to_string_lossy().to_string()),
             label: None,
             role: Default::default(),
@@ -2052,7 +2052,7 @@ fn spawn_enforces_max_depth_and_max_children_only_for_child_sessions() {
 
     let spawn_req = |parent: Option<&str>| {
         Request::Spawn(termade_protocol::SpawnRequest {
-            kind: AgentKind::ClaudeCode,
+            kind: Some(AgentKind::ClaudeCode),
             cwd: Some(cwd.to_string_lossy().to_string()),
             label: None,
             role: Role::Worker,
@@ -2358,7 +2358,7 @@ done
     shared.handle(
         &tx,
         Request::Spawn(termade_protocol::SpawnRequest {
-            kind: AgentKind::OpenCode,
+            kind: Some(AgentKind::OpenCode),
             cwd: Some(dir.to_string_lossy().to_string()),
             label: Some("worker/acp-t20".into()),
             role: Role::Worker,

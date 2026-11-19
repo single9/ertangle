@@ -91,7 +91,7 @@ fn test_remote_auto_token_and_incremental_reconnect() {
     let mut admin = Client::connect().unwrap();
     admin
         .send(&Request::Spawn(SpawnRequest {
-            kind: AgentKind::ClaudeCode,
+            kind: Some(AgentKind::ClaudeCode),
             cwd: Some(root.to_string_lossy().to_string()),
             label: Some("s1".into()),
             role: Default::default(),
@@ -137,7 +137,7 @@ fn test_remote_auto_token_and_incremental_reconnect() {
     // 5. 斷線期間，daemon 產生第二批事件 (Spawn 第二個 session)
     admin
         .send(&Request::Spawn(SpawnRequest {
-            kind: AgentKind::ClaudeCode,
+            kind: Some(AgentKind::ClaudeCode),
             cwd: Some(root.to_string_lossy().to_string()),
             label: Some("s2".into()),
             role: Default::default(),
