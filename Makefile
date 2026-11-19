@@ -136,7 +136,7 @@ install: build
 	install -m 755 $(BIN_LINUX) $(BINDIR)/termade
 	@echo "已安裝至 $(BINDIR)/termade"
 
-## 依目前 SHELL 安裝 shell 補全腳本 (zsh / bash / fish)
+## 依目前 SHELL 安裝 shell 自動完成腳本 (zsh / bash / fish)
 install-completions: build
 	@sh_name="$$(basename "$${SHELL:-}")"; \
 	case "$$sh_name" in \
@@ -147,7 +147,7 @@ install-completions: build
 	esac; \
 	mkdir -p "$$(dirname "$$dest")"; \
 	./$(BIN_LINUX) completions "$$sh_name" > "$$dest"; \
-	echo "已安裝 $$sh_name 補全至 $$dest"
+	echo "已安裝 $$sh_name 自動完成至 $$dest"
 
 ## 清除編譯產物與暫存 worktree
 clean:
@@ -164,7 +164,7 @@ help:
 	@echo "  make test             執行單元測試"
 	@echo "  make lint             執行 cargo clippy --all-targets -- -D warnings"
 	@echo "  make install          安裝 termade 至 $(BINDIR)/termade"
-	@echo "  make install-completions  依目前 SHELL 安裝補全腳本 (zsh / bash / fish)"
+	@echo "  make install-completions  依目前 SHELL 安裝自動完成腳本 (zsh / bash / fish)"
 	@echo "  make i18n-extract     更新 locales/termade.pot 與各語言 .po"
 	@echo "  make i18n-check       檢查翻譯檔 (CI 也會跑)"
 	@echo "  make setup-hooks      安裝 git pre-commit hook (自動檢查 fmt、clippy 與 i18n)"

@@ -502,7 +502,7 @@ msgid "父 session id 或標籤 (未指定時若有 TERMADE_SESSION 則自動繼
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "產生 shell 補全腳本並印到 stdout (bash / zsh / fish)"
+msgid "產生 shell 自動完成腳本並印到 stdout (bash / zsh / fish)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -538,6 +538,10 @@ msgid "終止該 session 底下所有背景子處理程序"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "自動完成腳本用的查詢 (不會啟動 daemon)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "若 session 忙碌，先排入待送佇列，等閒下來再自動送出"
 msgstr ""
 
@@ -547,10 +551,6 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "補充給接手者的說明"
-msgstr ""
-
-#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "補全腳本用的查詢 (不會啟動 daemon)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -2718,7 +2718,7 @@ msgid "沒有更多 hunk"
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs crates/termade-tui/src/draw.rs
-msgid " 命令 (Tab 補全) "
+msgid " 命令 (Tab 自動完成) "
 msgstr ""
 
 #: crates/termade-tui/src/draw.rs
@@ -2970,7 +2970,7 @@ msgid "選單 (s session、g git、v 檢視、m 訊息)"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
-msgid "命令列 (輸入時會提示，Tab 補全)；也可用 /"
+msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
 msgstr ""
 
 #: crates/termade-tui/src/help.rs
@@ -3302,7 +3302,7 @@ msgid "對 `{loc}` 留下審查註解 (Enter 送回 agent)"
 msgstr ""
 
 #: crates/termade-tui/src/input.rs
-msgid "命令 (Tab 補全)：spawn rm clean kill merge diff gc task …"
+msgid "命令 (Tab 自動完成)：spawn rm clean kill merge diff gc task …"
 msgstr ""
 
 #: crates/termade-tui/src/input.rs
@@ -3357,7 +3357,7 @@ msgstr ""
 msgid "沒有符合的路徑"
 msgstr ""
 
-#: crates/termade-tui/src/input.rs
+#: crates/termade-tui/src/input.rs crates/termade-tui/src/input.rs
 msgid "候選：{list}"
 msgstr ""
 
@@ -3482,7 +3482,7 @@ msgid "新增任務"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs
-msgid "附加檔案／圖片… (@路徑，Tab 補全)"
+msgid "附加檔案／圖片… (@路徑，Tab 自動完成)"
 msgstr ""
 
 #: crates/termade-tui/src/menu.rs

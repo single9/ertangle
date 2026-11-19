@@ -26,7 +26,7 @@
 | [T18](T18-task-board.md) | 任務板：相依性解鎖與獨立視圖 (已完成) | P2 | — |
 | [T19](T19-daemon-prompt-queue.md) | 把 prompt 排隊移到 daemon (已完成；超限時保留佇列、調高上限後恢復) | P2 | — (與 T17 有交互) |
 | [T20](T20-collab-instructions.md) | 把協作說明注入每個 agent (已完成) | P2 | — |
-| [T21](T21-shell-completions.md) | Shell 補全 (已完成) | P3 | — (session 補全會用到 T14 的 `resume`) |
+| [T21](T21-shell-completions.md) | Shell 自動完成 (已完成) | P3 | — (session 自動完成會用到 T14 的 `resume`) |
 | [T22](T22-shared-worktree-remove.md) | 共用 worktree 的 session 在分支刪掉後無法移除 (已完成) | P2 | — |
 | [T23](T23-surface-agent-errors.md) | agent 回合失敗時把錯誤原因顯示出來 (已完成；TUI 目視未做，見 `docs/VERIFICATION.md`) | P1 | — |
 | [T24](T24-handoff-message-forwarding.md) | 交接後，發給舊 session 的訊息轉給接手的 session (已完成) | P2 | — |

@@ -10,7 +10,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
         tr_noop!("常用"),
         &[
             ("Space", tr_noop!("選單 (s session、g git、v 檢視、m 訊息)")),
-            (":", tr_noop!("命令列 (輸入時會提示，Tab 補全)；也可用 /")),
+            (":", tr_noop!("命令列 (輸入時會提示，Tab 自動完成)；也可用 /")),
             ("n", tr_noop!("新增 agent：選 agent → model → 輸入 prompt")),
             (
                 "i / Enter",

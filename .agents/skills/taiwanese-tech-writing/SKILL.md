@@ -85,7 +85,7 @@ description: >-
 | **函式庫** | 庫 | Library |
 | **物件** | 對象 | Object |
 | **封裝** | 封裝 | Encapsulate |
-| **自動補齊 / 自動完成** | 自動補全 | Completions |
+| **自動完成** | 自動補全 / 自動補齊 | Completions |
 | **二進位檔 / 執行檔** | 二進制文件 | Binary / Executable |
 | **腳本** | 腳本 | Script |
 | **分支** | 分支 | Branch |

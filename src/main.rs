@@ -6,7 +6,7 @@
 //! * M2 協作：`whoami`、`peers`/`sessions`、`spawn`、`prompt`、`send`、`inbox`、`wait`、`ask`、`tasks`、`task`、`task-update`、`status`、`artifact`
 //! * M3 工作區與審查：`worktrees`、`diff`、`review`、`merge`、`pr`、`gc`
 //! * M4 打磨：`sleep`、`wake`、`cost`、`replay`、`export`、`playbook`
-//! * Shell 補全：`completions <bash|zsh|fish>` (隱藏的 `__complete sessions` 供補全腳本查 session)
+//! * Shell 自動完成：`completions <bash|zsh|fish>` (隱藏的 `__complete sessions` 供自動完成腳本查 session)
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -420,12 +420,12 @@ enum Cmd {
     },
     /// 關閉常駐的 daemon 與所有受管 agent 子處理程序
     Shutdown,
-    /// 產生 shell 補全腳本並印到 stdout (bash / zsh / fish)
+    /// 產生 shell 自動完成腳本並印到 stdout (bash / zsh / fish)
     Completions { shell: clap_complete::Shell },
     /// 印出所有說明文字 (供翻譯抽取用，不會啟動 daemon)
     #[command(name = "__help-strings", hide = true)]
     HelpStrings,
-    /// 補全腳本用的查詢 (不會啟動 daemon)
+    /// 自動完成腳本用的查詢 (不會啟動 daemon)
     #[command(name = "__complete", hide = true)]
     Complete {
         #[arg(value_parser = ["sessions"])]

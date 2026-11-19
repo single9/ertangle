@@ -79,7 +79,7 @@ Whenever generating, modifying, or reviewing documentation, comments, or user-fa
      - 審查 / 審核 / 核准 (not 審批)
      - 訊息 / 資訊 (not 信息)
      - 連結 (not 連接)
-     - 自動補齊 / 自動完成 (not 自動補全)
+     - 自動完成 (not 自動補全 / 自動補齊)
      - 二進位檔 / 執行檔 (not 二進制文件)
 
 3. **Typography (中英混排與標點)**:

@@ -1,4 +1,4 @@
-//! Shell 補全：`completions <shell>` 產生腳本；隱藏的 `__complete sessions` 供腳本在按 Tab 時查 session。
+//! Shell 自動完成：`completions <shell>` 產生腳本；隱藏的 `__complete sessions` 供腳本在按 Tab 時查 session。
 
 use std::ffi::OsStr;
 use std::time::Duration;
@@ -12,7 +12,7 @@ use termade_protocol::{Frame, Request};
 use tr::tr;
 
 // ---------------------------------------------------------------------------
-// 旗標的可用值 (補全腳本會列出這些；別名仍可解析但不列出)
+// 旗標的可用值 (自動完成腳本會列出這些；別名仍可解析但不列出)
 // ---------------------------------------------------------------------------
 
 /// `--effort` 的可用值；與 `termade_adapter::EFFORT_LEVELS` 相同 (有測試比對)。
@@ -93,7 +93,7 @@ pub(crate) fn cmd_completions(shell: Shell) -> Result<()> {
     Ok(())
 }
 
-/// clap 產生的靜態補全，加上 (zsh／bash)查 session 名稱的片段。
+/// clap 產生的靜態自動完成，加上 (zsh／bash)查 session 名稱的片段。
 pub(crate) fn completion_script(shell: Shell) -> String {
     let mut cmd = command_for_completion();
     let mut buf = Vec::new();

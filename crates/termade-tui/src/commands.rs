@@ -200,7 +200,7 @@ fn unqueue(app: &mut App, writer: &mut HostRouter) -> Result<()> {
     Ok(())
 }
 
-/// `:` 命令列可用的命令：(名稱, 用法與說明)，供提示與 Tab 補全。
+/// `:` 命令列可用的命令：(名稱, 用法與說明)，供提示與 Tab 自動完成。
 pub(crate) const COMMANDS: &[(&str, &str)] = &[
     (
         "spawn",

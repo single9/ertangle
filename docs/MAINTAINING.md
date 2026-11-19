@@ -7,7 +7,7 @@
 | 你改了 | 要同步 |
 | --- | --- |
 | 新增／改動 Normal 模式按鍵 (`crates/termade-tui/src/input.rs` 的 `handle_normal_key`) | 說明面板 `help.rs` 的 `HELP`；README「TUI 操作」；底部狀態列提示 (`draw.rs` 的 `draw_status`)只放最常用的，不必每個都加 |
-| 新增／改名 `:` 命令 (`commands.rs` 的 `execute_command`) | `commands.rs` 的 `COMMANDS` 表 (決定 Tab 補全與提示浮層，漏了就不會被提示)；`help.rs` 的「命令」一節 |
+| 新增／改名 `:` 命令 (`commands.rs` 的 `execute_command`) | `commands.rs` 的 `COMMANDS` 表 (決定 Tab 自動完成與提示浮層，漏了就不會被提示)；`help.rs` 的「命令」一節 |
 | 新增 Space 選單項目 (`menu.rs` 的 `menu_items`) | `help.rs` (有對應的獨立按鍵或命令時)；快捷鍵衝突要檢查同一層的 `key` 不重複 |
 | 新增 spawn 輸入模式的 Ctrl 組合鍵 | `help.rs` 的「prompt 輸入」；`draw.rs` 裡 Spawn 模式的輸入框標題 |
 | 新增畫面上的標記 (顏色、`ctx`、額度、`!bypass` 等) | `help.rs` 的「畫面上的標記」 |

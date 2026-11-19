@@ -496,7 +496,7 @@ msgid "父 session id 或標籤 (未指定時若有 TERMADE_SESSION 則自動繼
 msgstr "Parent session id or label (inherits TERMADE_SESSION automatically if not given)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "產生 shell 補全腳本並印到 stdout (bash / zsh / fish)"
+msgid "產生 shell 自動完成腳本並印到 stdout (bash / zsh / fish)"
 msgstr "Generate a shell completion script and print it to stdout (bash / zsh / fish)"
 
 #: src/cmd/helptext/help_strings.rs
@@ -532,6 +532,10 @@ msgid "終止該 session 底下所有背景子處理程序"
 msgstr "Terminate all background child processes under this session"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "自動完成腳本用的查詢 (不會啟動 daemon)"
+msgstr "Query used by completion scripts (does not start the daemon)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "若 session 忙碌，先排入待送佇列，等閒下來再自動送出"
 msgstr "If the session is busy, queue the prompt and send it automatically once it is idle"
 
@@ -542,10 +546,6 @@ msgstr "On conflict, retain markers in worktree and delegate resolution to agent
 #: src/cmd/helptext/help_strings.rs
 msgid "補充給接手者的說明"
 msgstr "Extra notes for the agent taking over"
-
-#: src/cmd/helptext/help_strings.rs
-msgid "補全腳本用的查詢 (不會啟動 daemon)"
-msgstr "Query used by completion scripts (does not start the daemon)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "要接續的 session id、label 或原生對話 id；搭配 --list 可省略"
@@ -2731,7 +2731,7 @@ msgid "沒有更多 hunk"
 msgstr "No more hunks"
 
 #: crates/termade-tui/src/draw.rs
-msgid " 命令 (Tab 補全) "
+msgid " 命令 (Tab 自動完成) "
 msgstr " Commands (Tab to complete) "
 
 #: crates/termade-tui/src/draw.rs
@@ -2983,7 +2983,7 @@ msgid "選單 (s session、g git、v 檢視、m 訊息)"
 msgstr "Menu (s session, g git, v view, m message)"
 
 #: crates/termade-tui/src/help.rs
-msgid "命令列 (輸入時會提示，Tab 補全)；也可用 /"
+msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
 msgstr "Command line (hints while typing, Tab to complete); / also works"
 
 #: crates/termade-tui/src/help.rs
@@ -3315,7 +3315,7 @@ msgid "對 `{loc}` 留下審查註解 (Enter 送回 agent)"
 msgstr "Leave a review comment on `{loc}` (Enter sends it to the agent)"
 
 #: crates/termade-tui/src/input.rs
-msgid "命令 (Tab 補全)：spawn rm clean kill merge diff gc task …"
+msgid "命令 (Tab 自動完成)：spawn rm clean kill merge diff gc task …"
 msgstr "Command (Tab to complete): spawn rm clean kill merge diff gc task …"
 
 #: crates/termade-tui/src/input.rs
@@ -3495,7 +3495,7 @@ msgid "新增任務"
 msgstr "Add task"
 
 #: crates/termade-tui/src/menu.rs
-msgid "附加檔案／圖片… (@路徑，Tab 補全)"
+msgid "附加檔案／圖片… (@路徑，Tab 自動完成)"
 msgstr "Attach file / image… (@path, Tab to complete)"
 
 #: crates/termade-tui/src/menu.rs

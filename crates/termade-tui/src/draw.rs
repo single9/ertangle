@@ -210,7 +210,7 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(tr!(" 命令 (Tab 補全) ")),
+                .title(tr!(" 命令 (Tab 自動完成) ")),
         ),
         area,
     );
@@ -1900,7 +1900,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &mut App) {
         Mode::Pick => tr!(" 選擇 (Enter 確認 · Esc 取消) "),
         Mode::Message => tr!(" message → 選取的 session "),
         Mode::Review => tr!(" review 註解 → 選取的 session "),
-        Mode::Command => tr!(" 命令 (Tab 補全) "),
+        Mode::Command => tr!(" 命令 (Tab 自動完成) "),
         Mode::Jump => tr!(" 跳轉 session "),
         Mode::Search => tr!(" 搜尋 (Enter／↓ 下一個 · ↑ 上一個 · Esc 離開) "),
     };

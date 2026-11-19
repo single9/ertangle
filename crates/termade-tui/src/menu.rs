@@ -234,7 +234,7 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 ),
                 it(
                     'f',
-                    termade_core::tr_noop!("附加檔案／圖片… (@路徑，Tab 補全)"),
+                    termade_core::tr_noop!("附加檔案／圖片… (@路徑，Tab 自動完成)"),
                     Act::Prefill(Mode::Prompt, "@"),
                 ),
             ],

@@ -1,4 +1,4 @@
-//! 檔案／圖片引用：`@path` 語法、路徑補全、貼上檔案路徑、剪貼簿圖片。
+//! 檔案／圖片引用：`@path` 語法、路徑自動完成、貼上檔案路徑、剪貼簿圖片。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -270,7 +270,7 @@ pub(crate) fn extract_attachments(
     Ok((out, atts))
 }
 
-/// 路徑補全：回傳符合的完整路徑字串 (目錄結尾加 `/`)。
+/// 路徑自動完成：回傳符合的完整路徑字串 (目錄結尾加 `/`)。
 pub(crate) fn complete_path(prefix: &str) -> Vec<String> {
     let (dir_part, name_part) = match prefix.rfind('/') {
         Some(i) => (&prefix[..=i], &prefix[i + 1..]),

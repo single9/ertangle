@@ -792,7 +792,7 @@ impl App {
         roots.len()
     }
 
-    /// 選取中 session 的工作目錄 (檔案搜尋與 `@` 補全的根)。
+    /// 選取中 session 的工作目錄 (檔案搜尋與 `@` 自動完成的根)。
     pub(crate) fn selected_cwd(&self) -> Option<String> {
         let id = self.selected_id()?;
         self.state.sessions.get(&id).map(|s| s.cwd.clone())
