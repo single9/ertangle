@@ -560,7 +560,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         if let Some(sock) = sock_opt {
             cmd.args([
                 "-c",
-                &format!("mcp_servers.termade.env={{\"TERMADE_SOCKET\":{:?}}}", sock),
+                &format!("mcp_servers.termade.env.TERMADE_SOCKET={:?}", sock),
             ]);
         }
         if spec.permission.auto_approves() {
