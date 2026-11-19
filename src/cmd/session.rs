@@ -92,7 +92,7 @@ pub(crate) fn cmd_spawn(
     prompt: Option<String>,
     cwd: Option<String>,
     label: Option<String>,
-    role: String,
+    role: Option<String>,
     worktree: bool,
     transport: String,
     permission: Option<String>,
@@ -151,7 +151,7 @@ pub(crate) fn cmd_spawn(
         kind,
         cwd,
         label,
-        role: Role::parse(&role),
+        role: role.as_deref().map(Role::parse),
         prompt,
         worktree,
         transport,
@@ -296,6 +296,9 @@ pub(crate) fn cmd_handoff(
     to: String,
     effort: Option<String>,
     note: Option<String>,
+    role: Option<String>,
+    parent: Option<String>,
+    force: bool,
 ) -> Result<()> {
     let (kind_str, model) = match to.split_once(':') {
         Some((k, m)) if !m.is_empty() => (k.to_string(), Some(m.to_string())),
@@ -307,12 +310,22 @@ pub(crate) fn cmd_handoff(
             kind_str = kind_str
         )
     })?;
+    let parent_change = match parent.as_deref().map(str::trim) {
+        None => None,
+        Some(p) if p.eq_ignore_ascii_case("none") => Some(termade_protocol::ParentChange::None),
+        Some(p) if p.eq_ignore_ascii_case("keep") => Some(termade_protocol::ParentChange::Keep),
+        Some(p) => Some(termade_protocol::ParentChange::Session(p.to_string())),
+    };
+    let role = role.as_deref().map(Role::parse);
     match roundtrip(&Request::Handoff {
         session,
         kind,
         model,
         effort,
         note,
+        role,
+        parent: parent_change,
+        force,
     })? {
         Frame::Ok { note } => println!("{}", note.unwrap_or_else(|| tr!("已交接"))),
         Frame::Error { message } => bail!("{message}"),

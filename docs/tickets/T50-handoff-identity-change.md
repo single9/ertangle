@@ -2,7 +2,7 @@
 
 Priority: P2　Scope: `termade-protocol`, `termade-daemon`, `termade-tui`, `termade` CLI　Depends on: T49
 
-Status: ready-for-agent
+Status: done
 
 ## Problem
 

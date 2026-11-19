@@ -14,6 +14,7 @@ use crate::hosts::HostRouter;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Item {
     DefaultAgent,
+    DefaultRole,
     DefaultPermission,
     TargetAgent,
     Model,
@@ -31,8 +32,9 @@ pub(crate) enum Item {
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 16] = [
+pub(crate) const ITEMS: [Item; 17] = [
     Item::DefaultAgent,
+    Item::DefaultRole,
     Item::DefaultPermission,
     Item::TargetAgent,
     Item::Model,
@@ -132,6 +134,7 @@ impl Item {
     pub(crate) fn label(self, s: &Settings) -> String {
         match self {
             Item::DefaultAgent => tr!("預設 agent"),
+            Item::DefaultRole => tr!("預設角色"),
             Item::DefaultPermission => tr!("預設權限"),
             Item::TargetAgent => tr!("下面兩項設定的對象 agent"),
             Item::Model if s.loading_models() => {
@@ -159,6 +162,7 @@ impl Item {
         let agent = c.agents.get(&s.agent);
         match self {
             Item::DefaultAgent => c.defaults.agent.clone().unwrap_or_default(),
+            Item::DefaultRole => c.defaults.role.clone().unwrap_or_default(),
             Item::DefaultPermission => c.defaults.permission.clone().unwrap_or_default(),
             Item::TargetAgent => s.agent.clone(),
             Item::Model => agent.and_then(|a| a.model.clone()).unwrap_or_default(),
@@ -198,6 +202,12 @@ impl Item {
                 v.extend(AGENTS.iter().map(|a| pair(a, a)));
                 v
             }
+            Item::DefaultRole => vec![
+                pair("", &tr!("未設定 (coordinator)")),
+                pair("coordinator", "coordinator"),
+                pair("worker", "worker"),
+                pair("reviewer", "reviewer"),
+            ],
             Item::DefaultPermission => vec![
                 pair("", &tr!("未設定 (auto)")),
                 pair("ask", &tr!("ask：每個動作都問")),
@@ -413,6 +423,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
     }
     let (table, key): (&[&str], &str) = match item {
         Item::DefaultAgent => (&["defaults"], "agent"),
+        Item::DefaultRole => (&["defaults"], "role"),
         Item::DefaultPermission => (&["defaults"], "permission"),
         Item::SpawnWorktree => (&["agent_spawn"], "worktree"),
         Item::SpawnConfirm => (&["agent_spawn"], "confirm"),

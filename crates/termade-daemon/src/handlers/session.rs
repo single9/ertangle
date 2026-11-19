@@ -8,10 +8,10 @@ use anyhow::bail;
 
 use termade_adapter::{spawn as spawn_adapter, AgentEvent, SessionSpec};
 use termade_core::{
-    now_millis, Artifact, BusMessage, Cost, Decision, Event, MsgKind, Session, SessionStatus,
-    Target,
+    now_millis, Artifact, BusMessage, Cost, Decision, Event, MsgKind, PermissionPolicy, Role,
+    Session, SessionStatus, Target, Task, TaskStatus,
 };
-use termade_protocol::{Frame, SpawnRequest};
+use termade_protocol::{Frame, ParentChange, SpawnRequest};
 use tr::tr;
 
 use crate::config;
@@ -48,11 +48,6 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     }
 
     let parent = spawn.parent.as_ref().map(|p| shared.resolve_session(p));
-    let role = spawn.role.clone();
-    let label = spawn
-        .label
-        .clone()
-        .unwrap_or_else(|| format!("{}/{}", role.id(), &id[4..8]));
 
     let global_dir = config_dir();
     let cfg_dir = if cwd.join(".termade").join("config.toml").is_file() {
@@ -68,6 +63,11 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         cwd.clone()
     };
     let cfg = config::Config::load(&global_dir, &cfg_dir);
+    let role = cfg.resolve_role(spawn.role.as_ref(), parent.is_some());
+    let label = spawn
+        .label
+        .clone()
+        .unwrap_or_else(|| format!("{}/{}", role.id(), &id[4..8]));
     // 沒指定 kind：依 roles.<role>.agent → 父 session 的 kind → defaults.agent → opencode 決定。
     let parent_kind = parent.as_ref().and_then(|pid| {
         lock(&shared.inner)
@@ -89,7 +89,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     // agent 自己建立 session：先檢查 model／effort 是否超出免確認範圍 (避免自動開出高消耗的 session)。
     let mut spawn_note: Option<String> = None;
     let mut spawn = spawn;
-    if parent.is_some() {
+    if parent.is_some() && spawn.inherit_from.is_none() {
         // 額度吃緊：換 fallback agent 或直接拒絕，避免工作做到一半被額度打斷。
         let quotas = lock(&shared.inner).state.quotas.clone();
         let warn = cfg
@@ -126,59 +126,61 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         }
     }
     if let Some(pid) = &parent {
-        let pol = &cfg.agent_spawn;
-        let check = pol.check(resolved.model.as_deref(), resolved.effort.as_deref());
-        let exceeds = !matches!(check, config::SpawnCheck::Fine);
-        let must_ask = pol.confirm() == "always" || (pol.confirm() == "costly" && exceeds);
-        if must_ask {
-            let reasons = match &check {
-                config::SpawnCheck::Exceeds { reasons, .. } => reasons.join("；"),
-                config::SpawnCheck::Fine => tr!("設定要求每次都先確認"),
-            };
-            let detail = tr!(
-                "agent {pid} 要建立 {kind} session：model={model} effort={effort}\n原因：{reasons}\n任務：{task}",
-                pid = pid,
-                kind = kind,
-                model = resolved.model.clone().unwrap_or_else(|| tr!("預設")),
-                effort = resolved.effort.clone().unwrap_or_else(|| tr!("預設")),
-                reasons = reasons,
-                task = spawn
-                    .prompt
-                    .as_deref()
-                    .unwrap_or("")
-                    .chars()
-                    .take(200)
-                    .collect::<String>(),
-            );
-            let d = ask_user(shared, pid, tr!("建立子 agent"), detail, false);
-            if d == Decision::Deny {
-                let _ = reply.send(Frame::error(tr!(
-                    "使用者拒絕 (或逾時未回應)建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
-                )));
-                return;
-            }
-        } else if let config::SpawnCheck::Exceeds {
-            effort_too_high,
-            model_not_allowed,
-            reasons,
-        } = check
-        {
-            // confirm = never：effort 調降，model 直接拒絕。
-            if model_not_allowed {
-                let _ = reply.send(Frame::error(tr!(
-                    "{reasons} (agent_spawn.confirm = never)",
-                    reasons = reasons.join("；")
-                )));
-                return;
-            }
-            if effort_too_high {
-                let max = pol.max_effort().to_string();
-                let n = tr!("effort 已調降為 {max}", max = max);
-                spawn_note = Some(match spawn_note.take() {
-                    Some(q) => format!("{q}; {n}"),
-                    None => n,
-                });
-                resolved.effort = Some(max);
+        if spawn.inherit_from.is_none() {
+            let pol = &cfg.agent_spawn;
+            let check = pol.check(resolved.model.as_deref(), resolved.effort.as_deref());
+            let exceeds = !matches!(check, config::SpawnCheck::Fine);
+            let must_ask = pol.confirm() == "always" || (pol.confirm() == "costly" && exceeds);
+            if must_ask {
+                let reasons = match &check {
+                    config::SpawnCheck::Exceeds { reasons, .. } => reasons.join("；"),
+                    config::SpawnCheck::Fine => tr!("設定要求每次都先確認"),
+                };
+                let detail = tr!(
+                    "agent {pid} 要建立 {kind} session：model={model} effort={effort}\n原因：{reasons}\n任務：{task}",
+                    pid = pid,
+                    kind = kind,
+                    model = resolved.model.clone().unwrap_or_else(|| tr!("預設")),
+                    effort = resolved.effort.clone().unwrap_or_else(|| tr!("預設")),
+                    reasons = reasons,
+                    task = spawn
+                        .prompt
+                        .as_deref()
+                        .unwrap_or("")
+                        .chars()
+                        .take(200)
+                        .collect::<String>(),
+                );
+                let d = ask_user(shared, pid, tr!("建立子 agent"), detail, false);
+                if d == Decision::Deny {
+                    let _ = reply.send(Frame::error(tr!(
+                        "使用者拒絕 (或逾時未回應)建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
+                    )));
+                    return;
+                }
+            } else if let config::SpawnCheck::Exceeds {
+                effort_too_high,
+                model_not_allowed,
+                reasons,
+            } = check
+            {
+                // confirm = never：effort 調降，model 直接拒絕。
+                if model_not_allowed {
+                    let _ = reply.send(Frame::error(tr!(
+                        "{reasons} (agent_spawn.confirm = never)",
+                        reasons = reasons.join("；")
+                    )));
+                    return;
+                }
+                if effort_too_high {
+                    let max = pol.max_effort().to_string();
+                    let n = tr!("effort 已調降為 {max}", max = max);
+                    spawn_note = Some(match spawn_note.take() {
+                        Some(q) => format!("{q}; {n}"),
+                        None => n,
+                    });
+                    resolved.effort = Some(max);
+                }
             }
         }
     }
@@ -187,45 +189,47 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     let mut parent_remaining_usd: Option<f64> = None;
     if let Some(pid) = &parent {
         let inner = lock(&shared.inner);
-        let depth = if inner.state.sessions.contains_key(pid) {
-            inner.state.session_depth(pid) + 1
-        } else {
-            1
-        };
-        if let Some(max_depth) = cfg.limits.max_depth {
-            if depth > max_depth {
-                let _ = reply.send(Frame::error(tr!(
-                    "超過子 agent 層數上限 max_depth：目前第 {depth} 層 (上限 {max_depth})",
-                    depth = depth,
-                    max_depth = max_depth
-                )));
-                return;
+        if spawn.inherit_from.is_none() {
+            let depth = if inner.state.sessions.contains_key(pid) {
+                inner.state.session_depth(pid) + 1
+            } else {
+                1
+            };
+            if let Some(max_depth) = cfg.limits.max_depth {
+                if depth > max_depth {
+                    let _ = reply.send(Frame::error(tr!(
+                        "超過子 agent 層數上限 max_depth：目前第 {depth} 層 (上限 {max_depth})",
+                        depth = depth,
+                        max_depth = max_depth
+                    )));
+                    return;
+                }
             }
-        }
-        {
-            let max_children = cfg
-                .limits
-                .max_children
-                .unwrap_or_else(|| cfg.agent_spawn.max_live_children());
-            let live_children = inner.state.live_children_count(pid);
-            if live_children >= max_children {
-                let _ = reply.send(Frame::error(tr!(
-                    "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中 (上限 {max_children})",
-                    live_children = live_children,
-                    max_children = max_children
-                )));
-                return;
+            {
+                let max_children = cfg
+                    .limits
+                    .max_children
+                    .unwrap_or_else(|| cfg.agent_spawn.max_live_children());
+                let live_children = inner.state.live_children_count(pid);
+                if live_children >= max_children {
+                    let _ = reply.send(Frame::error(tr!(
+                        "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中 (上限 {max_children})",
+                        live_children = live_children,
+                        max_children = max_children
+                    )));
+                    return;
+                }
             }
-        }
-        if let Some(tree_usd) = cfg.limits.tree_usd {
-            let tree_spent = inner.state.tree_cost_usd(pid);
-            if tree_spent >= tree_usd {
-                let _ = reply.send(Frame::error(tr!(
-                    "已達整棵樹成本上限 tree_usd：目前已花費 ${spent} (上限 ${limit})",
-                    spent = format!("{tree_spent:.2}"),
-                    limit = format!("{tree_usd:.2}")
-                )));
-                return;
+            if let Some(tree_usd) = cfg.limits.tree_usd {
+                let tree_spent = inner.state.tree_cost_usd(pid);
+                if tree_spent >= tree_usd {
+                    let _ = reply.send(Frame::error(tr!(
+                        "已達整棵樹成本上限 tree_usd：目前已花費 ${spent} (上限 ${limit})",
+                        spent = format!("{tree_spent:.2}"),
+                        limit = format!("{tree_usd:.2}")
+                    )));
+                    return;
+                }
             }
         }
         if let Some(p_sess) = inner.state.sessions.get(pid) {
@@ -372,6 +376,9 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             }
             if forced_worktree && !spawn.worktree {
                 note.push_str(&tr!("(依 agent_spawn.worktree 使用獨立 worktree)"));
+            }
+            if spawn.inherit_from.is_some() {
+                note.push_str(&tr!(" (權限：{perm})", perm = permission.id()));
             }
             let _ = reply.send(Frame::ok_note(note));
         }
@@ -909,6 +916,7 @@ fn with_attachment_summary(text: &str, atts: &[termade_core::Attachment]) -> Str
 }
 
 /// 交接：停掉舊 session、組簡報、讓新 agent 沿用同一個工作目錄接手。
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_handoff(
     shared: &Arc<Shared>,
     reply: &ClientTx,
@@ -917,6 +925,9 @@ pub(crate) fn handle_handoff(
     model: Option<String>,
     effort: Option<String>,
     note: Option<String>,
+    role: Option<Role>,
+    parent: Option<ParentChange>,
+    force: bool,
 ) {
     let sid = shared.resolve_session(&session);
     let Some(src) = lock(&shared.inner).state.sessions.get(&sid).cloned() else {
@@ -926,6 +937,76 @@ pub(crate) fn handle_handoff(
         )));
         return;
     };
+
+    let old_role = src.role.clone();
+    let old_parent = src.parent.clone();
+    let new_role = role.unwrap_or_else(|| old_role.clone());
+    let new_parent = match parent {
+        Some(ParentChange::None) => None,
+        Some(ParentChange::Session(pid)) => Some(shared.resolve_session(&pid)),
+        Some(ParentChange::Keep) => old_parent.clone(),
+        None => {
+            if new_role == Role::Coordinator {
+                None
+            } else {
+                old_parent.clone()
+            }
+        }
+    };
+    let role_changed = new_role != old_role;
+
+    // 檢查降級防護 (Decision 6)：coordinator 降級且仍有執行中子 session 時，未給 force 則拒絕
+    let live_children: Vec<Session> = {
+        let inner = lock(&shared.inner);
+        inner
+            .state
+            .sessions
+            .values()
+            .filter(|s| s.parent.as_deref() == Some(&sid) && s.status.is_live())
+            .cloned()
+            .collect()
+    };
+    if old_role == Role::Coordinator
+        && new_role != Role::Coordinator
+        && !live_children.is_empty()
+        && !force
+    {
+        let _ = reply.send(Frame::error(tr!(
+            "無法將仍有執行中子 session 的 coordinator 降級；請先結束子 session 或加上 --force"
+        )));
+        return;
+    }
+
+    // 晉升 worker 為 coordinator (Decision 5)：
+    // 指派給舊 session 的未完成任務退回 todo (無負責人)，並送 TASK_BLOCKED 給舊 parent
+    if old_parent.is_some() && new_role == Role::Coordinator {
+        let parent_id = old_parent.clone().unwrap();
+        let open_tasks: Vec<Task> = {
+            let inner = lock(&shared.inner);
+            inner
+                .state
+                .tasks
+                .values()
+                .filter(|t| t.assignee.as_deref() == Some(&sid) && t.status != TaskStatus::Done)
+                .cloned()
+                .collect()
+        };
+        for mut task in open_tasks {
+            task.status = TaskStatus::Todo;
+            task.assignee = None;
+            task.updated_ms = now_millis();
+            shared.emit(Event::TaskChanged { task: task.clone() });
+            let body = format!("TASK_BLOCKED {} promoted to coordinator by user", task.id);
+            let _ = shared.deliver_message(
+                Some(sid.clone()),
+                Target::Direct(parent_id.clone()),
+                MsgKind::Chat,
+                body,
+                None,
+            );
+        }
+    }
+
     // 舊 agent 還在跑就先停掉，避免兩個 agent 同時改同一個目錄。
     if let Some((_, ctl)) = shared.control(&sid) {
         let _ = ctl.kill();
@@ -962,6 +1043,9 @@ pub(crate) fn handle_handoff(
             &git_summary,
             note.as_deref(),
             &unread,
+            &new_role,
+            new_parent.as_deref(),
+            &live_children,
         )
     };
     let mut attachments = Vec::new();
@@ -981,10 +1065,30 @@ pub(crate) fn handle_handoff(
             });
         }
     }
-    shared.emit(Event::SessionNote {
-        session: sid.clone(),
-        note: tr!("已交接給 {kind}", kind = kind.id()),
-    });
+
+    if role_changed {
+        shared.emit(Event::SessionNote {
+            session: sid.clone(),
+            note: tr!(
+                "已交接給 {kind} (角色變更為 {role})",
+                kind = kind.id(),
+                role = new_role.id()
+            ),
+        });
+    } else {
+        shared.emit(Event::SessionNote {
+            session: sid.clone(),
+            note: tr!("已交接給 {kind}", kind = kind.id()),
+        });
+    }
+
+    // 權限繼承 (Decision 4)：角色變更或原 session 為手動 bypass 時不繼承，交由 handle_spawn 重新解析
+    let permission = if role_changed || src.permission == PermissionPolicy::Bypass {
+        None
+    } else {
+        Some(src.permission)
+    };
+
     handle_spawn(
         shared,
         reply,
@@ -992,12 +1096,12 @@ pub(crate) fn handle_handoff(
             kind: Some(kind.clone()),
             cwd: Some(src.cwd.clone()),
             label: Some(format!("{}→{}", src.label, kind.id())),
-            role: src.role.clone(),
+            role: Some(new_role),
             prompt: Some(brief),
             worktree: false,
             transport: Default::default(),
-            permission: Some(src.permission),
-            parent: src.parent.clone(),
+            permission,
+            parent: new_parent,
             model,
             effort,
             attachments,

@@ -712,10 +712,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .context("missing required parameter `prompt`")?
                 .to_string();
             let label = args["label"].as_str().map(|s| s.to_string());
-            let role = args["role"]
-                .as_str()
-                .map(Role::parse)
-                .unwrap_or(Role::Worker);
+            let role = args["role"].as_str().map(Role::parse);
             let worktree = args["worktree"].as_bool().unwrap_or(false);
             let permission = args["permission"]
                 .as_str()

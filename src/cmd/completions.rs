@@ -341,6 +341,19 @@ mod tests {
         assert!(spawn_args(&[]).0.is_none());
         assert!(Cli::try_parse_from(["termade", "spawn", "--kind", "nope"]).is_err());
         assert!(Cli::try_parse_from(["termade", "handoff", "s1", "--to", "agy:pro"]).is_ok());
+        assert!(Cli::try_parse_from([
+            "termade",
+            "handoff",
+            "s1",
+            "--to",
+            "claude",
+            "--role",
+            "coordinator",
+            "--parent",
+            "none",
+            "--force"
+        ])
+        .is_ok());
         assert!(Cli::try_parse_from(["termade", "handoff", "s1", "--to", "nope"]).is_err());
     }
 

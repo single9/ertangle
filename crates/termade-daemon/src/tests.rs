@@ -2055,7 +2055,7 @@ fn spawn_enforces_max_depth_and_max_children_only_for_child_sessions() {
             kind: Some(AgentKind::ClaudeCode),
             cwd: Some(cwd.to_string_lossy().to_string()),
             label: None,
-            role: Role::Worker,
+            role: Some(Role::Worker),
             prompt: None,
             worktree: false,
             transport: termade_protocol::Transport::Structured,
@@ -2361,7 +2361,7 @@ done
             kind: Some(AgentKind::OpenCode),
             cwd: Some(dir.to_string_lossy().to_string()),
             label: Some("worker/acp-t20".into()),
-            role: Role::Worker,
+            role: Some(Role::Worker),
             prompt: Some("只做第一件事".into()),
             worktree: false,
             transport: termade_protocol::Transport::Structured,
@@ -3509,4 +3509,544 @@ fn restart_preserves_old_live_orphans_and_archives_stale_ended_sessions() {
         "早已結束的舊 session 應移入 archived_sessions 保留接續能力"
     );
     let _ = std::fs::remove_file(&log);
+}
+
+// ---------------------------------------------------------------------------
+// T50: Handoff identity change tests
+// ---------------------------------------------------------------------------
+
+fn setup_fake_claude() {
+    std::env::set_var(
+        "TERMADE_CLAUDE_BIN",
+        format!(
+            "{}/../termade-adapter/tests/fake_claude.sh",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+    );
+}
+
+fn kill_all_sessions(shared: &Arc<Shared>) {
+    let sids: Vec<String> = lock(&shared.inner).state.sessions.keys().cloned().collect();
+    for sid in sids {
+        if let Some((_, ctl)) = shared.control(&sid) {
+            let _ = ctl.kill();
+        }
+    }
+}
+
+#[test]
+fn t50_default_role_with_and_without_parent() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+
+    // 1. 無 parent 且未指定 role: 預設為 Coordinator
+    let (tx1, rx1) = client_channel(None);
+    shared.handle(
+        &tx1,
+        Request::Spawn(termade_protocol::SpawnRequest {
+            kind: Some(AgentKind::ClaudeCode),
+            cwd: Some(cwd.to_string_lossy().to_string()),
+            label: Some("coord-test".into()),
+            role: None,
+            prompt: None,
+            worktree: false,
+            transport: termade_protocol::Transport::Structured,
+            permission: None,
+            parent: None,
+            model: None,
+            effort: None,
+            attachments: vec![],
+            inherit_from: None,
+            args: vec![],
+            budget_usd: None,
+        }),
+    );
+    let frames1: Vec<Frame> = rx1.try_iter().collect();
+    assert!(
+        matches!(frames1.first(), Some(Frame::Ok { .. })),
+        "{frames1:?}"
+    );
+    let coord_ses = lock(&shared.inner)
+        .state
+        .sessions
+        .values()
+        .find(|s| s.label == "coord-test")
+        .cloned()
+        .unwrap();
+    assert_eq!(coord_ses.role, Role::Coordinator);
+    assert!(coord_ses.parent.is_none());
+
+    // 2. 有 parent 且未指定 role: 預設為 Worker
+    let (tx2, rx2) = client_channel(None);
+    shared.handle(
+        &tx2,
+        Request::Spawn(termade_protocol::SpawnRequest {
+            kind: Some(AgentKind::ClaudeCode),
+            cwd: Some(cwd.to_string_lossy().to_string()),
+            label: Some("worker-test".into()),
+            role: None,
+            prompt: None,
+            worktree: false,
+            transport: termade_protocol::Transport::Structured,
+            permission: None,
+            parent: Some(coord_ses.id.clone()),
+            model: None,
+            effort: None,
+            attachments: vec![],
+            inherit_from: None,
+            args: vec![],
+            budget_usd: None,
+        }),
+    );
+    let frames2: Vec<Frame> = rx2.try_iter().collect();
+    assert!(
+        matches!(frames2.first(), Some(Frame::Ok { .. })),
+        "{frames2:?}"
+    );
+    let worker_ses = lock(&shared.inner)
+        .state
+        .sessions
+        .values()
+        .find(|s| s.label == "worker-test")
+        .cloned()
+        .unwrap();
+    assert_eq!(worker_ses.role, Role::Worker);
+    assert_eq!(worker_ses.parent.as_deref(), Some(coord_ses.id.as_str()));
+    kill_all_sessions(&shared);
+}
+
+#[test]
+fn t50_handoff_to_coordinator_clears_parent() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl: Arc<dyn AgentControl> = Arc::new(MockCtl::default());
+
+    // 建立 worker session，其 parent 為 "p1"
+    add_session(
+        &shared,
+        "w1",
+        "worker/w1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        let s = inner.state.sessions.get_mut("w1").unwrap();
+        s.role = Role::Worker;
+        s.parent = Some("p1".into());
+    }
+
+    // 交接給 coordinator (未指定 --parent)
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Handoff {
+            session: "w1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: Some(Role::Coordinator),
+            parent: None,
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(frames.first(), Some(Frame::Ok { .. })),
+        "{frames:?}"
+    );
+
+    // 接手的 session: parent 應被清除 (None)，角色為 Coordinator
+    let handed_to = lock(&shared.inner).state.sessions["w1"]
+        .handed_off_to
+        .clone()
+        .expect("應有 successor id");
+    let successor = lock(&shared.inner).state.sessions[&handed_to].clone();
+    assert_eq!(successor.role, Role::Coordinator);
+    assert!(successor.parent.is_none());
+    kill_all_sessions(&shared);
+}
+
+#[test]
+fn t50_handoff_keeps_parent_for_other_roles() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl: Arc<dyn AgentControl> = Arc::new(MockCtl::default());
+
+    add_session(
+        &shared,
+        "w1",
+        "worker/w1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        let s = inner.state.sessions.get_mut("w1").unwrap();
+        s.role = Role::Worker;
+        s.parent = Some("p1".into());
+    }
+
+    // 交接給 reviewer (未指定 --parent)
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Handoff {
+            session: "w1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: Some(Role::Reviewer),
+            parent: None,
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(frames.first(), Some(Frame::Ok { .. })),
+        "{frames:?}"
+    );
+
+    let handed_to = lock(&shared.inner).state.sessions["w1"]
+        .handed_off_to
+        .clone()
+        .unwrap();
+    let successor = lock(&shared.inner).state.sessions[&handed_to].clone();
+    assert_eq!(successor.role, Role::Reviewer);
+    assert_eq!(successor.parent.as_deref(), Some("p1"));
+    kill_all_sessions(&shared);
+}
+
+#[test]
+fn t50_demotion_with_running_children_refused_without_force() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl: Arc<dyn AgentControl> = Arc::new(MockCtl::default());
+
+    // 建立 coordinator 與正在執行的子 session
+    add_session(
+        &shared,
+        "c1",
+        "coord/c1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        inner.state.sessions.get_mut("c1").unwrap().role = Role::Coordinator;
+    }
+    add_session(
+        &shared,
+        "sub1",
+        "worker/sub1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        let sub = inner.state.sessions.get_mut("sub1").unwrap();
+        sub.role = Role::Worker;
+        sub.parent = Some("c1".into());
+    }
+
+    // 1. force = false: 拒絕降級
+    let (tx1, rx1) = client_channel(None);
+    shared.handle(
+        &tx1,
+        Request::Handoff {
+            session: "c1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: Some(Role::Worker),
+            parent: None,
+            force: false,
+        },
+    );
+    let frames1: Vec<Frame> = rx1.try_iter().collect();
+    match frames1.first() {
+        Some(Frame::Error { message }) => {
+            assert!(message.contains("coordinator") && message.contains("force"));
+        }
+        other => panic!("預期錯誤，得到 {other:?}"),
+    }
+    // 原 coordinator 應依然存在且未交接
+    assert!(lock(&shared.inner).state.sessions["c1"]
+        .handed_off_to
+        .is_none());
+
+    // 2. force = true: 允許降級
+    let (tx2, rx2) = client_channel(None);
+    shared.handle(
+        &tx2,
+        Request::Handoff {
+            session: "c1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: Some(Role::Worker),
+            parent: None,
+            force: true,
+        },
+    );
+    let frames2: Vec<Frame> = rx2.try_iter().collect();
+    assert!(
+        matches!(frames2.first(), Some(Frame::Ok { .. })),
+        "{frames2:?}"
+    );
+    let handed_to = lock(&shared.inner).state.sessions["c1"]
+        .handed_off_to
+        .clone()
+        .unwrap();
+    let successor = lock(&shared.inner).state.sessions[&handed_to].clone();
+    assert_eq!(successor.role, Role::Worker);
+    kill_all_sessions(&shared);
+}
+
+#[test]
+fn t50_promotion_returns_tasks_to_todo_and_notifies_parent() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl: Arc<dyn AgentControl> = Arc::new(MockCtl::default());
+
+    add_session(
+        &shared,
+        "p1",
+        "coord/p1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    add_session(
+        &shared,
+        "w1",
+        "worker/w1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        inner.state.sessions.get_mut("p1").unwrap().role = Role::Coordinator;
+        let w = inner.state.sessions.get_mut("w1").unwrap();
+        w.role = Role::Worker;
+        w.parent = Some("p1".into());
+
+        // 加入一個指派給 w1 且狀態為 Doing 的任務
+        let task = termade_core::Task {
+            id: "tsk_1".into(),
+            title: "實作認證模組".into(),
+            detail: "細節".into(),
+            status: TaskStatus::Doing,
+            assignee: Some("w1".into()),
+            created_by: Some("p1".into()),
+            updated_ms: 1000,
+            depends_on: vec![],
+        };
+        inner.state.tasks.insert(task.id.clone(), task);
+    }
+
+    // 晉升 w1 為 Coordinator
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Handoff {
+            session: "w1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: Some(Role::Coordinator),
+            parent: None,
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(frames.first(), Some(Frame::Ok { .. })),
+        "{frames:?}"
+    );
+
+    // 檢查任務退回 todo 且無負責人
+    let t = lock(&shared.inner).state.tasks["tsk_1"].clone();
+    assert_eq!(t.status, TaskStatus::Todo);
+    assert!(t.assignee.is_none());
+
+    // 檢查 p1 的收件匣收到 TASK_BLOCKED 通知
+    let inbox = lock(&shared.inner).state.inbox_for("p1", None);
+    let blocked_msg = inbox.iter().find(|m| {
+        m.body
+            .contains("TASK_BLOCKED tsk_1 promoted to coordinator by user")
+    });
+    assert!(
+        blocked_msg.is_some(),
+        "p1 收件匣應收到 TASK_BLOCKED 通知: {inbox:?}"
+    );
+    kill_all_sessions(&shared);
+}
+
+#[test]
+fn t50_permission_re_resolved_when_role_changes() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl: Arc<dyn AgentControl> = Arc::new(MockCtl::default());
+
+    // 設定 roles.reviewer 的 permission 為 ask
+    fs::create_dir_all(cwd.join(".termade")).unwrap();
+    fs::write(
+        cwd.join(".termade/config.toml"),
+        "[roles.reviewer]\npermission = \"ask\"\n[roles.worker]\npermission = \"auto\"\n",
+    )
+    .unwrap();
+
+    // 1. 角色變更時重新解析權限 (不繼承舊 session 的 auto)
+    add_session(
+        &shared,
+        "w1",
+        "worker/w1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        let s = inner.state.sessions.get_mut("w1").unwrap();
+        s.role = Role::Worker;
+        s.permission = PermissionPolicy::Auto;
+    }
+    let (tx1, rx1) = client_channel(None);
+    shared.handle(
+        &tx1,
+        Request::Handoff {
+            session: "w1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: Some(Role::Reviewer),
+            parent: None,
+            force: false,
+        },
+    );
+    let frames1: Vec<Frame> = rx1.try_iter().collect();
+    assert!(
+        matches!(frames1.first(), Some(Frame::Ok { .. })),
+        "{frames1:?}"
+    );
+    let successor1_id = lock(&shared.inner).state.sessions["w1"]
+        .handed_off_to
+        .clone()
+        .unwrap();
+    let successor1 = lock(&shared.inner).state.sessions[&successor1_id].clone();
+    assert_eq!(successor1.permission, PermissionPolicy::Ask);
+
+    // 2. 原 session 有手動 bypass 時，交接不繼承 bypass
+    add_session(
+        &shared,
+        "w2",
+        "worker/w2",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        let s = inner.state.sessions.get_mut("w2").unwrap();
+        s.role = Role::Worker;
+        s.permission = PermissionPolicy::Bypass;
+    }
+    let (tx2, rx2) = client_channel(None);
+    shared.handle(
+        &tx2,
+        Request::Handoff {
+            session: "w2".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: None,
+            role: None, // 角色不變
+            parent: None,
+            force: false,
+        },
+    );
+    let frames2: Vec<Frame> = rx2.try_iter().collect();
+    assert!(
+        matches!(frames2.first(), Some(Frame::Ok { .. })),
+        "{frames2:?}"
+    );
+    let successor2_id = lock(&shared.inner).state.sessions["w2"]
+        .handed_off_to
+        .clone()
+        .unwrap();
+    let successor2 = lock(&shared.inner).state.sessions[&successor2_id].clone();
+    // 應退回 worker 設定檔的 auto，而非繼承 bypass
+    assert_eq!(successor2.permission, PermissionPolicy::Auto);
+    kill_all_sessions(&shared);
+}
+
+#[test]
+fn t50_auto_handoff_keeps_identity() {
+    setup_fake_claude();
+    let shared = test_shared();
+    let cwd = temp_cwd();
+    let ctl: Arc<dyn AgentControl> = Arc::new(MockCtl::default());
+
+    // 建立一個 Reviewer 且 parent 為 "p1" 的 session
+    add_session(
+        &shared,
+        "r1",
+        "reviewer/r1",
+        SessionStatus::Idle,
+        ctl.clone(),
+        &cwd,
+    );
+    {
+        let mut inner = lock(&shared.inner);
+        let s = inner.state.sessions.get_mut("r1").unwrap();
+        s.role = Role::Reviewer;
+        s.parent = Some("p1".into());
+    }
+
+    // 模擬自動交接 (role: None, parent: None, force: false)
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Handoff {
+            session: "r1".into(),
+            kind: AgentKind::ClaudeCode,
+            model: None,
+            effort: None,
+            note: Some("自動交接：原 agent 額度用完".into()),
+            role: None,
+            parent: None,
+            force: false,
+        },
+    );
+    let frames: Vec<Frame> = rx.try_iter().collect();
+    assert!(
+        matches!(frames.first(), Some(Frame::Ok { .. })),
+        "{frames:?}"
+    );
+    let handed_to = lock(&shared.inner).state.sessions["r1"]
+        .handed_off_to
+        .clone()
+        .unwrap();
+    let successor = lock(&shared.inner).state.sessions[&handed_to].clone();
+    assert_eq!(successor.role, Role::Reviewer);
+    assert_eq!(successor.parent.as_deref(), Some("p1"));
+    kill_all_sessions(&shared);
 }

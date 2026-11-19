@@ -2481,8 +2481,27 @@ fn settings_panel_cycles_values_and_writes_config() {
     let text: String = render(&mut app).split_whitespace().collect();
     assert!(text.contains("預設權限") && text.contains("獨立worktree"));
 
-    // 第 2 列「預設權限」：未設定 → ask
-    crate::settings::handle_key(&mut app, None, key(KeyCode::Down));
+    // 第 2 列「預設角色」：未設定 → worker
+    let role_idx = crate::settings::ITEMS
+        .iter()
+        .position(|i| *i == crate::settings::Item::DefaultRole)
+        .unwrap();
+    app.settings.as_mut().unwrap().cursor = role_idx;
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
+    assert!(app.settings.as_ref().unwrap().sub.is_some());
+    for c in "worker".chars() {
+        crate::settings::handle_key(&mut app, None, key(KeyCode::Char(c)));
+    }
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
+    let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
+    assert_eq!(cfg.defaults.role.as_deref(), Some("worker"));
+
+    // 「預設權限」：未設定 → ask
+    let perm_idx = crate::settings::ITEMS
+        .iter()
+        .position(|i| *i == crate::settings::Item::DefaultPermission)
+        .unwrap();
+    app.settings.as_mut().unwrap().cursor = perm_idx;
     // Enter 開清單，打字過濾後 Enter 選定
     crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
     assert!(app.settings.as_ref().unwrap().sub.is_some());
@@ -2493,10 +2512,12 @@ fn settings_panel_cycles_values_and_writes_config() {
     }
     crate::settings::handle_key(&mut app, None, key(KeyCode::Enter));
     assert!(app.settings.as_ref().unwrap().sub.is_none());
-    // 第 6 列「worktree」：預設 on → off (寫成布林)
-    for _ in 0..4 {
-        crate::settings::handle_key(&mut app, None, key(KeyCode::Down));
-    }
+    // 「worktree」：預設 on → off (寫成布林)
+    let wt_idx = crate::settings::ITEMS
+        .iter()
+        .position(|i| *i == crate::settings::Item::SpawnWorktree)
+        .unwrap();
+    app.settings.as_mut().unwrap().cursor = wt_idx;
     crate::settings::handle_key(&mut app, None, key(KeyCode::Char(' ')));
 
     let cfg = termade_daemon::config::Config::load_file(&dir.join("termade").join("config.toml"));
@@ -2754,7 +2775,7 @@ fn submit_spawn_parses_role_flag_coordinator_and_short_flag() {
     let req1: Request = termade_protocol::decode_line(&line1).unwrap();
     match req1 {
         Request::Spawn(spawn) => {
-            assert_eq!(spawn.role, Role::Coordinator);
+            assert_eq!(spawn.role, Some(Role::Coordinator));
             assert_eq!(spawn.kind, Some(AgentKind::ClaudeCode));
             assert_eq!(spawn.model.as_deref(), Some("opus"));
             assert_eq!(spawn.prompt.as_deref(), Some("plan the work"));
@@ -2770,7 +2791,7 @@ fn submit_spawn_parses_role_flag_coordinator_and_short_flag() {
     let req2: Request = termade_protocol::decode_line(&line2).unwrap();
     match req2 {
         Request::Spawn(spawn) => {
-            assert_eq!(spawn.role, Role::Reviewer);
+            assert_eq!(spawn.role, Some(Role::Reviewer));
             assert_eq!(spawn.kind, Some(AgentKind::OpenCode));
             assert_eq!(spawn.prompt.as_deref(), Some("review the diff"));
         }

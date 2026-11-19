@@ -354,7 +354,12 @@ impl App {
             input_cursor: 0,
             status: tr!("已連線 daemon"),
             spawn_worktree: false,
-            spawn_role: Role::Worker,
+            spawn_role: cfg
+                .defaults
+                .role
+                .as_deref()
+                .map(Role::parse)
+                .unwrap_or(Role::Coordinator),
             spawn_permission: None,
             spawn_bypass_armed: false,
             spawn_target: None,
