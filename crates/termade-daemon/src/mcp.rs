@@ -160,6 +160,7 @@ pub fn tool_definitions() -> Vec<Value> {
         json!({
             "name": "termade_whoami",
             "description": "Return your own session info (id, label, role, cwd, branch, status) plus a `quotas` array (per-agent used %, reached) to check before spawning.",
+            "annotations": { "readOnlyHint": true },
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -168,6 +169,7 @@ pub fn tool_definitions() -> Vec<Value> {
         json!({
             "name": "termade_peers",
             "description": "List all agent sessions in the environment (id, label, role, status, cwd, branch, status_note).",
+            "annotations": { "readOnlyHint": true },
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -203,6 +205,7 @@ pub fn tool_definitions() -> Vec<Value> {
         json!({
             "name": "termade_inbox",
             "description": "Read messages addressed to you (by default only unread ones, advancing the read cursor).",
+            "annotations": { "readOnlyHint": true },
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -255,6 +258,7 @@ pub fn tool_definitions() -> Vec<Value> {
         json!({
             "name": "termade_task_list",
             "description": "List every task on the shared task board. Each task carries `depends_on` (prerequisite task ids) and `waiting_on` (the prerequisites that are not done yet, with title, status and assignee); a `blocked` task with a non-empty `waiting_on` is unblocked automatically when they finish.",
+            "annotations": { "readOnlyHint": true },
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -415,6 +419,7 @@ pub fn tool_definitions() -> Vec<Value> {
         json!({
             "name": "termade_diff",
             "description": "Get the git diff of a session's workspace (for a coordinator or reviewer to inspect changes).",
+            "annotations": { "readOnlyHint": true },
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -895,6 +900,21 @@ mod tests {
             "termade_approve",
         ] {
             assert!(names.contains(&expected), "missing tool {expected}");
+        }
+
+        // 驗證唯讀工具具備 readOnlyHint 註釋
+        for ro_tool in [
+            "termade_whoami",
+            "termade_peers",
+            "termade_inbox",
+            "termade_task_list",
+            "termade_diff",
+        ] {
+            let t = tools.iter().find(|t| t["name"] == ro_tool).unwrap();
+            assert_eq!(
+                t["annotations"]["readOnlyHint"], true,
+                "tool {ro_tool} should have readOnlyHint: true"
+            );
         }
     }
 

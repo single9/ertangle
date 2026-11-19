@@ -121,6 +121,28 @@ impl Conn {
                 let reason = params["reason"].as_str().unwrap_or("file change");
                 ("Edit".to_string(), reason.to_string(), ApprovalKind::File)
             }
+            "mcpServer/elicitation/request" => {
+                let tool_name = params["_meta"]["tool_name"]
+                    .as_str()
+                    .or_else(|| params["serverName"].as_str())
+                    .unwrap_or("tool");
+                let msg_text = params["message"]
+                    .as_str()
+                    .unwrap_or("MCP tool call approval");
+                (
+                    format!("MCP ({tool_name})"),
+                    msg_text.to_string(),
+                    ApprovalKind::McpElicitation,
+                )
+            }
+            "item/permissions/requestApproval" => {
+                let reason = params["reason"].as_str().unwrap_or("permissions request");
+                (
+                    "Permissions".to_string(),
+                    reason.to_string(),
+                    ApprovalKind::Permissions,
+                )
+            }
             other => {
                 // 不認識的請求一律回錯誤，避免 Codex 卡住等我們。
                 let _ = self.write(&json!({
@@ -267,6 +289,31 @@ impl Conn {
                     output: None,
                 });
             }
+            "mcpToolCall" | "McpToolCall" => {
+                self.flush_stream();
+                let tool = item["tool"].as_str().unwrap_or("mcp");
+                let server = item["server"].as_str().unwrap_or("");
+                let name = if server.is_empty() {
+                    tool.to_string()
+                } else {
+                    format!("{server}:{tool}")
+                };
+                let ok = item["status"].as_str().map(|s| s == "completed");
+                let output = item["result"]["content"].as_array().and_then(|arr| {
+                    let texts: Vec<&str> = arr.iter().filter_map(|c| c["text"].as_str()).collect();
+                    if texts.is_empty() {
+                        None
+                    } else {
+                        Some(texts.join("\n"))
+                    }
+                });
+                let _ = self.tx.send(AgentEvent::ToolCall {
+                    name,
+                    input: item["arguments"].to_string(),
+                    ok,
+                    output,
+                });
+            }
             "agentMessage" => {
                 // 有 delta 時文字已經送過，這裡只收尾。
                 self.flush_stream();
@@ -290,10 +337,12 @@ fn is_auth_error(err: &Value) -> bool {
     t.contains("401") || t.contains("token_revoked") || t.contains("unauthorized")
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ApprovalKind {
     Command,
     File,
+    McpElicitation,
+    Permissions,
 }
 
 impl ApprovalKind {
@@ -301,6 +350,8 @@ impl ApprovalKind {
         match self {
             ApprovalKind::Command => "command",
             ApprovalKind::File => "file",
+            ApprovalKind::McpElicitation => "mcp_elicitation",
+            ApprovalKind::Permissions => "permissions",
         }
     }
 }
@@ -407,18 +458,57 @@ impl AgentControl for CodexControl {
         let id = entry["id"].clone();
         let kind = match entry["kind"].as_str() {
             Some("file") => ApprovalKind::File,
+            Some("mcp_elicitation") => ApprovalKind::McpElicitation,
+            Some("permissions") => ApprovalKind::Permissions,
             _ => ApprovalKind::Command,
         };
-        // Codex 的 decision 是 camelCase 字串。
-        let verdict = match (kind, decision) {
-            (_, Decision::Allow) => "accept",
-            (_, Decision::AllowAlways) => "acceptForSession",
-            (_, Decision::Deny) => "decline",
-        };
-        self.conn.write(&json!({
-            "jsonrpc":"2.0","id":id,
-            "result":{ "decision": verdict }
-        }))
+        match kind {
+            ApprovalKind::McpElicitation => {
+                let result = match decision {
+                    Decision::Allow | Decision::AllowAlways => json!({
+                        "action": "accept",
+                        "content": {}
+                    }),
+                    Decision::Deny => json!({
+                        "action": "decline"
+                    }),
+                };
+                self.conn.write(&json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": result
+                }))
+            }
+            ApprovalKind::Permissions => {
+                let result = match decision {
+                    Decision::Allow | Decision::AllowAlways => json!({
+                        "permissions": {},
+                        "scope": "turn"
+                    }),
+                    Decision::Deny => json!({
+                        "permissions": null
+                    }),
+                };
+                self.conn.write(&json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": result
+                }))
+            }
+            ApprovalKind::Command | ApprovalKind::File => {
+                // Codex 的 decision 是 camelCase 字串。
+                let verdict = match (kind, decision) {
+                    (_, Decision::Allow) => "accept",
+                    (_, Decision::AllowAlways) => "acceptForSession",
+                    (_, Decision::Deny) => "decline",
+                };
+                self.conn.write(&json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": { "decision": verdict }
+                }))
+            }
+        }
     }
 
     fn transport(&self) -> &'static str {
@@ -438,6 +528,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let mut cmd = Command::new(prog);
     cmd.arg("app-server");
     cmd.args(spec.permission.codex_flags());
+    // 預設讓 workspace-write sandbox 具備網路存取，避免 Linux 上 bwrap --unshare-net 觸發
+    // `loopback: Failed RTM_NEWADDR: Operation not permitted`
+    cmd.args(["-c", "sandbox_workspace_write.network_access=true"]);
     if let Some(exe) = &spec.mcp_exe {
         cmd.args([
             "-c",
@@ -448,6 +541,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 spec.id
             ),
         ]);
+        if spec.permission.auto_approves() {
+            cmd.args(["-c", "apps.termade.default_tools_approval_mode=\"auto\""]);
+        }
     }
     cmd.args(&spec.args);
     cmd.current_dir(&spec.cwd)
@@ -636,14 +732,24 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
     if let Some(m) = &spec.model {
         p["model"] = json!(m);
     }
+    let mut config = json!({
+        "sandbox_workspace_write": {
+            "network_access": true
+        }
+    });
     if let Some(e) = &spec.effort {
         // thread 層級的 config 覆寫，等同 `-c model_reasoning_effort=...`。
-        p["config"] = json!({ "model_reasoning_effort": e });
+        config["model_reasoning_effort"] = json!(e);
     }
+    p["config"] = config;
     let sandbox = if spec.read_only {
         Some("read-only".to_string())
+    } else if let Some(s) = &spec.sandbox {
+        Some(s.clone())
+    } else if spec.permission == termade_core::PermissionPolicy::Bypass {
+        Some("danger-full-access".to_string())
     } else {
-        spec.sandbox.clone()
+        Some("workspace-write".to_string())
     };
     if let Some(s) = sandbox {
         p["sandbox"] = json!(s);
@@ -678,6 +784,37 @@ mod tests {
             };
             assert_eq!(got, want);
         }
+
+        assert_eq!(ApprovalKind::Command.as_str(), "command");
+        assert_eq!(ApprovalKind::File.as_str(), "file");
+        assert_eq!(ApprovalKind::McpElicitation.as_str(), "mcp_elicitation");
+        assert_eq!(ApprovalKind::Permissions.as_str(), "permissions");
+
+        // 驗證 MCP elicitation 與 permissions 的回傳結構
+        let mcp_allow = match Decision::Allow {
+            Decision::Allow | Decision::AllowAlways => json!({"action": "accept", "content": {}}),
+            Decision::Deny => json!({"action": "decline"}),
+        };
+        assert_eq!(mcp_allow["action"], "accept");
+
+        let mcp_deny = match Decision::Deny {
+            Decision::Allow | Decision::AllowAlways => json!({"action": "accept", "content": {}}),
+            Decision::Deny => json!({"action": "decline"}),
+        };
+        assert_eq!(mcp_deny["action"], "decline");
+
+        let perm_allow = match Decision::Allow {
+            Decision::Allow | Decision::AllowAlways => json!({"permissions": {}, "scope": "turn"}),
+            Decision::Deny => json!({"permissions": null}),
+        };
+        assert_eq!(perm_allow["scope"], "turn");
+        assert!(perm_allow["permissions"].is_object());
+
+        let perm_deny = match Decision::Deny {
+            Decision::Allow | Decision::AllowAlways => json!({"permissions": {}, "scope": "turn"}),
+            Decision::Deny => json!({"permissions": null}),
+        };
+        assert!(perm_deny["permissions"].is_null());
     }
 
     #[test]
@@ -709,10 +846,22 @@ mod tests {
         assert_eq!(p["model"], "m1");
         assert_eq!(p["sandbox"], "workspace-write");
         assert_eq!(p["config"]["model_reasoning_effort"], "high");
+        assert_eq!(
+            p["config"]["sandbox_workspace_write"]["network_access"],
+            true
+        );
         assert!(p.get("developerInstructions").is_none());
         let mut ro = spec.clone();
         ro.read_only = true;
         assert_eq!(thread_start_params(&ro)["sandbox"], "read-only");
+
+        let mut bypass = spec.clone();
+        bypass.sandbox = None;
+        bypass.permission = termade_core::PermissionPolicy::Bypass;
+        assert_eq!(
+            thread_start_params(&bypass)["sandbox"],
+            "danger-full-access"
+        );
         // 開新對話不帶 threadId；接續時帶上，其餘覆寫欄位照舊。
         assert!(thread_open_params(&spec)["threadId"].is_null());
         let mut re = spec.clone();
