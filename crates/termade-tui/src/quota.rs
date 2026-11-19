@@ -96,6 +96,13 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
         Style::default().fg(Color::DarkGray),
     ));
     out.push(Line::from(head));
+    let name_w = q
+        .windows
+        .iter()
+        .map(|w| w.name.chars().count())
+        .max()
+        .unwrap_or(4)
+        .max(4);
     for w in &q.windows {
         let reset = match w.resets_at_ms {
             Some(r) if r <= now_ms => Some(tr!("已重置")),
@@ -110,7 +117,7 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
         let (fill, empty) = bar(pct, BAR_CELLS);
         let color = level_color(pct);
         let mut spans = vec![
-            Span::raw(format!("  {:<4}", w.name)),
+            Span::raw(format!("  {:<width$}", w.name, width = name_w)),
             Span::styled(fill, Style::default().fg(color)),
             Span::styled(empty, Style::default().fg(Color::DarkGray)),
             Span::styled(format!(" {pct:>3.0}%"), Style::default().fg(color)),

@@ -2,7 +2,7 @@
 
 Priority: P2　Scope: `termade-adapter`, `termade-daemon`, `termade-tui`　Depends on: —
 
-Status: needs-info
+Status: done
 
 ## Problem
 
@@ -45,3 +45,4 @@ Not confirmed: whether accounts that authenticate through a GCP project (Vertex)
 
 - 2026-11-19: The account available locally is an enterprise account authenticated through a GCP project, which may only surface limits as 429 errors. The user will provide a separate personal account for researching per-user quota sources (1–3). Keep this ticket at `needs-info` until that account is available.
 - 2026-11-19: Implementation steps 3 and 4 done: the generic ACP adapter maps rate-limit errors (`RESOURCE_EXHAUSTED`, HTTP 429, "quota exceeded", "rate limit") from prompt failures and `session/update` error payloads to `AgentEvent::Quota { reached: true }` (agent id from the adapter kind, e.g. `antigravity`); the `:quota` popup shows a generic "no quota data reported" line for agents without data. Steps 1-2 (usage sources) remain open.
+- 2026-11-19: Captured a real `agy acp` session on a consumer account (`agy` 1.5.12): `agy acp` only emits context `usage_update` and per-turn token counts (no quota percentages in `session/update` or `_meta`, and `antigravity/quota` returns `-32601 Method not found`). However, `agy --output-format json -p /quota` exits 0 without starting a conversation (`num_turns: 0`) and returns structured `command.data.groups[].buckets[]` with `remaining_fraction` and `reset_time`. Implemented background polling of `agy --output-format json -p /quota` at session startup and after each prompt turn in `crates/termade-adapter/src/acp.rs`, plus dynamic window label alignment in `crates/termade-tui/src/quota.rs`.

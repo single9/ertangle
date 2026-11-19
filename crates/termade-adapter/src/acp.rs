@@ -31,6 +31,10 @@ struct Conn {
     agent: String,
     /// 已送出 `reached=true` 的限流額度、尚未被成功回合清除。
     limited: std::sync::atomic::AtomicBool,
+    /// Antigravity 專用：`agy --output-format json -p /quota` 的執行檔與環境變數。
+    quota_prog: Option<(std::path::PathBuf, Vec<(String, String)>)>,
+    /// 避免同時啟動多個額度查詢背景程序。
+    quota_refreshing: std::sync::atomic::AtomicBool,
     /// 我們自己的 session id (事件關聯用)。
     session_id: String,
     /// agent 回傳的 ACP session id (prompt / cancel 用)。
@@ -121,6 +125,36 @@ impl Conn {
             self.limited.store(true, Ordering::SeqCst);
             let _ = self.tx.send(AgentEvent::Quota(q));
         }
+    }
+
+    /// 非同步查詢 Antigravity 額度 (不阻塞回合)，同時間最多只跑一個查詢。
+    fn refresh_quota_async(self: &Arc<Self>) {
+        let Some((prog, env)) = self.quota_prog.clone() else {
+            return;
+        };
+        if self
+            .quota_refreshing
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return;
+        }
+        let conn = self.clone();
+        std::thread::spawn(move || {
+            struct Guard<'a>(&'a std::sync::atomic::AtomicBool);
+            impl Drop for Guard<'_> {
+                fn drop(&mut self) {
+                    self.0.store(false, Ordering::SeqCst);
+                }
+            }
+            let _guard = Guard(&conn.quota_refreshing);
+            if let Some(raw) = query_agy_quota(&prog, &env) {
+                let reached = conn.limited.load(Ordering::SeqCst);
+                if let Some(q) = parse_agy_quota_json(&raw, reached) {
+                    let _ = conn.tx.send(AgentEvent::Quota(q));
+                }
+            }
+        });
     }
 
     fn on_update(&self, msg: &Value) {
@@ -409,6 +443,7 @@ impl AgentControl for AcpControl {
                 }
                 conn.report_rate_limit(&e.to_string());
             }
+            conn.refresh_quota_async();
         });
         Ok(())
     }
@@ -623,9 +658,17 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .take()
         .with_context(|| tr!("取得 stdout 失敗"))?;
 
+    let quota_prog = if spec.kind == termade_core::AgentKind::Antigravity {
+        Some((prog.clone(), spec.env.clone()))
+    } else {
+        None
+    };
+
     let conn = Arc::new(Conn {
         agent: spec.kind.id().to_string(),
         limited: std::sync::atomic::AtomicBool::new(false),
+        quota_prog,
+        quota_refreshing: std::sync::atomic::AtomicBool::new(false),
         session_id: spec.id.clone(),
         acp_session: Mutex::new(String::new()),
         stdin: Mutex::new(stdin),
@@ -759,6 +802,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| tr!("設定 effort `{value}` 失敗", value = value))?;
     }
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
+    conn.refresh_quota_async();
 
     let control = AcpControl {
         conn,
@@ -838,6 +882,159 @@ mod model_tests {
     }
 }
 
+const QUOTA_QUERY_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// 執行 `agy --output-format json -p /quota` 取得原始 JSON；失敗或逾時回 `None`。
+fn query_agy_quota(prog: &std::path::Path, env: &[(String, String)]) -> Option<String> {
+    let mut cmd = Command::new(prog);
+    cmd.args(["--output-format", "json", "-p", "/quota"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let mut child = cmd.spawn().ok()?;
+    let deadline = std::time::Instant::now() + QUOTA_QUERY_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(s)) => break s,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+    if !status.success() {
+        return None;
+    }
+    let mut out = String::new();
+    if let Some(mut so) = child.stdout.take() {
+        use std::io::Read;
+        so.read_to_string(&mut out).ok()?;
+    }
+    Some(out)
+}
+
+/// 解析 `agy --output-format json -p /quota` 的輸出為 `Quota`。
+pub(crate) fn parse_agy_quota_json(raw: &str, reached: bool) -> Option<termade_core::Quota> {
+    let v: Value = serde_json::from_str(raw.trim()).ok()?;
+    let groups = v["command"]["data"]["groups"].as_array()?;
+    let mut windows = Vec::new();
+    for g in groups {
+        let group_name = g["name"].as_str().unwrap_or("");
+        let Some(buckets) = g["buckets"].as_array() else {
+            continue;
+        };
+        for b in buckets {
+            let Some(remaining) = b["remaining_fraction"].as_f64() else {
+                continue;
+            };
+            let id = b["id"].as_str().unwrap_or("");
+            let win_raw = b["window"].as_str().unwrap_or("");
+            let name = agy_window_name(group_name, id, win_raw);
+            let used_percent = ((1.0 - remaining) * 100.0).clamp(0.0, 100.0) as f32;
+            let resets_at_ms = b["reset_time"].as_str().and_then(parse_rfc3339_utc_ms);
+            windows.push(termade_core::QuotaWindow {
+                name,
+                used_percent,
+                resets_at_ms,
+            });
+        }
+    }
+    if windows.is_empty() {
+        return None;
+    }
+    windows.sort_by_key(|w| {
+        let rank = match w.name.as_str() {
+            "5h" => 0,
+            "7d" => 1,
+            n if n.starts_with("argon") => 2,
+            "3p-5h" => 3,
+            "3p-7d" => 4,
+            _ => 5,
+        };
+        (rank, w.name.clone())
+    });
+    let primary_exhausted = windows
+        .iter()
+        .any(|w| matches!(w.name.as_str(), "5h" | "7d") && w.used_percent >= 100.0);
+    Some(termade_core::Quota {
+        agent: "antigravity".into(),
+        windows,
+        reached: reached || primary_exhausted,
+        warning: false,
+        updated_ms: termade_core::now_millis(),
+    })
+}
+
+fn agy_window_name(group_name: &str, id: &str, window: &str) -> String {
+    if id == "gemini-5h" || (group_name == "Gemini Models" && window == "5h") {
+        return "5h".into();
+    }
+    if id == "gemini-weekly" || (group_name == "Gemini Models" && window == "weekly") {
+        return "7d".into();
+    }
+    if id.contains("argon") || group_name.contains("Argon") {
+        return match window {
+            "5h" => "argon-5h".into(),
+            "weekly" => "argon-7d".into(),
+            other if !other.is_empty() => format!("argon-{other}"),
+            _ => "argon".into(),
+        };
+    }
+    if id.starts_with("3p-") || group_name.contains("Claude") {
+        return match window {
+            "5h" => "3p-5h".into(),
+            "weekly" => "3p-7d".into(),
+            _ => id.into(),
+        };
+    }
+    match window {
+        "weekly" => "7d".into(),
+        other if !other.is_empty() => other.into(),
+        _ => id.into(),
+    }
+}
+
+/// 解析 UTC RFC 3339 時間字串 (`YYYY-MM-DDTHH:MM:SSZ` 或帶小數秒) 為 epoch 毫秒。
+pub(crate) fn parse_rfc3339_utc_ms(s: &str) -> Option<u64> {
+    let s = s.strip_suffix('Z')?;
+    let (date, time) = s.split_once('T')?;
+    let mut dp = date.split('-');
+    let y: i64 = dp.next()?.parse().ok()?;
+    let m: i64 = dp.next()?.parse().ok()?;
+    let d: i64 = dp.next()?.parse().ok()?;
+    if dp.next().is_some() || !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    let hms = time.split('.').next()?;
+    let mut tp = hms.split(':');
+    let hh: i64 = tp.next()?.parse().ok()?;
+    let mm: i64 = tp.next()?.parse().ok()?;
+    let ss: i64 = tp.next()?.parse().ok()?;
+    if tp.next().is_some()
+        || !(0..=23).contains(&hh)
+        || !(0..=59).contains(&mm)
+        || !(0..=60).contains(&ss)
+    {
+        return None;
+    }
+    // Howard Hinnant 的 civil-from-days 反推：轉成 Unix epoch 天數。
+    let y_adj = y - if m <= 2 { 1 } else { 0 };
+    let era = y_adj.div_euclid(400);
+    let yoe = y_adj.rem_euclid(400);
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146097 + doe - 719468;
+    let secs = days * 86_400 + hh * 3_600 + mm * 60 + ss;
+    u64::try_from(secs).ok()?.checked_mul(1_000)
+}
+
 #[cfg(test)]
 mod rate_limit_tests {
     use super::*;
@@ -878,5 +1075,75 @@ mod rate_limit_tests {
         ] {
             assert!(rate_limit_quota("antigravity", s).is_none(), "{s}");
         }
+    }
+
+    #[test]
+    fn parses_rfc3339_utc_ms() {
+        assert_eq!(parse_rfc3339_utc_ms("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(
+            parse_rfc3339_utc_ms("2026-11-19T15:43:56Z"),
+            Some(1_795_103_036_000)
+        );
+        assert_eq!(
+            parse_rfc3339_utc_ms("2026-11-19T15:43:56.123Z"),
+            Some(1_795_103_036_000)
+        );
+        assert!(parse_rfc3339_utc_ms("2026-11-19T15:43:56+08:00").is_none());
+    }
+
+    #[test]
+    fn parses_agy_quota_json_sample() {
+        let sample = r#"{
+            "conversation_id": "",
+            "status": "SUCCESS",
+            "command": {
+                "name": "usage",
+                "data": {
+                    "groups": [
+                        {
+                            "name": "Gemini Models",
+                            "buckets": [
+                                {"id": "gemini-weekly", "window": "weekly", "remaining_fraction": 0.75, "reset_time": "2026-11-25T13:49:39Z"},
+                                {"id": "gemini-5h", "window": "5h", "remaining_fraction": 0.93, "reset_time": "2026-11-19T15:43:56Z"}
+                            ]
+                        },
+                        {
+                            "name": "Claude and GPT models",
+                            "buckets": [
+                                {"id": "3p-weekly", "window": "weekly", "remaining_fraction": 1, "reset_time": "2026-11-26T10:58:54Z"},
+                                {"id": "3p-5h", "window": "5h", "remaining_fraction": 1, "reset_time": "2026-11-19T15:58:54Z"}
+                            ]
+                        },
+                        {
+                            "name": "Gemini 4 Argon",
+                            "buckets": [
+                                {"id": "gemini-argon-wtu-weekly", "window": "weekly", "remaining_fraction": 0.78, "reset_time": "2026-11-25T13:41:45Z"}
+                            ]
+                        }
+                    ]
+                }
+            }
+        }"#;
+        let q = parse_agy_quota_json(sample, false).expect("valid agy quota");
+        assert_eq!(q.agent, "antigravity");
+        assert!(!q.reached);
+        assert_eq!(q.windows.len(), 5);
+        assert_eq!(q.windows[0].name, "5h");
+        assert!((q.windows[0].used_percent - 7.0).abs() < 0.01);
+        assert_eq!(q.windows[1].name, "7d");
+        assert!((q.windows[1].used_percent - 25.0).abs() < 0.01);
+        assert_eq!(q.windows[2].name, "argon-7d");
+        assert_eq!(q.windows[3].name, "3p-5h");
+        assert_eq!(q.windows[4].name, "3p-7d");
+        assert_eq!(q.windows[0].resets_at_ms, Some(1_795_103_036_000));
+    }
+
+    #[test]
+    fn marks_reached_when_primary_window_exhausted() {
+        let sample = r#"{"command":{"name":"usage","data":{"groups":[{"name":"Gemini Models","buckets":[{"id":"gemini-5h","window":"5h","remaining_fraction":0.0}]}]}}}"#;
+        let q = parse_agy_quota_json(sample, false).expect("exhausted");
+        assert!(q.reached);
+        assert!((q.windows[0].used_percent - 100.0).abs() < 0.01);
+        assert!(parse_agy_quota_json("not json", false).is_none());
     }
 }
