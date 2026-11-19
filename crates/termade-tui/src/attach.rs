@@ -376,12 +376,25 @@ pub(crate) fn clipboard_image() -> Result<PathBuf, String> {
             continue;
         };
         if out.status.success() && out.stdout.starts_with(&[0x89, b'P', b'N', b'G']) {
-            let ts = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis())
-                .unwrap_or(0);
-            let path = std::env::temp_dir().join(format!("termade-clip-{ts}.png"));
-            std::fs::write(&path, &out.stdout).map_err(|e| tr!("寫入暫存圖片失敗：{e}", e = e))?;
+            let base_dir = std::env::var_os("XDG_RUNTIME_DIR")
+                .map(PathBuf::from)
+                .filter(|p| p.is_dir())
+                .unwrap_or_else(std::env::temp_dir);
+            let path = base_dir.join(format!("termade-{}.png", termade_core::new_id("clip")));
+
+            use std::io::Write;
+            let mut opts = std::fs::OpenOptions::new();
+            opts.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                opts.mode(0o600);
+            }
+            let mut file = opts
+                .open(&path)
+                .map_err(|e| tr!("寫入暫存圖片失敗：{e}", e = e))?;
+            file.write_all(&out.stdout)
+                .map_err(|e| tr!("寫入暫存圖片失敗：{e}", e = e))?;
             return Ok(path);
         }
     }

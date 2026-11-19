@@ -310,6 +310,13 @@ fn mime_type_for_path(path: &Path) -> &'static str {
     }
 }
 
+/// 檢查 canonical 目標路徑是否位於任一被允許的根目錄下。
+pub(crate) fn is_path_allowed(canonical_target: &Path, allowed_roots: &[PathBuf]) -> bool {
+    allowed_roots
+        .iter()
+        .any(|root| canonical_target.starts_with(root))
+}
+
 fn serve_file(
     shared: &Shared,
     stream: &mut TcpStream,
@@ -384,8 +391,24 @@ fn serve_file(
     }
 
     let mut resolved_path = PathBuf::from(&raw_path);
-    if resolved_path.is_relative() {
-        if let Ok(inner) = shared.inner.lock() {
+    let mut allowed_roots = Vec::new();
+    if let Ok(inner) = shared.inner.lock() {
+        if let Ok(c) = inner.default_cwd.canonicalize() {
+            allowed_roots.push(c);
+        }
+        for s in inner.state.sessions.values() {
+            if !s.cwd.is_empty() {
+                if let Ok(c) = Path::new(&s.cwd).canonicalize() {
+                    allowed_roots.push(c);
+                }
+            }
+            if let Some(repo) = &s.repo_root {
+                if let Ok(c) = Path::new(repo).canonicalize() {
+                    allowed_roots.push(c);
+                }
+            }
+        }
+        if resolved_path.is_relative() {
             let mut found = false;
             if let Some(sid) = session_id.as_deref() {
                 if let Some(s) = inner.state.sessions.get(sid) {
@@ -416,14 +439,45 @@ fn serve_file(
         }
     }
 
-    if let Ok(canon) = resolved_path.canonicalize() {
-        resolved_path = canon;
-    }
+    let resolved_path = match resolved_path.canonicalize() {
+        Ok(c) => c,
+        Err(_) => {
+            let body = format!("找不到檔案：{}", resolved_path.display());
+            let resp = format!(
+                "HTTP/1.1 404 Not Found\r\n\
+                 Content-Type: text/plain; charset=utf-8\r\n\
+                 Content-Length: {}\r\n\
+                 Access-Control-Allow-Origin: *\r\n\
+                 \r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(resp.as_bytes())?;
+            stream.flush()?;
+            return Ok(());
+        }
+    };
 
     if !resolved_path.is_file() {
         let body = format!("找不到檔案：{}", resolved_path.display());
         let resp = format!(
             "HTTP/1.1 404 Not Found\r\n\
+             Content-Type: text/plain; charset=utf-8\r\n\
+             Content-Length: {}\r\n\
+             Access-Control-Allow-Origin: *\r\n\
+             \r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(resp.as_bytes())?;
+        stream.flush()?;
+        return Ok(());
+    }
+
+    if !is_path_allowed(&resolved_path, &allowed_roots) {
+        let body = "拒絕存取：路徑不在工作區範圍內";
+        let resp = format!(
+            "HTTP/1.1 403 Forbidden\r\n\
              Content-Type: text/plain; charset=utf-8\r\n\
              Content-Length: {}\r\n\
              Access-Control-Allow-Origin: *\r\n\
@@ -595,6 +649,8 @@ fn handle_ws_session(
     Ok(())
 }
 
+pub(crate) const MAX_WS_PAYLOAD_LEN: usize = 30 * 1024 * 1024;
+
 /// 讀取單一 RFC 6455 WebSocket Frame。
 fn read_ws_frame<R: Read>(reader: &mut R) -> Result<(u8, Vec<u8>)> {
     let mut header = [0u8; 2];
@@ -611,7 +667,15 @@ fn read_ws_frame<R: Read>(reader: &mut R) -> Result<(u8, Vec<u8>)> {
     } else if len == 127 {
         let mut ext = [0u8; 8];
         reader.read_exact(&mut ext)?;
-        len = u64::from_be_bytes(ext) as usize;
+        let raw_len = u64::from_be_bytes(ext);
+        if raw_len > MAX_WS_PAYLOAD_LEN as u64 {
+            bail!("WebSocket 承載過大 (超過 30MB 限制)");
+        }
+        len = raw_len as usize;
+    }
+
+    if len > MAX_WS_PAYLOAD_LEN {
+        bail!("WebSocket 承載過大 (超過 30MB 限制)");
     }
 
     let mask_key = if masked {
@@ -713,6 +777,62 @@ mod tests {
             mime_type_for_path(Path::new("bin/app")),
             "application/octet-stream"
         );
+    }
+
+    #[test]
+    fn test_read_ws_frame_exceeds_max_payload() {
+        let mut data = Vec::new();
+        data.push(0x81); // opcode 1
+        data.push(127); // 64-bit len
+        let oversized = (MAX_WS_PAYLOAD_LEN as u64) + 1;
+        data.extend_from_slice(&oversized.to_be_bytes());
+        let mut cursor = std::io::Cursor::new(data);
+        let res = read_ws_frame(&mut cursor);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().to_string().contains("超過 30MB 限制"));
+    }
+
+    #[test]
+    fn test_read_ws_frame_valid_frames() {
+        // Unmasked frame
+        let unmasked = vec![0x81, 0x05, b'h', b'e', b'l', b'l', b'o'];
+        let (opcode, payload) = read_ws_frame(&mut std::io::Cursor::new(unmasked)).unwrap();
+        assert_eq!(opcode, 1);
+        assert_eq!(payload, b"hello");
+
+        // Masked frame
+        let mask = [0x12, 0x34, 0x56, 0x78];
+        let original = b"world";
+        let mut masked_payload = Vec::new();
+        for (i, &b) in original.iter().enumerate() {
+            masked_payload.push(b ^ mask[i % 4]);
+        }
+        let mut frame = vec![0x81, 0x80 | 0x05];
+        frame.extend_from_slice(&mask);
+        frame.extend_from_slice(&masked_payload);
+
+        let (opcode, payload) = read_ws_frame(&mut std::io::Cursor::new(frame)).unwrap();
+        assert_eq!(opcode, 1);
+        assert_eq!(payload, b"world");
+    }
+
+    #[test]
+    fn test_is_path_allowed() {
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let sub = tmp.join("termade_test_allowed");
+        let allowed_roots = vec![sub.clone()];
+
+        let child = sub.join("file.txt");
+        assert!(is_path_allowed(&child, &allowed_roots));
+        assert!(is_path_allowed(&sub, &allowed_roots));
+
+        // Outside path: /etc/passwd
+        assert!(!is_path_allowed(Path::new("/etc/passwd"), &allowed_roots));
+
+        // Sibling directory or parent
+        let sibling = tmp.join("termade_test_sibling");
+        assert!(!is_path_allowed(&sibling, &allowed_roots));
+        assert!(!is_path_allowed(&tmp, &allowed_roots));
     }
 
     mod hex {

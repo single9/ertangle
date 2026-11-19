@@ -89,9 +89,9 @@ pub(crate) const AUTH_FAIL_DELAY: Duration = Duration::from_millis(500);
 pub(crate) fn token_matches(given: Option<&str>, expected: &str) -> bool {
     let Some(given) = given else { return false };
     let (a, b) = (given.as_bytes(), expected.as_bytes());
-    let mut diff = (a.len() ^ b.len()) as u8;
+    let mut diff: usize = a.len() ^ b.len();
     for i in 0..a.len().max(b.len()) {
-        diff |= a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0);
+        diff |= (a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0)) as usize;
     }
     diff == 0
 }
