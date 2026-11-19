@@ -1688,6 +1688,7 @@ name = "termade-daemon"
 version = "0.8.0"
 dependencies = [
  "anyhow",
+ "nix 0.28.0",
  "serde",
  "serde_json",
  "termade-adapter",

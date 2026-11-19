@@ -419,8 +419,7 @@ pub(crate) fn ensure_private_dir(dir: &Path) -> Result<()> {
             if !meta.is_dir() {
                 bail!("{}", tr!("{dir} 不是目錄", dir = format!("{dir:?}")));
             }
-            // SAFETY: geteuid 無前置條件、無副作用。
-            let me = unsafe { libc_geteuid() };
+            let me = nix::unistd::geteuid().as_raw();
             if meta.uid() != me {
                 bail!(
                     "{}",
@@ -454,11 +453,6 @@ pub(crate) fn ensure_private_dir(dir: &Path) -> Result<()> {
         }
         Err(e) => Err(e.into()),
     }
-}
-
-extern "C" {
-    #[link_name = "geteuid"]
-    pub(crate) fn libc_geteuid() -> u32;
 }
 
 /// 以前景方式跑 daemon (預設只綁本地 Unix socket)。
