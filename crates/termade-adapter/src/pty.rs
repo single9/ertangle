@@ -19,7 +19,7 @@ struct PtyControl {
 
 impl AgentControl for PtyControl {
     fn send_input(&self, text: &str) -> Result<()> {
-        let mut w = self.writer.lock().unwrap();
+        let mut w = self.writer.lock().unwrap_or_else(|e| e.into_inner());
         w.write_all(text.as_bytes())?;
         w.write_all(b"\r")?;
         w.flush()?;
@@ -27,21 +27,28 @@ impl AgentControl for PtyControl {
     }
 
     fn cancel(&self) -> Result<()> {
-        let mut w = self.writer.lock().unwrap();
+        let mut w = self.writer.lock().unwrap_or_else(|e| e.into_inner());
         w.write_all(&[0x03])?; // Ctrl-C
         w.flush()?;
         Ok(())
     }
 
     fn pid(&self) -> Option<u32> {
-        self.child.lock().unwrap().process_id()
+        self.child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .process_id()
     }
 
     fn kill(&self) -> Result<()> {
         if let Some(pid) = self.pid() {
             let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
         }
-        self.child.lock().unwrap().kill().ok();
+        self.child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .kill()
+            .ok();
         Ok(())
     }
 
@@ -154,7 +161,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         std::thread::spawn(move || {
             let code = loop {
                 let status = {
-                    let mut c = child.lock().unwrap();
+                    let mut c = child.lock().unwrap_or_else(|e| e.into_inner());
                     c.try_wait()
                 };
                 match status {

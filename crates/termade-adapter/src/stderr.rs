@@ -71,9 +71,12 @@ impl StderrTail {
                     break;
                 }
                 let text = strip.feed(&buf[..n]);
-                shared.lock().unwrap().push_text(&text);
+                shared
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push_text(&text);
             }
-            shared.lock().unwrap().end_line();
+            shared.lock().unwrap_or_else(|e| e.into_inner()).end_line();
             let _ = done_tx.send(());
         });
         Arc::new(StderrTail {
@@ -84,7 +87,13 @@ impl StderrTail {
 
     /// 目前保留的行 (最舊在前)。
     pub fn lines(&self) -> Vec<String> {
-        self.inner.lock().unwrap().lines.iter().cloned().collect()
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .lines
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// 處理程序結束後呼叫：短暫等讀取執行緒收尾；非 0 結束且有內容時送出 `Output`。
@@ -92,7 +101,7 @@ impl StderrTail {
         let _ = self
             .done
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .recv_timeout(Duration::from_millis(500));
         if !matches!(code, Some(c) if c != 0) {
             return;

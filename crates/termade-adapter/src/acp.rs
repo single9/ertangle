@@ -61,7 +61,7 @@ impl Conn {
     fn write(&self, v: &Value) -> Result<()> {
         let mut line = serde_json::to_string(v)?;
         line.push('\n');
-        let mut w = self.stdin.lock().unwrap();
+        let mut w = self.stdin.lock().unwrap_or_else(|e| e.into_inner());
         w.write_all(line.as_bytes())?;
         w.flush()?;
         Ok(())
@@ -82,7 +82,10 @@ impl Conn {
     fn call(&self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (s, r) = mpsc::channel();
-        self.pending.lock().unwrap().insert(id, s);
+        self.pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, s);
         self.write(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))?;
         let msg = r
             .recv_timeout(timeout)
@@ -98,7 +101,11 @@ impl Conn {
 
     /// 送出一段 prompt，等整個回合結束。
     fn prompt(&self, text: &str, atts: &[termade_core::Attachment]) -> Result<()> {
-        let sid = self.acp_session.lock().unwrap().clone();
+        let sid = self
+            .acp_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if sid.is_empty() {
             bail!("{}", tr!("session 尚未就緒"));
         }
@@ -185,7 +192,11 @@ impl Conn {
             }
             "agent_message_chunk" => {
                 if let Some(t) = update["content"]["text"].as_str() {
-                    let text = self.stream.lock().unwrap().push("msg", t);
+                    let text = self
+                        .stream
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push("msg", t);
                     if !text.is_empty() {
                         let _ = self.tx.send(AgentEvent::Output(text));
                     }
@@ -193,7 +204,11 @@ impl Conn {
             }
             "agent_thought_chunk" => {
                 if let Some(t) = update["content"]["text"].as_str() {
-                    let text = self.stream.lock().unwrap().push("think", t);
+                    let text = self
+                        .stream
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push("think", t);
                     if !text.is_empty() {
                         let _ = self.tx.send(AgentEvent::Output(text));
                     }
@@ -232,14 +247,18 @@ impl Conn {
 
     /// 把行緩衝的殘留送出 (換種類或工具呼叫前呼叫)。
     fn flush_stream(&self) {
-        let text = self.stream.lock().unwrap().flush();
+        let text = self
+            .stream
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .flush();
         if !text.is_empty() {
             let _ = self.tx.send(AgentEvent::Output(text));
         }
     }
 
     fn on_permission(&self, msg: &Value) {
-        let jid = msg["id"].clone();
+        let jid = extract_request_id(msg);
         let params = &msg["params"];
         let options = params["options"].as_array().cloned().unwrap_or_default();
 
@@ -252,7 +271,7 @@ impl Conn {
         let detail = params["toolCall"]["rawInput"].to_string();
         self.perms
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(req.clone(), (jid, options));
         let _ = self.tx.send(AgentEvent::Permission(PermissionRequest {
             req,
@@ -263,7 +282,11 @@ impl Conn {
     }
 
     fn resolve(&self, req: &str, decision: Decision) -> Result<()> {
-        let entry = self.perms.lock().unwrap().remove(req);
+        let entry = self
+            .perms
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(req);
         let Some((jid, options)) = entry else {
             bail!("{}", tr!("未知的核准請求：{req}", req = req));
         };
@@ -387,6 +410,14 @@ fn recovered_quota(
         })
 }
 
+/// 從 JSON-RPC 訊息中安全擷取 id；若不存在或為 null 則回傳安全後備值 (`Value::Null`)。
+pub(crate) fn extract_request_id(msg: &Value) -> Value {
+    match msg.get("id") {
+        Some(id) if !id.is_null() => id.clone(),
+        _ => Value::Null,
+    }
+}
+
 fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
     for line in stdout.lines() {
         let Ok(line) = line else { break };
@@ -398,20 +429,30 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
         };
 
         if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
-            if msg.get("id").is_some() {
-                // server → client 請求
-                match method {
+            match msg.get("id") {
+                Some(_) => match method {
                     "session/request_permission" => conn.on_permission(&msg),
-                    _ => conn.respond_error(msg.get("id").unwrap(), -32601, "not supported"),
+                    _ => {
+                        let id = extract_request_id(&msg);
+                        conn.respond_error(&id, -32601, "not supported");
+                    }
+                },
+                None => {
+                    if method == "session/update" && !conn.loading.load(Ordering::SeqCst) {
+                        conn.on_update(&msg);
+                    }
                 }
-            } else if method == "session/update" && !conn.loading.load(Ordering::SeqCst) {
-                conn.on_update(&msg);
             }
         } else if let Some(id) = msg.get("id").and_then(|v| v.as_i64()) {
             // 載入期間唯一在等的請求就是 `session/load`；在同一條讀取執行緒上清旗標，
             // 回應之後的更新才不會被誤丟。
             conn.loading.store(false, Ordering::SeqCst);
-            if let Some(s) = conn.pending.lock().unwrap().remove(&id) {
+            if let Some(s) = conn
+                .pending
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&id)
+            {
                 let _ = s.send(msg);
             }
         }
@@ -450,11 +491,16 @@ impl AgentControl for AcpControl {
 
     /// `session/set_config_option`；回應帶完整 `configOptions`，順便更新快取。
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
-        let sid = self.conn.acp_session.lock().unwrap().clone();
+        let sid = self
+            .conn
+            .acp_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         let mut applied = None;
         let mut jobs = Vec::new();
         {
-            let opts = self.options.lock().unwrap();
+            let opts = self.options.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(m) = model {
                 jobs.push(("model", pick_model_option(&opts, m)?));
             }
@@ -472,7 +518,8 @@ impl AgentControl for AcpControl {
                 )
                 .with_context(|| tr!("設定 {what} `{value}` 失敗", what = what, value = value))?;
             if r["configOptions"].is_array() {
-                *self.options.lock().unwrap() = json!({ "configOptions": r["configOptions"] });
+                *self.options.lock().unwrap_or_else(|e| e.into_inner()) =
+                    json!({ "configOptions": r["configOptions"] });
             }
             if what == "model" {
                 applied = Some(value);
@@ -482,7 +529,12 @@ impl AgentControl for AcpControl {
     }
 
     fn cancel(&self) -> Result<()> {
-        let sid = self.conn.acp_session.lock().unwrap().clone();
+        let sid = self
+            .conn
+            .acp_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if sid.is_empty() {
             return Ok(());
         }
@@ -492,23 +544,27 @@ impl AgentControl for AcpControl {
     }
 
     fn pid(&self) -> Option<u32> {
-        Some(self.child.lock().unwrap().id())
+        Some(self.child.lock().unwrap_or_else(|e| e.into_inner()).id())
     }
 
     fn kill(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
-        self.child.lock().unwrap().kill().ok();
+        self.child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .kill()
+            .ok();
         Ok(())
     }
 
     fn sleep(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         crate::signal_pgid(pid, "-STOP").or_else(|_| crate::signal_pid(pid, "-STOP"))
     }
 
     fn wake(&self) -> Result<()> {
-        let pid = self.child.lock().unwrap().id();
+        let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
         crate::signal_pgid(pid, "-CONT").or_else(|_| crate::signal_pid(pid, "-CONT"))
     }
 
@@ -523,7 +579,11 @@ impl AgentControl for AcpControl {
 
 /// 取出只用一次的前置說明，接在第一則 prompt 前面。
 fn take_effective_prompt(prepend_once: &Mutex<Option<String>>, text: &str) -> String {
-    match prepend_once.lock().unwrap().take() {
+    match prepend_once
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
         Some(prefix) if !prefix.trim().is_empty() => {
             format!("{}\n\n{}", prefix.trim_end(), text)
         }
@@ -695,7 +755,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             // 用 try_wait 輪詢 (而非阻塞 wait)，否則會一直握著鎖，讓 `kill()` 永遠拿不到鎖而死鎖。
             let code = loop {
                 let status = {
-                    let mut c = child.lock().unwrap();
+                    let mut c = child.lock().unwrap_or_else(|e| e.into_inner());
                     c.try_wait()
                 };
                 match status {
@@ -767,7 +827,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             );
             conn.loading.store(false, Ordering::SeqCst);
             // 重播的片段可能有一部分已進了行緩衝，丟掉。
-            let _ = conn.stream.lock().unwrap().flush();
+            let _ = conn
+                .stream
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .flush();
             (id.clone(), loaded?)
         }
         None => {
@@ -783,7 +847,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             (sid, new)
         }
     };
-    *conn.acp_session.lock().unwrap() = sid.clone();
+    *conn.acp_session.lock().unwrap_or_else(|e| e.into_inner()) = sid.clone();
     if can_load {
         let _ = tx.send(AgentEvent::NativeId(sid.clone()));
     }
@@ -827,6 +891,19 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 #[cfg(test)]
 mod model_tests {
     use super::*;
+
+    #[test]
+    fn extracts_request_id_with_safe_fallback() {
+        assert_eq!(extract_request_id(&json!({"id": 123})), json!(123));
+        assert_eq!(extract_request_id(&json!({"id": "req-1"})), json!("req-1"));
+        assert_eq!(extract_request_id(&json!({"id": null})), Value::Null);
+        assert_eq!(
+            extract_request_id(&json!({"method": "session/update"})),
+            Value::Null
+        );
+        assert_eq!(extract_request_id(&json!(42)), Value::Null);
+        assert_eq!(extract_request_id(&json!([])), Value::Null);
+    }
 
     #[test]
     fn picks_model_option_and_validates() {
