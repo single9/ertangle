@@ -356,6 +356,8 @@ enum Cmd {
         /// 若發生衝突，自動保留標記於 worktree 並委派 agent 解衝突
         #[arg(long)]
         resolve: bool,
+        #[arg(long, default_value = "merge", value_parser = ["merge", "squash", "rebase"])]
+        strategy: String,
     },
     /// 為指定 session 的 worktree 建立 GitHub PR (M3)
     Pr {
@@ -640,7 +642,13 @@ fn main() -> Result<()> {
             session,
             dry_run,
             resolve,
-        } => cmd_merge(session, dry_run, resolve),
+            strategy,
+        } => {
+            let strategy = strategy
+                .parse::<termade_protocol::MergeStrategy>()
+                .unwrap_or_default();
+            cmd_merge(session, dry_run, resolve, strategy)
+        }
         Cmd::Pr {
             session,
             title,

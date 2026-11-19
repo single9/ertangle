@@ -541,28 +541,16 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         "bus" => app.toggle_bus(),
         "grid" => crate::project::toggle_grid(app),
         "merge" => {
-            let parts = rest.split_whitespace();
-            let mut dry_run = false;
-            let mut resolve = false;
-            let mut target = None;
-            for p in parts {
-                if p == "--dry-run" || p == "-n" || p == "dry-run" {
-                    dry_run = true;
-                } else if p == "--resolve" || p == "-r" || p == "resolve" {
-                    resolve = true;
-                } else if target.is_none() {
-                    target = Some(p.to_string());
-                }
-            }
-            let target = target.or_else(|| app.selected_id());
+            let parsed = parse_merge_args(rest);
+            let target = parsed.target.or_else(|| app.selected_id());
             if let Some(s) = target {
                 send(
                     writer,
                     &Request::WorktreeMerge {
                         session: s,
-                        dry_run,
-                        resolve,
-                        strategy: MergeStrategy::Merge,
+                        dry_run: parsed.dry_run,
+                        resolve: parsed.resolve,
+                        strategy: parsed.strategy,
                     },
                 )?;
             }
@@ -1681,6 +1669,49 @@ fn skill_command(app: &mut App, rest: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct MergeArgs {
+    pub target: Option<String>,
+    pub dry_run: bool,
+    pub resolve: bool,
+    pub strategy: MergeStrategy,
+}
+
+pub(crate) fn parse_merge_args(rest: &str) -> MergeArgs {
+    let mut dry_run = false;
+    let mut resolve = false;
+    let mut strategy = MergeStrategy::Merge;
+    let mut target = None;
+
+    let mut iter = rest.split_whitespace().peekable();
+    while let Some(p) = iter.next() {
+        if p == "--dry-run" || p == "-n" || p == "dry-run" {
+            dry_run = true;
+        } else if p == "--resolve" || p == "-r" || p == "resolve" {
+            resolve = true;
+        } else if p == "--squash" {
+            strategy = MergeStrategy::Squash;
+        } else if p == "--rebase" {
+            strategy = MergeStrategy::Rebase;
+        } else if let Some(val) = p.strip_prefix("--strategy=") {
+            strategy = val.parse::<MergeStrategy>().unwrap_or_default();
+        } else if p == "--strategy" {
+            if let Some(val) = iter.next() {
+                strategy = val.parse::<MergeStrategy>().unwrap_or_default();
+            }
+        } else if target.is_none() {
+            target = Some(p.to_string());
+        }
+    }
+
+    MergeArgs {
+        target,
+        dry_run,
+        resolve,
+        strategy,
+    }
+}
+
 /// 實際的安裝／移除／查詢，回傳狀態列文字 (拆出來方便測試)。
 pub(crate) fn skill_action(base: &std::path::Path, action: &str, target: &str) -> Result<String> {
     use termade_daemon::skill;
@@ -1711,4 +1742,88 @@ pub(crate) fn skill_action(base: &std::path::Path, action: &str, target: &str) -
             tr!("用法：:skill [install|uninstall|show] [claude|agents|codex] [global]")
         ),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_merge_args_defaults() {
+        let parsed = parse_merge_args("");
+        assert_eq!(
+            parsed,
+            MergeArgs {
+                target: None,
+                dry_run: false,
+                resolve: false,
+                strategy: MergeStrategy::Merge,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_merge_args_flags_and_target() {
+        let parsed = parse_merge_args("ses_1 --dry-run --resolve");
+        assert_eq!(
+            parsed,
+            MergeArgs {
+                target: Some("ses_1".into()),
+                dry_run: true,
+                resolve: true,
+                strategy: MergeStrategy::Merge,
+            }
+        );
+
+        let parsed = parse_merge_args("-n -r ses_2");
+        assert_eq!(
+            parsed,
+            MergeArgs {
+                target: Some("ses_2".into()),
+                dry_run: true,
+                resolve: true,
+                strategy: MergeStrategy::Merge,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_merge_args_strategy_options() {
+        assert_eq!(
+            parse_merge_args("ses_1 --squash").strategy,
+            MergeStrategy::Squash
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --rebase").strategy,
+            MergeStrategy::Rebase
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --strategy squash").strategy,
+            MergeStrategy::Squash
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --strategy=rebase").strategy,
+            MergeStrategy::Rebase
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --strategy=SQUASH").strategy,
+            MergeStrategy::Squash
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --strategy merge").strategy,
+            MergeStrategy::Merge
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --strategy invalid").strategy,
+            MergeStrategy::Merge
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --strategy=invalid").strategy,
+            MergeStrategy::Merge
+        );
+        assert_eq!(
+            parse_merge_args("ses_1 --strategy").strategy,
+            MergeStrategy::Merge
+        );
+    }
 }
