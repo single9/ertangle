@@ -650,6 +650,12 @@
       max-height: 200px;
       overflow-y: auto;
     }
+    /* 工具清單由範本產生，範本的換行與縮排不能被 pre-wrap 當成空白行，否則每筆之間隔著大片空白，
+       打開時在 200px 內只看得到一筆。 */
+    .collapse-content.tool-run-list {
+      white-space: normal;
+      max-height: 50vh;
+    }
 
     /* 工具呼叫聚合清單 */
     .tool-run-row {
@@ -2669,7 +2675,7 @@
             html += `
               <details class="turn-collapse">
                 <summary>工具呼叫 (${turn.tools.length} 次) ▾</summary>
-                <div class="collapse-content">
+                <div class="collapse-content tool-run-list">
                   ${turn.tools.map(t => `
                     <div class="tool-run-row">
                       <span class="tool-run-call">${escapeHtml(t.call)}</span>
