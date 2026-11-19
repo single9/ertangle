@@ -2831,6 +2831,8 @@
         } else if (trimmedUrl.startsWith("file://")) {
           const rawPath = trimmedUrl.replace(/^file:\/\//, "");
           return `<span class="chat-file-pill" onclick="openFileActionSheet('${escapeHtml(rawPath)}', '${escapeHtml(label)}')"><svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>${label}</span></span>`;
+        } else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(trimmedUrl)) {
+          return label;
         } else {
           return `<a href="${trimmedUrl}" class="chat-web-link">${label}</a>`;
         }
@@ -3101,7 +3103,12 @@
     }
 
     function escapeHtml(str) {
-      return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return (str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
     function updateAllViews() {

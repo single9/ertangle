@@ -16,6 +16,14 @@ fn token_compare_is_exact() {
 }
 
 #[test]
+fn token_compare_diff_256_length() {
+    let secret = "secret";
+    let padded = format!("secret{}", "\0".repeat(256));
+    assert!(!token_matches(Some(&padded), secret));
+    assert!(!token_matches(Some(secret), &padded));
+}
+
+#[test]
 fn listen_requires_token_and_loopback_or_tailscale() {
     // 必須有 token
     assert!(validate_listen("127.0.0.1:0", false, false).is_err());

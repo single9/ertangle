@@ -137,65 +137,6 @@ fn test_web_companion_http_and_websocket() {
         assert!(resp.contains("termade Mobile Companion"));
     }
 
-    // 3.5 測試 HTTP GET /file 檔案內容檢視端點 (文字檔與圖片)
-    {
-        let test_txt = root.join("hello.rs");
-        fs::write(&test_txt, "fn main() { println!(\"Hello\"); }\n").unwrap();
-
-        // 3.5.1 正確 Token 讀取文字檔
-        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
-        let req = format!(
-            "GET /file?path={}&token={} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-            test_txt.display(),
-            token
-        );
-        http_stream.write_all(req.as_bytes()).unwrap();
-        let mut resp = String::new();
-        http_stream.read_to_string(&mut resp).unwrap();
-        assert!(resp.starts_with("HTTP/1.1 200 OK"), "{resp}");
-        assert!(resp.contains("Content-Type: text/plain"));
-        assert!(resp.contains("println!(\"Hello\")"));
-
-        // 3.5.2 錯誤 Token 應拒絕 (401)
-        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
-        let req = format!(
-            "GET /file?path={}&token=wrong_token HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-            test_txt.display()
-        );
-        http_stream.write_all(req.as_bytes()).unwrap();
-        let mut resp = String::new();
-        http_stream.read_to_string(&mut resp).unwrap();
-        assert!(resp.starts_with("HTTP/1.1 401 Unauthorized"), "{resp}");
-
-        // 3.5.3 讀取圖片檔 (Content-Type 應為 image/png)
-        let test_png = root.join("icon.png");
-        fs::write(&test_png, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]).unwrap();
-        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
-        let req = format!(
-            "GET /file?path={}&token={} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-            test_png.display(),
-            token
-        );
-        http_stream.write_all(req.as_bytes()).unwrap();
-        let mut resp = Vec::new();
-        http_stream.read_to_end(&mut resp).unwrap();
-        let header_str = String::from_utf8_lossy(&resp);
-        assert!(header_str.starts_with("HTTP/1.1 200 OK"));
-        assert!(header_str.contains("Content-Type: image/png"));
-
-        // 3.5.4 檔案不存在應回傳 404
-        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
-        let req = format!(
-            "GET /file?path={}&token={} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-            root.join("non_existent.txt").display(),
-            token
-        );
-        http_stream.write_all(req.as_bytes()).unwrap();
-        let mut resp = String::new();
-        http_stream.read_to_string(&mut resp).unwrap();
-        assert!(resp.starts_with("HTTP/1.1 404 Not Found"), "{resp}");
-    }
-
     // 4. 測試 WebSocket 認證閘門：未帶正確 token 時被斷線
     {
         let mut ws_stream = TcpStream::connect(&web_addr).unwrap();
@@ -351,6 +292,77 @@ fn test_web_companion_http_and_websocket() {
         let models = models.expect("WebSocket 應收到 Models 回應");
         assert_eq!(models[0].id, "", "第一項是依設定檔預設");
         assert!(models.iter().any(|m| m.id == "opus"));
+    }
+
+    // 8. 測試 HTTP GET /file 檔案內容檢視端點 (文字檔、圖片、目錄白名單隔離)
+    {
+        let test_txt = root.join("hello.rs");
+        fs::write(&test_txt, "fn main() { println!(\"Hello\"); }\n").unwrap();
+
+        // 8.1 正確 Token 讀取文字檔
+        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
+        let req = format!(
+            "GET /file?path={}&token={} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            test_txt.display(),
+            token
+        );
+        http_stream.write_all(req.as_bytes()).unwrap();
+        let mut resp = String::new();
+        http_stream.read_to_string(&mut resp).unwrap();
+        assert!(resp.starts_with("HTTP/1.1 200 OK"), "{resp}");
+        assert!(resp.contains("Content-Type: text/plain"));
+        assert!(resp.contains("println!(\"Hello\")"));
+
+        // 8.2 錯誤 Token 應拒絕 (401)
+        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
+        let req = format!(
+            "GET /file?path={}&token=wrong_token HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            test_txt.display()
+        );
+        http_stream.write_all(req.as_bytes()).unwrap();
+        let mut resp = String::new();
+        http_stream.read_to_string(&mut resp).unwrap();
+        assert!(resp.starts_with("HTTP/1.1 401 Unauthorized"), "{resp}");
+
+        // 8.3 讀取圖片檔 (Content-Type 應為 image/png)
+        let test_png = root.join("icon.png");
+        fs::write(&test_png, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]).unwrap();
+        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
+        let req = format!(
+            "GET /file?path={}&token={} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            test_png.display(),
+            token
+        );
+        http_stream.write_all(req.as_bytes()).unwrap();
+        let mut resp = Vec::new();
+        http_stream.read_to_end(&mut resp).unwrap();
+        let header_str = String::from_utf8_lossy(&resp);
+        assert!(header_str.starts_with("HTTP/1.1 200 OK"));
+        assert!(header_str.contains("Content-Type: image/png"));
+
+        // 8.4 檔案不存在應回傳 404
+        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
+        let req = format!(
+            "GET /file?path={}&token={} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            root.join("non_existent.txt").display(),
+            token
+        );
+        http_stream.write_all(req.as_bytes()).unwrap();
+        let mut resp = String::new();
+        http_stream.read_to_string(&mut resp).unwrap();
+        assert!(resp.starts_with("HTTP/1.1 404 Not Found"), "{resp}");
+
+        // 8.5 目錄白名單隔離：工作區外的檔案應回傳 403 Forbidden
+        let mut http_stream = TcpStream::connect(&web_addr).unwrap();
+        let req = format!(
+            "GET /file?path=/etc/passwd&token={} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            token
+        );
+        http_stream.write_all(req.as_bytes()).unwrap();
+        let mut resp = String::new();
+        http_stream.read_to_string(&mut resp).unwrap();
+        assert!(resp.starts_with("HTTP/1.1 403 Forbidden"), "{resp}");
+        assert!(resp.contains("拒絕存取：路徑不在工作區範圍內"));
     }
 
     let _ = fs::remove_dir_all(&root);

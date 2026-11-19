@@ -2077,7 +2077,7 @@ msgstr ""
 msgid "顯示全部專案的 session、Bus 訊息與任務，P 只看本專案"
 msgstr ""
 
-#: crates/termade-tui/src/attach.rs
+#: crates/termade-tui/src/attach.rs crates/termade-tui/src/attach.rs
 msgid "寫入暫存圖片失敗：{e}"
 msgstr ""
 
