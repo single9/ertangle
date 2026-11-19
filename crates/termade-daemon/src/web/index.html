@@ -334,6 +334,8 @@
       width: 100%;
       animation: turnFadeIn 0.2s ease;
     }
+    /* 串流中被替換的既有對話框不重播淡入，否則每個輸出片段都會從透明閃一次。 */
+    .chat-turn.turn-updated { animation: none; }
     @keyframes turnFadeIn {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
@@ -2563,19 +2565,55 @@
       return turns;
     }
 
+    // 每筆 record (串流輸出片段、cost、context…) 都會要求重繪；合併到下一個 frame 只畫一次，
+    // 避免手機上逐字稿反覆清空重建造成閃爍。
+    let chatRenderPending = false;
     function renderCurrentChatTranscript() {
+      if (chatRenderPending) return;
+      chatRenderPending = true;
+      requestAnimationFrame(() => {
+        chatRenderPending = false;
+        renderChatTranscriptNow();
+      });
+    }
+
+    // 以 HTML 字串比對每一則，只替換內容有變的節點：未變動的對話框不重建，
+    // 已展開的 <details> (思考過程、工具呼叫) 在替換時保留展開狀態。
+    function reconcileChatRows(box, rows) {
+      if (box.children.length && box.children[0].dataset.html === undefined) box.innerHTML = "";
+      rows.forEach((r, i) => {
+        const key = r.className + "\u0000" + r.html;
+        const old = box.children[i];
+        if (old && old.dataset.html === key) return;
+        const row = document.createElement("div");
+        row.className = r.className;
+        row.innerHTML = r.html;
+        row.dataset.html = key;
+        if (old) {
+          row.classList.add("turn-updated");
+          const openFlags = Array.from(old.querySelectorAll("details")).map(d => d.open);
+          row.querySelectorAll("details").forEach((d, j) => { if (openFlags[j]) d.open = true; });
+          box.replaceChild(row, old);
+        } else {
+          box.appendChild(row);
+        }
+      });
+      while (box.children.length > rows.length) box.removeChild(box.lastChild);
+    }
+
+    function renderChatTranscriptNow() {
       const box = document.getElementById("chat-transcript");
       const prevScrollTop = box.scrollTop;
       const isNearBottom = box.scrollHeight - box.clientHeight - prevScrollTop < 60;
+      const rows = [];
 
-      box.innerHTML = "";
       if (!activeSession) {
-        box.innerHTML = `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無可用 Session，點擊上方選單建立新對話</div>`;
+        reconcileChatRows(box, [{ className: "chat-empty", html: `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無可用 Session，點擊上方選單建立新對話</div>` }]);
         return;
       }
       const lines = state.transcripts[activeSession] || [];
       if (lines.length === 0) {
-        box.innerHTML = `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無對話紀錄，請在下方輸入 Prompt 開始互動</div>`;
+        reconcileChatRows(box, [{ className: "chat-empty", html: `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無對話紀錄，請在下方輸入 Prompt 開始互動</div>` }]);
         return;
       }
 
@@ -2586,9 +2624,8 @@
 
       turns.forEach(turn => {
         if (turn.type === "user") {
-          const row = document.createElement("div");
-          row.className = "chat-turn turn-user";
-          row.innerHTML = `
+          const row = { className: "chat-turn turn-user" };
+          row.html = `
             <div class="turn-header">
               <span class="user-tag">你</span>
             </div>
@@ -2596,12 +2633,11 @@
               <div class="bubble-content">${renderSimpleMarkdown(turn.text)}</div>
             </div>
           `;
-          box.appendChild(row);
+          rows.push(row);
         } else if (turn.type === "peer") {
-          const row = document.createElement("div");
-          row.className = "chat-turn turn-peer";
+          const row = { className: "chat-turn turn-peer" };
           const who = turn.from === "termade" ? "termade 通知" : `來自 ${turn.from}`;
-          row.innerHTML = `
+          row.html = `
             <div class="turn-header">
               <span class="peer-tag">${escapeHtml(who)}</span>
             </div>
@@ -2609,10 +2645,9 @@
               <div class="bubble-content">${renderSimpleMarkdown(turn.text)}</div>
             </div>
           `;
-          box.appendChild(row);
+          rows.push(row);
         } else if (turn.type === "agent") {
-          const row = document.createElement("div");
-          row.className = "chat-turn turn-agent";
+          const row = { className: "chat-turn turn-agent" };
 
           let html = `
             <div class="turn-header">
@@ -2657,15 +2692,13 @@
             }
           }
 
-          row.innerHTML = html;
-          box.appendChild(row);
+          row.html = html;
+          rows.push(row);
         } else if (turn.type === "system") {
-          const row = document.createElement("div");
-          row.className = "chat-turn turn-system";
-          row.innerHTML = `<span class="system-pill">${escapeHtml(turn.text)}</span>`;
-          box.appendChild(row);
+          rows.push({ className: "chat-turn turn-system", html: `<span class="system-pill">${escapeHtml(turn.text)}</span>` });
         }
       });
+      reconcileChatRows(box, rows);
 
       if (isNearBottom || prevScrollTop === 0) {
         box.scrollTop = box.scrollHeight;
