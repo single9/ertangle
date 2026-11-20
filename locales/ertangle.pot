@@ -3258,7 +3258,7 @@ msgid "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  j/k 選 session  Enter 開逐字稿  Esc/F 返回  E 顯示已結束  ? 說明"
+msgid "  j/k 選 session  Enter 開逐字稿  l 圖／清單  Esc/F 返回  E 顯示已結束"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3289,7 +3289,7 @@ msgstr ""
 msgid "任務 {list}"
 msgstr ""
 
-#: crates/ertangle-tui/src/flow/draw.rs
+#: crates/ertangle-tui/src/flow/draw.rs crates/ertangle-tui/src/flow/graph.rs
 msgid "… {n} 個已結束 (E 顯示)"
 msgstr ""
 

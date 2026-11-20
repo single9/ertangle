@@ -168,3 +168,22 @@ opencode (本機 gemma4)：`spawn nx --prompt "用 shell 執行 sleep 25…"`，
 沒有驗證：`⧗` 佇列標記 (opencode 回合結束太快，無法讓 prompt 留在佇列，只有單元測試)；`?`／`!perm` 標記；多主機時的主機名稱；edge 上限 40 條 (只有單元測試)。
 
 另外發現 (非 T76 範圍)：連續對同一個 opencode session 送兩個 prompt 時，daemon log 出現 `Session already has an active ACP prompt`，session 狀態回到 `idle` 且佇列是空的，第二個 prompt 疑似遺失而不是排入佇列。
+
+## T77 Flow 動態節點圖 (實機，2026-11-21)
+
+環境同 T76 (獨立 tmux server 與暫存目錄 daemon、opencode 本機 gemma4)。session 樹：`coord` 下有 `worker/a`、`worker/b`、`worker/c`，`worker/a` 下有 `tester/a2`，另有一個沒有 parent 的 `tester/a1`；T4 指派給 `worker/b` 並相依 `worker/a` 的 T3。
+
+| 驗證項 | 做法 | 結果 |
+| --- | --- | --- |
+| 樹狀版面 | 120×40 按 `F` | 三層方框，父節點置中於子節點上方，層與層之間以 Braille 線相連；游標節點為雙線框 |
+| 依賴邊 | 目視 | `worker/b` 與 `worker/a` 之間是紅色虛線 |
+| 訊息封包 | `send --from coord --to worker/c` 後 0.6 秒擷取 | `◆` 帶殘影在 `coord` 往 `worker/c` 的連線上 |
+| broadcast | `send --from coord --broadcast` 後 0.5 秒擷取 | 畫面上同時有 5 個 `◆`，對應其他 5 個節點 |
+| 呼吸效果 | 每 0.3 秒擷取忙碌節點的框線顏色 | 256 色索引依序變化 22 → 34 → 40 → 28 |
+| 80×24 | `resize-window -x 80 -y 24` | 三層樹仍以圖形顯示 (層間 1 列)，邊列表因高度不足省略 |
+| `l` 切換 | 按 `l` 兩次 | 切到 T76 清單再切回圖形 |
+| 游標與 `Enter` | `j` 後 `Enter` | 雙線框移到 `worker/a`；切回 Transcript 並選取 `worker/a` |
+
+修正：一開始方框內的狀態文字 (例如 `busy`) 與狀態符號重複，還會被截斷；改成只有沒有其他標記時才顯示狀態文字。層間最少列數從 2 改成 1，3 層的樹才能在 80×24 顯示。
+
+沒有驗證：`WaitingApproval` 的閃爍 (只有單元測試)；頻道訊息 (設計上不畫封包，只出現在邊列表)；60 ms 重繪頻率對遠端 SSH 頻寬的實際影響。

@@ -108,7 +108,9 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         CenterView::Flow => {
             let model = crate::flow::build_flow_model(app, ertangle_core::now_millis());
             let cursor = app.flow_cursor.min(model.nodes.len().saturating_sub(1));
-            crate::flow::draw_flow(f, center, &model, cursor);
+            if app.flow_list || !crate::flow::draw_flow_graph(f, center, &model, cursor) {
+                crate::flow::draw_flow(f, center, &model, cursor);
+            }
         }
     }
     if let Some(a) = bus_area {
@@ -2421,7 +2423,7 @@ pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
         CenterView::Worktrees => tr!("  ? 說明  M 合併  G 清理  q 離開"),
         CenterView::Tasks => tr!("  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"),
         CenterView::Flow => {
-            tr!("  j/k 選 session  Enter 開逐字稿  Esc/F 返回  E 顯示已結束  ? 說明")
+            tr!("  j/k 選 session  Enter 開逐字稿  l 圖／清單  Esc/F 返回  E 顯示已結束")
         }
         CenterView::Grid => tr!("  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"),
     };

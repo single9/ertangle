@@ -324,6 +324,8 @@ pub(crate) struct App {
     pub(crate) flow_cursor: usize,
     /// T76：離開 Flow 時要回到的視圖。
     pub(crate) flow_return: CenterView,
+    /// T77: force the T76 text list instead of the animated graph.
+    pub(crate) flow_list: bool,
     pub(crate) task_offset: usize,
     /// 最近一次繪製時任務清單的區域，以及每個可見列對應的任務索引 (供滑鼠)。
     pub(crate) tasks_area: Rect,
@@ -463,6 +465,7 @@ impl App {
             task_cursor: 0,
             flow_cursor: 0,
             flow_return: CenterView::Transcript,
+            flow_list: false,
             task_offset: 0,
             tasks_area: Rect::default(),
             task_rows: Vec::new(),

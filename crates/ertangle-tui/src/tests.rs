@@ -5390,3 +5390,19 @@ fn flow_real_model_lists_session_and_enter_selects_it() {
     assert_eq!(app.view, CenterView::Transcript);
     assert_eq!(app.selected_id().as_deref(), Some("ses_test"));
 }
+
+#[test]
+fn flow_l_toggles_graph_and_list() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    key(&mut app, &mut w, KeyCode::Char('F'));
+    let graph = render(&mut app);
+    assert!(graph.contains('╔'), "graph mode draws the cursor box");
+    key(&mut app, &mut w, KeyCode::Char('l'));
+    assert!(app.flow_list);
+    let list = render(&mut app);
+    assert!(!list.contains('╔'));
+    assert!(list.contains("worker"));
+    key(&mut app, &mut w, KeyCode::Char('l'));
+    assert!(!app.flow_list);
+}

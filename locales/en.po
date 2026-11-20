@@ -3272,8 +3272,8 @@ msgid "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"
 msgstr "  j/k select task  Enter go to assignee  :task-status <status>  ? help"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  j/k 選 session  Enter 開逐字稿  Esc/F 返回  E 顯示已結束  ? 說明"
-msgstr "  j/k select session  Enter open transcript  Esc/F back  E show ended  ? help"
+msgid "  j/k 選 session  Enter 開逐字稿  l 圖／清單  Esc/F 返回  E 顯示已結束"
+msgstr "  j/k select session  Enter open transcript  l graph/list  Esc/F back  E show ended"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
@@ -3303,7 +3303,7 @@ msgstr "{n} msgs/10m"
 msgid "任務 {list}"
 msgstr "tasks {list}"
 
-#: crates/ertangle-tui/src/flow/draw.rs
+#: crates/ertangle-tui/src/flow/draw.rs crates/ertangle-tui/src/flow/graph.rs
 msgid "… {n} 個已結束 (E 顯示)"
 msgstr "… {n} ended (E to show)"
 
@@ -4479,6 +4479,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "  j/k 選 session  Enter 開逐字稿  Esc/F 返回  E 顯示已結束  ? 說明"
+#~ msgstr "  j/k select session  Enter open transcript  Esc/F back  E show ended  ? help"
 
 #~ msgid "{live} 存活 · {busy} 忙碌 · {waiting} 等待 · {ended} 已結束 │ 近 10 分鐘 {msgs} 則訊息 │ 任務 todo {todo} doing {doing} blocked {blocked} review {review}"
 #~ msgstr "{live} live · {busy} busy · {waiting} waiting · {ended} ended │ {msgs} msgs in 10m │ tasks todo {todo} doing {doing} blocked {blocked} review {review}"

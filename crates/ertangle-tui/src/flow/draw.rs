@@ -104,7 +104,7 @@ pub(super) fn summary_text(model: &FlowModel) -> String {
     groups.join(" │ ")
 }
 
-fn status_style(status: SessionStatus) -> Style {
+pub(super) fn status_style(status: SessionStatus) -> Style {
     match status {
         SessionStatus::Busy => Style::default().fg(Color::Green),
         SessionStatus::WaitingApproval => Style::default().fg(Color::Yellow),
@@ -126,8 +126,8 @@ fn status_name(status: SessionStatus) -> &'static str {
     }
 }
 
-/// Badge text for one node; `narrow` keeps only the unread badge.
-fn badges(node: &FlowNode, narrow: bool) -> String {
+/// Badge parts for one node, without the status name; `narrow` keeps only unread.
+fn badge_parts(node: &FlowNode, narrow: bool) -> Vec<String> {
     let mut parts: Vec<String> = Vec::new();
     if node.unread > 0 {
         parts.push(format!("✉{}", node.unread));
@@ -145,9 +145,28 @@ fn badges(node: &FlowNode, narrow: bool) -> String {
         if !node.tasks.is_empty() {
             parts.push(format!("T:{}", node.tasks.len()));
         }
+    }
+    parts
+}
+
+/// Badge text for one list row; `narrow` keeps only the unread badge.
+pub(super) fn badges(node: &FlowNode, narrow: bool) -> String {
+    let mut parts = badge_parts(node, narrow);
+    if !narrow {
         parts.push(status_name(node.status).to_string());
     }
     parts.join(" ")
+}
+
+/// Badge text for a graph box: the glyph already shows status, so the name is
+/// only used when there is nothing else to show.
+pub(super) fn box_badges(node: &FlowNode) -> String {
+    let parts = badge_parts(node, false);
+    if parts.is_empty() {
+        status_name(node.status).to_string()
+    } else {
+        parts.join(" ")
+    }
 }
 
 /// Node board rows, scrolled so the cursor stays visible.
@@ -291,7 +310,12 @@ fn edge_line(model: &FlowModel, e: &FlowEdge, w: usize, narrow: bool) -> Line<'s
 }
 
 /// Edge ribbon rows; the last row becomes `+N more` when edges do not all fit.
-fn edge_lines(model: &FlowModel, rows: usize, w: usize, narrow: bool) -> Vec<Line<'static>> {
+pub(super) fn edge_lines(
+    model: &FlowModel,
+    rows: usize,
+    w: usize,
+    narrow: bool,
+) -> Vec<Line<'static>> {
     let total = model.edges.len();
     let dropped = model.edges_truncated;
     let fits_all = total <= rows && dropped == 0;
@@ -317,7 +341,7 @@ fn edge_lines(model: &FlowModel, rows: usize, w: usize, narrow: bool) -> Vec<Lin
 }
 
 /// Truncates `s` to at most `w` display columns, ending with `…` when cut.
-fn truncate(s: &str, w: usize) -> String {
+pub(super) fn truncate(s: &str, w: usize) -> String {
     if s.width() <= w {
         return s.to_string();
     }

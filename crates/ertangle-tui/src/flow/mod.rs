@@ -5,9 +5,11 @@
 //! Design: `docs/tickets/T76-tui-session-flow-dashboard.md`.
 
 mod draw;
+mod graph;
 mod model;
 
 pub(crate) use draw::draw_flow;
+pub(crate) use graph::draw_flow_graph;
 pub(crate) use model::build_flow_model;
 
 use ertangle_core::{MsgKind, SessionId, SessionStatus, TaskId, TaskStatus};
@@ -18,6 +20,8 @@ pub(crate) const FLOW_WINDOW_MS: u64 = 10 * 60 * 1000;
 pub(crate) const FLOW_EDGE_CAP: usize = 40;
 /// Edges whose `last_ts` is within this window of `now_ms` show a pulse marker.
 pub(crate) const FLOW_PULSE_MS: u64 = 2000;
+/// T77: how long a message packet takes to travel from sender to receiver in graph mode.
+pub(crate) const FLOW_PACKET_MS: u64 = 1500;
 
 /// Everything the Flow view renders, derived from `App` state at one instant.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

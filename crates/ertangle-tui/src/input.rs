@@ -115,6 +115,7 @@ fn handle_flow_key(app: &mut App, key: KeyEvent) -> bool {
             app.view = CenterView::Transcript;
             app.selection = None;
         }
+        KeyCode::Char('l') => app.flow_list = !app.flow_list,
         KeyCode::Esc => app.view = app.flow_return,
         KeyCode::Tab => {
             app.selection = None;
