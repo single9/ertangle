@@ -96,7 +96,13 @@ fn handle_ctrl_key(app: &mut App, key: KeyEvent) -> Result<bool> {
 
 fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     match key.code {
-        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Char('q') => {
+            if let Some(q) = app.selected_question() {
+                crate::menu::start_question_picker(app, &q);
+            } else {
+                app.should_quit = true;
+            }
+        }
         KeyCode::Char('Q') => execute_command(app, writer, "shutdown")?,
         KeyCode::Char('H') => {
             app.cycle_host_filter();
@@ -247,7 +253,13 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             toggle_collapse_current_file(app)
         }
         KeyCode::Char('X') if app.view == CenterView::Diff => discard_diff(app, writer, false)?,
-        KeyCode::Enter | KeyCode::Char('i') => app.start_prompt(),
+        KeyCode::Enter | KeyCode::Char('i') => {
+            if let Some(q) = app.selected_question() {
+                crate::menu::start_question_picker(app, &q);
+            } else {
+                app.start_prompt();
+            }
+        }
         KeyCode::Char('n') => crate::menu::start_spawn_picker(app),
         KeyCode::Char('f') => crate::search::open(app, None),
         KeyCode::Char('m') => {

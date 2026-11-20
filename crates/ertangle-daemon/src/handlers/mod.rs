@@ -139,6 +139,26 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             req,
             decision,
         } => session::handle_permission(shared, reply, session, req, decision),
+        Request::McpQuestion {
+            session,
+            question,
+            header,
+            options,
+            multi_select,
+        } => session::handle_mcp_question(
+            shared,
+            reply,
+            session,
+            question,
+            header,
+            options,
+            multi_select,
+        ),
+        Request::AnswerQuestion {
+            session,
+            id,
+            answers,
+        } => session::handle_answer_question(shared, reply, session, id, answers),
         Request::SessionNote { session, note } => {
             session::handle_note(shared, reply, session, note)
         }

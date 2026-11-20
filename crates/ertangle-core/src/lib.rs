@@ -710,6 +710,55 @@ pub enum Decision {
     Deny,
 }
 
+/// Single option for interactive user question.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuestionOption {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+impl QuestionOption {
+    pub fn new(label: impl Into<String>, description: Option<&str>) -> Self {
+        Self {
+            label: label.into(),
+            description: description.map(str::to_string),
+        }
+    }
+
+    pub fn plain(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            description: None,
+        }
+    }
+}
+
+/// Normalized interactive question from agent to user.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserQuestion {
+    /// Internal request ID (e.g. `qst_...`), returned when answered.
+    pub id: String,
+    pub session: SessionId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header: Option<String>,
+    pub question: String,
+    #[serde(default)]
+    pub options: Vec<QuestionOption>,
+    #[serde(default)]
+    pub multi_select: bool,
+    #[serde(default)]
+    pub custom: bool,
+}
+
+/// Answer payload for an interactive user question.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuestionAnswer {
+    pub id: String,
+    pub session: SessionId,
+    pub answers: Vec<String>,
+}
+
 /// Normalized permission request sent by agent (regardless of source protocol).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionRequest {
@@ -832,6 +881,15 @@ pub enum Event {
         req: String,
         decision: Decision,
     },
+    QuestionRequested {
+        question: UserQuestion,
+    },
+    QuestionResolved {
+        session: SessionId,
+        id: String,
+        #[serde(default)]
+        answers: Vec<String>,
+    },
     BusMessage {
         message: BusMessage,
     },
@@ -933,6 +991,9 @@ pub struct State {
     pub reviews: Vec<ReviewComment>,
     /// Pending approval requests.
     pub pending_permissions: BTreeMap<String, PermissionRequest>,
+    /// Pending interactive user questions.
+    #[serde(default)]
+    pub pending_questions: BTreeMap<String, UserQuestion>,
     /// Session ID -> output text lines.
     pub transcripts: HashMap<SessionId, VecDeque<String>>,
     /// Event log write health status (defaults to normal).
@@ -957,6 +1018,7 @@ impl Default for State {
             artifacts: Vec::new(),
             reviews: Vec::new(),
             pending_permissions: BTreeMap::new(),
+            pending_questions: BTreeMap::new(),
             transcripts: HashMap::new(),
             log_ok: true,
             quotas: BTreeMap::new(),
@@ -1027,6 +1089,7 @@ impl State {
         }
         self.queues.remove(session);
         self.pending_permissions.retain(|_, p| p.session != session);
+        self.pending_questions.retain(|_, q| q.session != session);
     }
 
     /// Applies an event to state. `rec.seq` updates `self.seq`.
@@ -1241,6 +1304,16 @@ impl State {
             }
             Event::PermissionResolved { req, .. } => {
                 self.pending_permissions.remove(req);
+            }
+            Event::QuestionRequested { question } => {
+                self.pending_questions
+                    .insert(question.id.clone(), question.clone());
+                if let Some(s) = self.sessions.get_mut(&question.session) {
+                    s.status = SessionStatus::WaitingApproval;
+                }
+            }
+            Event::QuestionResolved { id, .. } => {
+                self.pending_questions.remove(id);
             }
             Event::BusMessage { message } => {
                 self.messages.push(message.clone());
@@ -2314,6 +2387,47 @@ pub(crate) mod tests {
             },
         ));
         assert!(st.pending_permissions.is_empty());
+    }
+
+    #[test]
+    fn question_requested_and_resolved() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::SessionStarted {
+                session: crate::tests::sample_session("s1"),
+            },
+        ));
+        st.apply(&rec(
+            2,
+            Event::QuestionRequested {
+                question: UserQuestion {
+                    id: "q1".into(),
+                    session: "s1".into(),
+                    header: Some("Database".into()),
+                    question: "Which database?".into(),
+                    options: vec![
+                        QuestionOption::new("PostgreSQL", Some("Recommended")),
+                        QuestionOption::new("SQLite", None),
+                    ],
+                    multi_select: false,
+                    custom: true,
+                },
+            },
+        ));
+        assert_eq!(st.sessions["s1"].status, SessionStatus::WaitingApproval);
+        assert_eq!(st.pending_questions.len(), 1);
+        assert_eq!(st.pending_questions["q1"].options[0].label, "PostgreSQL");
+
+        st.apply(&rec(
+            3,
+            Event::QuestionResolved {
+                session: "s1".into(),
+                id: "q1".into(),
+                answers: vec!["PostgreSQL".into()],
+            },
+        ));
+        assert!(st.pending_questions.is_empty());
     }
 
     #[test]

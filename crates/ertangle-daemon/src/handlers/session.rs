@@ -1556,6 +1556,105 @@ pub(crate) fn ask_user(
     }
 }
 
+/// 向使用者提出互動問題並阻塞等待答案 (最多 5 分鐘，逾時視為放棄)。
+pub(crate) fn ask_user_question(
+    shared: &Arc<Shared>,
+    sid: &str,
+    question: ertangle_core::UserQuestion,
+) -> Vec<String> {
+    const QUESTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let q_id = question.id.clone();
+    let sid_str = sid.to_string();
+    lock(&shared.inner)
+        .question_waiters
+        .insert(q_id.clone(), tx);
+    shared.emit(Event::QuestionRequested { question });
+    match rx.recv_timeout(QUESTION_TIMEOUT) {
+        Ok(answers) => answers,
+        Err(_) => {
+            lock(&shared.inner).question_waiters.remove(&q_id);
+            shared.emit(Event::QuestionResolved {
+                session: sid_str,
+                id: q_id,
+                answers: Vec::new(),
+            });
+            Vec::new()
+        }
+    }
+}
+
+/// MCP `ertangle_question`：提出問題並等候人類回答。
+pub(crate) fn handle_mcp_question(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    question: String,
+    header: Option<String>,
+    options: Vec<String>,
+    multi_select: bool,
+) {
+    let sid = shared.resolve_session(&session);
+    let q_options = options
+        .into_iter()
+        .map(ertangle_core::QuestionOption::plain)
+        .collect();
+    let q = ertangle_core::UserQuestion {
+        id: ertangle_core::new_id("qst"),
+        session: sid.clone(),
+        question,
+        header,
+        options: q_options,
+        multi_select,
+        custom: true,
+    };
+    let answers = ask_user_question(shared, &sid, q);
+    let _ = reply.send(Frame::QuestionAnswer { answers });
+}
+
+/// 人類回覆問題。
+pub(crate) fn handle_answer_question(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    id: String,
+    answers: Vec<String>,
+) {
+    let sid = shared.resolve_session(&session);
+    let waiter = lock(&shared.inner).question_waiters.remove(&id);
+    if let Some(tx) = waiter {
+        let _ = tx.send(answers.clone());
+        shared.emit(Event::QuestionResolved {
+            session: sid,
+            id,
+            answers,
+        });
+        let _ = reply.send(Frame::ok());
+        return;
+    }
+    match shared.control(&session) {
+        Some((real_sid, ctl)) => match ctl.resolve_question(&id, &answers) {
+            Ok(()) => {
+                shared.emit(Event::QuestionResolved {
+                    session: real_sid,
+                    id,
+                    answers,
+                });
+                let _ = reply.send(Frame::ok());
+            }
+            Err(e) => {
+                let _ = reply.send(Frame::error(tr!("問題回覆失敗：{e}", e = e)));
+            }
+        },
+        None => {
+            let _ = reply.send(Frame::error(tr!(
+                "找不到 session {session}",
+                session = session
+            )));
+        }
+    }
+}
+
 pub(crate) fn handle_note(shared: &Arc<Shared>, reply: &ClientTx, session: String, note: String) {
     let sid = shared.resolve_session(&session);
     shared.emit(Event::SessionNote { session: sid, note });

@@ -285,6 +285,8 @@ pub(crate) struct Inner {
     pub(crate) waiters: Vec<Waiter>,
     /// 等待人類回覆的 MCP 核准請求：req id → 決定通道。
     pub(crate) approval_waiters: HashMap<String, Sender<Decision>>,
+    /// 等待人類回覆的互動問題：qst id → 答案通道。
+    pub(crate) question_waiters: HashMap<String, Sender<Vec<String>>>,
     pub(crate) bus_guard: BusGuard,
     pub(crate) policy: PolicyEngine,
     pub(crate) default_cwd: PathBuf,
@@ -362,6 +364,7 @@ impl Shared {
                 pending_nudge: HashMap::new(),
                 waiters: Vec::new(),
                 approval_waiters: HashMap::new(),
+                question_waiters: HashMap::new(),
                 bus_guard: BusGuard::default(),
                 policy,
                 default_cwd,
@@ -624,6 +627,29 @@ impl Shared {
                 output,
             },
             AgentEvent::Permission(p) => Event::PermissionRequested { request: p },
+            AgentEvent::Question(q) => {
+                let sh = self.clone();
+                let q_id = q.id.clone();
+                let sid_c = sid.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(300));
+                    let is_pending = {
+                        let inner = lock(&sh.inner);
+                        inner.state.pending_questions.contains_key(&q_id)
+                    };
+                    if is_pending {
+                        if let Some((_sid, ctl)) = sh.control(&sid_c) {
+                            let _ = ctl.resolve_question(&q_id, &[]);
+                        }
+                        sh.emit(Event::QuestionResolved {
+                            session: sid_c,
+                            id: q_id,
+                            answers: Vec::new(),
+                        });
+                    }
+                });
+                Event::QuestionRequested { question: q }
+            }
             AgentEvent::Cost(c) => Event::Cost {
                 session: sid.clone(),
                 cost: c,

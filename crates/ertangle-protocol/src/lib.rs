@@ -253,6 +253,24 @@ pub enum Request {
         req: String,
         decision: Decision,
     },
+    /// agent (經 MCP `ertangle_question`) 提出問題並等待使用者回覆。
+    McpQuestion {
+        session: SessionId,
+        question: String,
+        #[serde(default)]
+        header: Option<String>,
+        #[serde(default)]
+        options: Vec<String>,
+        #[serde(default)]
+        multi_select: bool,
+    },
+    /// 回覆互動問題。
+    AnswerQuestion {
+        session: SessionId,
+        id: String,
+        #[serde(default)]
+        answers: Vec<String>,
+    },
     /// 送訊息到匯流排 (agent 之間溝通)。
     BusSend {
         #[serde(default)]
@@ -416,6 +434,10 @@ pub enum Frame {
     /// 核准決策回覆 (給 MCP `ertangle_approve` 或 client)。
     PermissionDecision {
         decision: Decision,
+    },
+    /// 互動問題回覆 (給 MCP `ertangle_question` 或 client)。
+    QuestionAnswer {
+        answers: Vec<String>,
     },
     /// 操作成功 (可帶說明)。
     Ok {
@@ -611,5 +633,37 @@ mod tests {
         assert_eq!(role, Some(Role::Coordinator));
         assert_eq!(parent, Some(ParentChange::None));
         assert!(force);
+    }
+
+    #[test]
+    fn question_protocol_roundtrip() {
+        let req = Request::AnswerQuestion {
+            session: "ses_1".into(),
+            id: "qst_1".into(),
+            answers: vec!["Option A".into(), "Option B".into()],
+        };
+        let line = encode_line(&req).unwrap();
+        let back: Request = decode_line(line.trim()).unwrap();
+        let Request::AnswerQuestion {
+            session,
+            id,
+            answers,
+        } = back
+        else {
+            panic!()
+        };
+        assert_eq!(session, "ses_1");
+        assert_eq!(id, "qst_1");
+        assert_eq!(answers, vec!["Option A", "Option B"]);
+
+        let frame = Frame::QuestionAnswer {
+            answers: vec!["Accepted".into()],
+        };
+        let f_line = encode_line(&frame).unwrap();
+        let f_back: Frame = decode_line(f_line.trim()).unwrap();
+        let Frame::QuestionAnswer { answers: f_ans } = f_back else {
+            panic!()
+        };
+        assert_eq!(f_ans, vec!["Accepted"]);
     }
 }

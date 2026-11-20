@@ -4206,3 +4206,76 @@ fn test_resume_picker_tab_toggle_and_project_command() {
 
     let _ = std::fs::remove_dir_all(&p_dir);
 }
+
+#[test]
+fn test_question_picker_single_and_multi_select() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let s = Session {
+        id: "ses_q".into(),
+        kind: AgentKind::OpenCode,
+        label: "worker/q".into(),
+        cwd: "/work".into(),
+        branch: None,
+        role: Role::Worker,
+        status: SessionStatus::Busy,
+        model: None,
+        cost: Cost::default(),
+        parent: None,
+        created_ms: ertangle_core::now_millis(),
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: None,
+        context: None,
+        native_id: None,
+        permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
+        handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+    };
+    app.state.sessions.insert("ses_q".into(), s);
+    app.selected = 0;
+
+    let q = ertangle_core::UserQuestion {
+        id: "qst_1".into(),
+        session: "ses_q".into(),
+        question: "Select flavor".into(),
+        header: Some("Flavor".into()),
+        options: vec![
+            ertangle_core::QuestionOption::plain("Vanilla"),
+            ertangle_core::QuestionOption::plain("Chocolate"),
+        ],
+        multi_select: true,
+        custom: true,
+    };
+    app.state
+        .pending_questions
+        .insert("qst_1".into(), q.clone());
+
+    assert_eq!(app.selected_question().unwrap().id, "qst_1");
+
+    crate::menu::start_question_picker(&mut app, &q);
+    assert_eq!(app.mode, Mode::Pick);
+    let p = app.picker.as_ref().unwrap();
+    assert_eq!(p.items.len(), 2);
+
+    // Toggle first option with Space
+    let space_key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
+    crate::menu::handle_pick_key(&mut app, &mut w, space_key).unwrap();
+    if let crate::menu::PickStage::Question { selected, .. } = &app.picker.as_ref().unwrap().stage {
+        assert!(selected.contains("Vanilla"));
+    } else {
+        panic!("unexpected stage");
+    }
+
+    // Press Enter to submit
+    let enter_key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+    crate::menu::handle_pick_key(&mut app, &mut w, enter_key).unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.picker.is_none());
+}

@@ -428,6 +428,33 @@ pub fn tool_definitions() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "ertangle_question",
+            "description": "Ask the user an interactive question with options or freeform text, and wait for their answer.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question to ask the user"
+                    },
+                    "header": {
+                        "type": "string",
+                        "description": "Short category or title for the question"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Available choices for the user to select from"
+                    },
+                    "multi_select": {
+                        "type": "boolean",
+                        "description": "Whether the user can select multiple choices (default false)"
+                    }
+                },
+                "required": ["question"]
+            }
+        }),
+        json!({
             "name": "ertangle_diff",
             "description": "Get the git diff of a session's workspace (for a coordinator or reviewer to inspect changes).",
             "annotations": { "readOnlyHint": true },
@@ -826,6 +853,36 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             Ok(json!({ "ok": true }))
         }
 
+        "ertangle_question" => {
+            let question = args["question"]
+                .as_str()
+                .context("missing required parameter `question`")?
+                .to_string();
+            let header = args["header"].as_str().map(|s| s.to_string());
+            let options: Vec<String> = args["options"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let multi_select = args["multi_select"].as_bool().unwrap_or(false);
+
+            let frame = roundtrip(&Request::McpQuestion {
+                session: session.to_string(),
+                question,
+                header,
+                options,
+                multi_select,
+            })?;
+            let answers = match frame {
+                Frame::QuestionAnswer { answers } => answers,
+                _ => Vec::new(),
+            };
+            Ok(json!({ "answers": answers }))
+        }
+
         "ertangle_diff" => {
             let target = args["session"].as_str().unwrap_or(session).to_string();
             match roundtrip(&Request::WorktreeDiff { session: target })? {
@@ -919,6 +976,7 @@ mod tests {
             "ertangle_spawn",
             "ertangle_artifact_share",
             "ertangle_status",
+            "ertangle_question",
             "ertangle_approve",
         ] {
             assert!(names.contains(&expected), "missing tool {expected}");

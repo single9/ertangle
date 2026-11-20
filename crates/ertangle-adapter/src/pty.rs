@@ -71,6 +71,14 @@ impl AgentControl for PtyControl {
         Ok(())
     }
 
+    /// PTY resolves user questions by writing the answer string directly to stdin.
+    fn resolve_question(&self, _id: &str, answers: &[String]) -> Result<()> {
+        if let Some(ans) = answers.first() {
+            self.send_input(&format!("{ans}\n"))?;
+        }
+        Ok(())
+    }
+
     fn transport(&self) -> &'static str {
         "pty"
     }

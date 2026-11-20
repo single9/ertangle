@@ -17,6 +17,7 @@ pub mod claude;
 pub mod codex;
 pub mod models;
 pub mod pty;
+pub mod question;
 pub mod stderr;
 pub mod stream;
 
@@ -43,6 +44,7 @@ pub enum AgentEvent {
         output: Option<String>,
     },
     Permission(PermissionRequest),
+    Question(ertangle_core::UserQuestion),
     Cost(Cost),
     Model(String),
     /// Native slash command names of the agent (without `/`).
@@ -127,6 +129,14 @@ pub trait AgentControl: Send + Sync {
     }
     /// Resolves a permission request.
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
+    /// Resolves an interactive user question.
+    fn resolve_question(&self, id: &str, answers: &[String]) -> Result<()> {
+        let _ = (id, answers);
+        bail!(
+            "{}",
+            tr!("{transport} 不支援回答問題", transport = self.transport())
+        )
+    }
     /// Actual transport used by this session (for display).
     fn transport(&self) -> &'static str;
     /// Gets the agent main process PID.

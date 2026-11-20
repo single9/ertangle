@@ -29,6 +29,7 @@ use tr::tr;
 
 /// Reads the running Claude event stream.
 struct Conn {
+    session_id: String,
     stdin: Mutex<ChildStdin>,
     stream: Mutex<StreamBuf>,
     /// Whether this message has already streamed via deltas (avoids duplicate output with the full assistant message).
@@ -168,9 +169,20 @@ impl Conn {
                 }
                 "tool_use" => {
                     self.flush_stream();
+                    let name = block["name"].as_str().unwrap_or("tool").to_string();
+                    let input = block["input"].to_string();
+                    if crate::question::is_question_tool(&name) {
+                        if let Some(q) = crate::question::parse_tool_call_question(
+                            &self.session_id,
+                            &name,
+                            &input,
+                        ) {
+                            let _ = self.tx.send(AgentEvent::Question(q));
+                        }
+                    }
                     let _ = self.tx.send(AgentEvent::ToolCall {
-                        name: block["name"].as_str().unwrap_or("tool").to_string(),
-                        input: block["input"].to_string(),
+                        name,
+                        input,
                         ok: None,
                         output: None,
                     });
@@ -546,6 +558,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| tr!("取得 claude stdout 失敗"))?;
 
     let conn = Arc::new(Conn {
+        session_id: spec.id.clone(),
         stdin: Mutex::new(stdin),
         stream: Mutex::new(StreamBuf::default()),
         saw_delta: AtomicBool::new(false),

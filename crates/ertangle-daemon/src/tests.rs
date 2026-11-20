@@ -1885,6 +1885,50 @@ fn approval_ask_waits_for_human_decision() {
 }
 
 #[test]
+fn mcp_question_waits_for_human_answer() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: ask_sess("ses-qst", PermissionPolicy::Ask),
+    });
+    let s2 = shared.clone();
+    let h = std::thread::spawn(move || {
+        let (tx, rx) = client_channel(None);
+        s2.handle(
+            &tx,
+            Request::McpQuestion {
+                session: "ses-qst".into(),
+                question: "Choose a database".into(),
+                header: Some("Database".into()),
+                options: vec!["PostgreSQL".into(), "SQLite".into()],
+                multi_select: false,
+            },
+        );
+        let r = rx.try_iter().next();
+        r
+    });
+    let qst_id = loop {
+        if let Some(q) = lock(&shared.inner).state.pending_questions.keys().next() {
+            break q.clone();
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let (tx, _rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::AnswerQuestion {
+            session: "ses-qst".into(),
+            id: qst_id,
+            answers: vec!["PostgreSQL".into()],
+        },
+    );
+    let reply = h.join().unwrap();
+    assert!(
+        matches!(reply, Some(Frame::QuestionAnswer { answers }) if answers == vec!["PostgreSQL"])
+    );
+    assert!(lock(&shared.inner).state.pending_questions.is_empty());
+}
+
+#[test]
 fn mcp_permission_auto_policy_answers_immediately_and_deny_wins() {
     let shared = test_shared();
     shared.emit(Event::SessionStarted {

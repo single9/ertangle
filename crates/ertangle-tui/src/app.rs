@@ -792,6 +792,7 @@ impl App {
                     self.worktrees = worktrees;
                 }
             }
+            Frame::QuestionAnswer { .. } => {}
             Frame::Ok { note } => {
                 if let Some(n) = note {
                     self.status = if self.has_multiple_hosts() {
@@ -855,6 +856,16 @@ impl App {
             .values()
             .find(|p| p.session == id)
             .map(|p| p.req.clone())
+    }
+
+    /// 回傳目前選取 session 尚未回覆的提問。
+    pub(crate) fn selected_question(&self) -> Option<ertangle_core::UserQuestion> {
+        let id = self.selected_id()?;
+        self.state
+            .pending_questions
+            .values()
+            .find(|q| q.session == id)
+            .cloned()
     }
 
     pub(crate) fn unread_bus(&self) -> usize {

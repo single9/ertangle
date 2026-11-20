@@ -44,6 +44,8 @@ struct Conn {
     pending: Mutex<HashMap<i64, Sender<Value>>>,
     /// Approvals: internal req id -> (JSON-RPC id, options)
     perms: Mutex<HashMap<String, (Value, Vec<Value>)>>,
+    /// Interactive questions: internal qst id -> (JSON-RPC id, property keys)
+    questions: Mutex<HashMap<String, (Value, Vec<String>)>>,
     /// Line buffer for streaming output (combines token-level chunks into complete lines).
     stream: Mutex<StreamBuf>,
     /// Collaboration instructions prepended to the first prompt (cleared once taken).
@@ -218,6 +220,13 @@ impl Conn {
                 self.flush_stream();
                 let name = tool_name(update);
                 let input = update["rawInput"].to_string();
+                if crate::question::is_question_tool(&name) {
+                    if let Some(q) =
+                        crate::question::parse_tool_call_question(&self.session_id, &name, &input)
+                    {
+                        let _ = self.tx.send(AgentEvent::Question(q));
+                    }
+                }
                 let _ = self.tx.send(AgentEvent::ToolCall {
                     name,
                     input,
@@ -291,6 +300,56 @@ impl Conn {
             bail!("{}", tr!("未知的核准請求：{req}", req = req));
         };
         self.respond(&jid, decision_result(decision, &options));
+        Ok(())
+    }
+
+    fn on_elicitation(&self, msg: &Value) {
+        let jid = extract_request_id(msg);
+        let params = &msg["params"];
+        if let Some((q, keys)) = crate::question::parse_acp_elicitation(&self.session_id, params) {
+            self.questions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(q.id.clone(), (jid, keys));
+            let _ = self.tx.send(AgentEvent::Question(q));
+        } else {
+            self.respond_error(&jid, -32602, "invalid elicitation params");
+        }
+    }
+
+    fn resolve_question(&self, id: &str, answers: &[String]) -> Result<()> {
+        let entry = self
+            .questions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
+        let Some((jid, keys)) = entry else {
+            bail!("{}", tr!("未知的問題請求：{id}", id = id));
+        };
+        if answers.is_empty() {
+            self.respond(
+                &jid,
+                json!({
+                    "action": "decline",
+                    "outcome": { "outcome": "cancelled" }
+                }),
+            );
+        } else {
+            let mut content = serde_json::Map::new();
+            let key = keys
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "answer".to_string());
+            content.insert(key, json!(answers));
+            self.respond(
+                &jid,
+                json!({
+                    "action": "accept",
+                    "content": content,
+                    "outcome": { "outcome": "selected" }
+                }),
+            );
+        }
         Ok(())
     }
 }
@@ -432,6 +491,7 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
             match msg.get("id") {
                 Some(_) => match method {
                     "session/request_permission" => conn.on_permission(&msg),
+                    "elicitation/create" => conn.on_elicitation(&msg),
                     _ => {
                         let id = extract_request_id(&msg);
                         conn.respond_error(&id, -32601, "not supported");
@@ -570,6 +630,10 @@ impl AgentControl for AcpControl {
 
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()> {
         self.conn.resolve(req, decision)
+    }
+
+    fn resolve_question(&self, id: &str, answers: &[String]) -> Result<()> {
+        self.conn.resolve_question(id, answers)
     }
 
     fn transport(&self) -> &'static str {
@@ -735,6 +799,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         next_id: AtomicI64::new(1),
         pending: Mutex::new(HashMap::new()),
         perms: Mutex::new(HashMap::new()),
+        questions: Mutex::new(HashMap::new()),
         stream: Mutex::new(StreamBuf::default()),
         prepend_once: Mutex::new(spec.system_append.clone().filter(|s| !s.trim().is_empty())),
         image_ok: std::sync::atomic::AtomicBool::new(false),
@@ -776,7 +841,10 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         "initialize",
         json!({
             "protocolVersion": 1,
-            "clientCapabilities": { "fs": { "readTextFile": false, "writeTextFile": false } }
+            "clientCapabilities": {
+                "fs": { "readTextFile": false, "writeTextFile": false },
+                "elicitation": { "form": true }
+            }
         }),
         CALL_TIMEOUT,
     )?;

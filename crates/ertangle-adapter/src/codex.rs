@@ -29,6 +29,12 @@ use tr::tr;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 
+struct PendingQuestion {
+    rpc_id: Value,
+    method: String,
+    q_key: Option<String>,
+}
+
 struct Conn {
     session_id: String,
     stdin: Mutex<ChildStdin>,
@@ -36,6 +42,8 @@ struct Conn {
     pending: Mutex<HashMap<i64, Sender<Value>>>,
     /// Approvals: internal req id -> JSON-RPC id.
     perms: Mutex<HashMap<String, Value>>,
+    /// Interactive questions: internal qst id -> pending question info.
+    questions: Mutex<HashMap<String, PendingQuestion>>,
     /// Current thread / turn id.
     thread: Mutex<String>,
     turn: Mutex<String>,
@@ -119,6 +127,49 @@ impl Conn {
 
     fn on_server_request(&self, method: &str, msg: &Value) {
         let params = &msg["params"];
+        if method == "item/tool/requestUserInput" {
+            if let Some((q, q_key)) =
+                crate::question::parse_codex_user_input(&self.session_id, params)
+            {
+                let id = msg.get("id").cloned().unwrap_or(Value::Null);
+                self.questions
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(
+                        q.id.clone(),
+                        PendingQuestion {
+                            rpc_id: id,
+                            method: method.to_string(),
+                            q_key,
+                        },
+                    );
+                let _ = self.tx.send(AgentEvent::Question(q));
+                return;
+            }
+        }
+        if method == "mcpServer/elicitation/request"
+            && (params.get("requestedSchema").is_some() || params.get("options").is_some())
+        {
+            if let Some((q, keys)) =
+                crate::question::parse_acp_elicitation(&self.session_id, params)
+            {
+                let id = msg.get("id").cloned().unwrap_or(Value::Null);
+                let q_key = keys.first().cloned();
+                self.questions
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(
+                        q.id.clone(),
+                        PendingQuestion {
+                            rpc_id: id,
+                            method: method.to_string(),
+                            q_key,
+                        },
+                    );
+                let _ = self.tx.send(AgentEvent::Question(q));
+                return;
+            }
+        }
         let (title, detail, kind) = match method {
             "item/commandExecution/requestApproval" | "execCommandApproval" => {
                 let cmd = params["command"].as_str().unwrap_or("(command)");
@@ -556,6 +607,52 @@ impl AgentControl for CodexControl {
         }
     }
 
+    fn resolve_question(&self, id: &str, answers: &[String]) -> Result<()> {
+        let entry = self
+            .conn
+            .questions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
+        let Some(PendingQuestion {
+            rpc_id,
+            method,
+            q_key,
+        }) = entry
+        else {
+            bail!("{}", tr!("未知的問題請求：{id}", id = id));
+        };
+        if method == "item/tool/requestUserInput" {
+            let mut map = serde_json::Map::new();
+            if !answers.is_empty() {
+                let key = q_key.unwrap_or_else(|| "q0".to_string());
+                map.insert(key, json!(answers));
+            }
+            self.conn.write(&json!({
+                "jsonrpc": "2.0",
+                "id": rpc_id,
+                "result": { "answers": map }
+            }))
+        } else {
+            let result = if answers.is_empty() {
+                json!({ "action": "decline" })
+            } else {
+                let mut content = serde_json::Map::new();
+                let key = q_key.unwrap_or_else(|| "answer".to_string());
+                content.insert(key, json!(answers));
+                json!({
+                    "action": "accept",
+                    "content": content
+                })
+            };
+            self.conn.write(&json!({
+                "jsonrpc": "2.0",
+                "id": rpc_id,
+                "result": result
+            }))
+        }
+    }
+
     fn transport(&self) -> &'static str {
         "app-server"
     }
@@ -645,6 +742,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         next_id: AtomicI64::new(1),
         pending: Mutex::new(HashMap::new()),
         perms: Mutex::new(HashMap::new()),
+        questions: Mutex::new(HashMap::new()),
         thread: Mutex::new(String::new()),
         turn: Mutex::new(String::new()),
         stream: Mutex::new(StreamBuf::default()),

@@ -76,8 +76,10 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         }
     };
 
-    // Bus 被隱藏時，待核准請求必須在別處看得到。
-    let center = if !right_bus && !app.state.pending_permissions.is_empty() {
+    // Bus 被隱藏時，待核准請求或提問必須在別處看得到。
+    let has_pending =
+        !app.state.pending_permissions.is_empty() || !app.state.pending_questions.is_empty();
+    let center = if !right_bus && has_pending {
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(1)])
@@ -575,10 +577,25 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let header_lines = if is_resume { 2 } else { 1 };
     let room = h.saturating_sub(header_lines + 2) as usize;
     let start = p.cursor.saturating_sub(room.saturating_sub(1));
-    for (i, (label, _)) in vis.iter().enumerate().skip(start).take(room) {
+    for (i, (label, value)) in vis.iter().enumerate().skip(start).take(room) {
         let sel = i == p.cursor;
+        let prefix = match &p.stage {
+            crate::menu::PickStage::Question {
+                multi_select: true,
+                selected,
+                ..
+            } => {
+                let check = if selected.contains(value) {
+                    "[x] "
+                } else {
+                    "[ ] "
+                };
+                format!("{} {check}", if sel { "▸" } else { " " })
+            }
+            _ => format!("{} ", if sel { "▸" } else { " " }),
+        };
         lines.push(Line::from(Span::styled(
-            format!("{} {label}", if sel { "▸" } else { " " }),
+            format!("{prefix}{label}"),
             if sel {
                 Style::default().fg(Color::Black).bg(Color::Cyan)
             } else {
@@ -622,14 +639,68 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     );
 }
 
-/// 一行待核准提示 (Bus 隱藏時使用)：優先顯示目前選取 session 的請求。
+/// 一行待核准／提問提示 (Bus 隱藏時使用)：優先顯示目前選取 session 的請求。
 pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
     let selected = app.selected_id();
-    let pending = &app.state.pending_permissions;
-    let p = pending
+    let perm_mine = app
+        .state
+        .pending_permissions
         .values()
-        .find(|p| Some(&p.session) == selected.as_ref())
-        .or_else(|| pending.values().next());
+        .find(|p| Some(&p.session) == selected.as_ref());
+    let qst_mine = app
+        .state
+        .pending_questions
+        .values()
+        .find(|q| Some(&q.session) == selected.as_ref());
+
+    if let Some(q) = qst_mine.or_else(|| {
+        if perm_mine.is_none() {
+            app.state.pending_questions.values().next()
+        } else {
+            None
+        }
+    }) {
+        let label = app
+            .state
+            .sessions
+            .get(&q.session)
+            .map_or_else(|| short(&q.session), |s| s.label.clone());
+        let mine = Some(&q.session) == selected.as_ref();
+        let total = app.state.pending_questions.len() + app.state.pending_permissions.len();
+        let more = if total > 1 {
+            format!(" (+{})", total - 1)
+        } else {
+            String::new()
+        };
+        let keys = if mine {
+            tr!("[q/Enter 回答]")
+        } else {
+            tr!("(選取該 session 後 q 回答)")
+        };
+        let default_header = tr!("提問");
+        let header_str = q.header.as_deref().unwrap_or(&default_header);
+        let text = tr!(
+            "⏸ {label} 提問 {header}：{question}{more} {keys}",
+            label = label,
+            header = header_str,
+            question = truncate(&q.question, 40),
+            more = more,
+            keys = keys
+        );
+        f.render_widget(
+            Paragraph::new(Line::styled(
+                text,
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            area,
+        );
+        return;
+    }
+
+    let p = perm_mine.or_else(|| app.state.pending_permissions.values().next());
     let Some(p) = p else { return };
     let label = app
         .state
@@ -637,8 +708,9 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
         .get(&p.session)
         .map_or_else(|| short(&p.session), |s| s.label.clone());
     let mine = Some(&p.session) == selected.as_ref();
-    let more = if pending.len() > 1 {
-        format!(" (+{})", pending.len() - 1)
+    let total = app.state.pending_permissions.len() + app.state.pending_questions.len();
+    let more = if total > 1 {
+        format!(" (+{})", total - 1)
     } else {
         String::new()
     };
@@ -681,12 +753,13 @@ pub(crate) fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
         return;
     }
     let sel = app.selected.min(ids.len() - 1);
-    let waiting: Vec<&SessionId> = app
+    let mut waiting: Vec<&SessionId> = app
         .state
         .pending_permissions
         .values()
         .map(|p| &p.session)
         .collect();
+    waiting.extend(app.state.pending_questions.values().map(|q| &q.session));
     let vis = app.visible_sessions();
     let multi_host = app.has_multiple_hosts();
     // (文字, 樣式)
@@ -1831,6 +1904,30 @@ pub(crate) fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
 
 pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     let mut lines: Vec<Line> = Vec::new();
+
+    for q in app.state.pending_questions.values() {
+        let default_header = tr!("提問");
+        let header_str = q.header.as_deref().unwrap_or(&default_header);
+        lines.push(Line::from(vec![
+            Span::styled(
+                tr!("⏸ 提問 "),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(tr!(
+                "{header}：{question}",
+                header = header_str,
+                question = truncate(&q.question, 40)
+            )),
+        ]));
+    }
+    if !app.state.pending_questions.is_empty() {
+        lines.push(Line::styled(
+            tr!("  [q/Enter] 回答問題"),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
 
     for p in app.state.pending_permissions.values() {
         lines.push(Line::from(vec![

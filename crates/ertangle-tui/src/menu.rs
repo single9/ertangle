@@ -316,6 +316,13 @@ pub(crate) enum PickStage {
         kind: AgentKind,
         model: Option<String>,
     },
+    /// 回答互動問題。
+    Question {
+        id: String,
+        session: ertangle_core::SessionId,
+        multi_select: bool,
+        selected: std::collections::HashSet<String>,
+    },
     /// 選擇多 Agent 團隊範本。
     Playbook,
     /// 選擇要接續的已結束 session。
@@ -469,6 +476,44 @@ pub(crate) fn start_handoff_picker(app: &mut App) {
     if let Some(p) = app.picker.as_mut() {
         p.title = tr!("交接給哪個 agent");
     }
+}
+
+pub(crate) fn start_question_picker(app: &mut App, q: &ertangle_core::UserQuestion) {
+    let mut items: Vec<(String, String)> = Vec::new();
+    for opt in &q.options {
+        let label = match &opt.description {
+            Some(desc) if !desc.is_empty() => format!("{} ({})", opt.label, desc),
+            _ => opt.label.clone(),
+        };
+        items.push((label, opt.label.clone()));
+    }
+    let title = match &q.header {
+        Some(h) if !h.is_empty() => format!("{}: {}", h, q.question),
+        _ => q.question.clone(),
+    };
+    let title_suffix = if q.multi_select {
+        tr!(" (Space 勾選 · Enter 送出 · Esc 取消)")
+    } else {
+        tr!(" (Enter 選擇 · 可輸入自訂答案 · Esc 取消)")
+    };
+    app.mode = Mode::Pick;
+    app.picker = Some(Picker {
+        stage: PickStage::Question {
+            id: q.id.clone(),
+            session: q.session.clone(),
+            multi_select: q.multi_select,
+            selected: std::collections::HashSet::new(),
+        },
+        resume_scope: ResumeScope::default(),
+        title: format!("{title}{title_suffix}"),
+        items,
+        filter: String::new(),
+        cursor: 0,
+        pending: None,
+        loading: false,
+        group_effort: false,
+        variants: Default::default(),
+    });
 }
 
 pub(crate) fn start_spawn_picker(app: &mut App) {
@@ -912,6 +957,33 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
             p.filter.pop();
             p.cursor = 0;
         }
+        KeyCode::Char(' ') if !ctrl => {
+            let is_multi_qst = matches!(
+                p.stage,
+                PickStage::Question {
+                    multi_select: true,
+                    ..
+                }
+            );
+            if is_multi_qst {
+                let chosen_val = p.visible().get(p.cursor).map(|(_, val)| val.clone());
+                if let Some(val) = chosen_val {
+                    if let PickStage::Question {
+                        ref mut selected, ..
+                    } = p.stage
+                    {
+                        if selected.contains(&val) {
+                            selected.remove(&val);
+                        } else {
+                            selected.insert(val);
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+            p.filter.push(' ');
+            p.cursor = 0;
+        }
         KeyCode::Char(c) if !ctrl => {
             p.filter.push(c);
             p.cursor = 0;
@@ -1109,6 +1181,48 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                             );
                         }
                     }
+                }
+                PickStage::Question {
+                    id,
+                    session,
+                    multi_select,
+                    selected,
+                } => {
+                    let answers: Vec<String> = if multi_select {
+                        let mut ans: Vec<String> = selected.into_iter().collect();
+                        if ans.is_empty() {
+                            if let Some(v) = chosen {
+                                if !v.is_empty() {
+                                    ans.push(v);
+                                }
+                            } else if !custom.is_empty() {
+                                ans.push(custom);
+                            }
+                        }
+                        ans
+                    } else if !custom.is_empty()
+                        && chosen.as_deref() != Some(&custom)
+                        && p.visible().is_empty()
+                    {
+                        vec![custom]
+                    } else if let Some(v) = chosen {
+                        vec![v]
+                    } else if !custom.is_empty() {
+                        vec![custom]
+                    } else {
+                        Vec::new()
+                    };
+                    app.picker = None;
+                    app.mode = Mode::Normal;
+                    crate::send(
+                        writer,
+                        &ertangle_protocol::Request::AnswerQuestion {
+                            session,
+                            id,
+                            answers,
+                        },
+                    )?;
+                    app.status = tr!("已送出問題回覆");
                 }
                 PickStage::Project => {
                     let chosen_path = if chosen.is_some() {

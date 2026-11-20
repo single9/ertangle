@@ -860,6 +860,10 @@ msgstr "session is not ready yet"
 msgid "未知的核准請求：{req}"
 msgstr "Unknown approval request: {req}"
 
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
+msgid "未知的問題請求：{id}"
+msgstr "Unknown question request: {id}"
+
 #: crates/ertangle-adapter/src/acp.rs
 msgid "設定 {what} `{value}` 失敗"
 msgstr "Failed to set {what} `{value}`"
@@ -1017,6 +1021,10 @@ msgid ""
 msgstr ""
 "⚠ Process exited with code {code}; last {count} line(s) of stderr:\n"
 "{lines}\n"
+
+#: crates/ertangle-adapter/src/lib.rs
+msgid "{transport} 不支援回答問題"
+msgstr "{transport} does not support answering questions"
 
 #: crates/ertangle-adapter/src/lib.rs
 msgid "{transport} 不支援執行期切換 model／effort"
@@ -1739,6 +1747,10 @@ msgstr "Failed to wake: {e}"
 #: crates/ertangle-daemon/src/handlers/session.rs
 msgid "核准回覆失敗：{e}"
 msgstr "Failed to reply to approval: {e}"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "問題回覆失敗：{e}"
+msgstr "Failed to reply to question: {e}"
 
 #: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已分享產出 {id}"
@@ -2883,6 +2895,22 @@ msgid "Enter 使用自訂值：{value}"
 msgstr "Enter to use custom value: {value}"
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "[q/Enter 回答]"
+msgstr "[q/Enter to answer]"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "(選取該 session 後 q 回答)"
+msgstr "(select this session then press q to answer)"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "提問"
+msgstr "Question"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "⏸ {label} 提問 {header}：{question}{more} {keys}"
+msgstr "⏸ {label} asks {header}: {question}{more} {keys}"
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "[a]llow [A]lways [d]eny"
 msgstr "[a]llow [A]lways [d]eny"
 
@@ -2953,6 +2981,18 @@ msgstr "(no diff data yet, press r to reload)"
 #: crates/ertangle-tui/src/draw.rs
 msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"
 msgstr "(no separate worktrees; use --worktree or Ctrl-W when creating a session)"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "⏸ 提問 "
+msgstr "⏸ Question "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "{header}：{question}"
+msgstr "{header}: {question}"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "  [q/Enter] 回答問題"
+msgstr "  [q/Enter] Answer question"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "⏸ 核准 "
@@ -3611,6 +3651,14 @@ msgid "交接給哪個 agent"
 msgstr "Hand off to which agent"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid " (Space 勾選 · Enter 送出 · Esc 取消)"
+msgstr " (Space toggle · Enter submit · Esc cancel)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid " (Enter 選擇 · 可輸入自訂答案 · Esc 取消)"
+msgstr " (Enter select · custom answer allowed · Esc cancel)"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "選擇 agent"
 msgstr "Choose agent"
 
@@ -3681,6 +3729,10 @@ msgstr "Resume requested for {label}"
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
 msgstr "{label} has no resumable conversation id (PTY, older log, or agent exited without reporting)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已送出問題回覆"
+msgstr "Question answer submitted"
 
 #: crates/ertangle-tui/src/mouse.rs
 msgid "輸入模式：Enter 送出 · Esc 取消 · 可拖曳選取複製"

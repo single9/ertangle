@@ -2452,6 +2452,12 @@
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       } else if (kind === "permission_resolved") {
         delete state.pending_permissions[event.req];
+      } else if (kind === "question_requested") {
+        if (!state.pending_questions) state.pending_questions = {};
+        state.pending_questions[event.question.id] = event.question;
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      } else if (kind === "question_resolved") {
+        if (state.pending_questions) delete state.pending_questions[event.id];
       } else if (kind === "task_changed") {
         state.tasks[event.task.id] = event.task;
       } else if (kind === "quota_updated") {

@@ -709,7 +709,7 @@ msgstr ""
 msgid "已清空排隊"
 msgstr ""
 
-#: src/cmd/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs
+#: src/cmd/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "找不到 session {session}"
 msgstr ""
 
@@ -865,6 +865,10 @@ msgstr ""
 msgid "未知的核准請求：{req}"
 msgstr ""
 
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
+msgid "未知的問題請求：{id}"
+msgstr ""
+
 #: crates/ertangle-adapter/src/acp.rs
 msgid "設定 {what} `{value}` 失敗"
 msgstr ""
@@ -1017,6 +1021,10 @@ msgstr ""
 msgid "⚠ 處理程序以結束碼 {code} 結束，stderr 最後 {count} 行：\n"
 "{lines}\n"
 ""
+msgstr ""
+
+#: crates/ertangle-adapter/src/lib.rs
+msgid "{transport} 不支援回答問題"
 msgstr ""
 
 #: crates/ertangle-adapter/src/lib.rs
@@ -1726,6 +1734,10 @@ msgstr ""
 
 #: crates/ertangle-daemon/src/handlers/session.rs
 msgid "核准回覆失敗：{e}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "問題回覆失敗：{e}"
 msgstr ""
 
 #: crates/ertangle-daemon/src/handlers/session.rs
@@ -2870,6 +2882,22 @@ msgid "Enter 使用自訂值：{value}"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "[q/Enter 回答]"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "(選取該 session 後 q 回答)"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs crates/ertangle-tui/src/draw.rs
+msgid "提問"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "⏸ {label} 提問 {header}：{question}{more} {keys}"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "[a]llow [A]lways [d]eny"
 msgstr ""
 
@@ -2939,6 +2967,18 @@ msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "⏸ 提問 "
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "{header}：{question}"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "  [q/Enter] 回答問題"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3598,6 +3638,14 @@ msgid "交接給哪個 agent"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
+msgid " (Space 勾選 · Enter 送出 · Esc 取消)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid " (Enter 選擇 · 可輸入自訂答案 · Esc 取消)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "選擇 agent"
 msgstr ""
 
@@ -3667,6 +3715,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已送出問題回覆"
 msgstr ""
 
 #: crates/ertangle-tui/src/mouse.rs
