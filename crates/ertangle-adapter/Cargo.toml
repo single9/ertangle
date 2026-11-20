@@ -1,5 +1,6 @@
 [package]
 name = "ertangle-adapter"
+description = "Agent adapters (Claude Code, Codex, ACP) for ertangle"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

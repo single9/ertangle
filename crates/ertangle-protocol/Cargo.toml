@@ -1,5 +1,6 @@
 [package]
 name = "ertangle-protocol"
+description = "Wire protocol between the ertangle daemon, TUI and CLI"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

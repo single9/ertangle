@@ -51,7 +51,12 @@ jobs:
           components: rustfmt, clippy
 
       - name: Update Cargo.toml
-        run: sed -i 's/^version = ".*"/version = "${{ steps.next.outputs.version }}"/' Cargo.toml
+        run: |
+          v="${{ steps.next.outputs.version }}"
+          sed -i "s/^version = \".*\"/version = \"$v\"/" Cargo.toml
+          # Path dependencies carry their own version for crates.io; keep them equal.
+          sed -i -E "s|^(ertangle-[a-z]+ = \{ path = \"crates/[a-z-]+\", version = \")[^\"]*(\" \})|\1$v\2|" Cargo.toml
+          grep -c "version = \"$v\" }" Cargo.toml
 
       - name: Generate CHANGELOG
         uses: orhun/git-cliff-action@v4

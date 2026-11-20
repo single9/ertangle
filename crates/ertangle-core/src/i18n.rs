@@ -58,7 +58,7 @@ const DOMAINS: [&str; 5] = [
     "ertangle_tui",
 ];
 
-const EN_PO: &str = include_str!("../../../locales/en.po");
+const EN_PO: &str = include_str!("../locales/en.po");
 
 static CURRENT: AtomicU8 = AtomicU8::new(0);
 

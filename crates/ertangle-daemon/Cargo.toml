@@ -1,5 +1,6 @@
 [package]
 name = "ertangle-daemon"
+description = "Session daemon and MCP message bus for ertangle"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

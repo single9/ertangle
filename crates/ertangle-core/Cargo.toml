@@ -1,5 +1,6 @@
 [package]
 name = "ertangle-core"
+description = "Shared types, paths and i18n helpers for ertangle"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

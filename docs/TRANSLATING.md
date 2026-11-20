@@ -31,7 +31,7 @@ ertangle 的介面以 gettext `.po` 檔翻譯。原始碼裡的繁體中文就�
 3. 在 `crates/ertangle-core/src/i18n.rs` 註冊：
    - `Language` 加一個成員 (例如 `Ja`)。
    - `LANGUAGES` 加一列 `(Language::Ja, "ja", "日本語")`，顯示名稱用該語言自己的寫法。
-   - `Language::parse`、`code`、`po` 與 `current` 加上對應分支，`po` 以 `include_str!("../../../locales/ja.po")` 內嵌。
+   - `Language::parse`、`code`、`po` 與 `current` 加上對應分支，`po` 以 `include_str!("../locales/ja.po")` 內嵌。
    - `catalog` 加一個 `OnceLock`。
 4. 翻譯 `ja.po`，執行 `make i18n-check` 與 `cargo test`。
 

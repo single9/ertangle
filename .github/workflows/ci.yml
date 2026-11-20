@@ -32,6 +32,16 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
 
+  # Everything `cargo publish` would do, minus the upload: package every crate
+  # and verify it builds against the packaged siblings.
+  publish-dry-run:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo publish --workspace --dry-run
+
   i18n:
     timeout-minutes: 10
     runs-on: ubuntu-latest
