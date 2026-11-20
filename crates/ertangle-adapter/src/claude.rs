@@ -31,6 +31,10 @@ use tr::tr;
 /// Pending question state for Claude native tool calls (`AskUserQuestion`).
 struct PendingClaudeQuestion {
     tool_use_id: String,
+    /// Raw question objects from the tool input; Claude uses them to render the tool result.
+    raw_questions: Vec<Value>,
+    /// Normalized question texts in the same order as `raw_questions`.
+    question_texts: Vec<String>,
     total: usize,
     answers: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
@@ -189,6 +193,16 @@ impl Conn {
                         );
                         if !questions.is_empty() {
                             let total = questions.len();
+                            let raw_questions = serde_json::from_str::<Value>(&input)
+                                .ok()
+                                .and_then(|v| {
+                                    v.get("questions").and_then(|q| q.as_array()).cloned()
+                                })
+                                .unwrap_or_default();
+                            let question_texts = questions
+                                .iter()
+                                .map(|q| q.question.clone())
+                                .collect::<Vec<_>>();
                             let shared_answers = Arc::new(Mutex::new(HashMap::new()));
                             let mut q_map =
                                 self.questions.lock().unwrap_or_else(|e| e.into_inner());
@@ -197,6 +211,8 @@ impl Conn {
                                     q.id.clone(),
                                     PendingClaudeQuestion {
                                         tool_use_id: tool_use_id.clone(),
+                                        raw_questions: raw_questions.clone(),
+                                        question_texts: question_texts.clone(),
                                         total,
                                         answers: Arc::clone(&shared_answers),
                                     },
@@ -382,6 +398,47 @@ fn tool_result_message(tool_use_id: &str, content: &str, is_error: bool) -> Valu
     })
 }
 
+/// Builds the structured tool result expected by Claude's native `AskUserQuestion`.
+fn question_tool_result_message(
+    tool_use_id: &str,
+    raw_questions: &[Value],
+    question_texts: &[String],
+    answers: &HashMap<String, Vec<String>>,
+) -> Value {
+    let mut answer_map = serde_json::Map::new();
+    let mut summary = Vec::new();
+    for (index, question) in question_texts.iter().enumerate() {
+        let selected = answers.get(question).cloned().unwrap_or_default();
+        let multi_select = raw_questions
+            .get(index)
+            .and_then(|q| {
+                q.get("multiSelect")
+                    .or_else(|| q.get("multi_select"))
+                    .or_else(|| q.get("multiple"))
+            })
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let value = if multi_select {
+            json!(selected)
+        } else {
+            json!(selected.first().cloned().unwrap_or_default())
+        };
+        answer_map.insert(question.clone(), value);
+        summary.push(format!("\"{question}\"=\"{}\"", selected.join(", ")));
+    }
+    let questions: Vec<Value> = if raw_questions.is_empty() {
+        question_texts
+            .iter()
+            .map(|text| json!({ "question": text }))
+            .collect()
+    } else {
+        raw_questions.to_vec()
+    };
+    let mut msg = tool_result_message(tool_use_id, &summary.join(", "), false);
+    msg["tool_use_result"] = json!({ "questions": questions, "answers": answer_map });
+    msg
+}
+
 struct ClaudeControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
@@ -483,22 +540,16 @@ impl AgentControl for ClaudeControl {
             q_map.retain(|_, v| v.tool_use_id != pending.tool_use_id);
             drop(q_map);
 
-            let content_str = if pending.total == 1 {
-                answers.join(", ")
-            } else {
-                let mut lines = Vec::new();
-                for ans in map.values() {
-                    lines.push(ans.join(", "));
-                }
-                lines.join("\n")
-            };
+            let result = question_tool_result_message(
+                &pending.tool_use_id,
+                &pending.raw_questions,
+                &pending.question_texts,
+                &map,
+            );
+            drop(map);
 
             let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
-            self.conn.send_raw(&tool_result_message(
-                &pending.tool_use_id,
-                &content_str,
-                false,
-            ))
+            self.conn.send_raw(&result)
         } else {
             Ok(())
         }
@@ -880,6 +931,47 @@ mod tests {
         assert_eq!(v["type"], "control_request");
         assert_eq!(v["request"]["subtype"], "set_model");
         assert_eq!(v["request"]["model"], "opus");
+    }
+
+    #[test]
+    fn question_tool_result_has_structured_answers() {
+        let raw = vec![json!({
+            "question": "Which database?",
+            "multiSelect": false,
+            "options": [{"label": "Postgres"}, {"label": "Redis"}]
+        })];
+        let texts = vec!["Which database?".to_string()];
+        let mut answers = HashMap::new();
+        answers.insert("Which database?".to_string(), vec!["Postgres".to_string()]);
+        let msg = question_tool_result_message("toolu_123", &raw, &texts, &answers);
+        assert_eq!(
+            msg["tool_use_result"]["answers"]["Which database?"],
+            json!("Postgres")
+        );
+        assert_eq!(
+            msg["tool_use_result"]["questions"][0]["question"],
+            json!("Which database?")
+        );
+        assert_eq!(
+            msg["message"]["content"][0]["content"],
+            json!("\"Which database?\"=\"Postgres\"")
+        );
+
+        let multi_raw = vec![json!({"question": "Pick features", "multiSelect": true})];
+        answers.insert(
+            "Pick features".to_string(),
+            vec!["Auth".into(), "Search".into()],
+        );
+        let msg = question_tool_result_message(
+            "toolu_456",
+            &multi_raw,
+            &["Pick features".to_string()],
+            &answers,
+        );
+        assert_eq!(
+            msg["tool_use_result"]["answers"]["Pick features"],
+            json!(["Auth", "Search"])
+        );
     }
 
     #[test]
