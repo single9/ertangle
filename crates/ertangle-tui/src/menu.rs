@@ -778,6 +778,7 @@ fn handle_custom_input(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
     };
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let has_options = !p.items.is_empty();
+    let in_group = matches!(&p.stage, PickStage::Question { questions, .. } if questions.len() > 1);
     let multi = matches!(
         p.stage,
         PickStage::Question {
@@ -813,6 +814,11 @@ fn handle_custom_input(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
             if text.is_empty() {
                 if has_options {
                     *custom_mode = false;
+                    return Ok(());
+                }
+                // 只有自由輸入的選填欄位：群組內留空 Enter 即跳過。
+                if in_group {
+                    return skip_question(app, writer);
                 }
                 return Ok(());
             }

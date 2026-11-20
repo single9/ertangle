@@ -4619,3 +4619,51 @@ fn question_picker_group_skip_sends_empty_answer_but_not_all_skipped() {
     assert!(sent.contains("Chocolate"), "{sent}");
     assert!(sent.contains("\"answers\":[]"), "{sent}");
 }
+
+#[test]
+fn question_picker_group_free_form_only_empty_enter_skips() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let q1 = qpick_q("qst_f1", false, false, Some("g"));
+    let mut q2 = qpick_q("qst_f2", false, true, Some("g"));
+    q2.options.clear();
+    app.state
+        .pending_questions
+        .insert(q1.id.clone(), q1.clone());
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    crate::menu::start_question_picker(&mut app, &q1);
+    qpick_key(&mut app, &mut w, KeyCode::Char('1'));
+    // Free-form-only optional field: empty Enter skips and finishes the group.
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    assert!(app.picker.is_none());
+    let sent = qpick_sent(&mut peer);
+    assert_eq!(sent.matches("answer_question").count(), 2, "{sent}");
+    assert!(sent.contains("\"answers\":[]"), "{sent}");
+}
+
+#[test]
+fn question_picker_group_all_empty_is_not_sent() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let mut q1 = qpick_q("qst_z1", false, true, Some("g"));
+    q1.options.clear();
+    let mut q2 = q1.clone();
+    q2.id = "qst_z2".into();
+    app.state
+        .pending_questions
+        .insert(q1.id.clone(), q1.clone());
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    crate::menu::start_question_picker(&mut app, &q1);
+    qpick_key(&mut app, &mut w, KeyCode::Enter); // skip first
+    qpick_key(&mut app, &mut w, KeyCode::Enter); // last: refused
+    assert!(app.picker.is_some());
+    assert!(qpick_sent(&mut peer).is_empty());
+    qpick_type(&mut app, &mut w, "hello world");
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    assert!(app.picker.is_none());
+    let sent = qpick_sent(&mut peer);
+    assert!(
+        sent.contains("hello world") && sent.contains("\"answers\":[]"),
+        "{sent}"
+    );
+}

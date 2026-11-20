@@ -2915,6 +2915,10 @@ msgid "s 跳過此題"
 msgstr "s skip this question"
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "留空 Enter 跳過此題"
+msgstr "Enter on empty input to skip"
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "[Enter 回答]"
 msgstr "[Enter to answer]"
 

@@ -2902,6 +2902,10 @@ msgid "s 跳過此題"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "留空 Enter 跳過此題"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "[Enter 回答]"
 msgstr ""
 

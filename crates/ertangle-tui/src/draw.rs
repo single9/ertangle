@@ -783,6 +783,8 @@ fn draw_question_picker(f: &mut TuiFrame, app: &App) {
     };
     let hint = if questions.len() > 1 && !*custom_mode {
         format!("{hint} · {}", tr!("s 跳過此題"))
+    } else if questions.len() > 1 && q.options.is_empty() {
+        format!("{hint} · {}", tr!("留空 Enter 跳過此題"))
     } else {
         hint
     };
