@@ -60,6 +60,23 @@ fn elicitation_accept_content(entries: &[(String, bool, Vec<String>)]) -> Value 
     Value::Object(content)
 }
 
+/// Builds the response for a completed elicitation. Skipped fields are omitted so a
+/// companion "Other" field cannot discard a real selection; a fully skipped form is declined.
+fn elicitation_response(entries: &[(String, bool, Vec<String>)]) -> Value {
+    let answered: Vec<_> = entries
+        .iter()
+        .filter(|(_, _, answers)| !answers.is_empty())
+        .cloned()
+        .collect();
+    if answered.is_empty() {
+        return json!({ "action": "decline" });
+    }
+    json!({
+        "action": "accept",
+        "content": elicitation_accept_content(&answered)
+    })
+}
+
 struct Conn {
     /// Agent ID represented by this adapter (`agent` field in quota events).
     agent: String,
@@ -400,51 +417,40 @@ impl Conn {
                 total,
                 answers: shared_answers,
             } => {
-                if answers.is_empty() {
-                    let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
-                    q_map.retain(|_, v| match v {
-                        PendingAcpQuestion::Elicitation { rpc_id: r, .. } => r != &rpc_id,
-                        _ => true,
-                    });
-                    drop(q_map);
-
-                    self.respond(&rpc_id, json!({ "action": "decline" }));
-                } else {
-                    let mut map = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
-                    map.insert(key, (multi_select, answers.to_vec()));
-                    if map.len() == total {
-                        let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
-                        q_map.retain(|_, v| match v {
-                            PendingAcpQuestion::Elicitation { rpc_id: r, .. } => r != &rpc_id,
-                            _ => true,
-                        });
-                        drop(q_map);
-
-                        let entries: Vec<(String, bool, Vec<String>)> = map
-                            .iter()
-                            .map(|(k, (multi, ans))| (k.clone(), *multi, ans.clone()))
-                            .collect();
-                        drop(map);
-
-                        self.respond(
-                            &rpc_id,
-                            json!({
-                                "action": "accept",
-                                "content": elicitation_accept_content(&entries)
-                            }),
-                        );
-                    }
+                // An empty answer means the human skipped this field, which is normal for
+                // companion fields such as "Other". Keep it as an omitted field instead of
+                // declining the whole form; a real selection in another field still wins.
+                let mut map = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
+                map.insert(key, (multi_select, answers.to_vec()));
+                if map.len() < total {
+                    return Ok(());
                 }
+                let entries: Vec<(String, bool, Vec<String>)> = map
+                    .iter()
+                    .map(|(k, (multi, ans))| (k.clone(), *multi, ans.clone()))
+                    .collect();
+                drop(map);
+
+                let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
+                q_map.retain(|_, v| match v {
+                    PendingAcpQuestion::Elicitation { rpc_id: r, .. } => r != &rpc_id,
+                    _ => true,
+                });
+                drop(q_map);
+
+                self.respond(&rpc_id, elicitation_response(&entries));
             }
             PendingAcpQuestion::ToolCall {
                 total,
                 answers: shared_answers,
             } => {
-                if answers.is_empty() {
-                    return Ok(());
-                }
                 let mut list = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
-                list.extend(answers.iter().cloned());
+                if answers.is_empty() {
+                    // Preserve one slot per skipped question so a grouped request still completes.
+                    list.push(String::new());
+                } else {
+                    list.extend(answers.iter().cloned());
+                }
                 if list.len() >= total {
                     let ans_str = list.join("\n");
                     let _ = self.tx.send(AgentEvent::Output(format!("↳ {ans_str}\n")));
@@ -1078,6 +1084,22 @@ mod model_tests {
         assert_eq!(
             elicitation_accept_content(&[("custom".to_string(), false, Vec::new())]),
             json!({ "custom": [] })
+        );
+    }
+
+    #[test]
+    fn elicitation_response_keeps_selection_when_other_field_is_skipped() {
+        let entries = vec![
+            ("A1".to_string(), false, vec!["Postgres".to_string()]),
+            ("A2".to_string(), false, Vec::new()),
+        ];
+        assert_eq!(
+            elicitation_response(&entries),
+            json!({ "action": "accept", "content": { "A1": "Postgres" } })
+        );
+        assert_eq!(
+            elicitation_response(&[("A2".to_string(), false, Vec::new())]),
+            json!({ "action": "decline" })
         );
     }
 
