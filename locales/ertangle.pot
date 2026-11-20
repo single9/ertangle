@@ -170,6 +170,14 @@ msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` 
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "Project directory (TUI default and session spawn cwd)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "Scope: here (this project only) / all (all projects, default)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "Session id 或標籤"
 msgstr ""
 
@@ -331,10 +339,6 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "將指定 session 的 worktree 合併回主分支 (M3)"
-msgstr ""
-
-#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "專案目錄 (TUI 預設與 session 啟動目錄)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -627,10 +631,6 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "逾時毫秒數 (預設 60000 = 60 秒)"
-msgstr ""
-
-#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "過濾範圍：here (只列出本專案) / all (全部專案，預設)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs

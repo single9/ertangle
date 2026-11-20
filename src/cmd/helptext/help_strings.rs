@@ -4,6 +4,8 @@
 #[allow(dead_code)]
 pub(super) const HELP_STRINGS: &[&str] = &[
     ertangle_core::tr_noop!("Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)"),
+    ertangle_core::tr_noop!("Project directory (TUI default and session spawn cwd)"),
+    ertangle_core::tr_noop!("Scope: here (this project only) / all (all projects, default)"),
     ertangle_core::tr_noop!("Session id 或標籤"),
     ertangle_core::tr_noop!("Web 版自訂連接埠 (預設 7421)"),
     ertangle_core::tr_noop!("daemon socket 路徑 (預設讀取 ERTANGLE_SOCKET 環境變數或標準 runtime 路徑)"),
@@ -45,7 +47,6 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     ertangle_core::tr_noop!("寄件者 session id (預設讀 ERTANGLE_SESSION 環境變數)"),
     ertangle_core::tr_noop!("寫入各成員 prompt 中 `{{goal}}` 的目標需求"),
     ertangle_core::tr_noop!("將指定 session 的 worktree 合併回主分支 (M3)"),
-    ertangle_core::tr_noop!("專案目錄 (TUI 預設與 session 啟動目錄)"),
     ertangle_core::tr_noop!("對指定 session 的程式碼留下審查註解並送回該 agent (M3)"),
     ertangle_core::tr_noop!("對象 session id 或標籤"),
     ertangle_core::tr_noop!("工作目錄 (預設為目前目錄)"),
@@ -119,7 +120,6 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     ertangle_core::tr_noop!("連線遠端 daemon 位址 (例如 127.0.0.1:7420；亦可透過環境變數 ERTANGLE_REMOTE 設定)"),
     ertangle_core::tr_noop!("逾時毫秒數 (預設 120000 = 2 分鐘)"),
     ertangle_core::tr_noop!("逾時毫秒數 (預設 60000 = 60 秒)"),
-    ertangle_core::tr_noop!("過濾範圍：here (只列出本專案) / all (全部專案，預設)"),
     ertangle_core::tr_noop!("遠端認證 token (亦可透過環境變數 ERTANGLE_TOKEN 設定)"),
     ertangle_core::tr_noop!("遠端連線認證用的 token (未指定則讀環境變數 ERTANGLE_TOKEN；為安全建議搭配 SSH 轉發)"),
     ertangle_core::tr_noop!("重播 event log 並印出歷史事件"),

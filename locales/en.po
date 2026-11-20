@@ -164,6 +164,14 @@ msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` 
 msgstr "Agent kind: opencode / claude / codex / antigravity; may include `:model` (e.g. claude:opus)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "Project directory (TUI default and session spawn cwd)"
+msgstr "Project directory (TUI default and session spawn cwd)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "Scope: here (this project only) / all (all projects, default)"
+msgstr "Filter scope: here (this project only) / all (all projects, default)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "Session id 或標籤"
 msgstr "Session id or label"
 
@@ -326,10 +334,6 @@ msgstr "Goal text substituted into `{{goal}}` in each member prompt"
 #: src/cmd/helptext/help_strings.rs
 msgid "將指定 session 的 worktree 合併回主分支 (M3)"
 msgstr "Merge the given session's worktree back into the main branch (M3)"
-
-#: src/cmd/helptext/help_strings.rs
-msgid "專案目錄 (TUI 預設與 session 啟動目錄)"
-msgstr "Project directory (default for TUI and session startup)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "對指定 session 的程式碼留下審查註解並送回該 agent (M3)"
@@ -622,10 +626,6 @@ msgstr "Timeout in milliseconds (default 120000 = 2 minutes)"
 #: src/cmd/helptext/help_strings.rs
 msgid "逾時毫秒數 (預設 60000 = 60 秒)"
 msgstr "Timeout in milliseconds (default 60000 = 60 seconds)"
-
-#: src/cmd/helptext/help_strings.rs
-msgid "過濾範圍：here (只列出本專案) / all (全部專案，預設)"
-msgstr "Filter scope: here (this project only) / all (all projects, default)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "遠端認證 token (亦可透過環境變數 ERTANGLE_TOKEN 設定)"
@@ -4194,6 +4194,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "專案目錄 (TUI 預設與 session 啟動目錄)"
+#~ msgstr "Project directory (default for TUI and session startup)"
+
+#~ msgid "過濾範圍：here (只列出本專案) / all (全部專案，預設)"
+#~ msgstr "Filter scope: here (this project only) / all (all projects, default)"
 
 #~ msgid "[prompt]  不帶參數開選擇器；有 prompt 時接續選取的 session"
 #~ msgstr "[prompt]  Without args open picker; with prompt resume selected session"

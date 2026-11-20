@@ -257,9 +257,9 @@ pub(crate) struct App {
     pub(crate) disconnected: bool,
     /// daemon 啟動世代 id (epoch)，斷線重連時比對用。
     pub(crate) daemon_epoch: Option<String>,
-    /// 作用中專案目錄 (PathBuf)，為 home_project、scope_here 以及新 session spawn cwd 的單一來源。
+    /// Active project directory; single source for home_project, scope_here, and new session cwd.
     pub(crate) active_project: std::path::PathBuf,
-    /// TUI 啟動所在或目前切換到的專案根目錄 (git 頂層，否則 cwd)。
+    /// Project root of the active project (git toplevel, otherwise cwd).
     pub(crate) home_project: String,
     /// 只列出屬於 `home_project` 的 session。
     pub(crate) scope_here: bool,
@@ -1017,7 +1017,7 @@ impl App {
         format!("{current_file} (L{}: {})", idx + 1, truncate(line_text, 48))
     }
 
-    /// 切換作用中專案目錄，更新相關狀態並持久化至全域設定。
+    /// Switch the active project, refresh related state, and persist it to the global config.
     pub(crate) fn set_active_project(&mut self, path: &std::path::Path) -> Result<(), String> {
         if !path.exists() || !path.is_dir() {
             return Err(tr!("路徑不存在或不是目錄：{path}", path = path.display()));
@@ -1371,7 +1371,7 @@ pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
     };
 }
 
-/// 依優先順序解析啟動專案目錄：命令列參數 > 全域設定 last_project > 程序 cwd。
+/// Resolve the startup project with precedence: CLI flag > persisted last_project > process cwd.
 pub(crate) fn resolve_active_project(
     flag: Option<&std::path::Path>,
     persisted: Option<&str>,

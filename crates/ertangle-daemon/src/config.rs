@@ -176,9 +176,9 @@ pub struct TuiCfg {
     pub notify_command: Option<String>,
     /// 回合短於這個秒數時，「做完了」不通知 (預設 10)。
     pub notify_min_turn_secs: Option<u64>,
-    /// 常用專案根目錄清單 (只認全域設定)。
+    /// List of frequently used project roots (global config only).
     pub projects: Vec<String>,
-    /// 上次使用的專案根目錄 (只認全域設定)。
+    /// Last active project root (global config only).
     pub last_project: Option<String>,
 }
 

@@ -320,7 +320,7 @@ pub(crate) enum PickStage {
     Playbook,
     /// 選擇要接續的已結束 session。
     Resume,
-    /// 選擇要切換的作用中專案。
+    /// Pick the project to switch to.
     Project,
 }
 
@@ -538,7 +538,7 @@ pub(crate) fn format_compact_age(now_ms: u64, created_ms: u64) -> String {
     }
 }
 
-/// 重新產生接續選擇器的候選清單 (依範圍過濾並附加母 session 標記與專案前綴)。
+/// Rebuild resume picker items: filter by scope, add parent annotation and project prefix.
 pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String, String)> {
     let mut ended: Vec<(&ertangle_core::Session, bool)> = Vec::new();
     // 收集本機與多主機的已結束及封存歷史 session
@@ -578,7 +578,7 @@ pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String
         }
     }
 
-    // 建立 id -> label 對應表 (包含所有主機與本機的 live、ended、archived session)
+    // Build an id -> label map covering live, ended, and archived sessions on all hosts.
     let mut parent_map: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
     for h in app.hosts.values() {
@@ -600,7 +600,7 @@ pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String
         parent_map.insert(s.id.clone(), s.label.clone());
     }
 
-    // 收集所有專案根目錄，供 project_name 計算不衝突名稱
+    // Collect all project roots so project_name can disambiguate identical names.
     let mut all_roots: Vec<String> = Vec::new();
     for (s, _) in &ended {
         let root = s.project_root().to_string();
@@ -698,7 +698,7 @@ pub(crate) fn start_resume_picker(app: &mut App) {
     app.mode = Mode::Pick;
 }
 
-/// `:project`／`:project open`：列出常用與執行過 session 的專案根目錄，選中後切換作用中專案。
+/// `:project` / `:project open`: list configured and observed project roots, then switch to the chosen one.
 pub(crate) fn start_project_picker(app: &mut App) {
     let global_dir = ertangle_daemon::config_dir();
     let cfg = ertangle_daemon::config::Config::load(&global_dir, &app.active_project);
