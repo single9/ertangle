@@ -2191,6 +2191,14 @@ msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr "▸ Tools ×{calls} (✓{ok}) · last: {last}"
 
 #: crates/ertangle-tui/src/app.rs
+msgid "⋯ 思考 ({n} 行)"
+msgstr "⋯ Thinking ({n} lines)"
+
+#: crates/ertangle-tui/src/app.rs
+msgid "⋯ 思考 ({n} 行) · {last}"
+msgstr "⋯ Thinking ({n} lines) · {last}"
+
+#: crates/ertangle-tui/src/app.rs
 msgid "工具：展開 (每筆呼叫都顯示，按 O 摺疊)"
 msgstr "Tools: expanded (every call shown, O to collapse)"
 
@@ -2199,12 +2207,12 @@ msgid "工具：摺疊 (連續呼叫合成一行，按 O 展開)"
 msgstr "Tools: collapsed (consecutive calls on one line, O to expand)"
 
 #: crates/ertangle-tui/src/app.rs
-msgid "思考顯示：開 (顯示 💭 行)"
-msgstr "Thinking: shown (💭 lines visible)"
+msgid "思考顯示：開 (展開完整思考內容)"
+msgstr "Thinking: expanded (full thought content shown)"
 
 #: crates/ertangle-tui/src/app.rs
-msgid "思考顯示：關 (已隱藏 💭 行，按 T 顯示)"
-msgstr "Thinking: hidden (💭 lines hidden, T to show)"
+msgid "思考顯示：關 (摺疊為單行摘要，按 T 展開)"
+msgstr "Thinking: folded (single-line summary, press T to expand)"
 
 #: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/input.rs
 msgid "逐字稿：跟隨最新"
@@ -3110,6 +3118,14 @@ msgstr " (no sessions: press n to create one) "
 #: crates/ertangle-tui/src/draw.rs
 msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
 msgstr "Agent output appears here. Press i to type a prompt, n to create a session, g for the Diff view."
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "思考中"
+msgstr "Thinking"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "思考中..."
+msgstr "Thinking..."
 
 #: crates/ertangle-tui/src/draw.rs
 msgid " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k 選行 · {{/}} hunk · (/) 檔案 · Enter 摺疊 · X 退回 · c 註解 · M 合併 "
@@ -4415,6 +4431,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "思考顯示：開 (顯示 💭 行)"
+#~ msgstr "Thinking: shown (💭 lines visible)"
+
+#~ msgid "思考顯示：關 (已隱藏 💭 行，按 T 顯示)"
+#~ msgstr "Thinking: hidden (💭 lines hidden, T to show)"
 
 #~ msgid " (Space 勾選 · Enter 送出 · Esc 取消)"
 #~ msgstr " (Space toggle · Enter submit · Esc cancel)"

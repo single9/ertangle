@@ -340,9 +340,19 @@ fn event_loop(
         app.auto_open_question();
         dirty |= app.picker.is_some() != was_picking;
         dirty |= app.rebuild_pending;
-        // 只在有狀態或輸入變動時重繪，閒置時不佔 CPU。
-        // 每秒至少重繪一次，讓時間／狀態類顯示保持更新。
-        if dirty || last_draw.elapsed() >= Duration::from_secs(1) {
+        // Redraw only on state/input changes so idling costs no CPU. While any session
+        // is busy, redraw every 120ms to animate the thinking spinner.
+        let any_busy = app
+            .state
+            .sessions
+            .values()
+            .any(|s| s.status == SessionStatus::Busy);
+        let redraw_interval = if any_busy {
+            Duration::from_millis(120)
+        } else {
+            Duration::from_secs(1)
+        };
+        if dirty || last_draw.elapsed() >= redraw_interval {
             last_draw = std::time::Instant::now();
             terminal.draw(|f| draw(f, &mut app))?;
             dirty = false;

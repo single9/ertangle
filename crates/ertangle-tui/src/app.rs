@@ -16,6 +16,12 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::diff::{build_gutter, diff_stat, parse_files, rebuild_visible_diff, DiffFile};
 
+/// Return the thought text of a transcript line for both the new `⋯ ` prefix and the
+/// legacy `💭 ` prefix used by older logs.
+pub(crate) fn strip_thought_prefix(line: &str) -> Option<&str> {
+    line.strip_prefix("⋯ ").or_else(|| line.strip_prefix("💭 "))
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum Mode {
     Normal,
@@ -1179,9 +1185,10 @@ struct ToolRun<'a> {
     prev_completed: Option<Cow<'a, str>>,
 }
 
-/// 依顯示設定過濾逐字稿：隱藏思考行；未展開工具時，把連續的工具呼叫／成功結果
-/// 摺成一行摘要 (失敗 `✗` 行保留，錯誤不該被藏起來)。
-/// 若最後一筆工具呼叫尚未完成 (`active_tools` 非空)，不摺入統計行，而是獨立顯示於最下方。
+/// Filter the transcript by display settings. Consecutive thought lines fold into a single
+/// summary when hidden; consecutive tool calls/results fold when tools are collapsed
+/// (failed `✗` lines stay visible). An unfinished tool call is always shown on its own at
+/// the bottom instead of being folded into the summary.
 pub(crate) fn visible_transcript<'a>(
     lines: impl Iterator<Item = &'a String>,
     show_thoughts: bool,
@@ -1190,6 +1197,7 @@ pub(crate) fn visible_transcript<'a>(
 ) -> Vec<Cow<'a, str>> {
     let mut out: Vec<Cow<'a, str>> = Vec::with_capacity(lines.size_hint().0);
     let mut run: Option<ToolRun<'a>> = None;
+    let mut thought_run: Option<(usize, &'a str)> = None;
     fn flush<'a>(out: &mut Vec<Cow<'a, str>>, run: &mut Option<ToolRun<'a>>) {
         if let Some(r) = run.take() {
             if r.calls == 1 {
@@ -1205,10 +1213,44 @@ pub(crate) fn visible_transcript<'a>(
             }
         }
     }
+    fn flush_thoughts<'a>(out: &mut Vec<Cow<'a, str>>, run: &mut Option<(usize, &'a str)>) {
+        if let Some((count, last)) = run.take() {
+            let trimmed = last.trim();
+            let mut chars = trimmed.chars();
+            let preview: String = chars.by_ref().take(60).collect();
+            let preview = if chars.next().is_some() {
+                format!("{preview}…")
+            } else {
+                preview
+            };
+            if preview.is_empty() {
+                out.push(Cow::Owned(tr!("⋯ 思考 ({n} 行)", n = count)));
+            } else {
+                out.push(Cow::Owned(tr!(
+                    "⋯ 思考 ({n} 行) · {last}",
+                    n = count,
+                    last = preview
+                )));
+            }
+        }
+    }
     for l in lines {
-        if !show_thoughts && l.starts_with("💭 ") {
+        if let Some(rest) = strip_thought_prefix(l) {
+            if show_thoughts {
+                flush_thoughts(&mut out, &mut thought_run);
+                out.push(Cow::Borrowed(l.as_str()));
+            } else {
+                let count = thought_run.map_or(1, |(n, _)| n + 1);
+                let last = if rest.trim().is_empty() {
+                    thought_run.map_or("", |(_, last)| last)
+                } else {
+                    rest
+                };
+                thought_run = Some((count, last));
+            }
             continue;
         }
+        flush_thoughts(&mut out, &mut thought_run);
         if show_tools {
             out.push(Cow::Borrowed(l.as_str()));
         } else if l.starts_with("▸ ") {
@@ -1231,6 +1273,8 @@ pub(crate) fn visible_transcript<'a>(
             out.push(Cow::Borrowed(l.as_str()));
         }
     }
+
+    flush_thoughts(&mut out, &mut thought_run);
 
     if let Some(tool) = active_tools.last() {
         let elapsed_secs = (ertangle_core::now_millis().saturating_sub(tool.started_ms)) / 1000;
@@ -1297,15 +1341,15 @@ pub(crate) fn toggle_tools(app: &mut App) {
     };
 }
 
-/// 切換是否顯示 agent 的思考行 (`💭`)。
+/// Toggle whether individual thought lines are expanded or folded into a summary.
 pub(crate) fn toggle_thoughts(app: &mut App) {
     app.show_thoughts = !app.show_thoughts;
     app.md_cache = None;
     app.selection = None;
     app.status = if app.show_thoughts {
-        tr!("思考顯示：開 (顯示 💭 行)")
+        tr!("思考顯示：開 (展開完整思考內容)")
     } else {
-        tr!("思考顯示：關 (已隱藏 💭 行，按 T 顯示)")
+        tr!("思考顯示：關 (摺疊為單行摘要，按 T 展開)")
     };
 }
 

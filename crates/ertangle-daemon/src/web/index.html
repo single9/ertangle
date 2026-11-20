@@ -681,6 +681,21 @@
       user-select: none;
     }
     .turn-collapse summary:hover { color: var(--text); }
+    /* T75: animated, emoji-free thinking indicator and latest-thought preview. */
+    .think-ind { color: var(--text-dim); font-weight: 600; }
+    .think-ind.active { color: var(--cyan); animation: think-pulse 1.2s ease-in-out infinite; }
+    .think-preview { color: var(--text-dim); font-weight: 400; opacity: 0.9; }
+    @keyframes think-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+    .chat-thinking-live {
+      color: var(--cyan);
+      font-size: 12px;
+      font-style: italic;
+      padding: 6px 10px;
+    }
+    .think-dots span { opacity: 0.2; animation: think-dot 1.2s infinite; }
+    .think-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .think-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes think-dot { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
     .collapse-content {
       padding: 8px 12px;
       border-top: 1px solid var(--border-subtle);
@@ -2721,12 +2736,13 @@
         } else if (currentUserTurn && line.startsWith("  ") && !line.startsWith("  ✓") && !line.startsWith("  ✗")) {
           // 多行 prompt 的後續行：core 以兩個空格縮排對齊。
           currentUserTurn.parts.push(line.substring(2));
-        } else if (line.startsWith("💭 ")) {
+        } else if (line.startsWith("⋯ ") || line.startsWith("💭 ")) {
           flushUser();
           if (!currentAgentTurn) {
             currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
           }
-          currentAgentTurn.thoughts.push(line.substring(2));
+          // Accept both the new emoji-free prefix and legacy logs without keeping the emoji.
+          currentAgentTurn.thoughts.push(line.replace(/^(?:⋯|💭)\s*/, ""));
         } else if (line.startsWith("▸ ") || line.startsWith("[工具 ")) {
           flushUser();
           if (!currentAgentTurn) {
@@ -2799,6 +2815,14 @@
       while (box.children.length > rows.length) box.removeChild(box.lastChild);
     }
 
+    // Bottom row shown while the session is busy with no active tool: animated dots, no emoji.
+    function thinkingLiveRow() {
+      return {
+        className: "chat-thinking-live-row",
+        html: `<div class="chat-thinking-live"><span class="think-dots"><span>.</span><span>.</span><span>.</span></span> <span>思考中</span></div>`
+      };
+    }
+
     function renderChatTranscriptNow() {
       const box = document.getElementById("chat-transcript");
       const prevScrollTop = box.scrollTop;
@@ -2809,18 +2833,23 @@
         reconcileChatRows(box, [{ className: "chat-empty", html: `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無可用 Session，點擊上方選單建立新對話</div>` }]);
         return;
       }
+      const current = state.sessions[activeSession] || {};
+      const isSessionBusy = current.status === "busy";
+      const noActiveTool = !(current.active_tools && current.active_tools.length);
+      const showThinkingLive = isSessionBusy && noActiveTool;
       const lines = state.transcripts[activeSession] || [];
       if (lines.length === 0) {
-        reconcileChatRows(box, [{ className: "chat-empty", html: `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無對話紀錄，請在下方輸入 Prompt 開始互動</div>` }]);
+        const emptyRows = [{ className: "chat-empty", html: `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無對話紀錄，請在下方輸入 Prompt 開始互動</div>` }];
+        if (showThinkingLive) emptyRows.push(thinkingLiveRow());
+        reconcileChatRows(box, emptyRows);
         return;
       }
 
       const turns = groupTranscriptIntoTurns(lines);
-      const current = state.sessions[activeSession] || {};
       const agentLabel = current.label || activeSession;
       const modelTag = current.model || current.kind || "agent";
 
-      turns.forEach(turn => {
+      turns.forEach((turn, turnIdx) => {
         if (turn.type === "user") {
           const row = { className: "chat-turn turn-user" };
           row.html = `
@@ -2855,9 +2884,14 @@
           `;
 
           if (turn.thoughts && turn.thoughts.length > 0) {
+            const isLastTurn = turnIdx === turns.length - 1 && turn.type === "agent";
+            const thinkActive = isLastTurn && isSessionBusy;
+            const lastThought = turn.thoughts.slice().reverse().find(t => t && String(t).trim());
+            const preview = lastThought ? String(lastThought).trim().slice(0, 70) : "";
+            const summaryLabel = thinkActive ? "思考中" : "思考過程";
             html += `
               <details class="turn-collapse">
-                <summary>思考過程 (${turn.thoughts.length} 行) ▾</summary>
+                <summary><span class="think-ind ${thinkActive ? "active" : ""}">⋯</span> ${summaryLabel} (${turn.thoughts.length} 行)${preview ? ` <span class="think-preview">· ${escapeHtml(preview)}</span>` : ""} ▾</summary>
                 <div class="collapse-content">${escapeHtml(turn.thoughts.join("\n"))}</div>
               </details>
             `;
@@ -2884,6 +2918,7 @@
           rows.push({ className: "chat-turn turn-system", html: `<span class="system-pill">${escapeHtml(turn.text)}</span>` });
         }
       });
+      if (showThinkingLive) rows.push(thinkingLiveRow());
       reconcileChatRows(box, rows);
 
       if (isNearBottom || prevScrollTop === 0) {

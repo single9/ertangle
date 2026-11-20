@@ -984,6 +984,31 @@ mod tests {
         assert!(INDEX_HTML.contains("webCommandByVerb(verb)"));
     }
 
+    /// T75: thought lines are emoji-free, animated, and show a live busy indicator.
+    #[test]
+    fn thinking_display_is_animated_and_emoji_free() {
+        // Both the new `⋯ ` prefix and legacy `💭 ` logs are recognized.
+        assert!(INDEX_HTML.contains("line.startsWith(\"⋯ \") || line.startsWith(\"💭 \")"));
+        assert!(INDEX_HTML.contains("replace(/^(?:⋯|💭)\\s*/, \"\")"));
+        // The collapsed summary shows an animated symbol, busy label, count and preview.
+        assert!(INDEX_HTML
+            .contains("<span class=\"think-ind ${thinkActive ? \"active\" : \"\"}\">⋯</span>"));
+        assert!(INDEX_HTML.contains("const summaryLabel = thinkActive ? \"思考中\" : \"思考過程\""));
+        assert!(INDEX_HTML.contains("class=\"think-preview\""));
+        assert!(INDEX_HTML.contains("@keyframes think-pulse"));
+        // A live bottom row is present while busy without an active tool.
+        assert!(INDEX_HTML.contains("function thinkingLiveRow()"));
+        assert!(INDEX_HTML.contains("chat-thinking-live"));
+        assert!(INDEX_HTML.contains("@keyframes think-dot"));
+        assert!(INDEX_HTML.contains("const showThinkingLive = isSessionBusy && noActiveTool"));
+        // No emoji in the thinking render block itself (the legacy recognizer is elsewhere).
+        let render_start = INDEX_HTML
+            .find("function renderChatTranscriptNow()")
+            .unwrap();
+        let render_end = INDEX_HTML.find("function toolCallParts(").unwrap();
+        assert!(!INDEX_HTML[render_start..render_end].contains("💭"));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()

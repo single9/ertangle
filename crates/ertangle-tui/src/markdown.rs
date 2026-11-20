@@ -5,7 +5,7 @@
 //! 引言、分隔線、圍籬程式碼區塊 (含語言標籤與底色)、GFM 表格。
 //!
 //! 也認得 ertangle 自己在逐字稿裡加的語意前綴：`❯ ` (使用者 prompt)、
-//! `💭 ` (思考)、`▸ ` (工具呼叫)、`💬 ` (審查註解)，各自用不同顏色呈現。
+//! `⋯ ` (思考，亦相容舊 `💭 `)、`▸ ` (工具呼叫)、`💬 ` (審查註解)，各自用不同顏色呈現。
 //!
 //! 設計上刻意保持「行導向」：一次 `render` 會把整段來源重新渲染，
 //! 因此圍籬／表格狀態不需要跨次呼叫儲存。
@@ -164,8 +164,8 @@ fn render_line_with_links(
             ),
         };
     }
-    if let Some(rest) = line.strip_prefix("💭 ") {
-        return prefixed_with_links("💭 ", rest, THOUGHT, true);
+    if let Some(rest) = crate::app::strip_thought_prefix(line) {
+        return prefixed_with_links("· ", rest, THOUGHT, true);
     }
     if let Some(rest) = line.strip_prefix("▸ ") {
         return (tool_line(rest), Vec::new());
@@ -1179,11 +1179,14 @@ mod tests {
     #[test]
     fn semantic_prefixes() {
         let mut r = Renderer::new();
-        let src = plain("💭 thinking\n▸ Bash ls\n💬 review x");
+        let src = plain("⋯ thinking\n💭 legacy thought\n▸ Bash ls\n💬 review x");
         let out = r.render(&src, 80);
+        assert_eq!(out[0].spans[0].content, "· ");
         assert_eq!(out[0].spans[0].style.fg, Some(THOUGHT));
-        assert_eq!(out[1].spans[1].style.fg, Some(TOOL));
-        assert_eq!(out[2].spans[0].style.fg, Some(REVIEW));
+        assert_eq!(out[1].spans[0].content, "· ");
+        assert_eq!(out[1].spans[0].style.fg, Some(THOUGHT));
+        assert_eq!(out[2].spans[1].style.fg, Some(TOOL));
+        assert_eq!(out[3].spans[0].style.fg, Some(REVIEW));
     }
 
     #[test]

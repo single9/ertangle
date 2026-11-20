@@ -2178,6 +2178,14 @@ msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
+msgid "⋯ 思考 ({n} 行)"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
+msgid "⋯ 思考 ({n} 行) · {last}"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
 msgid "工具：展開 (每筆呼叫都顯示，按 O 摺疊)"
 msgstr ""
 
@@ -2186,11 +2194,11 @@ msgid "工具：摺疊 (連續呼叫合成一行，按 O 展開)"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
-msgid "思考顯示：開 (顯示 💭 行)"
+msgid "思考顯示：開 (展開完整思考內容)"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
-msgid "思考顯示：關 (已隱藏 💭 行，按 T 顯示)"
+msgid "思考顯示：關 (摺疊為單行摘要，按 T 展開)"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/input.rs
@@ -3095,6 +3103,14 @@ msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "思考中"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "思考中..."
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs

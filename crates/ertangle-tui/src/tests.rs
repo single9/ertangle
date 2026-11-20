@@ -311,7 +311,15 @@ fn input_cursor_is_placed_inside_the_box() {
 
 #[test]
 fn thinking_lines_are_hidden_by_default() {
-    let mut app = sample_app(&["💭 planning", "answer", "💭 more", "done"]);
+    // Consecutive thoughts (new and legacy prefixes) fold into one summary line whose
+    // preview is the last non-empty thought.
+    let mut app = sample_app(&[
+        "⋯ first hidden thought",
+        "💭 second thought",
+        "⋯ last thought preview",
+        "answer",
+        "done",
+    ]);
     let id: SessionId = "ses_test".into();
 
     let (lines, _) = build_transcript_lines(&app, &id, 80);
@@ -325,11 +333,17 @@ fn thinking_lines_are_hidden_by_default() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(!text.contains("planning"), "thought leaked: {text}");
-    assert!(!text.contains("more"), "thought leaked: {text}");
+    assert!(text.contains("思考 (3 行)"), "no fold summary: {text}");
+    assert!(text.contains("last thought preview"), "no preview: {text}");
+    assert!(
+        !text.contains("first hidden thought"),
+        "thought leaked: {text}"
+    );
+    assert!(!text.contains("second thought"), "thought leaked: {text}");
+    assert!(!text.contains("💭"), "emoji leaked: {text}");
     assert!(text.contains("answer"));
     assert!(text.contains("done"));
-    assert!(!main_pane_text(&app).contains("planning"));
+    assert!(!main_pane_text(&app).contains("first hidden thought"));
 
     app.show_thoughts = true;
     let (lines, _) = build_transcript_lines(&app, &id, 80);
@@ -343,9 +357,65 @@ fn thinking_lines_are_hidden_by_default() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(text.contains("planning"));
-    assert!(text.contains("more"));
-    assert!(main_pane_text(&app).contains("planning"));
+    assert!(text.contains("first hidden thought"));
+    assert!(text.contains("second thought"));
+    assert!(text.contains("last thought preview"));
+    assert!(!text.contains("思考 (3 行)"), "fold summary should be gone");
+    assert!(main_pane_text(&app).contains("first hidden thought"));
+}
+
+#[test]
+fn thought_prefix_recognizes_new_and_legacy_markers() {
+    assert_eq!(crate::app::strip_thought_prefix("⋯ hello"), Some("hello"));
+    assert_eq!(
+        crate::app::strip_thought_prefix("💭 legacy"),
+        Some("legacy")
+    );
+    assert_eq!(crate::app::strip_thought_prefix("plain"), None);
+    assert!(crate::draw::SPINNER_FRAMES.contains(&crate::draw::spinner_frame()));
+}
+
+#[test]
+fn safe_boundary_does_not_split_a_consecutive_thought_run() {
+    let all_thoughts: VecDeque<String> = (0..12).map(|i| format!("⋯ thought {i}")).collect();
+    assert_eq!(crate::draw::find_safe_boundary(&all_thoughts), 0);
+
+    let mut mixed: VecDeque<String> = (0..20).map(|i| format!("line {i}")).collect();
+    mixed.push_back("⋯ first".into());
+    mixed.push_back("💭 last".into());
+    // The boundary may fall before the run, but never between its two lines.
+    let boundary = crate::draw::find_safe_boundary(&mixed);
+    assert!(boundary <= 20, "unexpected boundary {boundary}");
+    assert_ne!(boundary, 21);
+}
+
+#[test]
+fn busy_session_shows_live_thinking_indicator() {
+    let mut app = sample_app(&[]);
+    let text = render(&mut app);
+    assert!(
+        squash(&text).contains("思考中"),
+        "no live indicator: {text}"
+    );
+    assert!(
+        crate::draw::SPINNER_FRAMES
+            .iter()
+            .any(|frame| text.contains(frame)),
+        "no spinner frame: {text}"
+    );
+
+    // Scrolling away from the latest output hides the live row. Render once first so the
+    // markdown cache exists; a cold cache reset would clear the scroll offset.
+    let long: Vec<String> = (0..60).map(|i| format!("line {i}")).collect();
+    let refs: Vec<&str> = long.iter().map(String::as_str).collect();
+    let mut scrolled = sample_app(&refs);
+    let _ = render(&mut scrolled);
+    scrolled.transcript_scroll = Some(0);
+    let text = render(&mut scrolled);
+    assert!(
+        !squash(&text).contains("思考中"),
+        "live row should be hidden: {text}"
+    );
 }
 
 fn cache_lines(lines: Vec<Line<'static>>) -> MdCache {
@@ -2089,15 +2159,25 @@ fn search_escape_restores_normal_keys_and_remembers_query() {
 
 #[test]
 fn search_skips_hidden_lines_and_is_documented() {
-    let mut app = sample_app(&["💭 secret thought", "visible secret", "plain"]);
+    // "needle" only exists in an earlier thought line that was folded away; the fold
+    // preview contains only the last thought, so it must not be searchable.
+    let mut app = sample_app(&[
+        "💭 hidden needle",
+        "💭 secret thought",
+        "visible secret",
+        "plain",
+    ]);
     let (mut w, _peer) = pair_writer();
     render(&mut app);
-    execute_command(&mut app, &mut w, "find secret").unwrap();
+    execute_command(&mut app, &mut w, "find needle").unwrap();
     assert_eq!(
         app.search.as_ref().unwrap().matches.len(),
-        1,
-        "隱藏的思考行不在搜尋範圍"
+        0,
+        "folded-away thought lines are not searchable"
     );
+    handle_key(&mut app, &mut w, kev(KeyCode::Esc)).unwrap();
+    execute_command(&mut app, &mut w, "find visible").unwrap();
+    assert_eq!(app.search.as_ref().unwrap().matches.len(), 1);
     handle_key(&mut app, &mut w, kev(KeyCode::Esc)).unwrap();
 
     // Worktrees 視圖不支援搜尋。

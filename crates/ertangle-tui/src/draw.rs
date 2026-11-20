@@ -3,6 +3,15 @@
 use super::*;
 use tr::tr;
 
+/// Braille spinner frames for live thinking indicators.
+pub(crate) const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// Current spinner frame, advancing every 120ms so busy redraws animate it.
+pub(crate) fn spinner_frame() -> &'static str {
+    let idx = (ertangle_core::now_millis() / 120) as usize % SPINNER_FRAMES.len();
+    SPINNER_FRAMES[idx]
+}
+
 pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     app.input_inner_w = f.area().width.saturating_sub(2) as usize;
     let input_h = crate::inputbox::height_for(&app.input, f.area().width)
@@ -1337,12 +1346,12 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     Style::default().fg(Color::Cyan),
                 );
             }
-            push_span(
-                &mut spans,
-                &mut used,
-                s.status.glyph(),
-                Style::default().fg(color),
-            );
+            let glyph = if s.status == SessionStatus::Busy {
+                spinner_frame()
+            } else {
+                s.status.glyph()
+            };
+            push_span(&mut spans, &mut used, glyph, Style::default().fg(color));
 
             // 右側只留真正需要注意的短標記：context 快滿、有背景處理程序。
             let mut right: Vec<(String, Color)> = Vec::new();
@@ -1489,10 +1498,12 @@ pub(crate) fn find_safe_boundary(buf: &std::collections::VecDeque<String>) -> us
         let prev = &buf[i - 1];
         let next = &buf[i];
 
-        if prev.starts_with("▸ ")
-            || prev.starts_with("  ✓")
-            || prev.starts_with("  ✗")
-            || prev.starts_with("💭 ")
+        if prev.starts_with("▸ ") || prev.starts_with("  ✓") || prev.starts_with("  ✗") {
+            continue;
+        }
+        // A boundary between two thought lines would split one folded run into two summaries.
+        if crate::app::strip_thought_prefix(prev).is_some()
+            && crate::app::strip_thought_prefix(next).is_some()
         {
             continue;
         }
@@ -1945,6 +1956,50 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
             tr!("這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"),
             Style::default().fg(Color::DarkGray),
         ));
+    }
+
+    // Always show an animated indicator while the selected session is busy with no tool
+    // in flight, even before the first token arrives. Rendering here keeps the markdown
+    // cache deterministic for unit tests.
+    let live_text = selected
+        .as_ref()
+        .and_then(|id| {
+            app.state
+                .sessions
+                .get(id)
+                .filter(|s| s.status == SessionStatus::Busy && s.active_tools.is_empty())
+                .map(|_| id)
+        })
+        .filter(|_| app.transcript_scroll.is_none())
+        .map(|id| {
+            let preview = app
+                .state
+                .transcripts
+                .get(id)
+                .and_then(|buf| buf.back())
+                .and_then(|line| crate::app::strip_thought_prefix(line))
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.chars().take(60).collect::<String>());
+            match preview {
+                Some(p) => format!("{} {} · {}", spinner_frame(), tr!("思考中"), p),
+                None => format!("{} {}", spinner_frame(), tr!("思考中...")),
+            }
+        });
+    if let Some(text) = live_text {
+        let live = Line::styled(
+            text,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::ITALIC),
+        );
+        if visible.len() == viewport {
+            if let Some(last) = visible.last_mut() {
+                *last = live;
+            }
+        } else {
+            visible.push(live);
+        }
     }
 
     let para = Paragraph::new(visible).block(
