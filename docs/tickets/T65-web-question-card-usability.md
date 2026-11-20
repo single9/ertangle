@@ -19,6 +19,7 @@ Status: done
 - 以簽章 (`setCardHtml` 比對 `dataset.sig`) 控制重繪，只有問題集合改變才重建，勾選與自訂文字在 state 事件間保留。
 - Chat 分頁且問題屬於目前 Session 時，在 `#chat-question-slot` 內嵌顯示 (位於逐字稿與輸入框之間，`max-height: 50vh` 並可內部捲動)，隱藏全域橫幅；其他情況橫幅改為單行摘要加「回答」按鈕，按下後切換到該 Session 的 Chat。
 - 多題顯示「1/N」；同一 `group` 的問題一起顯示，一個送出鈕對每題各送一次 `answer_question`。
+- 同一 `group` 至少要回答一題才能送出；未回答的同組問題送出 `answers: []` (視為略過)。Daemon 不再於第一題回答後自動清除同組其他問題，每題只由自己的 `answer_question` 解決，避免後續答案找不到等待者而遺失。
 - 單選仍須按送出 (避免誤觸)，自訂輸入框按 Enter 即送出。仍送出選項 label，由 daemon 對應 value。
 
 ## Acceptance criteria

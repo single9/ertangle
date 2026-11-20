@@ -3892,7 +3892,8 @@
       if (!first) return;
       const qs = questionGroupOf(first);
       const payloads = qs.map(q => ({ q, answers: collectQuestionAnswers(q, scope) }));
-      if (payloads.some(p => !p.answers.length)) {
+      // Unanswered siblings are sent as [] (skip); at least one must be answered.
+      if (payloads.every(p => !p.answers.length)) {
         showToast("請選擇選項或輸入自訂答案");
         return;
       }

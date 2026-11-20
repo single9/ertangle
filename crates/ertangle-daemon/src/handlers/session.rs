@@ -1613,54 +1613,10 @@ pub(crate) fn handle_mcp_question(
     let _ = reply.send(Frame::QuestionAnswer { answers });
 }
 
-/// Returns other pending questions submitted in the same request as `id`.
-pub(crate) fn grouped_question_siblings(
-    shared: &Arc<Shared>,
-    session: &str,
-    id: &str,
-) -> Vec<String> {
-    let inner = lock(&shared.inner);
-    let Some(group) = inner
-        .state
-        .pending_questions
-        .get(id)
-        .and_then(|q| q.group.clone())
-    else {
-        return Vec::new();
-    };
-    inner
-        .state
-        .pending_questions
-        .values()
-        .filter(|q| q.session == session && q.id != id && q.group.as_deref() == Some(&group))
-        .map(|q| q.id.clone())
-        .collect()
-}
-
-/// Clears sibling questions from the same request after one of them is answered.
-///
-/// The adapter still waits for an answer to every field in a grouped ACP request, so
-/// skipped siblings must be resolved there too. Otherwise the real selection never
-/// reaches the originating tool call.
-fn clear_grouped_questions(
-    shared: &Arc<Shared>,
-    session: &str,
-    id: &str,
-    ctl: Option<&dyn ertangle_adapter::AgentControl>,
-) {
-    for sibling in grouped_question_siblings(shared, session, id) {
-        if let Some(ctl) = ctl {
-            let _ = ctl.resolve_question(&sibling, &[]);
-        }
-        shared.emit(Event::QuestionResolved {
-            session: session.to_string(),
-            id: sibling,
-            answers: Vec::new(),
-        });
-    }
-}
-
 /// Answer an interactive question from a human.
+///
+/// Grouped questions are resolved only by their own answers: clients send `[]` for
+/// siblings they skip, so no sibling is auto-cleared here.
 pub(crate) fn handle_answer_question(
     shared: &Arc<Shared>,
     reply: &ClientTx,
@@ -1672,7 +1628,6 @@ pub(crate) fn handle_answer_question(
     let waiter = lock(&shared.inner).question_waiters.remove(&id);
     if let Some(tx) = waiter {
         let _ = tx.send(answers.clone());
-        clear_grouped_questions(shared, &sid, &id, None);
         shared.emit(Event::QuestionResolved {
             session: sid,
             id,
@@ -1684,7 +1639,6 @@ pub(crate) fn handle_answer_question(
     match shared.control(&session) {
         Some((real_sid, ctl)) => match ctl.resolve_question(&id, &answers) {
             Ok(()) => {
-                clear_grouped_questions(shared, &real_sid, &id, Some(ctl.as_ref()));
                 shared.emit(Event::QuestionResolved {
                     session: real_sid,
                     id,

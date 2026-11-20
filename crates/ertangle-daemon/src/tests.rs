@@ -1929,36 +1929,54 @@ fn mcp_question_waits_for_human_answer() {
 }
 
 #[test]
-fn grouped_question_siblings_are_scoped_to_one_request() {
+fn grouped_questions_stay_pending_until_each_is_answered() {
     let shared = test_shared();
     shared.emit(Event::SessionStarted {
         session: ask_sess("ses-group", PermissionPolicy::Ask),
     });
-    let question = |id: &str, group: Option<&str>| ertangle_core::UserQuestion {
-        id: id.into(),
-        session: "ses-group".into(),
-        header: None,
-        question: id.into(),
-        options: Vec::new(),
-        multi_select: false,
-        custom: true,
-        group: group.map(str::to_string),
-    };
-    for q in [
-        question("qst_g1", Some("group-a")),
-        question("qst_g2", Some("group-a")),
-        question("qst_g3", None),
-    ] {
-        shared.emit(Event::QuestionRequested { question: q });
+    let mut rxs = Vec::new();
+    for id in ["qst_g1", "qst_g2"] {
+        shared.emit(Event::QuestionRequested {
+            question: ertangle_core::UserQuestion {
+                id: id.into(),
+                session: "ses-group".into(),
+                header: None,
+                question: id.into(),
+                options: Vec::new(),
+                multi_select: false,
+                custom: true,
+                group: Some("group-a".into()),
+            },
+        });
+        let (wtx, wrx) = std::sync::mpsc::channel();
+        lock(&shared.inner)
+            .question_waiters
+            .insert(id.to_string(), wtx);
+        rxs.push(wrx);
     }
+    let (tx, _rx) = client_channel(None);
+    let answer = |id: &str, answers: Vec<String>| {
+        shared.handle(
+            &tx,
+            Request::AnswerQuestion {
+                session: "ses-group".into(),
+                id: id.into(),
+                answers,
+            },
+        );
+    };
 
-    let siblings =
-        crate::handlers::session::grouped_question_siblings(&shared, "ses-group", "qst_g1");
-    assert_eq!(siblings, vec!["qst_g2".to_string()]);
-    assert!(
-        crate::handlers::session::grouped_question_siblings(&shared, "ses-group", "qst_g3")
-            .is_empty()
-    );
+    answer("qst_g1", vec!["A".into()]);
+    assert_eq!(rxs[0].try_recv().unwrap(), vec!["A".to_string()]);
+    assert!(lock(&shared.inner)
+        .state
+        .pending_questions
+        .contains_key("qst_g2"));
+    assert!(rxs[1].try_recv().is_err());
+
+    answer("qst_g2", Vec::new());
+    assert_eq!(rxs[1].try_recv().unwrap(), Vec::<String>::new());
+    assert!(lock(&shared.inner).state.pending_questions.is_empty());
 }
 
 #[test]

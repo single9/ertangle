@@ -865,6 +865,7 @@ mod tests {
         // Grouped questions share one submit that sends one op per question.
         assert!(INDEX_HTML.contains("function questionGroupOf("));
         assert!(INDEX_HTML.contains("function submitQuestionGroup("));
+        assert!(INDEX_HTML.contains("payloads.every(p => !p.answers.length)"));
         assert!(INDEX_HTML.contains("op: \"answer_question\""));
         // Enter in the custom input submits.
         assert!(INDEX_HTML.contains("event.key==='Enter'"));
