@@ -1,6 +1,6 @@
 # T73 — Session cleanup: auto-archive, retention, prune
 
-Status: in-progress (daemon and TUI parts done; Web part pending)
+Status: done
 
 ## Problem
 
@@ -27,6 +27,8 @@ Finished worker sessions pile up in the session list and archived sessions grow 
 - `:prune` (menu `SPC g p`) sends `Request::Prune` scoped to the home project when the project scope is on (all projects otherwise); the daemon's summary shows in the status line.
 - `:resume` still lists archived and ended sessions (unchanged).
 
-### Web (pending)
+### Web (done)
 
-Ended sessions folded into a collapsed group, a "prune" button in the Sessions tab, and a collapsed archived list with resume.
+1. Ended (non-live) sessions folded into a bottom "已結束 (N)" group collapsed by default across session lists (overview tree, Sessions tab, session picker) with toggle state remembered in `localStorage`.
+2. Sessions tab has a "清理已結束" button with `confirm()` sending `{op: "prune"}` (optionally scoped to project) and displaying result counts/skips via toast.
+3. Collapsed "已封存 (N)" list at bottom of Sessions tab from `state.archived_sessions`, with `archive_pruned` event handling; each row displays label, kind, ended time, and last summary note; tap opens archived transcript drawer and a "接續" button using the existing `resume` op.

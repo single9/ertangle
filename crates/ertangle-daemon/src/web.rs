@@ -928,6 +928,34 @@ mod tests {
         assert!(decl < first_use, "pendingKeys must be declared before use");
     }
 
+    /// T73c: Ended sessions are folded into a collapsed group across session lists.
+    #[test]
+    fn ended_sessions_folded_into_collapsed_group() {
+        assert!(INDEX_HTML.contains("已結束 ("));
+        assert!(INDEX_HTML.contains("ertangle_sessions_ended_open"));
+        assert!(INDEX_HTML.contains("ertangle_ov_ended_open"));
+        assert!(INDEX_HTML.contains("ertangle_picker_ended_open"));
+    }
+
+    /// T73c: Sessions tab has a prune button with confirm prompt sending `{op: "prune"}`.
+    #[test]
+    fn prune_button_and_request() {
+        assert!(INDEX_HTML.contains("清理已結束"));
+        assert!(INDEX_HTML.contains("pruneSessions()"));
+        assert!(INDEX_HTML.contains("op: \"prune\""));
+        assert!(INDEX_HTML.contains("confirm("));
+    }
+
+    /// T73c: Sessions tab has a collapsed archived list with tap-to-transcript and resume.
+    #[test]
+    fn archived_sessions_list_and_transcript_drawer() {
+        assert!(INDEX_HTML.contains("已封存 ("));
+        assert!(INDEX_HTML.contains("ertangle_archived_sessions_open"));
+        assert!(INDEX_HTML.contains("openArchivedTranscript("));
+        assert!(INDEX_HTML.contains("id=\"sheet-archived-transcript\""));
+        assert!(INDEX_HTML.contains("archive_pruned"));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()
