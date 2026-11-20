@@ -528,20 +528,52 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let loading = p.loading;
     let p = &*p;
     let vis = p.visible();
-    let w = 72.min(f.area().width);
-    let h = (vis.len() as u16 + 4).clamp(6, 18).min(f.area().height);
+    let is_resume = matches!(p.stage, crate::menu::PickStage::Resume);
+    let max_w = if is_resume { 96 } else { 72 };
+    let w = max_w.min(f.area().width.saturating_sub(2));
+    let extra_h: u16 = if is_resume { 5 } else { 4 };
+    let h = (vis.len() as u16 + extra_h)
+        .clamp(6, 18)
+        .min(f.area().height);
     let area = Rect::new(
         f.area().x + (f.area().width.saturating_sub(w)) / 2,
         f.area().y + (f.area().height.saturating_sub(h)) / 3,
         w,
         h,
     );
-    let mut lines = vec![Line::from(vec![
+    let mut lines = Vec::new();
+    if is_resume {
+        let here_active = p.resume_scope == crate::menu::ResumeScope::Here;
+        let here_style = if here_active {
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        let all_style = if !here_active {
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!(" [ {} ] ", tr!("本專案")), here_style),
+            Span::raw(" "),
+            Span::styled(format!(" [ {} ] ", tr!("全部專案")), all_style),
+            Span::styled(tr!(" (Tab 切換)"), Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+    lines.push(Line::from(vec![
         Span::styled("> ", Style::default().fg(Color::Cyan)),
         Span::raw(p.filter.clone()),
         Span::styled("▏", Style::default().fg(Color::Cyan)),
-    ])];
-    let room = h.saturating_sub(3) as usize;
+    ]));
+    let header_lines = if is_resume { 2 } else { 1 };
+    let room = h.saturating_sub(header_lines + 2) as usize;
     let start = p.cursor.saturating_sub(room.saturating_sub(1));
     for (i, (label, _)) in vis.iter().enumerate().skip(start).take(room) {
         let sel = i == p.cursor;
@@ -561,12 +593,20 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
         )));
     }
     if vis.is_empty() && !loading {
-        lines.push(Line::from(Span::styled(
-            if p.filter.is_empty() {
+        let empty_msg =
+            if is_resume && p.resume_scope == crate::menu::ResumeScope::Here && p.filter.is_empty()
+            {
+                tr!(
+                    "{project} 沒有已結束的 session；按 Tab 切換至全部專案",
+                    project = crate::app::project_name(&app.home_project, &[])
+                )
+            } else if p.filter.is_empty() {
                 tr!("(沒有選項)")
             } else {
                 tr!("Enter 使用自訂值：{value}", value = p.filter)
-            },
+            };
+        lines.push(Line::from(Span::styled(
+            empty_msg,
             Style::default().fg(Color::DarkGray),
         )));
     }

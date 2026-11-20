@@ -227,7 +227,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ),
     (
         "resume",
-        ertangle_core::tr_noop!("[prompt]  不帶參數開選擇器；有 prompt 時接續選取的 session"),
+        ertangle_core::tr_noop!("[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 時接續選取的 session"),
     ),
     (
         "model",
@@ -271,6 +271,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("thoughts", ertangle_core::tr_noop!("顯示／隱藏思考")),
     ("tools", ertangle_core::tr_noop!("展開／摺疊工具呼叫")),
     ("scope", ertangle_core::tr_noop!("[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)")),
+    (
+        "project",
+        ertangle_core::tr_noop!("[here|all|open <路徑>]  切換專案範圍或開啟專案 (open 省略路徑開選擇器)"),
+    ),
     (
         "skill",
         ertangle_core::tr_noop!("[install|uninstall|show] [claude|agents|codex] [global]  安裝 ertangle-ade skill"),
@@ -583,12 +587,13 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         "thoughts" | "think" => toggle_thoughts(app),
         "tools" => toggle_tools(app),
         "skill" => skill_command(app, rest)?,
-        "scope" | "project" => match rest {
+        "scope" => match rest {
             "here" | "this" => toggle_scope(app, Some(true)),
             "all" => toggle_scope(app, Some(false)),
             "" => toggle_scope(app, None),
             _ => app.status = tr!("用法：:scope [here|all]"),
         },
+        "project" => project_command(app, rest)?,
         "notify" => match rest {
             "on" | "off" => {
                 app.notify.enabled = rest == "on";
@@ -848,6 +853,32 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             app.should_quit = true;
         }
         other => forward_native(app, writer, other, rest)?,
+    }
+    Ok(())
+}
+
+fn project_command(app: &mut App, rest: &str) -> Result<()> {
+    let rest = rest.trim();
+    if rest.is_empty() {
+        toggle_scope(app, None);
+    } else if rest == "here" || rest == "this" {
+        toggle_scope(app, Some(true));
+    } else if rest == "all" {
+        toggle_scope(app, Some(false));
+    } else if let Some(path_arg) = rest
+        .strip_prefix("open")
+        .or_else(|| rest.strip_prefix("set"))
+    {
+        let path_str = path_arg.trim();
+        if path_str.is_empty() {
+            crate::menu::start_project_picker(app);
+        } else if let Err(err) = app.set_active_project(std::path::Path::new(path_str)) {
+            app.status = err;
+        }
+    } else if rest == "pick" || rest == "select" || rest == "list" {
+        crate::menu::start_project_picker(app);
+    } else {
+        app.status = tr!("用法：:project [here|all|open <路徑>]");
     }
     Ok(())
 }
@@ -1230,9 +1261,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
         writer,
         &Request::Spawn(SpawnRequest {
             kind: Some(kind.clone()),
-            cwd: std::env::current_dir()
-                .ok()
-                .map(|p| p.to_string_lossy().to_string()),
+            cwd: Some(app.active_project.to_string_lossy().to_string()),
             label: None,
             role: Some(role),
             prompt,

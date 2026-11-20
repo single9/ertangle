@@ -93,7 +93,12 @@ pub(crate) mod hosts;
 pub(crate) use hosts::*;
 
 /// 啟動 TUI (會先確保 daemon 在跑)。
-pub fn run() -> Result<()> {
+pub fn run(initial_project: Option<std::path::PathBuf>) -> Result<()> {
+    if let Some(ref p) = initial_project {
+        if !p.exists() || !p.is_dir() {
+            anyhow::bail!("{}: {}", tr!("專案目錄不存在或不是目錄"), p.display());
+        }
+    }
     ertangle_daemon::ensure_daemon()?;
 
     let mut client = Client::connect()?;
@@ -157,17 +162,15 @@ pub fn run() -> Result<()> {
     }
 
     let mut terminal = setup_terminal()?;
-    let result = event_loop(&mut terminal, &mut router, rx, host_sync);
+    let result = event_loop(&mut terminal, &mut router, rx, host_sync, initial_project);
     running.store(false, Ordering::Relaxed);
     restore_terminal(&mut terminal)?;
     result
 }
 
 /// `ertangle - <專案根目錄名稱>`；取不到名稱時只用 `ertangle`。
-fn window_title() -> String {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let root = crate::app::home_project(&cwd);
-    let name = std::path::Path::new(&root)
+fn window_title(app: &App) -> String {
+    let name = std::path::Path::new(&app.home_project)
         .file_name()
         .map(|n| n.to_string_lossy().replace(|c: char| c.is_control(), ""))
         .unwrap_or_default();
@@ -216,7 +219,7 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     write!(stdout, "\x1b[?1007h")?;
     // 視窗標題帶上專案名，在有 window manager 的環境可辨識是哪個專案。
     // 先 push (XTWINOPS 22) 原標題，離開時 pop 還原。
-    write!(stdout, "\x1b[22;0t\x1b]0;{}\x07", window_title())?;
+    write!(stdout, "\x1b[22;0t\x1b]0;ertangle\x07")?;
     stdout.flush()?;
     let backend = CrosstermBackend::new(stdout);
     Ok(Terminal::new(backend)?)
@@ -259,13 +262,13 @@ fn event_loop(
     writer: &mut HostRouter,
     rx: Receiver<HostEvent>,
     host_sync: HostSyncMap,
+    initial_project: Option<std::path::PathBuf>,
 ) -> Result<()> {
-    let mut app = App::new();
+    let mut app = App::with_project(initial_project);
     app.prompt_history = history::History::load(Some(history::history_path("prompt")));
     app.command_history = history::History::load(Some(history::history_path("command")));
     let mut dirty = true;
     let mut last_draw = std::time::Instant::now();
-    let base_title = window_title();
     let mut last_title = String::new();
 
     loop {
@@ -325,7 +328,7 @@ fn event_loop(
             }
         }
 
-        let title = format!("{}{base_title}", status_prefix(&app));
+        let title = format!("{}{}", status_prefix(&app), window_title(&app));
         if title != last_title {
             let _ = write!(io::stdout(), "\x1b]0;{title}\x07");
             let _ = io::stdout().flush();

@@ -301,6 +301,13 @@ pub(crate) fn handle_menu_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
 // spawn 選擇器
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ResumeScope {
+    #[default]
+    Here,
+    All,
+}
+
 #[derive(Clone)]
 pub(crate) enum PickStage {
     Agent,
@@ -313,10 +320,13 @@ pub(crate) enum PickStage {
     Playbook,
     /// 選擇要接續的已結束 session。
     Resume,
+    /// 選擇要切換的作用中專案。
+    Project,
 }
 
 pub(crate) struct Picker {
     pub stage: PickStage,
+    pub resume_scope: ResumeScope,
     pub title: String,
     /// (顯示文字, 值)；值為空字串代表「預設」。
     pub items: Vec<(String, String)>,
@@ -476,6 +486,7 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
         .collect();
     app.picker = Some(Picker {
         stage: PickStage::Agent,
+        resume_scope: ResumeScope::default(),
         title: tr!("選擇 agent"),
         items,
         filter: String::new(),
@@ -503,6 +514,7 @@ pub(crate) fn start_playbook_picker(app: &mut App) {
     }
     app.picker = Some(Picker {
         stage: PickStage::Playbook,
+        resume_scope: ResumeScope::default(),
         title: tr!("選擇團隊範本 (選完輸入目標需求)"),
         items,
         filter: String::new(),
@@ -526,7 +538,8 @@ pub(crate) fn format_compact_age(now_ms: u64, created_ms: u64) -> String {
     }
 }
 
-pub(crate) fn start_resume_picker(app: &mut App) {
+/// 重新產生接續選擇器的候選清單 (依範圍過濾並附加母 session 標記與專案前綴)。
+pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String, String)> {
     let mut ended: Vec<(&ertangle_core::Session, bool)> = Vec::new();
     // 收集本機與多主機的已結束及封存歷史 session
     for (host_name, h) in &app.hosts {
@@ -565,13 +578,45 @@ pub(crate) fn start_resume_picker(app: &mut App) {
         }
     }
 
-    if ended.is_empty() {
-        app.status = tr!("沒有可接續的 session (已結束且具備對話 id)");
-        return;
+    // 建立 id -> label 對應表 (包含所有主機與本機的 live、ended、archived session)
+    let mut parent_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for h in app.hosts.values() {
+        for s in h
+            .state
+            .sessions
+            .values()
+            .chain(h.state.archived_sessions.values())
+        {
+            parent_map.insert(s.id.clone(), s.label.clone());
+        }
     }
+    for s in app
+        .state
+        .sessions
+        .values()
+        .chain(app.state.archived_sessions.values())
+    {
+        parent_map.insert(s.id.clone(), s.label.clone());
+    }
+
+    // 收集所有專案根目錄，供 project_name 計算不衝突名稱
+    let mut all_roots: Vec<String> = Vec::new();
+    for (s, _) in &ended {
+        let root = s.project_root().to_string();
+        if !all_roots.contains(&root) {
+            all_roots.push(root);
+        }
+    }
+    let all_roots_refs: Vec<&str> = all_roots.iter().map(|s| s.as_str()).collect();
+
+    if scope == ResumeScope::Here {
+        ended.retain(|(s, _)| s.project_root() == app.home_project);
+    }
+
     ended.sort_by_key(|(a, _)| std::cmp::Reverse(a.created_ms));
     let now_ms = ertangle_core::now_millis();
-    let items: Vec<(String, String)> = ended
+    ended
         .into_iter()
         .map(|(s, is_archived)| {
             let kind_model = match &s.model {
@@ -580,29 +625,58 @@ pub(crate) fn start_resume_picker(app: &mut App) {
             };
             let age = format_compact_age(now_ms, s.created_ms);
             let resumable = if s.native_id.is_some() { "↻" } else { "–" };
-            let label = if is_archived {
-                let tag = tr!("封存");
-                format!(
-                    "{} {} [{tag}]  {}  {}  {}",
-                    s.status.glyph(),
-                    s.label,
-                    kind_model,
-                    age,
-                    resumable
-                )
-            } else {
-                format!(
-                    "{} {}  {}  {}  {}",
-                    s.status.glyph(),
-                    s.label,
-                    kind_model,
-                    age,
-                    resumable
-                )
+            let parent_suffix = match &s.parent {
+                Some(pid) => {
+                    let plabel = parent_map
+                        .get(pid)
+                        .cloned()
+                        .unwrap_or_else(|| crate::app::short(pid));
+                    format!("  ↳ {plabel}")
+                }
+                None => String::new(),
             };
+            let proj_prefix = if scope == ResumeScope::All {
+                let pname = crate::app::project_name(s.project_root(), &all_roots_refs);
+                format!("[{pname}] ")
+            } else {
+                String::new()
+            };
+            let tag_part = if is_archived {
+                let tag = tr!("封存");
+                format!(" [{tag}]")
+            } else {
+                String::new()
+            };
+            let label = format!(
+                "{proj_prefix}{} {}{tag_part}  {}  {}  {}{parent_suffix}",
+                s.status.glyph(),
+                s.label,
+                kind_model,
+                age,
+                resumable
+            );
             (label, s.id.clone())
         })
-        .collect();
+        .collect()
+}
+
+pub(crate) fn start_resume_picker(app: &mut App) {
+    let all_items = rebuild_resume_items(app, ResumeScope::All);
+    if all_items.is_empty() {
+        app.status = tr!("沒有可接續的 session (已結束且具備對話 id)");
+        return;
+    }
+
+    let resume_scope = if app.scope_here {
+        ResumeScope::Here
+    } else {
+        ResumeScope::All
+    };
+    let items = if resume_scope == ResumeScope::All {
+        all_items
+    } else {
+        rebuild_resume_items(app, ResumeScope::Here)
+    };
 
     let cursor = app
         .selected_id()
@@ -611,7 +685,77 @@ pub(crate) fn start_resume_picker(app: &mut App) {
 
     app.picker = Some(Picker {
         stage: PickStage::Resume,
-        title: tr!("接續 session (Enter 確認 · Esc 取消)"),
+        resume_scope,
+        title: tr!("接續 session (Tab 切換專案範圍 · Enter 確認 · Esc 取消)"),
+        items,
+        filter: String::new(),
+        cursor,
+        pending: None,
+        loading: false,
+        group_effort: false,
+        variants: Default::default(),
+    });
+    app.mode = Mode::Pick;
+}
+
+/// `:project`／`:project open`：列出常用與執行過 session 的專案根目錄，選中後切換作用中專案。
+pub(crate) fn start_project_picker(app: &mut App) {
+    let global_dir = ertangle_daemon::config_dir();
+    let cfg = ertangle_daemon::config::Config::load(&global_dir, &app.active_project);
+
+    let mut roots: Vec<String> = Vec::new();
+    let mut add_root = |r: &str| {
+        let trimmed = r.trim();
+        if !trimmed.is_empty() && !roots.iter().any(|existing| existing == trimmed) {
+            roots.push(trimmed.to_string());
+        }
+    };
+
+    add_root(&app.home_project);
+    for r in &cfg.tui.projects {
+        add_root(r);
+    }
+    for s in app.state.sessions.values() {
+        add_root(s.project_root());
+    }
+    for s in app.state.archived_sessions.values() {
+        add_root(s.project_root());
+    }
+    for h in app.hosts.values() {
+        for s in h.state.sessions.values() {
+            add_root(s.project_root());
+        }
+        for s in h.state.archived_sessions.values() {
+            add_root(s.project_root());
+        }
+    }
+
+    if roots.is_empty() {
+        app.status = tr!("沒有可用的專案清單");
+        return;
+    }
+
+    let all_roots_refs: Vec<&str> = roots.iter().map(|s| s.as_str()).collect();
+    let items: Vec<(String, String)> = roots
+        .iter()
+        .map(|r| {
+            let pname = crate::app::project_name(r, &all_roots_refs);
+            let is_curr = r == &app.home_project;
+            let mark = if is_curr { "* " } else { "  " };
+            let label = format!("{mark}{:<16} {r}", pname);
+            (label, r.clone())
+        })
+        .collect();
+
+    let cursor = items
+        .iter()
+        .position(|(_, path)| path == &app.home_project)
+        .unwrap_or(0);
+
+    app.picker = Some(Picker {
+        stage: PickStage::Project,
+        resume_scope: ResumeScope::default(),
+        title: tr!("選擇專案 (Enter 確認 · Esc 取消)"),
         items,
         filter: String::new(),
         cursor,
@@ -703,14 +847,55 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
             app.picker = None;
             app.mode = Mode::Normal;
         }
-        KeyCode::Down | KeyCode::Tab => {
+        KeyCode::Tab | KeyCode::BackTab => {
+            if matches!(p.stage, PickStage::Resume) {
+                let new_scope = match p.resume_scope {
+                    ResumeScope::Here => ResumeScope::All,
+                    ResumeScope::All => ResumeScope::Here,
+                };
+                let old_cursor = p.cursor;
+                let items = rebuild_resume_items(app, new_scope);
+                if let Some(p) = app.picker.as_mut() {
+                    p.resume_scope = new_scope;
+                    p.items = items;
+                    let n = p.visible().len();
+                    p.cursor = if n > 0 { old_cursor.min(n - 1) } else { 0 };
+                }
+                return Ok(());
+            }
+            if n > 0 {
+                if key.code == KeyCode::Tab {
+                    p.cursor = (p.cursor + 1) % n;
+                } else {
+                    p.cursor = (p.cursor + n - 1) % n;
+                }
+            }
+        }
+        KeyCode::Down => {
             if n > 0 {
                 p.cursor = (p.cursor + 1) % n;
             }
         }
-        KeyCode::Up | KeyCode::BackTab => {
+        KeyCode::Up => {
             if n > 0 {
                 p.cursor = (p.cursor + n - 1) % n;
+            }
+        }
+        KeyCode::Char('t') if ctrl => {
+            if matches!(p.stage, PickStage::Resume) {
+                let new_scope = match p.resume_scope {
+                    ResumeScope::Here => ResumeScope::All,
+                    ResumeScope::All => ResumeScope::Here,
+                };
+                let old_cursor = p.cursor;
+                let items = rebuild_resume_items(app, new_scope);
+                if let Some(p) = app.picker.as_mut() {
+                    p.resume_scope = new_scope;
+                    p.items = items;
+                    let n = p.visible().len();
+                    p.cursor = if n > 0 { old_cursor.min(n - 1) } else { 0 };
+                }
+                return Ok(());
             }
         }
         KeyCode::Char('n') if ctrl => {
@@ -922,6 +1107,22 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                                 "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)",
                                 label = label
                             );
+                        }
+                    }
+                }
+                PickStage::Project => {
+                    let chosen_path = if chosen.is_some() {
+                        chosen
+                    } else if !custom.is_empty() {
+                        Some(custom)
+                    } else {
+                        None
+                    };
+                    app.picker = None;
+                    app.mode = Mode::Normal;
+                    if let Some(target) = chosen_path {
+                        if let Err(err) = app.set_active_project(std::path::Path::new(&target)) {
+                            app.status = err;
                         }
                     }
                 }

@@ -334,6 +334,10 @@ msgid "將指定 session 的 worktree 合併回主分支 (M3)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "專案目錄 (TUI 預設與 session 啟動目錄)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "對指定 session 的程式碼留下審查註解並送回該 agent (M3)"
 msgstr ""
 
@@ -626,6 +630,10 @@ msgid "逾時毫秒數 (預設 60000 = 60 秒)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "過濾範圍：here (只列出本專案) / all (全部專案，預設)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "遠端認證 token (亦可透過環境變數 ERTANGLE_TOKEN 設定)"
 msgstr ""
 
@@ -709,16 +717,16 @@ msgstr ""
 msgid "(排隊為空)"
 msgstr ""
 
-#: src/cmd/session.rs
-msgid "沒有可接續的已結束或歷史 session"
-msgstr ""
-
 #: src/cmd/session.rs src/cmd/session.rs
 msgid "已移除"
 msgstr ""
 
 #: src/cmd/session.rs crates/ertangle-core/src/lib.rs
 msgid "已結束"
+msgstr ""
+
+#: src/cmd/session.rs
+msgid "沒有可接續的已結束或歷史 session"
 msgstr ""
 
 #: src/cmd/session.rs
@@ -2069,6 +2077,18 @@ msgstr ""
 msgid "i"
 msgstr ""
 
+#: crates/ertangle-tui/src/app.rs
+msgid "路徑不存在或不是目錄：{path}"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
+msgid "無法解析路徑"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已切換專案：{project}"
+msgstr ""
+
 #: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs
 msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr ""
@@ -2226,7 +2246,7 @@ msgid "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 a
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "[prompt]  不帶參數開選擇器；有 prompt 時接續選取的 session"
+msgid "[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 時接續選取的 session"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2315,6 +2335,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "[here|all|open <路徑>]  切換專案範圍或開啟專案 (open 省略路徑開選擇器)"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2495,6 +2519,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "已要求結束本專案 {n} 個執行中的 session"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "用法：:project [here|all|open <路徑>]"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2814,7 +2842,23 @@ msgid "按 Esc、Enter、Space 或 q 關閉"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "本專案"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "全部專案"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " (Tab 切換)"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "  載入可用 model 中…"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "{project} 沒有已結束的 session；按 Tab 切換至全部專案"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3270,7 +3314,11 @@ msgid "交接給另一個 agent，如 :handoff codex 補充說明"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
-msgid "接續已結束的 session (處理程序死掉或 daemon 重啟後)；可接 prompt"
+msgid "接續已結束的 session (選擇器中 Tab 切換範圍)；可接 prompt"
+msgstr ""
+
+#: crates/ertangle-tui/src/help.rs
+msgid "切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開選擇器)"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
@@ -3562,15 +3610,23 @@ msgid "選擇團隊範本 (選完輸入目標需求)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "沒有可接續的 session (已結束且具備對話 id)"
-msgstr ""
-
-#: crates/ertangle-tui/src/menu.rs
 msgid "封存"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "接續 session (Enter 確認 · Esc 取消)"
+msgid "沒有可接續的 session (已結束且具備對話 id)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "接續 session (Tab 切換專案範圍 · Enter 確認 · Esc 取消)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "沒有可用的專案清單"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "選擇專案 (Enter 確認 · Esc 取消)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4100,6 +4156,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/hosts.rs
 msgid "找不到主機 {host} 的連線"
+msgstr ""
+
+#: crates/ertangle-tui/src/lib.rs
+msgid "專案目錄不存在或不是目錄"
 msgstr ""
 
 #: crates/ertangle-tui/src/lib.rs

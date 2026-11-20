@@ -257,7 +257,9 @@ pub(crate) struct App {
     pub(crate) disconnected: bool,
     /// daemon 啟動世代 id (epoch)，斷線重連時比對用。
     pub(crate) daemon_epoch: Option<String>,
-    /// TUI 啟動所在的專案根目錄 (git 頂層，否則 cwd)。
+    /// 作用中專案目錄 (PathBuf)，為 home_project、scope_here 以及新 session spawn cwd 的單一來源。
+    pub(crate) active_project: std::path::PathBuf,
+    /// TUI 啟動所在或目前切換到的專案根目錄 (git 頂層，否則 cwd)。
     pub(crate) home_project: String,
     /// 只列出屬於 `home_project` 的 session。
     pub(crate) scope_here: bool,
@@ -327,7 +329,12 @@ pub(crate) struct App {
 }
 
 impl App {
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
+        Self::with_project(None)
+    }
+
+    pub(crate) fn with_project(initial_project: Option<std::path::PathBuf>) -> Self {
         let global_dir = ertangle_daemon::config_dir();
         let cwd = std::env::current_dir().unwrap_or_default();
         let cfg = ertangle_daemon::config::Config::load(&global_dir, &cwd);
@@ -337,6 +344,22 @@ impl App {
             .as_deref()
             .and_then(LayoutMode::parse)
             .unwrap_or(LayoutMode::Two);
+        let active_project = resolve_active_project(
+            initial_project.as_deref(),
+            cfg.tui.last_project.as_deref(),
+            &cwd,
+        );
+        let home_proj = active_project.to_string_lossy().to_string();
+
+        if initial_project.is_some() {
+            let _ = ertangle_daemon::config::Config::set_value(
+                &global_dir.join("config.toml"),
+                &["tui"],
+                "last_project",
+                &home_proj,
+            );
+        }
+
         let mut hosts = BTreeMap::new();
         hosts.insert("local".into(), HostData::new("local"));
         for (name, r) in &cfg.remotes {
@@ -392,7 +415,8 @@ impl App {
             show_tools: false,
             disconnected: false,
             daemon_epoch: None,
-            home_project: home_project(&cwd),
+            active_project,
+            home_project: home_proj,
             scope_here: true,
             input_inner_w: 80,
             prompt_history: crate::history::History::default(),
@@ -992,6 +1016,40 @@ impl App {
         let line_text = self.diff_lines[idx].trim();
         format!("{current_file} (L{}: {})", idx + 1, truncate(line_text, 48))
     }
+
+    /// 切換作用中專案目錄，更新相關狀態並持久化至全域設定。
+    pub(crate) fn set_active_project(&mut self, path: &std::path::Path) -> Result<(), String> {
+        if !path.exists() || !path.is_dir() {
+            return Err(tr!("路徑不存在或不是目錄：{path}", path = path.display()));
+        }
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("{}: {}", tr!("無法解析路徑"), e))?;
+        let root_str = home_project(&canonical);
+        let root_path = std::path::PathBuf::from(&root_str);
+
+        self.active_project = root_path;
+        self.home_project = root_str.clone();
+        self.scope_here = true;
+        self.selection = None;
+        self.selected = 0;
+        self.md_cache = None;
+        self.rebuild_pending = true;
+
+        let global_dir = ertangle_daemon::config_dir();
+        let _ = ertangle_daemon::config::Config::set_value(
+            &global_dir.join("config.toml"),
+            &["tui"],
+            "last_project",
+            &root_str,
+        );
+
+        self.status = tr!(
+            "已切換專案：{project}",
+            project = project_name(&self.home_project, &[])
+        );
+        Ok(())
+    }
 }
 
 pub(crate) fn main_pane_text(app: &App) -> String {
@@ -1311,4 +1369,33 @@ pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
     } else {
         tr!("顯示全部專案的 session、Bus 訊息與任務，P 只看本專案")
     };
+}
+
+/// 依優先順序解析啟動專案目錄：命令列參數 > 全域設定 last_project > 程序 cwd。
+pub(crate) fn resolve_active_project(
+    flag: Option<&std::path::Path>,
+    persisted: Option<&str>,
+    cwd: &std::path::Path,
+) -> std::path::PathBuf {
+    if let Some(p) = flag {
+        if p.is_dir() {
+            if let Ok(canon) = p.canonicalize() {
+                return std::path::PathBuf::from(home_project(&canon));
+            }
+            return std::path::PathBuf::from(home_project(p));
+        }
+    }
+    if let Some(last) = persisted {
+        let p = std::path::Path::new(last);
+        if p.is_dir() {
+            if let Ok(canon) = p.canonicalize() {
+                return std::path::PathBuf::from(home_project(&canon));
+            }
+            return std::path::PathBuf::from(home_project(p));
+        }
+    }
+    if let Ok(canon) = cwd.canonicalize() {
+        return std::path::PathBuf::from(home_project(&canon));
+    }
+    std::path::PathBuf::from(home_project(cwd))
 }

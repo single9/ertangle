@@ -176,6 +176,10 @@ pub struct TuiCfg {
     pub notify_command: Option<String>,
     /// 回合短於這個秒數時，「做完了」不通知 (預設 10)。
     pub notify_min_turn_secs: Option<u64>,
+    /// 常用專案根目錄清單 (只認全域設定)。
+    pub projects: Vec<String>,
+    /// 上次使用的專案根目錄 (只認全域設定)。
+    pub last_project: Option<String>,
 }
 
 /// 成本與子 agent 數量上限。
@@ -1615,5 +1619,28 @@ role = "reviewer"
         assert_eq!(with_default.resolve_role(None, false), Role::Reviewer);
         // 但有 parent 時依然是 worker
         assert_eq!(with_default.resolve_role(None, true), Role::Worker);
+    }
+
+    #[test]
+    fn tui_cfg_projects_and_last_project() {
+        let toml_src = r#"
+[tui]
+projects = ["/repo/a", "/repo/b"]
+last_project = "/repo/a"
+"#;
+        let c = Config::parse(toml_src).unwrap();
+        assert_eq!(c.tui.projects, vec!["/repo/a", "/repo/b"]);
+        assert_eq!(c.tui.last_project.as_deref(), Some("/repo/a"));
+
+        // Global only: local config cannot override tui.projects or tui.last_project
+        let local_src = r#"
+[tui]
+projects = ["/local/malicious"]
+last_project = "/local/malicious"
+"#;
+        let local = Config::parse(local_src).unwrap();
+        let layered = Config::layered(c, local);
+        assert_eq!(layered.tui.projects, vec!["/repo/a", "/repo/b"]);
+        assert_eq!(layered.tui.last_project.as_deref(), Some("/repo/a"));
     }
 }

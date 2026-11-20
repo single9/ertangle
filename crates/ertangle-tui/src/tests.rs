@@ -895,6 +895,7 @@ fn picker_filters_and_offers_default_model() {
     assert!(choices.iter().any(|(_, v)| v == "claude-sonnet-4-6"));
     let p = crate::menu::Picker {
         stage: crate::menu::PickStage::Agent,
+        resume_scope: Default::default(),
         title: "t".into(),
         items: choices,
         filter: "op".into(),
@@ -983,6 +984,7 @@ fn antigravity_models_are_grouped_by_base_name() {
     .unwrap();
     let mut p = crate::menu::Picker {
         stage: crate::menu::PickStage::Agent,
+        resume_scope: Default::default(),
         title: "t".into(),
         items: vec![],
         filter: String::new(),
@@ -2257,6 +2259,8 @@ fn resume_picker_lists_ended_filters_and_resumes() {
     app.state.sessions.insert("ses_live".into(), s_live);
     app.state.sessions.insert("ses_old".into(), s_old);
     app.state.sessions.insert("ses_new".into(), s_new);
+    app.scope_here = true;
+    app.home_project = "/tmp".into();
 
     crate::menu::start_resume_picker(&mut app);
     assert_eq!(app.mode, Mode::Pick);
@@ -3895,4 +3899,310 @@ fn tool_folding_identical_for_show_tools_false() {
 
     assert_eq!(cache_text, cold_text);
     assert!(cache_text.iter().any(|l| l.contains("工具 ×3 (✓3)")));
+}
+
+#[test]
+fn test_resolve_active_project_precedence() {
+    let tmp = std::env::temp_dir();
+    let dir_flag = tmp.join(ertangle_core::new_id("flag"));
+    let dir_cfg = tmp.join(ertangle_core::new_id("cfg"));
+    let dir_cwd = tmp.join(ertangle_core::new_id("cwd"));
+    std::fs::create_dir_all(&dir_flag).unwrap();
+    std::fs::create_dir_all(&dir_cfg).unwrap();
+    std::fs::create_dir_all(&dir_cwd).unwrap();
+
+    let canon_flag = dir_flag.canonicalize().unwrap();
+    let canon_cfg = dir_cfg.canonicalize().unwrap();
+    let canon_cwd = dir_cwd.canonicalize().unwrap();
+
+    // 1. Flag wins over config and cwd
+    let res1 = crate::app::resolve_active_project(
+        Some(&dir_flag),
+        Some(dir_cfg.to_str().unwrap()),
+        &dir_cwd,
+    );
+    assert_eq!(res1, canon_flag);
+
+    // 2. Invalid/missing flag falls back to config
+    let bad_flag = tmp.join("nonexistent_flag_dir");
+    let res2 = crate::app::resolve_active_project(
+        Some(&bad_flag),
+        Some(dir_cfg.to_str().unwrap()),
+        &dir_cwd,
+    );
+    assert_eq!(res2, canon_cfg);
+
+    // 3. No flag: config wins over cwd
+    let res3 = crate::app::resolve_active_project(None, Some(dir_cfg.to_str().unwrap()), &dir_cwd);
+    assert_eq!(res3, canon_cfg);
+
+    // 4. No flag, invalid/missing config falls back to cwd
+    let res4 = crate::app::resolve_active_project(None, Some("/nonexistent/cfg/path"), &dir_cwd);
+    assert_eq!(res4, canon_cwd);
+
+    // 5. No flag, no config uses cwd
+    let res5 = crate::app::resolve_active_project(None, None, &dir_cwd);
+    assert_eq!(res5, canon_cwd);
+
+    let _ = std::fs::remove_dir_all(&dir_flag);
+    let _ = std::fs::remove_dir_all(&dir_cfg);
+    let _ = std::fs::remove_dir_all(&dir_cwd);
+}
+
+#[test]
+fn test_app_set_active_project_state_transition() {
+    let mut app = test_app();
+    let tmp = std::env::temp_dir();
+    let target = tmp.join(ertangle_core::new_id("proj_target"));
+    std::fs::create_dir_all(&target).unwrap();
+    let canon = target.canonicalize().unwrap();
+
+    app.scope_here = false;
+    app.selection = Some(((1, 0), (2, 5)));
+    app.selected = 5;
+
+    let res = app.set_active_project(&target);
+    assert!(res.is_ok());
+    assert_eq!(app.active_project, canon);
+    assert_eq!(app.home_project, canon.to_string_lossy());
+    assert!(
+        app.scope_here,
+        "set_active_project should set scope_here = true"
+    );
+    assert_eq!(app.selected, 0, "selected session should be reset to 0");
+    assert!(app.selection.is_none(), "text selection should be reset");
+    assert!(app.rebuild_pending, "rebuild_pending should be armed");
+
+    // Invalid path returns Err and leaves state untouched
+    let non_existent = tmp.join("non_existent_sub_path");
+    let err = app.set_active_project(&non_existent);
+    assert!(err.is_err());
+    assert_eq!(
+        app.active_project, canon,
+        "active_project unchanged on error"
+    );
+
+    let _ = std::fs::remove_dir_all(&target);
+}
+
+#[test]
+fn test_resume_picker_scope_filtering_and_parent_resolution() {
+    let mut app = test_app();
+    app.home_project = "/work/alpha".into();
+
+    let now = ertangle_core::now_millis();
+
+    // Live parent session in /work/alpha
+    let s_parent_live = Session {
+        id: "ses_parent_live".into(),
+        kind: AgentKind::OpenCode,
+        label: "coord/alpha".into(),
+        cwd: "/work/alpha".into(),
+        branch: None,
+        role: Role::Coordinator,
+        status: SessionStatus::Busy,
+        model: Some("o3".into()),
+        cost: Cost::default(),
+        parent: None,
+        created_ms: now.saturating_sub(100_000),
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: Some("/work/alpha".into()),
+        context: None,
+        native_id: Some("n_p_live".into()),
+        permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
+        handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+    };
+    app.state
+        .sessions
+        .insert("ses_parent_live".into(), s_parent_live.clone());
+
+    // Ended child session in /work/alpha with live parent
+    let mut s_child_alpha = s_parent_live.clone();
+    s_child_alpha.id = "ses_child_alpha".into();
+    s_child_alpha.label = "worker/alpha-1".into();
+    s_child_alpha.status = SessionStatus::Exited;
+    s_child_alpha.parent = Some("ses_parent_live".into());
+    s_child_alpha.native_id = Some("n_child_a".into());
+    s_child_alpha.created_ms = now.saturating_sub(50_000);
+    app.state
+        .sessions
+        .insert("ses_child_alpha".into(), s_child_alpha);
+
+    // Ended session in /work/alpha with unknown parent id
+    let mut s_unknown_parent = s_parent_live.clone();
+    s_unknown_parent.id = "ses_unk".into();
+    s_unknown_parent.label = "worker/alpha-unk".into();
+    s_unknown_parent.status = SessionStatus::Exited;
+    s_unknown_parent.parent = Some("ses_9876543210".into());
+    s_unknown_parent.native_id = Some("n_unk".into());
+    s_unknown_parent.created_ms = now.saturating_sub(40_000);
+    app.state
+        .sessions
+        .insert("ses_unk".into(), s_unknown_parent);
+
+    // Archived session in /work/beta (different project)
+    let mut s_arch_beta = s_parent_live.clone();
+    s_arch_beta.id = "ses_arch_beta".into();
+    s_arch_beta.label = "worker/beta-arch".into();
+    s_arch_beta.cwd = "/work/beta".into();
+    s_arch_beta.repo_root = Some("/work/beta".into());
+    s_arch_beta.status = SessionStatus::Idle;
+    s_arch_beta.native_id = Some("n_beta".into());
+    s_arch_beta.created_ms = now.saturating_sub(30_000);
+    app.state
+        .archived_sessions
+        .insert("ses_arch_beta".into(), s_arch_beta);
+
+    // 1. In ResumeScope::Here: only sessions in /work/alpha, no project prefix, parent annotation resolved
+    let items_here = crate::menu::rebuild_resume_items(&app, crate::menu::ResumeScope::Here);
+    let ids_here: Vec<_> = items_here.iter().map(|(_, id)| id.as_str()).collect();
+    assert_eq!(ids_here, vec!["ses_unk", "ses_child_alpha"]);
+
+    // Verify parent label for live parent: ↳ coord/alpha
+    let child_row = items_here
+        .iter()
+        .find(|(_, id)| id == "ses_child_alpha")
+        .unwrap();
+    assert!(
+        child_row.0.contains("↳ coord/alpha"),
+        "Should resolve live parent label: {}",
+        child_row.0
+    );
+    assert!(
+        !child_row.0.starts_with('['),
+        "Here scope should NOT prefix project name: {}",
+        child_row.0
+    );
+
+    // Verify parent label for unknown parent: short id ↳ 987654
+    let unk_row = items_here.iter().find(|(_, id)| id == "ses_unk").unwrap();
+    assert!(
+        unk_row.0.contains("↳ 987654"),
+        "Should fallback to short parent id: {}",
+        unk_row.0
+    );
+
+    // 2. In ResumeScope::All: includes /work/beta, has project prefixes
+    let items_all = crate::menu::rebuild_resume_items(&app, crate::menu::ResumeScope::All);
+    let ids_all: Vec<_> = items_all.iter().map(|(_, id)| id.as_str()).collect();
+    assert_eq!(ids_all, vec!["ses_arch_beta", "ses_unk", "ses_child_alpha"]);
+
+    let beta_row = items_all
+        .iter()
+        .find(|(_, id)| id == "ses_arch_beta")
+        .unwrap();
+    assert!(
+        beta_row.0.starts_with("[beta]"),
+        "All scope should prefix project name: {}",
+        beta_row.0
+    );
+}
+
+#[test]
+fn test_resume_picker_tab_toggle_and_project_command() {
+    let mut app = test_app();
+    app.home_project = "/work/alpha".into();
+    app.scope_here = true;
+
+    let now = ertangle_core::now_millis();
+    let s_ended = Session {
+        id: "ses_ended".into(),
+        kind: AgentKind::OpenCode,
+        label: "worker/alpha".into(),
+        cwd: "/work/alpha".into(),
+        branch: None,
+        role: Role::Worker,
+        status: SessionStatus::Exited,
+        model: None,
+        cost: Cost::default(),
+        parent: None,
+        created_ms: now,
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: Some("/work/alpha".into()),
+        context: None,
+        native_id: Some("n_end".into()),
+        permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
+        handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+    };
+    app.state.sessions.insert("ses_ended".into(), s_ended);
+
+    // Open resume picker
+    crate::menu::start_resume_picker(&mut app);
+    assert_eq!(app.mode, Mode::Pick);
+    let p = app.picker.as_ref().unwrap();
+    assert_eq!(p.resume_scope, crate::menu::ResumeScope::Here);
+
+    let (mut w, _peer) = pair_writer();
+
+    // Tab key toggles scope to All
+    let tab_key = KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE);
+    crate::menu::handle_pick_key(&mut app, &mut w, tab_key).unwrap();
+    assert_eq!(
+        app.picker.as_ref().unwrap().resume_scope,
+        crate::menu::ResumeScope::All,
+        "Tab should toggle resume scope to All"
+    );
+
+    // Tab key toggles back to Here
+    crate::menu::handle_pick_key(&mut app, &mut w, tab_key).unwrap();
+    assert_eq!(
+        app.picker.as_ref().unwrap().resume_scope,
+        crate::menu::ResumeScope::Here,
+        "Tab should toggle resume scope back to Here"
+    );
+
+    // Esc closes picker
+    let esc_key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    crate::menu::handle_pick_key(&mut app, &mut w, esc_key).unwrap();
+    assert!(app.picker.is_none());
+    assert_eq!(app.mode, Mode::Normal);
+
+    // Test :project commands
+    // 1. :project here / all / toggle
+    crate::commands::execute_command(&mut app, &mut w, "project here").unwrap();
+    assert!(app.scope_here);
+    crate::commands::execute_command(&mut app, &mut w, "project all").unwrap();
+    assert!(!app.scope_here);
+    crate::commands::execute_command(&mut app, &mut w, "project").unwrap();
+    assert!(app.scope_here);
+
+    // 2. :project open <path>
+    let tmp = std::env::temp_dir();
+    let p_dir = tmp.join(ertangle_core::new_id("open_proj"));
+    std::fs::create_dir_all(&p_dir).unwrap();
+    let canon = p_dir.canonicalize().unwrap();
+
+    crate::commands::execute_command(
+        &mut app,
+        &mut w,
+        &format!("project open {}", p_dir.display()),
+    )
+    .unwrap();
+    assert_eq!(app.active_project, canon);
+    assert!(app.scope_here);
+
+    // 3. :project open without path opens project picker
+    crate::commands::execute_command(&mut app, &mut w, "project open").unwrap();
+    assert!(matches!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(crate::menu::PickStage::Project)
+    ));
+
+    let _ = std::fs::remove_dir_all(&p_dir);
 }

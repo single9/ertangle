@@ -31,6 +31,9 @@ struct Cli {
     /// 遠端認證 token (亦可透過環境變數 ERTANGLE_TOKEN 設定)
     #[arg(long, global = true)]
     token: Option<String>,
+    /// 專案目錄 (TUI 預設與 session 啟動目錄)
+    #[arg(long, global = true)]
+    project: Option<std::path::PathBuf>,
     #[command(subcommand)]
     cmd: Option<Cmd>,
 }
@@ -183,6 +186,9 @@ enum Cmd {
         /// 列出所有可接續的已結束與歷史封存 session
         #[arg(long, short = 'l')]
         list: bool,
+        /// 過濾範圍：here (只列出本專案) / all (全部專案，預設)
+        #[arg(long, default_value = "all")]
+        scope: String,
         /// 接續後立刻送出的 prompt (可省略)
         text: Vec<String>,
     },
@@ -512,7 +518,7 @@ fn main() -> Result<()> {
     }
 
     match cli.cmd.unwrap_or(Cmd::Tui) {
-        Cmd::Tui => ertangle_tui::run(),
+        Cmd::Tui => ertangle_tui::run(cli.project),
         Cmd::Daemon {
             listen,
             web,
@@ -570,8 +576,9 @@ fn main() -> Result<()> {
         Cmd::Resume {
             session,
             list,
+            scope,
             text,
-        } => cmd_resume(session, list, text),
+        } => cmd_resume(session, list, scope, text),
         Cmd::Sleep { session } => cmd_sleep(session),
         Cmd::Wake { session } => cmd_wake(session),
         Cmd::Model {

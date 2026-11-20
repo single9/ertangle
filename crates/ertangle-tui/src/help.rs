@@ -131,7 +131,11 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             (":handoff", tr_noop!("交接給另一個 agent，如 :handoff codex 補充說明")),
             (
                 ":resume",
-                tr_noop!("接續已結束的 session (處理程序死掉或 daemon 重啟後)；可接 prompt"),
+                tr_noop!("接續已結束的 session (選擇器中 Tab 切換範圍)；可接 prompt"),
+            ),
+            (
+                ":project :scope",
+                tr_noop!("切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開選擇器)"),
             ),
             (":rm :clean", tr_noop!("移除選取的 session／清除所有已結束的 session (含 worktree)")),
             (":copy [N]", tr_noop!("複製內容；Transcript 可指定第 N 則訊息 (預設最新)")),

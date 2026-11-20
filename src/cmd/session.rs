@@ -237,47 +237,120 @@ pub(crate) fn cmd_kill(session: String) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn cmd_resume(session: Option<String>, list: bool, text: Vec<String>) -> Result<()> {
+fn home_project(cwd: &std::path::Path) -> String {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["rev-parse", "--show-toplevel"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| cwd.to_string_lossy().to_string())
+}
+
+pub(crate) fn format_resume_row(
+    s: &ertangle_core::Session,
+    is_archived: bool,
+    parent_map: &std::collections::HashMap<String, String>,
+) -> String {
+    let tag = if is_archived {
+        tr!("已移除")
+    } else {
+        tr!("已結束")
+    };
+    let model = s.model.as_deref().unwrap_or("-");
+    let note = s.status_note.as_deref().unwrap_or("");
+    let mut line = format!(
+        "{:<16} {:<20} {:<12} {:<22} [{}] {} {}",
+        s.id,
+        s.label,
+        s.kind.id(),
+        model,
+        tag,
+        s.cwd,
+        note
+    );
+    if let Some(pid) = &s.parent {
+        let plabel = parent_map.get(pid).cloned().unwrap_or_else(|| {
+            pid.rsplit('_')
+                .next()
+                .unwrap_or(pid)
+                .chars()
+                .take(6)
+                .collect()
+        });
+        let trimmed = line.trim_end();
+        line = format!("{trimmed} ↳ {plabel}");
+    }
+    line
+}
+
+pub(crate) fn filter_resume_sessions<'a>(
+    sessions: impl IntoIterator<Item = (&'a ertangle_core::Session, bool)>,
+    here_root: Option<&str>,
+) -> Vec<(&'a ertangle_core::Session, bool)> {
+    let mut rows: Vec<_> = sessions
+        .into_iter()
+        .filter(|(s, is_archived)| {
+            let resumable = if *is_archived {
+                s.native_id.is_some()
+            } else {
+                !s.status.is_live() && s.native_id.is_some()
+            };
+            if !resumable {
+                return false;
+            }
+            if let Some(root) = here_root {
+                s.project_root() == root
+            } else {
+                true
+            }
+        })
+        .collect();
+    rows.sort_by_key(|a| std::cmp::Reverse(a.0.created_ms));
+    rows
+}
+
+pub(crate) fn cmd_resume(
+    session: Option<String>,
+    list: bool,
+    scope: String,
+    text: Vec<String>,
+) -> Result<()> {
     if list || session.is_none() {
         let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
             bail!("{}", tr!("未取得快照"));
         };
-        let mut rows: Vec<(&ertangle_core::Session, bool)> = state
+        let mut parent_map = std::collections::HashMap::new();
+        for s in state
             .sessions
             .values()
-            .filter(|s| !s.status.is_live() && s.native_id.is_some())
+            .chain(state.archived_sessions.values())
+        {
+            parent_map.insert(s.id.clone(), s.label.clone());
+        }
+        let is_here = scope.eq_ignore_ascii_case("here") || scope.eq_ignore_ascii_case("this");
+        let here_root = if is_here {
+            let cwd = std::env::current_dir().unwrap_or_default();
+            Some(home_project(&cwd))
+        } else {
+            None
+        };
+        let all_candidates = state
+            .sessions
+            .values()
             .map(|s| (s, false))
-            .chain(
-                state
-                    .archived_sessions
-                    .values()
-                    .filter(|s| s.native_id.is_some())
-                    .map(|s| (s, true)),
-            )
-            .collect();
-        rows.sort_by_key(|a| std::cmp::Reverse(a.0.created_ms));
+            .chain(state.archived_sessions.values().map(|s| (s, true)));
+        let rows = filter_resume_sessions(all_candidates, here_root.as_deref());
         if rows.is_empty() {
             println!("{}", tr!("沒有可接續的已結束或歷史 session"));
             return Ok(());
         }
         for (s, is_archived) in rows {
-            let tag = if is_archived {
-                tr!("已移除")
-            } else {
-                tr!("已結束")
-            };
-            let model = s.model.as_deref().unwrap_or("-");
-            let note = s.status_note.as_deref().unwrap_or("");
-            println!(
-                "{:<16} {:<20} {:<12} {:<22} [{}] {} {}",
-                s.id,
-                s.label,
-                s.kind.id(),
-                model,
-                tag,
-                s.cwd,
-                note
-            );
+            println!("{}", format_resume_row(s, is_archived, &parent_map));
         }
         return Ok(());
     }
@@ -512,4 +585,155 @@ pub(crate) fn cmd_bg_kill(session: String, pid: Option<u32>, all: bool, force: b
         _ => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ertangle_core::{AgentKind, Cost, Role, Session, SessionStatus};
+    use std::collections::HashMap;
+
+    fn make_session(
+        id: &str,
+        cwd: &str,
+        root: Option<&str>,
+        parent: Option<&str>,
+        status: SessionStatus,
+        native_id: Option<&str>,
+    ) -> Session {
+        Session {
+            id: id.into(),
+            kind: AgentKind::OpenCode,
+            label: id.into(),
+            cwd: cwd.into(),
+            branch: None,
+            role: Role::Worker,
+            status,
+            model: Some("test-model".into()),
+            cost: Cost::default(),
+            parent: parent.map(String::from),
+            created_ms: 1000,
+            transport: "acp".into(),
+            status_note: Some("done".into()),
+            repo_root: root.map(String::from),
+            context: None,
+            native_id: native_id.map(String::from),
+            permission: Default::default(),
+            budget_usd: None,
+            over_budget: false,
+            handed_off_to: None,
+            effort: None,
+            slash_commands: Vec::new(),
+            active_tools: Vec::new(),
+            bg_procs: Vec::new(),
+            tool_calls: 0,
+        }
+    }
+
+    #[test]
+    fn test_filter_resume_sessions_scope() {
+        let s1 = make_session(
+            "s1",
+            "/proj_a",
+            Some("/proj_a"),
+            None,
+            SessionStatus::Exited,
+            Some("n1"),
+        );
+        let s2 = make_session(
+            "s2",
+            "/proj_b",
+            Some("/proj_b"),
+            None,
+            SessionStatus::Exited,
+            Some("n2"),
+        );
+        let s3 = make_session(
+            "s3",
+            "/proj_a",
+            Some("/proj_a"),
+            None,
+            SessionStatus::Busy,
+            Some("n3"),
+        ); // live
+        let s4 = make_session(
+            "s4",
+            "/proj_a",
+            Some("/proj_a"),
+            None,
+            SessionStatus::Exited,
+            None,
+        ); // no native_id
+        let s_arch = make_session(
+            "s_arch",
+            "/proj_a",
+            Some("/proj_a"),
+            None,
+            SessionStatus::Idle,
+            Some("n4"),
+        ); // archived
+
+        let list = vec![
+            (&s1, false),
+            (&s2, false),
+            (&s3, false),
+            (&s4, false),
+            (&s_arch, true),
+        ];
+
+        // Filter scope: here (/proj_a)
+        let filtered_here = filter_resume_sessions(list.clone(), Some("/proj_a"));
+        let ids: Vec<_> = filtered_here.iter().map(|(s, _)| s.id.as_str()).collect();
+        assert_eq!(ids, vec!["s1", "s_arch"]);
+
+        // Filter scope: all (None)
+        let filtered_all = filter_resume_sessions(list, None);
+        let ids_all: Vec<_> = filtered_all.iter().map(|(s, _)| s.id.as_str()).collect();
+        assert_eq!(ids_all, vec!["s1", "s2", "s_arch"]);
+    }
+
+    #[test]
+    fn test_format_resume_row_parent() {
+        let mut parent_map = HashMap::new();
+        parent_map.insert("p1".into(), "parent-worker".into());
+
+        // 1. With known parent
+        let s_with_parent = make_session(
+            "c1",
+            "/proj",
+            None,
+            Some("p1"),
+            SessionStatus::Exited,
+            Some("n1"),
+        );
+        let row1 = format_resume_row(&s_with_parent, false, &parent_map);
+        assert!(
+            row1.contains("↳ parent-worker"),
+            "Row should contain resolved parent label: {row1}"
+        );
+
+        // 2. With unknown parent (short id fallback)
+        let s_unknown_parent = make_session(
+            "c2",
+            "/proj",
+            None,
+            Some("ses_1234567890"),
+            SessionStatus::Exited,
+            Some("n2"),
+        );
+        let row2 = format_resume_row(&s_unknown_parent, false, &parent_map);
+        assert!(
+            row2.contains("↳ 123456"),
+            "Row should contain short parent id: {row2}"
+        );
+
+        // 3. Without parent
+        let s_no_parent =
+            make_session("c3", "/proj", None, None, SessionStatus::Exited, Some("n3"));
+        let row3 = format_resume_row(&s_no_parent, false, &parent_map);
+        assert!(
+            !row3.contains("↳"),
+            "Row should not contain parent symbol: {row3}"
+        );
+    }
 }
