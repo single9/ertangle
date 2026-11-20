@@ -1,6 +1,100 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.0.0] - 2026-11-20
+
+### 🚀 Features
+
+- *(protocol)* Add selectable worktree merge strategy
+- *(worktree)* Surface merge strategy selection in CLI, TUI, and MCP
+- *(daemon)* Implement squash and rebase worktree merge strategies
+- *(worktree)* Add configurable merge strategy default
+- *(tui)* Add resume scope tabs and active project support
+- *(adapter)* Support interactive question tools for all agents
+- *(web)* Answer interactive questions from the browser
+- *(adapter)* Complete question paths for all agents
+- *(tui)* Allow skipping grouped questions while requiring one answer
+- *(tui)* Skip optional free-form grouped question with empty Enter
+- *(tui)* Auto-open question picker docked above the input
+- *(web)* Send images with prompts
+- *(daemon)* Add restart that re-execs and auto-resumes sessions (T69)
+- *(tui)* Close question picker on remote answer and edit custom answer (T72)
+- *(daemon)* Auto-archive merged workers, periodic sweep, archive retention and prune op (T73a)
+- *(tui)* Fold ended sessions into a collapsed sidebar group and add :prune (T73b)
+- *(web)* Fold ended sessions, add prune button and archived list (T73c)
+- *(exec)* Run shell commands in a session cwd from daemon, CLI and TUI (T74a)
+- *(web)* Add slash command palette and shell execution (T74b)
+- *(thinking)* Emoji-free animated thinking display with folded previews (T75)
+
+### 🐛 Bug Fixes
+
+- *(adapter)* Drain CLI stdout to restore Codex model list (T54)
+- *(daemon)* Remove panic-prone unwraps and unsafe libc geteuid
+- *(test)* Restore executable bit on fake agent scripts lost in rename
+- *(adapter)* Correct question protocol response shapes
+- *(adapter)* Align elicitation answer shape with ACP spec
+- *(question)* Auto-approve question tool permissions
+- *(claude)* Send structured AskUserQuestion results
+- *(claude)* Answer native questions through permission tool
+- *(question)* Clear grouped questions together
+- *(acp)* Parse elicitation oneOf options
+- *(question)* Clear questions when sessions end
+- *(acp)* Keep selection when sibling question is skipped
+- *(acp)* Submit elicitation const values instead of labels
+- *(web)* Show question banner outside tab views
+- *(web)* Make pending question card usable in chat and across re-renders
+- *(daemon)* Stop auto-clearing grouped sibling questions on answer
+- *(tui)* Rework question picker with custom answer row, groups and multi-line layout
+- *(daemon)* Persist inbox cursors and warn on dead task assignee (T70)
+- *(web)* Declare pendingKeys so review slot clears after question resolved (T71)
+- *(daemon)* Clear auto-resumed note after the resumed turn finishes
+
+### 🚜 Refactor
+
+- *(core,tui)* Reduce panic-prone unwrap and expect in production code
+- *(adapter)* Eliminate panic-prone unwrap and expect in production code
+- [**breaking**] Rename termade to ertangle
+
+### 📚 Documentation
+
+- *(agents)* Add mandatory Rust clean code conventions
+- *(tickets)* Mark T55 done and record merge commits
+- *(tickets)* Add T56 for selectable merge strategies
+- Document selectable merge strategies and sync i18n
+- *(merge)* Simplify strategy help text
+- *(tickets)* Add T57 rename termade to ertangle
+- Rename termade to ertangle and add migration guide
+- *(tickets)* Mark T57 done
+- *(tickets)* Add T58-T62 and English-first convention
+- Use English comments in T58/T59 changes
+- Translate adapter and core comments to English
+- *(tickets)* Mark T62 ready for agent
+- *(t62)* Probe notes for interactive question tool support
+- *(tickets)* Link T62 probe findings
+- *(tickets)* Track remaining question tool work
+- *(ticket)* Mark web question UI as implemented
+- *(ticket)* Record T63 live probes
+- *(ticket)* Add ACP fallback probe findings
+- *(ticket)* Finalize T63 verification results
+- *(ticket)* Record Antigravity live question probe
+- *(ticket)* Add T64 for web question banner visibility
+- *(ticket)* Write T65 and T66 in English
+
+### 🎨 Styling
+
+- *(web)* Restyle question card as a minimal divided list
+- *(web)* Replace option dots with 1-9 keycaps and check marks
+
+### 🧪 Testing
+
+- *(protocol)* Cover Request::Restart serde
+
+### ⚙️ Miscellaneous Tasks
+
+- Rename release assets and gitignore entry to ertangle
+- Publish workspace crates to crates.io on release
+- Make crates.io publishing a manual workflow
+
 ## [0.8.0] - 2026-11-19
 
 ### 🚀 Features
