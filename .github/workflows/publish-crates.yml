@@ -1,0 +1,33 @@
+name: publish-crates
+# 手動觸發：發佈無法撤回 (只能 yank)，所以不隨每次 release 自動執行。
+# 用法：gh workflow run publish-crates.yml --ref v0.8.0
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 確認 ref 是 release tag 且與 Cargo.toml 版本一致
+        run: |
+          ver=$(grep -m1 '^version = "' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+          if [ "${GITHUB_REF_NAME}" != "v${ver}" ]; then
+            echo "ref ${GITHUB_REF_NAME} 與 Cargo.toml 版本 v${ver} 不一致，請用 --ref v${ver}" >&2
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+      # 依相依順序發佈所有 workspace crate，並等待索引更新。
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
+            echo "CARGO_REGISTRY_TOKEN is not set" >&2
+            exit 1
+          fi
+          cargo publish --workspace
