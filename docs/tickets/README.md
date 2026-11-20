@@ -61,6 +61,7 @@
 | [T54](T54-codex-model-list-pipe-deadlock.md) | 修復 Codex 模型清單因 stdout pipe 阻塞而空白 (已完成) | P1 | — |
 | [T55](T55-rust-clean-code-conventions.md) | 建立 Rust 程式寫作慣例並減少 production unwrap 與 unsafe | P2 | — |
 | [T56](T56-selectable-merge-strategy.md) | 讓使用者選擇 worktree 合併策略 (merge / squash / rebase) | P2 | — |
+| [T57](T57-rename-to-ertangle.md) | 專案改名：termade → ertangle (ER=EPR) | P1 | — |
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 
