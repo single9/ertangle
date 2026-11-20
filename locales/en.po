@@ -860,7 +860,8 @@ msgstr "session is not ready yet"
 msgid "未知的核准請求：{req}"
 msgstr "Unknown approval request: {req}"
 
-#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/claude.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "未知的問題請求：{id}"
 msgstr "Unknown question request: {id}"
 
@@ -2895,12 +2896,12 @@ msgid "Enter 使用自訂值：{value}"
 msgstr "Enter to use custom value: {value}"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "[q/Enter 回答]"
-msgstr "[q/Enter to answer]"
+msgid "[Enter 回答]"
+msgstr "[Enter to answer]"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "(選取該 session 後 q 回答)"
-msgstr "(select this session then press q to answer)"
+msgid "(選取該 session 後 Enter 回答)"
+msgstr "(select this session then press Enter to answer)"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "提問"
@@ -2991,8 +2992,8 @@ msgid "{header}：{question}"
 msgstr "{header}: {question}"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  [q/Enter] 回答問題"
-msgstr "  [q/Enter] Answer question"
+msgid "  [Enter] 回答問題"
+msgstr "  [Enter] Answer question"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "⏸ 核准 "
@@ -4246,6 +4247,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "[q/Enter 回答]"
+#~ msgstr "[q/Enter to answer]"
+
+#~ msgid "(選取該 session 後 q 回答)"
+#~ msgstr "(select this session then press q to answer)"
+
+#~ msgid "  [q/Enter] 回答問題"
+#~ msgstr "  [q/Enter] Answer question"
 
 #~ msgid "專案目錄 (TUI 預設與 session 啟動目錄)"
 #~ msgstr "Project directory (default for TUI and session startup)"

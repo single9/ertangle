@@ -26,6 +26,20 @@ const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
 /// `session/load` must wait for the agent to replay the entire history, which takes longer than a normal call for long conversations.
 const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 
+/// Pending question state for ACP elicitation or tool-call fallback.
+enum PendingAcpQuestion {
+    Elicitation {
+        rpc_id: Value,
+        key: String,
+        total: usize,
+        answers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    },
+    ToolCall {
+        total: usize,
+        answers: Arc<Mutex<Vec<String>>>,
+    },
+}
+
 struct Conn {
     /// Agent ID represented by this adapter (`agent` field in quota events).
     agent: String,
@@ -44,8 +58,8 @@ struct Conn {
     pending: Mutex<HashMap<i64, Sender<Value>>>,
     /// Approvals: internal req id -> (JSON-RPC id, options)
     perms: Mutex<HashMap<String, (Value, Vec<Value>)>>,
-    /// Interactive questions: internal qst id -> (JSON-RPC id, property keys)
-    questions: Mutex<HashMap<String, (Value, Vec<String>)>>,
+    /// Interactive questions: internal qst id -> pending question state
+    questions: Mutex<HashMap<String, PendingAcpQuestion>>,
     /// Line buffer for streaming output (combines token-level chunks into complete lines).
     stream: Mutex<StreamBuf>,
     /// Collaboration instructions prepended to the first prompt (cleared once taken).
@@ -221,10 +235,22 @@ impl Conn {
                 let name = tool_name(update);
                 let input = update["rawInput"].to_string();
                 if crate::question::is_question_tool(&name) {
-                    if let Some(q) =
-                        crate::question::parse_tool_call_question(&self.session_id, &name, &input)
-                    {
-                        let _ = self.tx.send(AgentEvent::Question(q));
+                    let questions =
+                        crate::question::parse_tool_call_questions(&self.session_id, &name, &input);
+                    if !questions.is_empty() {
+                        let total = questions.len();
+                        let shared_answers = Arc::new(Mutex::new(Vec::new()));
+                        let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
+                        for q in questions {
+                            q_map.insert(
+                                q.id.clone(),
+                                PendingAcpQuestion::ToolCall {
+                                    total,
+                                    answers: Arc::clone(&shared_answers),
+                                },
+                            );
+                            let _ = self.tx.send(AgentEvent::Question(q));
+                        }
                     }
                 }
                 let _ = self.tx.send(AgentEvent::ToolCall {
@@ -306,14 +332,25 @@ impl Conn {
     fn on_elicitation(&self, msg: &Value) {
         let jid = extract_request_id(msg);
         let params = &msg["params"];
-        if let Some((q, keys)) = crate::question::parse_acp_elicitation(&self.session_id, params) {
-            self.questions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(q.id.clone(), (jid, keys));
-            let _ = self.tx.send(AgentEvent::Question(q));
-        } else {
+        let list = crate::question::parse_acp_elicitations(&self.session_id, params);
+        if list.is_empty() {
             self.respond_error(&jid, -32602, "invalid elicitation params");
+            return;
+        }
+        let total = list.len();
+        let shared_answers = Arc::new(Mutex::new(HashMap::new()));
+        let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
+        for (q, key) in list {
+            q_map.insert(
+                q.id.clone(),
+                PendingAcpQuestion::Elicitation {
+                    rpc_id: jid.clone(),
+                    key,
+                    total,
+                    answers: Arc::clone(&shared_answers),
+                },
+            );
+            let _ = self.tx.send(AgentEvent::Question(q));
         }
     }
 
@@ -323,32 +360,71 @@ impl Conn {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(id);
-        let Some((jid, keys)) = entry else {
+        let Some(pending) = entry else {
             bail!("{}", tr!("未知的問題請求：{id}", id = id));
         };
-        if answers.is_empty() {
-            self.respond(
-                &jid,
-                json!({
-                    "action": "decline",
-                    "outcome": { "outcome": "cancelled" }
-                }),
-            );
-        } else {
-            let mut content = serde_json::Map::new();
-            let key = keys
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "answer".to_string());
-            content.insert(key, json!(answers));
-            self.respond(
-                &jid,
-                json!({
-                    "action": "accept",
-                    "content": content,
-                    "outcome": { "outcome": "selected" }
-                }),
-            );
+        match pending {
+            PendingAcpQuestion::Elicitation {
+                rpc_id,
+                key,
+                total,
+                answers: shared_answers,
+            } => {
+                if answers.is_empty() {
+                    let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
+                    q_map.retain(|_, v| match v {
+                        PendingAcpQuestion::Elicitation { rpc_id: r, .. } => r != &rpc_id,
+                        _ => true,
+                    });
+                    drop(q_map);
+
+                    self.respond(
+                        &rpc_id,
+                        json!({
+                            "action": "decline",
+                            "outcome": { "outcome": "cancelled" }
+                        }),
+                    );
+                } else {
+                    let mut map = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
+                    map.insert(key, answers.to_vec());
+                    if map.len() == total {
+                        let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
+                        q_map.retain(|_, v| match v {
+                            PendingAcpQuestion::Elicitation { rpc_id: r, .. } => r != &rpc_id,
+                            _ => true,
+                        });
+                        drop(q_map);
+
+                        let mut content = serde_json::Map::new();
+                        for (k, v) in map.iter() {
+                            content.insert(k.clone(), json!(v));
+                        }
+                        self.respond(
+                            &rpc_id,
+                            json!({
+                                "action": "accept",
+                                "content": content,
+                                "outcome": { "outcome": "selected" }
+                            }),
+                        );
+                    }
+                }
+            }
+            PendingAcpQuestion::ToolCall {
+                total,
+                answers: shared_answers,
+            } => {
+                if answers.is_empty() {
+                    return Ok(());
+                }
+                let mut list = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
+                list.extend(answers.iter().cloned());
+                if list.len() >= total {
+                    let ans_str = list.join("\n");
+                    let _ = self.tx.send(AgentEvent::Output(format!("↳ {ans_str}\n")));
+                }
+            }
         }
         Ok(())
     }

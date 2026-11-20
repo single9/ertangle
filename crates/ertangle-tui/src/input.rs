@@ -97,11 +97,7 @@ fn handle_ctrl_key(app: &mut App, key: KeyEvent) -> Result<bool> {
 fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Char('q') => {
-            if let Some(q) = app.selected_question() {
-                crate::menu::start_question_picker(app, &q);
-            } else {
-                app.should_quit = true;
-            }
+            app.should_quit = true;
         }
         KeyCode::Char('Q') => execute_command(app, writer, "shutdown")?,
         KeyCode::Char('H') => {

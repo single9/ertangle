@@ -57,68 +57,65 @@ pub fn parse_options(val: &Value) -> Vec<QuestionOption> {
         .collect()
 }
 
-/// Parses tool call JSON input into a normalized [`UserQuestion`].
+/// Parses tool call JSON input into a list of normalized [`UserQuestion`]s.
 ///
 /// If input is invalid JSON or unknown format, gracefully falls back to a text question
 /// rather than failing or panicking.
-pub fn parse_tool_call_question(
-    session: &str,
-    name: &str,
-    input_json: &str,
-) -> Option<UserQuestion> {
+pub fn parse_tool_call_questions(session: &str, name: &str, input_json: &str) -> Vec<UserQuestion> {
     if !is_question_tool(name) {
-        return None;
+        return Vec::new();
     }
-    let id = new_id("qst");
     let val: Value = match serde_json::from_str(input_json) {
         Ok(v) => v,
         Err(_) => {
             // Malformed JSON fallback: degrade to text question.
-            return Some(UserQuestion {
-                id,
+            return vec![UserQuestion {
+                id: new_id("qst"),
                 session: session.to_string(),
                 header: Some(name.to_string()),
                 question: input_json.trim().to_string(),
                 options: Vec::new(),
                 multi_select: false,
                 custom: true,
-            });
+            }];
         }
     };
 
     // Case 1: questions array `{"questions": [...]}`
     if let Some(questions) = val.get("questions").and_then(|q| q.as_array()) {
-        if let Some(first) = questions.first() {
-            let question = first
+        let mut list = Vec::new();
+        for (i, item) in questions.iter().enumerate() {
+            let question = item
                 .get("question")
-                .or_else(|| first.get("prompt"))
-                .or_else(|| first.get("text"))
+                .or_else(|| item.get("prompt"))
+                .or_else(|| item.get("text"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let header = first
+            let header = item
                 .get("header")
-                .or_else(|| first.get("title"))
+                .or_else(|| item.get("title"))
                 .and_then(|v| v.as_str())
                 .map(str::to_string);
-            let options = first.get("options").map(parse_options).unwrap_or_default();
-            let multi_select = first
+            let options = item.get("options").map(parse_options).unwrap_or_default();
+            let multi_select = item
                 .get("multiple")
-                .or_else(|| first.get("multi_select"))
-                .or_else(|| first.get("is_multi_select"))
+                .or_else(|| item.get("multi_select"))
+                .or_else(|| item.get("is_multi_select"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let custom = first
-                .get("custom")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
+            let custom = item.get("custom").and_then(|v| v.as_bool()).unwrap_or(true);
 
-            return Some(UserQuestion {
-                id,
+            list.push(UserQuestion {
+                id: new_id("qst"),
                 session: session.to_string(),
                 header,
                 question: if question.is_empty() {
-                    input_json.to_string()
+                    if questions.len() > 1 {
+                        format!("Question {}", i + 1)
+                    } else {
+                        input_json.to_string()
+                    }
                 } else {
                     question
                 },
@@ -126,6 +123,9 @@ pub fn parse_tool_call_question(
                 multi_select,
                 custom,
             });
+        }
+        if !list.is_empty() {
+            return list;
         }
     }
 
@@ -144,32 +144,45 @@ pub fn parse_tool_call_question(
             .unwrap_or(false);
         let custom = val.get("custom").and_then(|v| v.as_bool()).unwrap_or(true);
 
-        return Some(UserQuestion {
-            id,
+        return vec![UserQuestion {
+            id: new_id("qst"),
             session: session.to_string(),
             header,
             question: question.to_string(),
             options,
             multi_select,
             custom,
-        });
+        }];
     }
 
     // Degrade to text question
-    Some(UserQuestion {
-        id,
+    vec![UserQuestion {
+        id: new_id("qst"),
         session: session.to_string(),
         header: Some(name.to_string()),
         question: input_json.to_string(),
         options: Vec::new(),
         multi_select: false,
         custom: true,
-    })
+    }]
 }
 
-/// Parses an ACP `elicitation/create` request into [`UserQuestion`] and property keys.
-pub fn parse_acp_elicitation(session: &str, params: &Value) -> Option<(UserQuestion, Vec<String>)> {
-    let id = new_id("qst");
+/// Parses tool call JSON input into a normalized [`UserQuestion`].
+///
+/// If input is invalid JSON or unknown format, gracefully falls back to a text question
+/// rather than failing or panicking.
+pub fn parse_tool_call_question(
+    session: &str,
+    name: &str,
+    input_json: &str,
+) -> Option<UserQuestion> {
+    parse_tool_call_questions(session, name, input_json)
+        .into_iter()
+        .next()
+}
+
+/// Parses an ACP `elicitation/create` request into multiple [`UserQuestion`]s with property keys.
+pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestion, String)> {
     let message = params
         .get("message")
         .or_else(|| params.get("title"))
@@ -177,29 +190,25 @@ pub fn parse_acp_elicitation(session: &str, params: &Value) -> Option<(UserQuest
         .unwrap_or("")
         .to_string();
 
-    let mut keys = Vec::new();
-    let mut options = Vec::new();
-    let mut header = None;
-    let mut question_text = message.clone();
-    let mut multi_select = false;
-
-    // Check requestedSchema or form fields
+    let mut out = Vec::new();
     let schema = params.get("requestedSchema").unwrap_or(params);
     if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
         for (k, v) in props {
-            keys.push(k.clone());
-            if header.is_none() {
-                header = v.get("title").and_then(|t| t.as_str()).map(str::to_string);
+            let header = v.get("title").and_then(|t| t.as_str()).map(str::to_string);
+            let mut desc = v
+                .get("description")
+                .and_then(|d| d.as_str())
+                .unwrap_or("")
+                .to_string();
+            if desc.is_empty() {
+                desc = if !message.is_empty() {
+                    message.clone()
+                } else {
+                    header.clone().unwrap_or_else(|| k.clone())
+                };
             }
-            if let Some(desc) = v.get("description").and_then(|d| d.as_str()) {
-                if question_text.is_empty() {
-                    question_text = desc.to_string();
-                }
-            }
-            if v.get("type").and_then(|t| t.as_str()) == Some("array") {
-                multi_select = true;
-            }
-            // Enum or options in schema
+            let multi_select = v.get("type").and_then(|t| t.as_str()) == Some("array");
+            let mut options = Vec::new();
             if let Some(enum_vals) = v.get("enum").and_then(|e| e.as_array()) {
                 for ev in enum_vals {
                     if let Some(s) = ev.as_str() {
@@ -219,47 +228,138 @@ pub fn parse_acp_elicitation(session: &str, params: &Value) -> Option<(UserQuest
             } else if let Some(opts) = v.get("options") {
                 options.extend(parse_options(opts));
             }
+
+            out.push((
+                UserQuestion {
+                    id: new_id("qst"),
+                    session: session.to_string(),
+                    header,
+                    question: desc,
+                    options,
+                    multi_select,
+                    custom: true,
+                },
+                k.clone(),
+            ));
         }
     }
 
     if let Some(fields) = params.get("fields").and_then(|f| f.as_array()) {
         for f in fields {
-            if let Some(k) = f.get("key").and_then(|k| k.as_str()) {
-                keys.push(k.to_string());
+            let key = f
+                .get("key")
+                .and_then(|k| k.as_str())
+                .unwrap_or("field")
+                .to_string();
+            let header = f.get("title").and_then(|t| t.as_str()).map(str::to_string);
+            let mut desc = f
+                .get("description")
+                .and_then(|d| d.as_str())
+                .unwrap_or("")
+                .to_string();
+            if desc.is_empty() {
+                desc = if !message.is_empty() {
+                    message.clone()
+                } else {
+                    header.clone().unwrap_or_else(|| key.clone())
+                };
             }
-            if header.is_none() {
-                header = f.get("title").and_then(|t| t.as_str()).map(str::to_string);
-            }
-            if let Some(desc) = f.get("description").and_then(|d| d.as_str()) {
-                if question_text.is_empty() {
-                    question_text = desc.to_string();
-                }
-            }
-            if f.get("type").and_then(|t| t.as_str()) == Some("multiselect") {
-                multi_select = true;
-            }
-            if let Some(opts) = f.get("options") {
-                options.extend(parse_options(opts));
-            }
+            let multi_select = f.get("type").and_then(|t| t.as_str()) == Some("multiselect");
+            let options = f.get("options").map(parse_options).unwrap_or_default();
+
+            out.push((
+                UserQuestion {
+                    id: new_id("qst"),
+                    session: session.to_string(),
+                    header,
+                    question: desc,
+                    options,
+                    multi_select,
+                    custom: true,
+                },
+                key,
+            ));
         }
     }
 
-    if question_text.is_empty() {
-        question_text = header
-            .clone()
-            .unwrap_or_else(|| "Interactive Question".to_string());
+    if out.is_empty() {
+        let question_text = if !message.is_empty() {
+            message
+        } else {
+            "Interactive Question".to_string()
+        };
+        out.push((
+            UserQuestion {
+                id: new_id("qst"),
+                session: session.to_string(),
+                header: None,
+                question: question_text,
+                options: Vec::new(),
+                multi_select: false,
+                custom: true,
+            },
+            "answer".to_string(),
+        ));
     }
 
-    let q = UserQuestion {
-        id,
-        session: session.to_string(),
-        header,
-        question: question_text,
-        options,
-        multi_select,
-        custom: true,
+    out
+}
+
+/// Parses an ACP `elicitation/create` request into [`UserQuestion`] and property keys.
+pub fn parse_acp_elicitation(session: &str, params: &Value) -> Option<(UserQuestion, Vec<String>)> {
+    let list = parse_acp_elicitations(session, params);
+    let keys: Vec<String> = list.iter().map(|(_, k)| k.clone()).collect();
+    list.into_iter().next().map(|(q, _)| (q, keys))
+}
+
+/// Parses Codex `item/tool/requestUserInput` parameters into multiple [`UserQuestion`]s with question keys.
+pub fn parse_codex_user_inputs(session: &str, params: &Value) -> Vec<(UserQuestion, String)> {
+    let Some(questions) = params.get("questions").and_then(|q| q.as_array()) else {
+        return Vec::new();
     };
-    Some((q, keys))
+
+    let mut out = Vec::new();
+    for (i, item) in questions.iter().enumerate() {
+        let q_key = item
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("q{i}"));
+        let header = item
+            .get("header")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let question = item
+            .get("question")
+            .or_else(|| item.get("prompt"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let options = item.get("options").map(parse_options).unwrap_or_default();
+        let multi_select = item
+            .get("multiple")
+            .or_else(|| item.get("multi_select"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        out.push((
+            UserQuestion {
+                id: new_id("qst"),
+                session: session.to_string(),
+                header,
+                question: if question.is_empty() {
+                    format!("Question {}", i + 1)
+                } else {
+                    question
+                },
+                options,
+                multi_select,
+                custom: true,
+            },
+            q_key,
+        ));
+    }
+    out
 }
 
 /// Parses Codex `item/tool/requestUserInput` parameters into [`UserQuestion`] and question key.
@@ -267,38 +367,10 @@ pub fn parse_codex_user_input(
     session: &str,
     params: &Value,
 ) -> Option<(UserQuestion, Option<String>)> {
-    let id = new_id("qst");
-    let questions = params.get("questions").and_then(|q| q.as_array())?;
-    let first = questions.first()?;
-
-    let q_key = first.get("id").and_then(|v| v.as_str()).map(str::to_string);
-    let header = first
-        .get("header")
-        .and_then(|v| v.as_str())
-        .map(str::to_string);
-    let question = first
-        .get("question")
-        .or_else(|| first.get("prompt"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let options = first.get("options").map(parse_options).unwrap_or_default();
-    let multi_select = first
-        .get("multiple")
-        .or_else(|| first.get("multi_select"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let q = UserQuestion {
-        id,
-        session: session.to_string(),
-        header,
-        question,
-        options,
-        multi_select,
-        custom: true,
-    };
-    Some((q, q_key))
+    parse_codex_user_inputs(session, params)
+        .into_iter()
+        .next()
+        .map(|(q, k)| (q, Some(k)))
 }
 
 #[cfg(test)]
@@ -346,6 +418,34 @@ mod tests {
     }
 
     #[test]
+    fn parse_multiple_tool_call_questions() {
+        let json = r#"{
+            "questions": [
+                {
+                    "question": "Choose database",
+                    "header": "Database",
+                    "options": ["PostgreSQL", "SQLite"]
+                },
+                {
+                    "question": "Choose cache",
+                    "header": "Cache",
+                    "options": ["Redis", "Memcached"],
+                    "multi_select": true
+                }
+            ]
+        }"#;
+        let list = parse_tool_call_questions("ses_1", "AskUserQuestion", json);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].header.as_deref(), Some("Database"));
+        assert_eq!(list[0].question, "Choose database");
+        assert_eq!(list[0].options.len(), 2);
+        assert!(!list[0].multi_select);
+        assert_eq!(list[1].header.as_deref(), Some("Cache"));
+        assert_eq!(list[1].question, "Choose cache");
+        assert!(list[1].multi_select);
+    }
+
+    #[test]
     fn parse_antigravity_question_format() {
         let json = r#"{
             "questions": [{
@@ -382,6 +482,31 @@ mod tests {
     }
 
     #[test]
+    fn parse_multiple_codex_questions() {
+        let params = serde_json::json!({
+            "threadId": "th_1",
+            "questions": [
+                {
+                    "id": "q1",
+                    "question": "First question?",
+                    "options": ["Yes", "No"]
+                },
+                {
+                    "id": "q2",
+                    "question": "Second question?",
+                    "options": ["Option A", "Option B"]
+                }
+            ]
+        });
+        let list = parse_codex_user_inputs("ses_3", &params);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].1, "q1");
+        assert_eq!(list[0].0.question, "First question?");
+        assert_eq!(list[1].1, "q2");
+        assert_eq!(list[1].0.question, "Second question?");
+    }
+
+    #[test]
     fn parse_acp_elicitation_format() {
         let params = serde_json::json!({
             "mode": "form",
@@ -403,6 +528,34 @@ mod tests {
         assert_eq!(q.header.as_deref(), Some("Environment"));
         assert_eq!(q.options.len(), 3);
         assert_eq!(q.options[0].label, "production");
+    }
+
+    #[test]
+    fn parse_multiple_acp_elicitations() {
+        let params = serde_json::json!({
+            "mode": "form",
+            "message": "Project Config",
+            "requestedSchema": {
+                "type": "object",
+                "properties": {
+                    "lang": {
+                        "type": "string",
+                        "title": "Language",
+                        "enum": ["Rust", "TypeScript"]
+                    },
+                    "framework": {
+                        "type": "string",
+                        "title": "Framework",
+                        "enum": ["Actix", "Axum"]
+                    }
+                }
+            }
+        });
+        let list = parse_acp_elicitations("ses_4", &params);
+        assert_eq!(list.len(), 2);
+        let keys: Vec<String> = list.iter().map(|(_, k)| k.clone()).collect();
+        assert!(keys.contains(&"lang".to_string()));
+        assert!(keys.contains(&"framework".to_string()));
     }
 
     #[test]

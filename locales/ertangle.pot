@@ -865,7 +865,7 @@ msgstr ""
 msgid "未知的核准請求：{req}"
 msgstr ""
 
-#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/claude.rs crates/ertangle-adapter/src/codex.rs
 msgid "未知的問題請求：{id}"
 msgstr ""
 
@@ -2882,11 +2882,11 @@ msgid "Enter 使用自訂值：{value}"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "[q/Enter 回答]"
+msgid "[Enter 回答]"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "(選取該 session 後 q 回答)"
+msgid "(選取該 session 後 Enter 回答)"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs crates/ertangle-tui/src/draw.rs
@@ -2978,7 +2978,7 @@ msgid "{header}：{question}"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  [q/Enter] 回答問題"
+msgid "  [Enter] 回答問題"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs

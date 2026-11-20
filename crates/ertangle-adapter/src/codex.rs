@@ -32,7 +32,9 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 struct PendingQuestion {
     rpc_id: Value,
     method: String,
-    q_key: Option<String>,
+    q_key: String,
+    total: usize,
+    answers: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
 
 /// Build the JSON-RPC result for Codex `item/tool/requestUserInput`.
@@ -140,45 +142,50 @@ impl Conn {
     fn on_server_request(&self, method: &str, msg: &Value) {
         let params = &msg["params"];
         if method == "item/tool/requestUserInput" {
-            if let Some((q, q_key)) =
-                crate::question::parse_codex_user_input(&self.session_id, params)
-            {
+            let list = crate::question::parse_codex_user_inputs(&self.session_id, params);
+            if !list.is_empty() {
                 let id = msg.get("id").cloned().unwrap_or(Value::Null);
-                self.questions
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .insert(
+                let total = list.len();
+                let shared_answers = Arc::new(Mutex::new(HashMap::new()));
+                let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
+                for (q, q_key) in list {
+                    q_map.insert(
                         q.id.clone(),
                         PendingQuestion {
-                            rpc_id: id,
+                            rpc_id: id.clone(),
                             method: method.to_string(),
                             q_key,
+                            total,
+                            answers: Arc::clone(&shared_answers),
                         },
                     );
-                let _ = self.tx.send(AgentEvent::Question(q));
+                    let _ = self.tx.send(AgentEvent::Question(q));
+                }
                 return;
             }
         }
         if method == "mcpServer/elicitation/request"
             && (params.get("requestedSchema").is_some() || params.get("options").is_some())
         {
-            if let Some((q, keys)) =
-                crate::question::parse_acp_elicitation(&self.session_id, params)
-            {
+            let list = crate::question::parse_acp_elicitations(&self.session_id, params);
+            if !list.is_empty() {
                 let id = msg.get("id").cloned().unwrap_or(Value::Null);
-                let q_key = keys.first().cloned();
-                self.questions
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .insert(
+                let total = list.len();
+                let shared_answers = Arc::new(Mutex::new(HashMap::new()));
+                let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
+                for (q, q_key) in list {
+                    q_map.insert(
                         q.id.clone(),
                         PendingQuestion {
-                            rpc_id: id,
+                            rpc_id: id.clone(),
                             method: method.to_string(),
                             q_key,
+                            total,
+                            answers: Arc::clone(&shared_answers),
                         },
                     );
-                let _ = self.tx.send(AgentEvent::Question(q));
+                    let _ = self.tx.send(AgentEvent::Question(q));
+                }
                 return;
             }
         }
@@ -630,34 +637,80 @@ impl AgentControl for CodexControl {
             rpc_id,
             method,
             q_key,
+            total,
+            answers: shared_answers,
         }) = entry
         else {
             bail!("{}", tr!("未知的問題請求：{id}", id = id));
         };
-        if method == "item/tool/requestUserInput" {
-            let key = q_key.unwrap_or_else(|| "q0".to_string());
-            self.conn.write(&json!({
-                "jsonrpc": "2.0",
-                "id": rpc_id,
-                "result": user_input_answer_result(answers, &key)
-            }))
-        } else {
-            let result = if answers.is_empty() {
-                json!({ "action": "decline" })
+
+        if answers.is_empty() {
+            let mut q_map = self
+                .conn
+                .questions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            q_map.retain(|_, v| v.rpc_id != rpc_id);
+            drop(q_map);
+
+            let result = if method == "item/tool/requestUserInput" {
+                json!({ "answers": {} })
             } else {
-                let mut content = serde_json::Map::new();
-                let key = q_key.unwrap_or_else(|| "answer".to_string());
-                content.insert(key, json!(answers));
-                json!({
-                    "action": "accept",
-                    "content": content
-                })
+                json!({ "action": "decline" })
             };
-            self.conn.write(&json!({
+            return self.conn.write(&json!({
                 "jsonrpc": "2.0",
                 "id": rpc_id,
                 "result": result
-            }))
+            }));
+        }
+
+        let mut map = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
+        map.insert(q_key, answers.to_vec());
+        if map.len() == total {
+            let mut q_map = self
+                .conn
+                .questions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            q_map.retain(|_, v| v.rpc_id != rpc_id);
+            drop(q_map);
+
+            if method == "item/tool/requestUserInput" {
+                let result = if map.len() == 1 {
+                    if let Some((k, ans)) = map.iter().next() {
+                        user_input_answer_result(ans, k)
+                    } else {
+                        json!({ "answers": {} })
+                    }
+                } else {
+                    let mut answers_by_id = serde_json::Map::new();
+                    for (k, ans) in map.iter() {
+                        answers_by_id.insert(k.clone(), json!({ "answers": ans, "other": null }));
+                    }
+                    json!({ "answers": answers_by_id })
+                };
+                self.conn.write(&json!({
+                    "jsonrpc": "2.0",
+                    "id": rpc_id,
+                    "result": result
+                }))
+            } else {
+                let mut content = serde_json::Map::new();
+                for (k, ans) in map.iter() {
+                    content.insert(k.clone(), json!(ans));
+                }
+                self.conn.write(&json!({
+                    "jsonrpc": "2.0",
+                    "id": rpc_id,
+                    "result": {
+                        "action": "accept",
+                        "content": content
+                    }
+                }))
+            }
+        } else {
+            Ok(())
         }
     }
 

@@ -886,6 +886,10 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
         return Ok(());
     };
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    if ctrl && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('q')) {
+        app.should_quit = true;
+        return Ok(());
+    }
     let n = p.visible().len();
     match key.code {
         KeyCode::Esc => {

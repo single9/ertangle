@@ -1929,6 +1929,40 @@ fn mcp_question_waits_for_human_answer() {
 }
 
 #[test]
+fn cancellable_question_timeout_cleans_up_timer() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: ask_sess("ses-timer", PermissionPolicy::Ask),
+    });
+    let q = ertangle_core::UserQuestion {
+        id: "qst_timer_1".into(),
+        session: "ses-timer".into(),
+        header: Some("Header".into()),
+        question: "Question text".into(),
+        options: Vec::new(),
+        multi_select: false,
+        custom: true,
+    };
+    shared.ingest(
+        &"ses-timer".to_string(),
+        ertangle_adapter::AgentEvent::Question(q),
+    );
+    assert!(lock(&shared.inner)
+        .question_timers
+        .contains_key("qst_timer_1"));
+
+    // Resolving the question cleans up the timer immediately
+    shared.emit(Event::QuestionResolved {
+        session: "ses-timer".into(),
+        id: "qst_timer_1".into(),
+        answers: vec!["Answer".into()],
+    });
+    assert!(!lock(&shared.inner)
+        .question_timers
+        .contains_key("qst_timer_1"));
+}
+
+#[test]
 fn mcp_permission_auto_policy_answers_immediately_and_deny_wins() {
     let shared = test_shared();
     shared.emit(Event::SessionStarted {
