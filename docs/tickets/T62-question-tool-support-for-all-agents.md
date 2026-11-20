@@ -4,6 +4,10 @@ Priority: P1　Scope: `ertangle-protocol`, `ertangle-core`, `ertangle-daemon`, `
 
 Status: ready-for-agent
 
+## Investigation result
+
+See `T62-probe-notes.md`. The concrete blockers are confirmed: ACP `initialize` does not advertise `clientCapabilities.elicitation`, and `acp.rs` rejects unhandled server-to-client JSON-RPC requests with `-32601`; Codex answers `mcpServer/elicitation/request` with empty content and rejects `item/tool/requestUserInput`. Claude needs an MCP fallback and PTY needs a typed-answer fallback.
+
 ## Problem
 
 When an agent emits an interactive question tool call (a prompt with a question, a header, and selectable options, such as the harness `question` tool), ertangle cannot display it. The call only arrives as a plain tool-call event, so it is rendered as text in the transcript. The user gets no interactive widget, cannot choose an option, and the tool call fails with a message such as "the question couldn't be shown to the user in this client", leaving the agent without an answer.
