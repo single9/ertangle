@@ -1671,7 +1671,10 @@
               <div class="sessions-page-title">Agent Sessions</div>
               <div id="sessions-count-sub" class="sessions-page-sub">共 0 個 Session</div>
             </div>
-            <button class="btn-pill btn-allow" style="flex:none; padding:6px 14px; font-size:12px;" onclick="openNewSessionSheet()">+ 建立新 Session</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn-pill" style="flex:none; padding:6px 12px; font-size:12px; background:var(--bg-card); color:var(--text); border:1px solid var(--border);" onclick="pruneSessions()" title="清理已結束且已合併的 Session">清理已結束</button>
+              <button class="btn-pill btn-allow" style="flex:none; padding:6px 14px; font-size:12px;" onclick="openNewSessionSheet()">+ 建立新 Session</button>
+            </div>
           </div>
           <!-- 專案篩選列 -->
           <div class="filter-bar" id="session-project-filter-bar"></div>
@@ -2051,6 +2054,30 @@
           <button class="btn-pill btn-secondary" style="justify-content:center; padding:9px; color:var(--text-dim);" onclick="closeSheet('sheet-file-action')">
             關閉
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜 8：已封存 Session 對話紀錄 (Archived Transcript) -->
+    <div id="sheet-archived-transcript" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container" style="max-height:88vh; display:flex; flex-direction:column;">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div>
+            <div id="archived-sheet-title" class="sheet-title" style="margin-bottom:2px;">對話紀錄</div>
+            <div id="archived-sheet-info" style="font-size:11px; color:var(--text-dim);"></div>
+          </div>
+          <button class="sheet-close" onclick="closeSheet('sheet-archived-transcript')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div id="archived-sheet-body" style="flex:1; min-height:180px; max-height:55vh; background:#0d0e14; border:1px solid var(--border); border-radius:10px; padding:12px; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-bottom:12px;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <button class="btn-pill" style="flex:1; background:var(--bg-card); color:var(--text); border:1px solid var(--border); padding:8px 12px;" onclick="closeSheet('sheet-archived-transcript')">關閉</button>
+          <button id="archived-sheet-resume-btn" class="btn-pill" style="flex:1; background:var(--yellow); color:#000; border:none; padding:8px 12px; font-weight:600;">接續</button>
         </div>
       </div>
     </div>
@@ -2448,6 +2475,11 @@
         const x = state.sessions[event.session];
         if (x) {
           x.status = event.status;
+          if (["exited", "failed"].includes(event.status)) {
+            x.ended_ms = x.ended_ms || record.ts || Date.now();
+          } else {
+            x.ended_ms = null;
+          }
           if (event.status !== "busy" && event.status !== "waiting_approval") x.active_tools = [];
         }
       } else if (kind === "session_bg_procs") {
@@ -2460,10 +2492,17 @@
         }
       } else if (kind === "session_limited") {
         const x = state.sessions[event.session];
-        if (x) { x.status = "failed"; x.status_note = `額度用完：${(event.detail || "").slice(0, 80)} (可用 handoff 交接)`; }
+        if (x) {
+          x.status = "failed";
+          x.status_note = `額度用完：${(event.detail || "").slice(0, 80)} (可用 handoff 交接)`;
+          x.ended_ms = x.ended_ms || record.ts || Date.now();
+        }
       } else if (kind === "session_exited") {
         const x = state.sessions[event.session];
-        if (x && isLive(x)) x.status = "exited";
+        if (x) {
+          if (isLive(x)) x.status = "exited";
+          x.ended_ms = x.ended_ms || record.ts || Date.now();
+        }
       } else if (kind === "session_over_budget") {
         if (state.sessions[event.session]) state.sessions[event.session].over_budget = true;
       } else if (kind === "session_budget") {
@@ -2501,6 +2540,7 @@
         if (removed && removed.native_id) {
           if (!state.archived_sessions) state.archived_sessions = {};
           removed.status = "exited";
+          if (!removed.ended_ms) removed.ended_ms = record.ts || Date.now();
           state.archived_sessions[event.session] = removed;
         } else {
           delete state.transcripts[event.session];
@@ -2509,6 +2549,13 @@
         delete state.queues[event.session];
         if (activeSession === event.session) {
           activeSession = pickSession(curScope()) || Object.keys(state.sessions)[0] || null;
+        }
+      } else if (kind === "archive_pruned") {
+        if (state.archived_sessions && event.sessions) {
+          for (const id of event.sessions) {
+            delete state.archived_sessions[id];
+            if (state.transcripts) delete state.transcripts[id];
+          }
         }
       } else if (kind === "permission_requested") {
         state.pending_permissions[event.request.req] = event.request;
@@ -3456,14 +3503,26 @@
         const act = ev.target.closest("[data-act]");
         const card = ev.target.closest("[data-sid]");
         if (!card) return;
-        if (act && act.dataset.act === "settings") openSessionSettings(card.dataset.sid);
+        const sid = card.dataset.sid;
+        if (card.dataset.archived === "1") {
+          if (act && act.dataset.act === "resume") {
+            if (ws) {
+              ws.send(JSON.stringify({ op: "resume", session: sid }));
+              showToast("已發送接續請求…");
+            }
+          } else {
+            openArchivedTranscript(sid);
+          }
+          return;
+        }
+        if (act && act.dataset.act === "settings") openSessionSettings(sid);
         else if (act && act.dataset.act === "resume") {
           if (ws) {
-            ws.send(JSON.stringify({ op: "resume", session: card.dataset.sid }));
+            ws.send(JSON.stringify({ op: "resume", session: sid }));
             showToast("已發送接續請求…");
           }
         }
-        else selectSession(card.dataset.sid);
+        else selectSession(sid);
       };
 
       // 更新副標題計數
@@ -3482,11 +3541,8 @@
         return;
       }
 
-      sids.forEach(id => {
-        const s = state.sessions[id];
+      function buildSessionCard(id, s) {
         const pName = getProjectName(s);
-        if (!inScope(s)) return;
-
         const isActive = (id === activeSession);
         const shortModel = shortenModelName(s.model) || s.kind || "agent";
         const st = s.status || "idle";
@@ -3530,36 +3586,74 @@
             </div>
           </div>
         `;
-        container.appendChild(item);
-      });
+        return item;
+      }
+
+      const scoped = sids.filter(id => inScope(state.sessions[id]));
+      const liveSids = scoped.filter(id => isLive(state.sessions[id]));
+      const endedSids = scoped.filter(id => !isLive(state.sessions[id]));
+
+      liveSids.forEach(id => container.appendChild(buildSessionCard(id, state.sessions[id])));
+
+      if (endedSids.length > 0) {
+        const endedDetails = document.createElement("details");
+        endedDetails.style.cssText = "margin-top:14px; border-top:1px solid var(--border); padding-top:10px;";
+        endedDetails.open = localStorage.getItem("ertangle_sessions_ended_open") === "1";
+        endedDetails.ontoggle = () => {
+          try { localStorage.setItem("ertangle_sessions_ended_open", endedDetails.open ? "1" : "0"); } catch (_) {}
+        };
+        const endedSum = document.createElement("summary");
+        endedSum.style.cssText = "cursor:pointer; font-size:12px; color:var(--text-dim); padding:4px 2px; user-select:none; font-weight:500;";
+        endedSum.innerText = `已結束 (${endedSids.length})`;
+        endedDetails.appendChild(endedSum);
+
+        const endedBox = document.createElement("div");
+        endedBox.style.cssText = "display:flex; flex-direction:column; gap:10px; margin-top:8px; opacity:0.85;";
+        endedSids.forEach(id => endedBox.appendChild(buildSessionCard(id, state.sessions[id])));
+        endedDetails.appendChild(endedBox);
+        container.appendChild(endedDetails);
+      }
 
       const archIds = Object.keys(state.archived_sessions || {}).filter(id => {
         const s = state.archived_sessions[id];
-        return s && s.native_id && inScope(s);
-      }).sort((a, b) => ((state.archived_sessions[b] || {}).created_ms || 0) - ((state.archived_sessions[a] || {}).created_ms || 0));
+        return s && inScope(s);
+      }).sort((a, b) => {
+        const sa = state.archived_sessions[a] || {};
+        const sb = state.archived_sessions[b] || {};
+        return (sb.ended_ms || sb.created_ms || 0) - (sa.ended_ms || sa.created_ms || 0);
+      });
 
       if (archIds.length > 0) {
         const details = document.createElement("details");
         details.style.cssText = "margin-top:14px; border-top:1px solid var(--border); padding-top:10px;";
+        details.open = localStorage.getItem("ertangle_archived_sessions_open") === "1";
+        details.ontoggle = () => {
+          try { localStorage.setItem("ertangle_archived_sessions_open", details.open ? "1" : "0"); } catch (_) {}
+        };
         const sum = document.createElement("summary");
-        sum.style.cssText = "cursor:pointer; font-size:12px; color:var(--text-dim); padding:4px 2px; user-select:none;";
-        sum.innerText = `歷史封存 Session (${archIds.length} 個可接續)`;
+        sum.style.cssText = "cursor:pointer; font-size:12px; color:var(--text-dim); padding:4px 2px; user-select:none; font-weight:500;";
+        sum.innerText = `已封存 (${archIds.length})`;
         details.appendChild(sum);
+
+        const archBox = document.createElement("div");
+        archBox.style.cssText = "display:flex; flex-direction:column; gap:10px; margin-top:8px;";
+
         archIds.forEach(id => {
           const s = state.archived_sessions[id];
           const pName = getProjectName(s);
           const shortModel = shortenModelName(s.model) || s.kind || "agent";
+          const endedTimeStr = formatEndedTime(s.ended_ms || s.created_ms);
           const item = document.createElement("div");
           item.className = "session-card";
-          item.style.marginTop = "8px";
+          item.style.cursor = "pointer";
           item.style.opacity = "0.85";
           item.dataset.sid = id;
+          item.dataset.archived = "1";
           item.innerHTML = `
             <div class="session-card-header">
               <div class="session-card-context">
                 <span class="session-card-project">${escapeHtml(pName)}</span>
-                <span class="session-card-dot">•</span>
-                <span class="session-card-model">${escapeHtml(shortModel)}</span>
+                ${endedTimeStr ? `<span class="session-card-dot">•</span><span class="session-card-model">結束於 ${escapeHtml(endedTimeStr)}</span>` : ""}
               </div>
               <span class="header-status-tag">已封存</span>
             </div>
@@ -3570,16 +3664,18 @@
             <div class="session-card-footer">
               <div class="session-card-stats">
                 <span class="session-kind-badge">${escapeHtml(s.kind || "agent")}</span>
+                <span style="font-size:11px; color:var(--text-dim);">點選查看紀錄</span>
               </div>
               <div class="session-card-actions" onclick="event.stopPropagation()">
-                <button class="session-open-btn" data-act="resume" style="background:var(--yellow); color:#000; border:none;">
-                  <span>接續對話 (Resume)</span>
+                <button class="session-open-btn" data-act="resume" style="background:var(--yellow); color:#000; border:none; padding:5px 12px; border-radius:6px; font-weight:600;">
+                  <span>接續</span>
                 </button>
               </div>
             </div>
           `;
-          details.appendChild(item);
+          archBox.appendChild(item);
         });
+        details.appendChild(archBox);
         container.appendChild(details);
       }
     }
@@ -3658,6 +3754,57 @@
       }
     }
 
+    function formatEndedTime(ms) {
+      if (!ms) return "";
+      const d = new Date(ms);
+      const pad = n => String(n).padStart(2, "0");
+      const yr = d.getFullYear();
+      const mo = pad(d.getMonth() + 1);
+      const da = pad(d.getDate());
+      const hr = pad(d.getHours());
+      const mi = pad(d.getMinutes());
+      return `${yr}-${mo}-${da} ${hr}:${mi}`;
+    }
+
+    function openArchivedTranscript(id) {
+      const s = (state.archived_sessions && state.archived_sessions[id]) || (state.sessions && state.sessions[id]);
+      if (!s) return;
+      const titleEl = document.getElementById("archived-sheet-title");
+      const infoEl = document.getElementById("archived-sheet-info");
+      const bodyEl = document.getElementById("archived-sheet-body");
+      const resumeBtn = document.getElementById("archived-sheet-resume-btn");
+
+      titleEl.innerText = s.label || id;
+      const endedTime = formatEndedTime(s.ended_ms || s.created_ms);
+      infoEl.innerText = `${s.kind || "agent"}${endedTime ? " • 結束於 " + endedTime : ""}`;
+
+      const lines = (state.transcripts && state.transcripts[id]) || [];
+      if (lines.length === 0) {
+        bodyEl.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:40px 16px;">尚無對話紀錄</div>`;
+      } else {
+        bodyEl.innerHTML = `<pre style="margin:0; font-family:var(--font-mono); font-size:12px; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-all;">${lines.map(l => escapeHtml(String(l))).join("\n")}</pre>`;
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      }
+
+      resumeBtn.onclick = () => {
+        closeSheet("sheet-archived-transcript");
+        if (ws) {
+          ws.send(JSON.stringify({ op: "resume", session: id }));
+          showToast("已發送接續請求…");
+        }
+      };
+      openSheet("sheet-archived-transcript");
+    }
+
+    function pruneSessions() {
+      if (!confirm("確定要清理已結束且已合併的 Session 嗎？")) return;
+      if (!ws) return;
+      const req = { op: "prune" };
+      const scope = curScope();
+      if (scope && scope !== "all") req.project = scope;
+      ws.send(JSON.stringify(req));
+    }
+
     // 核心切換：切換 Session 並立即更新頂部狀態與對話
     function selectSession(id) {
       if (!state.sessions[id]) return;
@@ -3678,7 +3825,10 @@
       if (sids.length === 0) {
         container.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:24px 16px;">目前無任何可用 Session</div>`;
       } else {
-        sids.forEach(id => {
+        const liveIds = sids.filter(id => isLive(state.sessions[id]));
+        const endedIds = sids.filter(id => !isLive(state.sessions[id]));
+
+        function createPickerCard(id) {
           const s = state.sessions[id];
           const pName = getProjectName(s);
           const isActive = (id === activeSession);
@@ -3709,8 +3859,30 @@
             </div>
           `;
           card.onclick = () => selectSession(id);
-          container.appendChild(card);
-        });
+          return card;
+        }
+
+        liveIds.forEach(id => container.appendChild(createPickerCard(id)));
+
+        if (endedIds.length > 0) {
+          const pickerEndedOpen = localStorage.getItem("ertangle_picker_ended_open") === "1";
+          const details = document.createElement("details");
+          details.style.cssText = "margin-top:14px; border-top:1px solid var(--border); padding-top:10px;";
+          details.open = pickerEndedOpen;
+          details.ontoggle = () => {
+            try { localStorage.setItem("ertangle_picker_ended_open", details.open ? "1" : "0"); } catch (_) {}
+          };
+          const sum = document.createElement("summary");
+          sum.style.cssText = "cursor:pointer; font-size:12px; color:var(--text-dim); padding:4px 2px; user-select:none; font-weight:500;";
+          sum.innerText = `已結束 (${endedIds.length})`;
+          details.appendChild(sum);
+
+          const box = document.createElement("div");
+          box.style.cssText = "display:flex; flex-direction:column; gap:10px; margin-top:8px; opacity:0.85;";
+          endedIds.forEach(id => box.appendChild(createPickerCard(id)));
+          details.appendChild(box);
+          container.appendChild(details);
+        }
       }
 
       openSheet("sheet-session-picker");
@@ -3761,19 +3933,49 @@
     }
     function renderOverview() {
       const ids = scopedIds();
-      const idset = new Set(ids);
-      const kidsOf = {};
-      ids.forEach(id => { const p = state.sessions[id].parent; if (p && idset.has(p)) (kidsOf[p] = kidsOf[p] || []).push(id); });
-      const build = (id, depth, seen) => {
+      const liveIds = ids.filter(id => isLive(state.sessions[id]));
+      const endedIds = ids.filter(id => !isLive(state.sessions[id]));
+
+      const liveSet = new Set(liveIds);
+      const liveKidsOf = {};
+      liveIds.forEach(id => { const p = state.sessions[id].parent; if (p && liveSet.has(p)) (liveKidsOf[p] = liveKidsOf[p] || []).push(id); });
+      const liveBuild = (id, depth, seen) => {
         if (seen.has(id)) return "";
         seen.add(id);
-        return ovCard(id, depth, (kidsOf[id] || []).map(k => build(k, depth + 1, seen)));
+        return ovCard(id, depth, (liveKidsOf[id] || []).map(k => liveBuild(k, depth + 1, seen)));
       };
-      const roots = ids.filter(id => { const p = state.sessions[id].parent; return !(p && idset.has(p)); });
-      const seen = new Set();
+      const liveRoots = liveIds.filter(id => { const p = state.sessions[id].parent; return !(p && liveSet.has(p)); });
+      const liveSeen = new Set();
+      const liveHtml = liveRoots.map(r => liveBuild(r, 0, liveSeen)).join("");
+
+      let endedGroupHtml = "";
+      if (endedIds.length > 0) {
+        const endedSet = new Set(endedIds);
+        const endedKidsOf = {};
+        endedIds.forEach(id => { const p = state.sessions[id].parent; if (p && endedSet.has(p)) (endedKidsOf[p] = endedKidsOf[p] || []).push(id); });
+        const endedBuild = (id, depth, seen) => {
+          if (seen.has(id)) return "";
+          seen.add(id);
+          return ovCard(id, depth, (endedKidsOf[id] || []).map(k => endedBuild(k, depth + 1, seen)));
+        };
+        const endedRoots = endedIds.filter(id => { const p = state.sessions[id].parent; return !(p && endedSet.has(p)); });
+        const endedSeen = new Set();
+        const endedHtml = endedRoots.map(r => endedBuild(r, 0, endedSeen)).join("");
+        const ovEndedOpen = localStorage.getItem("ertangle_ov_ended_open") === "1";
+        endedGroupHtml = `
+          <details class="ended-sessions-details" style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;" ${ovEndedOpen ? "open" : ""} ontoggle="try { localStorage.setItem('ertangle_ov_ended_open', this.open ? '1' : '0'); } catch(_){}">
+            <summary style="cursor:pointer; font-size:12px; color:var(--text-dim); padding:4px 2px; user-select:none; font-weight:500;">已結束 (${endedIds.length})</summary>
+            <div style="margin-top:8px; opacity:0.85;">${endedHtml}</div>
+          </details>
+        `;
+      }
+
       const tree = document.getElementById("ov-tree");
-      tree.innerHTML = roots.map(r => build(r, 0, seen)).join("") ||
-        `<div style="text-align:center; color:var(--text-dim); padding:24px;">此專案目前沒有 Session</div>`;
+      if (ids.length === 0) {
+        tree.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:24px;">此專案目前沒有 Session</div>`;
+      } else {
+        tree.innerHTML = (liveHtml || (endedIds.length === 0 ? `<div style="text-align:center; color:var(--text-dim); padding:24px;">此專案目前沒有存活的 Session</div>` : "")) + endedGroupHtml;
+      }
       tree.onclick = ev => { const el = ev.target.closest("[data-sid]"); if (el) selectSession(el.dataset.sid); };
 
       const sc = curScope();
