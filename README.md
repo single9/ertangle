@@ -1,8 +1,6 @@
-# ertangle (ER=EPR) — 終端機原生的多 Agent 開發協作環境
+# ertangle — 終端機原生的多 Agent 開發協作環境
 
 [English](README_EN.md) | [繁體中文](README.md)
-
-專案名稱 `ertangle` (念作 er-tangle) 由 ER (愛因斯坦-羅森橋) 與 entangle (糾纏) 組成，源自 Maldacena 與 Susskind 提出的 ER=EPR 猜想 (量子糾纏等於愛因斯坦-羅森橋)。在 `ertangle` 中，每個 Agent 各自生活在獨立的宇宙 (Git Worktree)，並透過量子糾纏 (MCP 訊息匯流排) 相互連通與協同工作。本專案為 [erbridge](https://github.com/single9/erbridge) (Einstein-Rosen bridge) 的姊妹專案。
 
 > **讓多個 Coding Agent 在同一個 Repo 內平行工作、自主溝通、互相協同開發的終端機環境**。
 
@@ -598,3 +596,9 @@ make pre-commit    # 一鍵自動排版 (fmt)、跑 clippy 與檢查多國語系
 ## 致謝
 
 `ertangle` 的發想來自 [Orca](https://github.com/stablyai/orca) (MIT 授權)，其 full handoff 與 review 迴圈的概念啟發了本專案的設計。本專案為獨立實作，未複製其程式碼。
+
+---
+
+## 命名由來
+
+專案名稱 `ertangle` (念作 er-tangle) 由 ER (愛因斯坦-羅森橋) 與 entangle (糾纏) 組成，靈感源自 Maldacena 與 Susskind 提出的 ER=EPR 猜想 (量子糾纏等於愛因斯坦-羅森橋)。在 `ertangle` 中，每個 Agent 各自生活在獨立的宇宙 (Git Worktree)，並透過量子糾纏 (MCP 訊息匯流排) 相互連通與協同工作。本專案為 [erbridge](https://github.com/single9/erbridge) 的姊妹專案。

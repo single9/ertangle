@@ -1,8 +1,6 @@
-# ertangle (ER=EPR) — Terminal-Native Multi-Agent Development Environment
+# ertangle — Terminal-Native Multi-Agent Development Environment
 
 [English](README_EN.md) | [繁體中文](README.md)
-
-The name `ertangle` (pronounced "er-tangle") combines ER (Einstein-Rosen bridge) and entangle, and originates from the Maldacena–Susskind ER=EPR conjecture (entanglement = Einstein-Rosen bridges). In `ertangle`, each agent lives in its own universe (a git worktree) and connects through entanglement (the MCP message bus). It is a sibling project of [erbridge](https://github.com/single9/erbridge) (Einstein-Rosen bridge).
 
 > **Run multiple coding agents concurrently on the same git repository, communicating autonomously and collaborating safely inside your terminal.**
 
@@ -570,3 +568,9 @@ This project is licensed under the [MIT License](LICENSE).
 ## Acknowledgements
 
 `ertangle` was inspired by [Orca](https://github.com/stablyai/orca) (MIT licensed); its full-handoff and review-loop concepts informed this design. This is an independent implementation and does not copy its code.
+
+---
+
+## Name Origin
+
+The name `ertangle` (pronounced "er-tangle") combines ER (Einstein-Rosen bridge) and entangle, inspired by the Maldacena–Susskind ER=EPR conjecture (entanglement = Einstein-Rosen bridges). In `ertangle`, each agent lives in its own universe (a git worktree) and connects through entanglement (the MCP message bus). It is a sibling project of [erbridge](https://github.com/single9/erbridge).
