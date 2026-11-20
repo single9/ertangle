@@ -326,6 +326,10 @@ msgid "在報告末尾附上該 session worktree 的 git diff"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "在指定 session 的工作目錄執行 shell 命令 (不經過 agent)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "在獨立的 git worktree 中執行 (M3)"
 msgstr ""
 
@@ -590,6 +594,10 @@ msgid "補充給接手者的說明"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "要執行的命令 (可含空格，例如 `ertangle exec ses_x -- ls -la`)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "要接續的 session id、label 或原生對話 id；搭配 --list 可省略"
 msgstr ""
 
@@ -726,10 +734,14 @@ msgid "已建立 session"
 msgstr ""
 
 #: src/cmd/session.rs
+msgid "命令執行完成"
+msgstr ""
+
+#: src/cmd/session.rs
 msgid "已清空排隊"
 msgstr ""
 
-#: src/cmd/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs
+#: src/cmd/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "找不到 session {session}"
 msgstr ""
 
@@ -1660,6 +1672,22 @@ msgstr ""
 msgid "送 prompt 失敗：{e}"
 msgstr ""
 
+#: crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-tui/src/commands.rs
+msgid "命令不可為空"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "找不到工作目錄：{cwd}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "執行命令失敗：{e}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "超過 60 秒，已終止"
+msgstr ""
+
 #: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已清空 {count} 則排隊 prompt"
 msgstr ""
@@ -2245,8 +2273,12 @@ msgstr ""
 msgid "已送出 prompt"
 msgstr ""
 
-#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
 msgid "沒有選取的 session"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "已送出 Shell 命令：! {command}"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2295,6 +2327,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "說明面板：所有按鍵與命令"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "<命令>  在選取 session 的工作目錄執行 shell 命令 (亦可在輸入框打 !<命令>)"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -3217,6 +3253,10 @@ msgstr ""
 msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
 msgstr ""
 
+#: crates/ertangle-tui/src/help.rs crates/ertangle-tui/src/input.rs
+msgid "在選取 session 的工作目錄執行 shell 命令 (!<命令>)"
+msgstr ""
+
 #: crates/ertangle-tui/src/help.rs
 msgid "新增 agent：選 agent → model → 輸入 prompt"
 msgstr ""
@@ -3743,6 +3783,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "附加檔案／圖片… (@路徑，Tab 自動完成)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "Shell 命令 (在 session 工作目錄執行)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

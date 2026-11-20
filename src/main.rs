@@ -147,6 +147,14 @@ enum Cmd {
         #[arg(required = true)]
         text: Vec<String>,
     },
+    /// 在指定 session 的工作目錄執行 shell 命令 (不經過 agent)
+    #[command(alias = "sh")]
+    Exec {
+        session: String,
+        /// 要執行的命令 (可含空格，例如 `ertangle exec ses_x -- ls -la`)
+        #[arg(required = true, trailing_var_arg = true)]
+        command: Vec<String>,
+    },
     /// 查看或清空指定 session 的待送 prompt 佇列
     Queue {
         session: String,
@@ -571,6 +579,7 @@ fn main() -> Result<()> {
             queue,
             text,
         } => cmd_prompt(session, text, attach, queue),
+        Cmd::Exec { session, command } => cmd_exec(session, command),
         Cmd::Queue { session, clear } => cmd_queue(session, clear),
         Cmd::Cancel { session } => cmd_cancel(session),
         Cmd::Kill { session } => cmd_kill(session),

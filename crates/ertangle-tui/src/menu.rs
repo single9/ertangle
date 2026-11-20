@@ -247,6 +247,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     ertangle_core::tr_noop!("附加檔案／圖片… (@路徑，Tab 自動完成)"),
                     Act::Prefill(Mode::Prompt, "@"),
                 ),
+                it(
+                    'e',
+                    ertangle_core::tr_noop!("Shell 命令 (在 session 工作目錄執行)"),
+                    Act::Prefill(Mode::Prompt, "!"),
+                ),
             ],
         ),
         _ => return None,

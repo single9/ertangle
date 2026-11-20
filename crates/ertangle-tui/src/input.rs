@@ -243,6 +243,12 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             app.input_cursor = 0;
             app.status = tr!("命令 (Tab 自動完成)：spawn rm clean kill merge diff gc task …");
         }
+        KeyCode::Char('!') => {
+            app.mode = Mode::Prompt;
+            app.input = "!".into();
+            app.input_cursor = 1;
+            app.status = tr!("在選取 session 的工作目錄執行 shell 命令 (!<命令>)");
+        }
         KeyCode::Enter if app.view == CenterView::Grid => app.view = CenterView::Transcript,
         KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
         KeyCode::Enter | KeyCode::Char('v') if app.view == CenterView::Diff => {

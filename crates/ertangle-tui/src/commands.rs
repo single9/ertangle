@@ -25,6 +25,10 @@ pub(crate) fn submit_prompt_or_route(
     if let Some(cmd) = trimmed.strip_prefix('/') {
         return execute_command(app, writer, cmd);
     }
+    // `!<cmd>` 在選取 session 的工作目錄執行 shell 命令，不送給 agent。
+    if let Some(cmd) = trimmed.strip_prefix('!') {
+        return exec_shell_command(app, writer, cmd);
+    }
     // `@存在的檔案` 是附件，不是 `@peer` 訊息。
     if (trimmed.starts_with('@') && !crate::attach::leads_with_file(trimmed, &app.search_root()))
         || trimmed.starts_with('#')
@@ -74,6 +78,32 @@ pub(crate) fn submit_prompt_or_route(
     } else {
         app.status = tr!("沒有選取的 session");
     }
+    Ok(())
+}
+
+/// 在選取 session 的工作目錄執行 shell 命令 (T74)。
+pub(crate) fn exec_shell_command(
+    app: &mut App,
+    writer: &mut HostRouter,
+    command: &str,
+) -> Result<()> {
+    let command = command.trim();
+    if command.is_empty() {
+        app.status = tr!("命令不可為空");
+        return Ok(());
+    }
+    let Some(session) = app.selected_id() else {
+        app.status = tr!("沒有選取的 session");
+        return Ok(());
+    };
+    send(
+        writer,
+        &Request::Exec {
+            session,
+            command: command.to_string(),
+        },
+    )?;
+    app.status = tr!("已送出 Shell 命令：! {command}", command = command);
     Ok(())
 }
 
@@ -218,6 +248,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         ertangle_core::tr_noop!("[路徑]  匯出目前 session 樹為 Markdown，寫檔並複製到剪貼簿"),
     ),
     ("help", ertangle_core::tr_noop!("說明面板：所有按鍵與命令")),
+    (
+        "exec",
+        ertangle_core::tr_noop!("<命令>  在選取 session 的工作目錄執行 shell 命令 (亦可在輸入框打 !<命令>)"),
+    ),
     ("quota", ertangle_core::tr_noop!("開啟額度面板：已安裝 agent 的各視窗用量與重置時間")),
     (
         "budget",
@@ -368,11 +402,16 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         return forward_native(app, writer, &verb, &rest);
     }
     let raw = raw.trim().trim_start_matches('/');
+    // `:!<cmd>` 是 shell 命令的簡寫 (大小寫必須保留，所以在轉小寫前處理)。
+    if let Some(cmd) = raw.strip_prefix('!') {
+        return exec_shell_command(app, writer, cmd.trim());
+    }
     let mut parts = raw.splitn(2, char::is_whitespace);
     let verb = parts.next().unwrap_or("").to_ascii_lowercase();
     let rest = parts.next().unwrap_or("").trim();
 
     match verb.as_str() {
+        "exec" | "sh" => exec_shell_command(app, writer, rest)?,
         "help" | "h" | "?" => crate::help::open_help(app),
         "find" => crate::search::open(app, (!rest.is_empty()).then_some(rest)),
         "quota" => crate::quota::open(app),

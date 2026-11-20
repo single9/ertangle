@@ -11,6 +11,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
         &[
             ("Space", tr_noop!("選單 (s session、g git、v 檢視、m 訊息)")),
             (":", tr_noop!("命令列 (輸入時會提示，Tab 自動完成)；也可用 /")),
+            ("!", tr_noop!("在選取 session 的工作目錄執行 shell 命令 (!<命令>)")),
             ("n", tr_noop!("新增 agent：選 agent → model → 輸入 prompt")),
             (
                 "i / Enter",

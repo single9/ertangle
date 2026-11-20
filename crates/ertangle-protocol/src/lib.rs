@@ -156,6 +156,11 @@ pub enum Request {
         #[serde(default)]
         queue: bool,
     },
+    /// 在 session 的工作目錄執行 shell 命令 (不經過 agent)，輸出寫入逐字稿。
+    Exec {
+        session: SessionId,
+        command: String,
+    },
     /// 清空某個 session 的待送 prompt 佇列。
     QueueClear {
         session: SessionId,
@@ -510,6 +515,25 @@ mod tests {
             serde_json::from_str::<Request>(&json).unwrap(),
             Request::Restart
         ));
+    }
+
+    #[test]
+    fn exec_request_serde_roundtrip() {
+        let line = encode_line(&Request::Exec {
+            session: "ses_1".into(),
+            command: "echo \"hello world\"".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            line.trim(),
+            r#"{"op":"exec","session":"ses_1","command":"echo \"hello world\""}"#
+        );
+        let back: Request = decode_line(line.trim()).unwrap();
+        let Request::Exec { session, command } = back else {
+            panic!("expected Exec")
+        };
+        assert_eq!(session, "ses_1");
+        assert_eq!(command, "echo \"hello world\"");
     }
 
     #[test]

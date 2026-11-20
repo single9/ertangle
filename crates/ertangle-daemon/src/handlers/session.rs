@@ -1,8 +1,11 @@
 //! Session 生命週期與控制請求處理 (Spawn、Prompt、Kill、Sleep、Wake、Permission 等)。
 
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::bail;
 
@@ -853,6 +856,207 @@ pub(crate) fn handle_prompt(
             let _ = reply.send(Frame::error(tr!("送 prompt 失敗：{e}", e = e)));
         }
     }
+}
+
+/// Maximum wall-clock time for a shell command started by `Request::Exec`.
+const EXEC_TIMEOUT: Duration = Duration::from_secs(60);
+/// Output caps: 64 KB and 200 lines, whichever is hit first.
+const EXEC_MAX_BYTES: usize = 64 * 1024;
+const EXEC_MAX_LINES: usize = 200;
+
+/// Result of a shell command run in a session's working directory.
+struct ShellOutcome {
+    output: String,
+    /// Exit code as text, or `timeout` / `?` when unavailable.
+    code: String,
+    timed_out: bool,
+    spawn_error: Option<String>,
+}
+
+/// Trim a captured output to the configured byte/line caps without splitting a UTF-8 character.
+fn truncate_shell_output(mut text: String) -> String {
+    let mut truncated = false;
+    if text.len() > EXEC_MAX_BYTES {
+        let mut end = EXEC_MAX_BYTES;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+        truncated = true;
+    }
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.len() > EXEC_MAX_LINES {
+        text = lines[..EXEC_MAX_LINES].join("\n");
+        truncated = true;
+    }
+    if truncated {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str("...(truncated)");
+    }
+    text
+}
+
+/// Run `sh -c <command>` in `cwd`; readers drain both pipes so a chatty command cannot deadlock.
+fn run_shell_in(cwd: &str, session: &str, command: &str) -> ShellOutcome {
+    let mut child = match Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("ERTANGLE_SESSION", session)
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(e) => {
+            return ShellOutcome {
+                output: String::new(),
+                code: "?".into(),
+                timed_out: false,
+                spawn_error: Some(e.to_string()),
+            }
+        }
+    };
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let out_reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = stdout {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    });
+    let err_reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = stderr {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    });
+    let deadline = Instant::now() + EXEC_TIMEOUT;
+    let mut timed_out = false;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() >= deadline => {
+                timed_out = true;
+                let _ = child.kill();
+                break child.wait().ok();
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => break None,
+        }
+    };
+    let out_bytes = out_reader.join().unwrap_or_default();
+    let err_bytes = err_reader.join().unwrap_or_default();
+    let mut combined = out_bytes;
+    if !err_bytes.is_empty() {
+        if !combined.is_empty() && !combined.ends_with(b"\n") {
+            combined.push(b'\n');
+        }
+        combined.extend_from_slice(&err_bytes);
+    }
+    let output = truncate_shell_output(String::from_utf8_lossy(&combined).into_owned());
+    let code = if timed_out {
+        "timeout".to_string()
+    } else {
+        status
+            .and_then(|s| s.code())
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "?".to_string())
+    };
+    ShellOutcome {
+        output,
+        code,
+        timed_out,
+        spawn_error: None,
+    }
+}
+
+/// Transcript rendering for a shell command: fenced output plus the exit code.
+fn format_shell_transcript(output: &str, code: &str) -> String {
+    if output.trim().is_empty() {
+        format!("`[exit {code}]`")
+    } else {
+        format!("```text\n{output}\n```\n[exit {code}]")
+    }
+}
+
+/// Execute a shell command in a session's cwd (T74). Runs on a background thread so a slow
+/// command never blocks other daemon requests; output goes to the transcript and the reply note.
+pub(crate) fn handle_exec(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    command: String,
+) {
+    let command = command.trim();
+    if command.is_empty() {
+        let _ = reply.send(Frame::error(tr!("命令不可為空")));
+        return;
+    }
+    let sid = shared.resolve_session(&session);
+    let cwd = {
+        let inner = lock(&shared.inner);
+        inner
+            .state
+            .sessions
+            .get(&sid)
+            .or_else(|| inner.state.archived_sessions.get(&sid))
+            .map(|s| s.cwd.clone())
+    };
+    let Some(cwd) = cwd else {
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
+        return;
+    };
+    if !Path::new(&cwd).is_dir() {
+        let _ = reply.send(Frame::error(tr!("找不到工作目錄：{cwd}", cwd = cwd)));
+        return;
+    }
+
+    shared.emit(Event::UserPrompt {
+        session: sid.clone(),
+        text: format!("! {command}"),
+        from: None,
+    });
+
+    let shared = shared.clone();
+    let reply = reply.clone();
+    let exec_sid = sid.clone();
+    let exec_command = command.to_string();
+    std::thread::spawn(move || {
+        let outcome = run_shell_in(&cwd, &exec_sid, &exec_command);
+        if let Some(e) = outcome.spawn_error {
+            shared.emit(Event::Output {
+                session: exec_sid,
+                text: format!("⚠ {e}\n[exit ?]"),
+            });
+            let _ = reply.send(Frame::error(tr!("執行命令失敗：{e}", e = e)));
+            return;
+        }
+        shared.emit(Event::Output {
+            session: exec_sid,
+            text: format_shell_transcript(&outcome.output, &outcome.code),
+        });
+        let summary = format!("[exit {}]", outcome.code);
+        let note = if outcome.output.trim().is_empty() {
+            summary
+        } else {
+            format!("{}\n{}", outcome.output, summary)
+        };
+        let note = if outcome.timed_out {
+            format!("{note} ({})", tr!("超過 60 秒，已終止"))
+        } else {
+            note
+        };
+        let _ = reply.send(Frame::ok_note(note));
+    });
 }
 
 pub(crate) fn handle_queue_clear(shared: &Arc<Shared>, reply: &ClientTx, session: String) {

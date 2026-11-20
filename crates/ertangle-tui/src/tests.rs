@@ -4978,3 +4978,67 @@ fn prune_command_sends_scoped_request_and_ended_command_toggles() {
         .iter()
         .any(|(n, _)| *n == "prune"));
 }
+
+// ---- T74a: shell command execution (!cmd / :exec cmd / ! shortcut) ----
+
+#[test]
+fn tui_bang_prompt_sends_exec_request() {
+    use std::io::{BufRead, BufReader};
+    let mut app = sample_app(&[]);
+    let (mut w, peer) = pair_writer();
+    crate::commands::submit_prompt_or_route(&mut app, &mut w, "!  echo hello ").unwrap();
+    let mut line = String::new();
+    BufReader::new(peer).read_line(&mut line).unwrap();
+    match ertangle_protocol::decode_line(&line).unwrap() {
+        Request::Exec { session, command } => {
+            assert_eq!(session, "ses_test");
+            assert_eq!(command, "echo hello");
+        }
+        other => panic!("expected Exec request, got {other:?}"),
+    }
+    assert!(app.status.contains("echo hello"), "{}", app.status);
+}
+
+#[test]
+fn tui_exec_and_bang_command_aliases_send_exec_request() {
+    use std::io::{BufRead, BufReader};
+    for input in ["exec echo hi", "sh echo hi", "!echo hi", "! echo hi"] {
+        let mut app = sample_app(&[]);
+        let (mut w, peer) = pair_writer();
+        crate::commands::execute_command(&mut app, &mut w, input).unwrap();
+        let mut line = String::new();
+        BufReader::new(peer).read_line(&mut line).unwrap();
+        match ertangle_protocol::decode_line(&line).unwrap() {
+            Request::Exec { session, command } => {
+                assert_eq!(session, "ses_test", "input: {input}");
+                assert_eq!(command, "echo hi", "input: {input}");
+            }
+            other => panic!("expected Exec request for {input}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn tui_empty_shell_command_is_rejected_without_request() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    let (mut w, mut peer) = pair_writer();
+    crate::commands::exec_shell_command(&mut app, &mut w, "   ").unwrap();
+    let mut byte = [0u8; 1];
+    assert!(matches!(
+        peer.read(&mut byte),
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
+    ));
+    assert!(app.status.contains("命令不可為空"), "{}", app.status);
+}
+
+#[test]
+fn tui_bang_key_prefills_prompt_shell_mode() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    key(&mut app, &mut w, KeyCode::Char('!'));
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "!");
+    assert_eq!(app.input_cursor, 1);
+    assert!(app.status.contains("shell 命令"), "{}", app.status);
+}

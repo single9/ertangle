@@ -95,6 +95,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             attachments,
             queue,
         } => session::handle_prompt(shared, reply, session, text, attachments, queue),
+        Request::Exec { session, command } => session::handle_exec(shared, reply, session, command),
         Request::QueueClear { session } => session::handle_queue_clear(shared, reply, session),
         Request::QueuePop { session } => session::handle_queue_pop(shared, reply, session),
         Request::Cancel { session } => session::handle_cancel(shared, reply, session),

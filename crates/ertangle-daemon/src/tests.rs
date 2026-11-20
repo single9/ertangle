@@ -4840,3 +4840,141 @@ fn prune_archive_drops_entries_past_default_age() {
     shared.prune_archive(now);
     assert!(!is_archived(&shared, "ses_a"));
 }
+
+// ---- T74a: Request::Exec (shell command in a session's cwd) ----
+
+#[test]
+fn exec_empty_command_replies_error() {
+    let shared = test_shared();
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Exec {
+            session: "ses_x".into(),
+            command: "   ".into(),
+        },
+    );
+    match rx.rx.recv_timeout(Duration::from_secs(2)).unwrap() {
+        Frame::Error { message } => assert!(message.contains("命令不可為空"), "{message}"),
+        other => panic!("expected error frame, got {other:?}"),
+    }
+}
+
+#[test]
+fn exec_unknown_session_replies_error() {
+    let shared = test_shared();
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Exec {
+            session: "ses_missing".into(),
+            command: "echo hi".into(),
+        },
+    );
+    match rx.rx.recv_timeout(Duration::from_secs(2)).unwrap() {
+        Frame::Error { message } => assert!(message.contains("找不到 session"), "{message}"),
+        other => panic!("expected error frame, got {other:?}"),
+    }
+}
+
+#[test]
+fn exec_runs_in_session_cwd_and_records_transcript() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    fs::write(dir.join("marker.txt"), b"t74-marker\n").unwrap();
+    add_session(
+        &shared,
+        "ses_exec",
+        "w/exec",
+        SessionStatus::Busy,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Exec {
+            session: "w/exec".into(),
+            command: "pwd; cat marker.txt".into(),
+        },
+    );
+    let note = match rx.rx.recv_timeout(Duration::from_secs(10)).unwrap() {
+        Frame::Ok { note: Some(n) } => n,
+        other => panic!("expected ok note, got {other:?}"),
+    };
+    assert!(note.contains(dir.to_string_lossy().as_ref()), "{note}");
+    assert!(note.contains("t74-marker"), "{note}");
+    assert!(note.contains("[exit 0]"), "{note}");
+
+    let recs: Vec<ertangle_core::Record> = lock(&shared.inner).backlog.iter().cloned().collect();
+    assert!(recs.iter().any(|r| matches!(
+        &r.event,
+        Event::UserPrompt { session, text, from: None }
+            if session == "ses_exec" && text == "! pwd; cat marker.txt"
+    )));
+    assert!(recs.iter().any(|r| matches!(
+        &r.event,
+        Event::Output { session, text }
+            if session == "ses_exec"
+                && text.contains("```text")
+                && text.contains("t74-marker")
+                && text.contains("[exit 0]")
+    )));
+}
+
+#[test]
+fn exec_captures_stderr_exit_code_and_session_env() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_env",
+        "w/env",
+        SessionStatus::Busy,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Exec {
+            session: "ses_env".into(),
+            command: "echo \"$ERTANGLE_SESSION\" >&2; exit 7".into(),
+        },
+    );
+    let note = match rx.rx.recv_timeout(Duration::from_secs(10)).unwrap() {
+        Frame::Ok { note: Some(n) } => n,
+        other => panic!("expected ok note, got {other:?}"),
+    };
+    assert!(note.contains("ses_env"), "{note}");
+    assert!(note.contains("[exit 7]"), "{note}");
+}
+
+#[test]
+fn exec_truncates_long_output() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_long",
+        "w/long",
+        SessionStatus::Busy,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::Exec {
+            session: "ses_long".into(),
+            command: "seq 1 250".into(),
+        },
+    );
+    let note = match rx.rx.recv_timeout(Duration::from_secs(10)).unwrap() {
+        Frame::Ok { note: Some(n) } => n,
+        other => panic!("expected ok note, got {other:?}"),
+    };
+    assert!(note.contains("...(truncated)"), "{note}");
+    assert!(note.contains("\n200\n"), "{note}");
+    assert!(!note.contains("\n250\n"), "{note}");
+}

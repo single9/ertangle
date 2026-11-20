@@ -200,6 +200,18 @@ pub(crate) fn cmd_prompt(
     Ok(())
 }
 
+/// 在 session 的工作目錄執行 shell 命令，並印出 daemon 回傳的輸出與結束代碼。
+pub(crate) fn cmd_exec(session: String, command: Vec<String>) -> Result<()> {
+    let frame = roundtrip(&Request::Exec {
+        session,
+        command: join(command),
+    })?;
+    if let Frame::Ok { note } = frame {
+        println!("{}", note.unwrap_or_else(|| tr!("命令執行完成")));
+    }
+    Ok(())
+}
+
 pub(crate) fn cmd_queue(session: String, clear: bool) -> Result<()> {
     if clear {
         if let Frame::Ok { note } = roundtrip(&Request::QueueClear { session })? {

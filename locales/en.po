@@ -320,6 +320,10 @@ msgid "在報告末尾附上該 session worktree 的 git diff"
 msgstr "Append the session worktree git diff to the report"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "在指定 session 的工作目錄執行 shell 命令 (不經過 agent)"
+msgstr "Run a shell command in the given session's working directory (without going through the agent)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "在獨立的 git worktree 中執行 (M3)"
 msgstr "Run in a separate git worktree (M3)"
 
@@ -584,6 +588,10 @@ msgid "補充給接手者的說明"
 msgstr "Extra notes for the agent taking over"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "要執行的命令 (可含空格，例如 `ertangle exec ses_x -- ls -la`)"
+msgstr "Command to run (may contain spaces, e.g. `ertangle exec ses_x -- ls -la`)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "要接續的 session id、label 或原生對話 id；搭配 --list 可省略"
 msgstr "Session id, label, or native conversation id to resume; may be omitted with --list"
 
@@ -718,6 +726,10 @@ msgstr "Unknown permission policy: {p} (ask/auto/bypass)"
 #: src/cmd/session.rs
 msgid "已建立 session"
 msgstr "Created session"
+
+#: src/cmd/session.rs
+msgid "命令執行完成"
+msgstr "Command finished"
 
 #: src/cmd/session.rs
 msgid "已清空排隊"
@@ -1673,6 +1685,23 @@ msgid "送 prompt 失敗：{e}"
 msgstr "Failed to send prompt: {e}"
 
 #: crates/ertangle-daemon/src/handlers/session.rs
+#: crates/ertangle-tui/src/commands.rs
+msgid "命令不可為空"
+msgstr "Command must not be empty"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "找不到工作目錄：{cwd}"
+msgstr "Working directory not found: {cwd}"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "執行命令失敗：{e}"
+msgstr "Failed to run command: {e}"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "超過 60 秒，已終止"
+msgstr "Timed out after 60s and was terminated"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已清空 {count} 則排隊 prompt"
 msgstr "Cleared {count} queued prompt(s)"
 
@@ -2263,6 +2292,10 @@ msgid "沒有選取的 session"
 msgstr "No session selected"
 
 #: crates/ertangle-tui/src/commands.rs
+msgid "已送出 Shell 命令：! {command}"
+msgstr "Shell command sent: ! {command}"
+
+#: crates/ertangle-tui/src/commands.rs
 msgid "已超過成本上限，先用 :budget <金額> 調高"
 msgstr "Cost limit exceeded; raise it with :budget <amount> first"
 
@@ -2309,6 +2342,10 @@ msgstr "[path]  Export the current session tree as Markdown, save to a file and 
 #: crates/ertangle-tui/src/commands.rs
 msgid "說明面板：所有按鍵與命令"
 msgstr "Help panel: all keys and commands"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "<命令>  在選取 session 的工作目錄執行 shell 命令 (亦可在輸入框打 !<命令>)"
+msgstr "<command>  Run a shell command in the selected session's working directory (or type !<command> in the prompt)"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "開啟額度面板：已安裝 agent 的各視窗用量與重置時間"
@@ -3230,6 +3267,10 @@ msgstr "Menu (s session, g git, v view, m message)"
 msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
 msgstr "Command line (hints while typing, Tab to complete); / also works"
 
+#: crates/ertangle-tui/src/help.rs crates/ertangle-tui/src/input.rs
+msgid "在選取 session 的工作目錄執行 shell 命令 (!<命令>)"
+msgstr "Run a shell command in the selected session's working directory (!<command>)"
+
 #: crates/ertangle-tui/src/help.rs
 msgid "新增 agent：選 agent → model → 輸入 prompt"
 msgstr "New agent: pick agent → model → type prompt"
@@ -3757,6 +3798,10 @@ msgstr "Add task"
 #: crates/ertangle-tui/src/menu.rs
 msgid "附加檔案／圖片… (@路徑，Tab 自動完成)"
 msgstr "Attach file / image… (@path, Tab to complete)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "Shell 命令 (在 session 工作目錄執行)"
+msgstr "Shell command (run in the session working directory)"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
