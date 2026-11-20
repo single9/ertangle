@@ -14,7 +14,7 @@ env \
   ./target/debug/ertangle daemon --web 127.0.0.1 --web-port 7421
 ```
 
-Binary: `./target/debug/ertangle`. Probes 1-4 used the build from `389a602`; final probes 5-9 used the rebuilt binary from `784a755` (grouped question cleanup, ACP `oneOf` parsing, and session-exit cleanup).
+Binary: `./target/debug/ertangle`. Probes 1-4 used the build from `389a602`; probes 5-9 used `784a755`; probe 10 used the final build from `bd6b58b` (const submission values and skipped-field handling).
 
 ## Probe 1 — OpenCode MCP question answered over the daemon socket
 
@@ -188,7 +188,50 @@ TRANSCRIPT_TAIL ... Redis
 
 Codex `item/tool/requestUserInput` answer shape and multi-input parsing are covered by unit tests (`user_input_answer_result_has_codex_shape` and the parser tests). A live native probe is not possible here: the tool is absent from the default-mode tool set; the binary reports `request_user_input requires an interactive stdin terminal` while the adapter uses piped stdin; the `experimental_request_user_input` toggle does not remove that requirement; and a fallback probe hit an unrelated token-mismatch error. Antigravity is not installed in this environment.
 
-**Result: protocol/unit PASS; live probes BLOCKED (environment).**
+**Result: protocol/unit PASS; Codex live BLOCKED (environment).**
+
+### Probe 10 — Antigravity native `ask_question` (final)
+
+Correction: `agy` is installed at `/home/duye/.local/bin/agy` and the adapter launches it with `agy acp` (`AgentKind::Antigravity::acp_command`). The isolated probe daemon has no `ertangle` MCP server configured, so the MCP fallback tool is unavailable there; the built-in `ask_question` tool is used instead.
+
+Raw ACP frames for the probe prompt:
+
+```json
+{"method":"session/update","params":{"update":{"sessionUpdate":"tool_call","name":"ask_question",
+ "rawInput":{"questions":[{"is_multi_select":false,"options":["Postgres","Redis"],
+ "question":"Which database should we use?"}]}}}}
+{"method":"elicitation/create","id":"1","params":{"mode":"form",
+ "message":"The agent has a question.",
+ "requestedSchema":{"type":"object","properties":{
+   "q1":{"type":"string","title":"Which database should we use?",
+         "oneOf":[{"const":"1","title":"Postgres"},{"const":"2","title":"Redis"}]},
+   "q1_other":{"type":"string","title":"Other",
+               "description":"Optional free-form answer to: Which database should we use?"}}}}}
+```
+
+Two pending questions were shown: the choice field and an optional free-form "Other" field. Answering the choice with `Postgres` and skipping "Other" produced:
+
+```json
+{"id":"1","jsonrpc":"2.0","result":{"action":"accept","content":{"q1":"1"}}}
+```
+
+Two bugs were found and fixed before this result:
+
+- Skipping the "Other" field declined the whole form ("User Skipped"). Skipped fields are now resolved as omitted (`aa23cc9`).
+- The reply used the option label `"Postgres"` instead of the schema const `"1"`, which agy rejected. `QuestionOption.value` now carries the const and `acp.rs` maps answers back before replying (`bd6b58b`).
+
+Final clean-binary run, session `ses_506d570eddf7`:
+
+```text
+QUESTION qst_31e2182806ca -> Postgres
+STATUS idle TOOLS 4
+PENDING {}
+Selected database: Postgres
+```
+
+An OpenCode native regression probe after the same changes also passed (`"Which UI framework should we use?"="React"`).
+
+**Result: PASS.**
 
 ## Coverage summary
 
@@ -202,10 +245,11 @@ Codex `item/tool/requestUserInput` answer shape and multi-input parsing are cove
 | ACP elicitation `oneOf` options | Probe 6 | PASS |
 | Claude native `AskUserQuestion` | Probe 7 | PASS (single and multi) |
 | Codex `item/tool/requestUserInput` | Probe 9 | PASS (protocol/unit); live blocked |
-| Multiple questions per request | Probe 6, 7 | PASS |
+| Multiple questions per request | Probe 6, 7, 10 | PASS |
 | Cancellable daemon timeout | unit test | PASS |
-| Grouped / session-exit cleanup | unit tests, Probe 8 | PASS |
-| Antigravity agent | Probe 9 | BLOCKED (binary not installed) |
+| Grouped / session-exit cleanup | unit tests, Probe 8, 10 | PASS |
+| ACP oneOf const submission values | Probe 10 | PASS |
+| Antigravity agent | Probe 10 | PASS |
 
 ## Notes
 
