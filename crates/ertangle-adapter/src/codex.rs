@@ -43,6 +43,13 @@ struct PendingQuestion {
     answers: ElicitationAnswers,
 }
 
+/// Codex `-c` override that approves every tool of our own MCP server without a prompt.
+///
+/// Must target `mcp_servers.<id>`: the `apps.<id>` table only configures connectors, and the
+/// default `auto` mode still prompts for tools not annotated read-only (`ertangle_send`, ...).
+const AUTO_APPROVE_ERTANGLE_MCP: &str =
+    "mcp_servers.ertangle.default_tools_approval_mode=\"approve\"";
+
 /// Key `parse_acp_elicitations` gives to a form-less prompt (e.g. an MCP tool-call approval).
 const CONFIRM_KEY: &str = "answer";
 const CONFIRM_ALLOW: &str = "Allow";
@@ -814,7 +821,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             ]);
         }
         if spec.permission.auto_approves() {
-            cmd.args(["-c", "apps.ertangle.default_tools_approval_mode=\"auto\""]);
+            cmd.args(["-c", AUTO_APPROVE_ERTANGLE_MCP]);
         }
     }
     cmd.args(&spec.args);
@@ -1078,6 +1085,12 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn auto_approve_override_targets_mcp_server_with_valid_mode() {
+        assert!(AUTO_APPROVE_ERTANGLE_MCP.starts_with("mcp_servers.ertangle."));
+        assert!(AUTO_APPROVE_ERTANGLE_MCP.ends_with("=\"approve\""));
+    }
 
     #[test]
     fn formless_elicitation_gets_allow_deny_options() {
