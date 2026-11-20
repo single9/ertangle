@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use ertangle_core::{BusMessage, MsgKind, SessionId, SessionStatus, Target, TaskStatus};
+use ertangle_core::{BusMessage, SessionId, SessionStatus, Target, TaskStatus};
 
 use super::{
     FlowEdge, FlowEdgeKind, FlowEndpoint, FlowModel, FlowNode, FlowSummary, FLOW_EDGE_CAP,
@@ -163,24 +163,18 @@ fn dependency_edges(app: &App) -> Vec<FlowEdge> {
 
 /// Aggregates messages by (from, to, kind), newest first with deterministic ties.
 fn message_edges(messages: &[&BusMessage]) -> Vec<FlowEdge> {
-    type Key = (SessionId, EndpointKey, MsgKind);
-    let mut groups: BTreeMap<(SessionId, EndpointKey, &'static str), (FlowEdge, Key)> =
-        BTreeMap::new();
+    let mut groups: BTreeMap<(SessionId, EndpointKey, &'static str), FlowEdge> = BTreeMap::new();
     for m in messages {
         let to_key = EndpointKey::from(&m.to);
         let key = (m.from.clone(), to_key.clone(), m.kind.id());
-        let entry = groups.entry(key).or_insert_with(|| {
-            let edge = FlowEdge {
-                from: m.from.clone(),
-                to: to_key.endpoint(),
-                kind: FlowEdgeKind::Message(m.kind),
-                count: 0,
-                last_ts: 0,
-                preview: String::new(),
-            };
-            (edge, (m.from.clone(), to_key.clone(), m.kind))
+        let edge = groups.entry(key).or_insert_with(|| FlowEdge {
+            from: m.from.clone(),
+            to: to_key.endpoint(),
+            kind: FlowEdgeKind::Message(m.kind),
+            count: 0,
+            last_ts: 0,
+            preview: String::new(),
         });
-        let edge = &mut entry.0;
         edge.count += 1;
         if edge.count == 1 || m.ts >= edge.last_ts {
             edge.last_ts = m.ts;
@@ -188,7 +182,7 @@ fn message_edges(messages: &[&BusMessage]) -> Vec<FlowEdge> {
         }
     }
     // BTreeMap order is (from, to, kind id); a stable sort by last_ts desc keeps it as tie-break.
-    let mut edges: Vec<FlowEdge> = groups.into_values().map(|(e, _)| e).collect();
+    let mut edges: Vec<FlowEdge> = groups.into_values().collect();
     edges.sort_by_key(|e| std::cmp::Reverse(e.last_ts));
     edges
 }
@@ -222,7 +216,7 @@ impl EndpointKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ertangle_core::{AgentKind, Cost, Role, Session, Task};
+    use ertangle_core::{AgentKind, Cost, MsgKind, Role, Session, Task};
 
     fn session(id: &str, parent: Option<&str>, status: SessionStatus, cwd: &str) -> Session {
         Session {

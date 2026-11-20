@@ -14,8 +14,6 @@ mod clipboard;
 mod commands;
 mod diff;
 mod draw;
-// T76: dead-code allowance can go once model.rs constructs every variant.
-#[allow(dead_code)]
 mod flow;
 mod help;
 mod history;

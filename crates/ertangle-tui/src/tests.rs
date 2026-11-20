@@ -5375,3 +5375,18 @@ fn flow_view_renders_through_main_draw() {
     let text = render(&mut app);
     assert!(text.contains("Flow"));
 }
+
+#[test]
+fn flow_real_model_lists_session_and_enter_selects_it() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    key(&mut app, &mut w, KeyCode::Char('F'));
+    let text = render(&mut app);
+    assert!(
+        text.contains("worker"),
+        "node label rendered from real model"
+    );
+    key(&mut app, &mut w, KeyCode::Enter);
+    assert_eq!(app.view, CenterView::Transcript);
+    assert_eq!(app.selected_id().as_deref(), Some("ses_test"));
+}

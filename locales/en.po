@@ -707,7 +707,7 @@ msgstr "Show remote connection info (Tailscale IP, token path, and connection co
 msgid "{sid}  (非受管 session)"
 msgstr "{sid}  (unmanaged session)"
 
-#: src/cmd/session.rs
+#: src/cmd/session.rs crates/ertangle-tui/src/flow/draw.rs
 msgid "(沒有 session)"
 msgstr "(no sessions)"
 
@@ -2508,6 +2508,10 @@ msgid "任務視圖：依狀態分組，Enter 跳到負責人"
 msgstr "Task view: grouped by status, Enter jumps to the assignee"
 
 #: crates/ertangle-tui/src/commands.rs
+msgid "流程儀表板：session 節點與訊息流向 (同 F)"
+msgstr "Flow dashboard: session nodes and message flow (same as F)"
+
+#: crates/ertangle-tui/src/commands.rs
 msgid "<todo|doing|blocked|review|done>  改任務視圖選取任務的狀態"
 msgstr "<todo|doing|blocked|review|done>  Change the status of the task selected in the task view"
 
@@ -3268,8 +3272,28 @@ msgid "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"
 msgstr "  j/k select task  Enter go to assignee  :task-status <status>  ? help"
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "  j/k 選 session  Enter 開逐字稿  Esc/F 返回  E 顯示已結束  ? 說明"
+msgstr "  j/k select session  Enter open transcript  Esc/F back  E show ended  ? help"
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
 msgstr "  Select a session to switch panes (4 per page)  Enter/V back to single transcript  ? help"
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "{live} 存活 · {busy} 忙碌 · {waiting} 等待 · {ended} 已結束 │ 近 10 分鐘 {msgs} 則訊息 │ 任務 todo {todo} doing {doing} blocked {blocked} review {review}"
+msgstr "{live} live · {busy} busy · {waiting} waiting · {ended} ended │ {msgs} msgs in 10m │ tasks todo {todo} doing {doing} blocked {blocked} review {review}"
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "… {n} 個已結束 (E 顯示)"
+msgstr "… {n} ended (E to show)"
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "(未指派)"
+msgstr "(unassigned)"
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "+{n} 筆更多"
+msgstr "+{n} more"
 
 #: crates/ertangle-tui/src/help.rs
 msgid "常用"
@@ -3578,6 +3602,10 @@ msgstr "Search the transcript or diff, e.g. :find error (same as f)"
 #: crates/ertangle-tui/src/help.rs
 msgid "新增任務／廣播訊息"
 msgstr "Add a task / broadcast a message"
+
+#: crates/ertangle-tui/src/help.rs
+msgid "流程儀表板：session 節點、未讀與訊息流向；j/k 選取，Enter 開逐字稿，Esc 返回"
+msgstr "Flow dashboard: session nodes, unread and message flow; j/k select, Enter opens transcript, Esc goes back"
 
 #: crates/ertangle-tui/src/help.rs
 msgid "任務視圖／改選取任務的狀態 (todo doing blocked review done)"

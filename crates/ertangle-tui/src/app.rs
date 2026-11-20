@@ -1490,8 +1490,6 @@ pub(crate) fn project_color(root: &str) -> ratatui::style::Color {
     PALETTE[h as usize % PALETTE.len()]
 }
 
-/// 切換「只看本專案／全部專案」。
-/// Expands or collapses the "ended" group of the session sidebar (`None` toggles).
 /// Toggles the Flow view, remembering the view to return to (T76).
 pub(crate) fn toggle_flow(app: &mut App) {
     app.selection = None;
@@ -1503,6 +1501,7 @@ pub(crate) fn toggle_flow(app: &mut App) {
     }
 }
 
+/// Expands or collapses the "ended" group of the session sidebar (`None` toggles).
 pub(crate) fn toggle_ended(app: &mut App, show: Option<bool>) {
     // Keep the selection on the same session when rows appear/disappear.
     let keep = app.selected_id();
