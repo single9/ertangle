@@ -71,7 +71,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         .label
         .clone()
         .unwrap_or_else(|| format!("{}/{}", role.id(), id.get(4..8).unwrap_or(&id)));
-    // 沒指定 kind：依 roles.<role>.agent → 父 session 的 kind → defaults.agent → opencode 決定。
+    // worker_order 依額度略過已達上限或警告中的 agent，再回退到既有解析順序。
     let parent_kind = parent.as_ref().and_then(|pid| {
         lock(&shared.inner)
             .state
@@ -79,7 +79,28 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
             .get(pid)
             .map(|s| s.kind.clone())
     });
-    let mut kind = cfg.resolve_kind(spawn.kind.as_ref(), &role, parent_kind.as_ref());
+    let spawn_quotas = parent
+        .as_ref()
+        .map(|_| lock(&shared.inner).state.quotas.clone());
+    let warn = cfg
+        .handoff
+        .warn_percent
+        .unwrap_or(crate::quota_watch::DEFAULT_WARN_PERCENT);
+    let mut kind = if let Some(quotas) = &spawn_quotas {
+        cfg.resolve_worker_kind_with_quotas(
+            spawn.kind.as_ref(),
+            &role,
+            parent_kind.as_ref(),
+            ertangle_adapter::is_installed,
+            config::WorkerQuotaSnapshot {
+                quotas,
+                warn_percent: warn,
+                now_ms: now_millis(),
+            },
+        )
+    } else {
+        cfg.resolve_kind(spawn.kind.as_ref(), &role, parent_kind.as_ref())
+    };
     let mut resolved = cfg.resolve(
         &kind,
         &role,
@@ -94,11 +115,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
     let mut spawn = spawn;
     if parent.is_some() && spawn.inherit_from.is_none() {
         // 額度吃緊：換 fallback agent 或直接拒絕，避免工作做到一半被額度打斷。
-        let quotas = lock(&shared.inner).state.quotas.clone();
-        let warn = cfg
-            .handoff
-            .warn_percent
-            .unwrap_or(crate::quota_watch::DEFAULT_WARN_PERCENT);
+        let quotas = spawn_quotas.unwrap_or_default();
         match crate::quota_watch::check_spawn_quota(
             &kind,
             &quotas,

@@ -337,7 +337,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 "properties": {
                     "kind": {
                         "type": "string",
-                        "description": "Agent kind: opencode | claude | codex | antigravity. If omitted, resolved in order: [roles.<role>] agent in config, then your own agent kind (parent), then [defaults] agent, then opencode. The model is not inherited."
+                        "description": "Agent kind: opencode | claude | codex | antigravity. Do not pass this unless the user explicitly named an agent. If omitted, ertangle uses [roles.<role>].agent, then for workers the first installed agent in [defaults].worker_order with available quota (skipping reached quotas and preferring agents below the QUOTA_WARN threshold), then your own kind (parent), [defaults].agent, and finally opencode. The model is not inherited."
                     },
                     "prompt": {
                         "type": "string",

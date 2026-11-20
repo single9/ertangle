@@ -72,6 +72,12 @@ pub struct AgentSpawnCfg {
     pub shared_cargo_target: Option<bool>,
 }
 
+pub(crate) struct WorkerQuotaSnapshot<'a> {
+    pub quotas: &'a BTreeMap<String, ertangle_core::Quota>,
+    pub warn_percent: f32,
+    pub now_ms: u64,
+}
+
 /// 一次 agent spawn 的檢查結果。
 #[derive(Debug, Clone, PartialEq)]
 pub enum SpawnCheck {
@@ -895,6 +901,41 @@ impl Config {
             .unwrap_or(AgentKind::OpenCode)
     }
 
+    /// Resolve a worker kind while preferring installed agents with available quota.
+    pub(crate) fn resolve_worker_kind_with_quotas(
+        &self,
+        requested: Option<&AgentKind>,
+        role: &Role,
+        parent_kind: Option<&AgentKind>,
+        installed: impl Fn(&AgentKind) -> bool,
+        quota: WorkerQuotaSnapshot<'_>,
+    ) -> AgentKind {
+        if role != &Role::Worker || requested.is_some() || self.role_agent(role).is_some() {
+            return self.resolve_kind_with(requested, role, parent_kind, installed);
+        }
+        let candidates: Vec<_> = self
+            .defaults
+            .worker_order
+            .iter()
+            .filter_map(|s| AgentKind::parse(s))
+            .filter(|kind| installed(kind))
+            .filter(|kind| !quota.quotas.get(kind.id()).is_some_and(|q| q.reached))
+            .collect();
+        let preferred = candidates.iter().find(|kind| {
+            quota.quotas.get(kind.id()).is_none_or(|q| {
+                !q.warning
+                    && crate::quota_watch::live_pressure(q, quota.now_ms) < quota.warn_percent
+            })
+        });
+        preferred
+            .or_else(|| candidates.first())
+            .cloned()
+            .or_else(|| self.worker_pick(&installed))
+            .or_else(|| parent_kind.cloned())
+            .or_else(|| self.defaults.agent.as_deref().and_then(AgentKind::parse))
+            .unwrap_or(AgentKind::OpenCode)
+    }
+
     /// `defaults.worker_order` 中第一個可辨識且已安裝的 agent。
     fn worker_pick(&self, installed: &impl Fn(&AgentKind) -> bool) -> Option<AgentKind> {
         self.defaults
@@ -1558,6 +1599,57 @@ worker_order = ["codex", "bogus", "opencode"]
         let local = Config::parse("[defaults]\nworker_order = [\"opencode\"]").unwrap();
         let m = Config::layered(c, local);
         assert_eq!(m.defaults.worker_order, vec!["opencode"]);
+    }
+
+    #[test]
+    fn worker_order_skips_reached_and_prefers_available_quota() {
+        let c = Config::parse("[defaults]\nworker_order = [\"claude\", \"codex\", \"opencode\"]")
+            .unwrap();
+        let quota = |agent: &str, reached: bool, warning: bool, used: f32| ertangle_core::Quota {
+            agent: agent.to_string(),
+            windows: vec![ertangle_core::QuotaWindow {
+                name: "5h".into(),
+                used_percent: used,
+                resets_at_ms: None,
+            }],
+            reached,
+            warning,
+            updated_ms: 0,
+        };
+        let mut quotas = BTreeMap::new();
+        quotas.insert("claude".into(), quota("claude", true, false, 100.0));
+        quotas.insert("codex".into(), quota("codex", false, true, 95.0));
+        let all = |_: &AgentKind| true;
+        assert_eq!(
+            c.resolve_worker_kind_with_quotas(
+                None,
+                &Role::Worker,
+                Some(&AgentKind::ClaudeCode),
+                all,
+                WorkerQuotaSnapshot {
+                    quotas: &quotas,
+                    warn_percent: 90.0,
+                    now_ms: 0
+                }
+            ),
+            AgentKind::OpenCode
+        );
+
+        quotas.insert("opencode".into(), quota("opencode", true, false, 100.0));
+        assert_eq!(
+            c.resolve_worker_kind_with_quotas(
+                None,
+                &Role::Worker,
+                None,
+                all,
+                WorkerQuotaSnapshot {
+                    quotas: &quotas,
+                    warn_percent: 90.0,
+                    now_ms: 0
+                }
+            ),
+            AgentKind::Codex
+        );
     }
 
     #[test]
