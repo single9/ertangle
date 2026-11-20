@@ -3755,6 +3755,45 @@ fn discard_worktree_change_reverts_single_hunk_and_whole_file() {
 }
 
 #[test]
+fn auto_resumed_note_clears_when_resumed_turn_finishes() {
+    let shared = test_shared();
+    let session = restart_session("ses-note", SessionStatus::Busy);
+    shared.emit(Event::SessionStarted { session });
+    shared.emit(Event::SessionNote {
+        session: "ses-note".into(),
+        note: crate::auto_resumed_note(),
+    });
+    let note = |sh: &Arc<Shared>| {
+        lock(&sh.inner)
+            .state
+            .sessions
+            .get("ses-note")
+            .and_then(|s| s.status_note.clone())
+    };
+    shared.emit(Event::SessionStatus {
+        session: "ses-note".into(),
+        status: SessionStatus::Busy,
+    });
+    assert_eq!(note(&shared), Some(crate::auto_resumed_note()));
+    shared.emit(Event::SessionStatus {
+        session: "ses-note".into(),
+        status: SessionStatus::Idle,
+    });
+    assert_eq!(note(&shared), None, "finished turn counts as progress");
+
+    // Other notes are left alone.
+    shared.emit(Event::SessionNote {
+        session: "ses-note".into(),
+        note: "keep me".into(),
+    });
+    shared.emit(Event::SessionStatus {
+        session: "ses-note".into(),
+        status: SessionStatus::Idle,
+    });
+    assert_eq!(note(&shared).as_deref(), Some("keep me"));
+}
+
+#[test]
 fn auto_resume_only_for_busy_resumable_sessions_with_quota_and_progress() {
     use std::collections::BTreeMap;
     let mut s = restart_session("ses-a", SessionStatus::Busy);

@@ -586,10 +586,21 @@ impl Shared {
             inner.backlog.pop_front();
         }
 
+        let finished_turn = match &rec.event {
+            Event::SessionStatus {
+                session,
+                status: SessionStatus::Idle,
+            } => Some(session.clone()),
+            _ => None,
+        };
         let frame = Frame::Record {
             record: Box::new(rec),
         };
         inner.clients.retain(|c| c.send_bounded(frame.clone()));
+
+        if let Some(session) = finished_turn {
+            clear_auto_resumed_note(self, inner, session);
+        }
     }
 
     /// 把 adapter 事件翻譯成核心事件 (並在核准事件時先經過 PolicyEngine 規則過濾)。
@@ -1088,6 +1099,29 @@ pub(crate) const AUTO_RESUME_PROMPT: &str = "The ertangle daemon restarted and i
 /// 自動接續後留在 session 上的說明；下次重啟時看到它代表上次接續後沒有任何進展。
 pub(crate) fn auto_resumed_note() -> String {
     tr!("daemon 重啟，已自動接續")
+}
+
+/// Clears the "auto-resumed" note once the resumed session finishes a turn.
+///
+/// The note guards against resume loops when the daemon keeps crashing, so it must only
+/// mean "no progress since the last auto-resume". Leaving it in place after the session
+/// went idle blocked every later restart from auto-resuming that session.
+fn clear_auto_resumed_note(shared: &Shared, inner: &mut Inner, session: SessionId) {
+    let has_note = inner
+        .state
+        .sessions
+        .get(&session)
+        .and_then(|s| s.status_note.as_deref())
+        == Some(auto_resumed_note().as_str());
+    if has_note {
+        shared.emit_locked(
+            inner,
+            Event::SessionNote {
+                session,
+                note: String::new(),
+            },
+        );
+    }
 }
 
 /// 重啟當下這個 session 是否該自動接續：正在跑回合、有原生對話 id、該 agent 額度沒滿，
