@@ -101,6 +101,7 @@ pub fn parse_tool_call_questions(session: &str, name: &str, input_json: &str) ->
             let multi_select = item
                 .get("multiple")
                 .or_else(|| item.get("multi_select"))
+                .or_else(|| item.get("multiSelect"))
                 .or_else(|| item.get("is_multi_select"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
@@ -138,6 +139,7 @@ pub fn parse_tool_call_questions(session: &str, name: &str, input_json: &str) ->
         let options = val.get("options").map(parse_options).unwrap_or_default();
         let multi_select = val
             .get("multi_select")
+            .or_else(|| val.get("multiSelect"))
             .or_else(|| val.get("multiple"))
             .or_else(|| val.get("is_multi_select"))
             .and_then(|v| v.as_bool())
@@ -443,6 +445,21 @@ mod tests {
         assert_eq!(list[1].header.as_deref(), Some("Cache"));
         assert_eq!(list[1].question, "Choose cache");
         assert!(list[1].multi_select);
+    }
+
+    #[test]
+    fn parse_claude_camel_case_multi_select() {
+        let json = r#"{
+            "questions": [{
+                "question": "Choose features",
+                "header": "Features",
+                "multiSelect": true,
+                "options": ["Auth", "Search"]
+            }]
+        }"#;
+        let q = parse_tool_call_question("ses_1", "AskUserQuestion", json).expect("parse claude");
+        assert!(q.multi_select);
+        assert_eq!(q.options.len(), 2);
     }
 
     #[test]

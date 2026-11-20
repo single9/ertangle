@@ -1535,6 +1535,16 @@ pub(crate) fn ask_user(
             });
             return d;
         }
+        // Question tools already prompt the user through the question UI. Approving the
+        // tool call here prevents a duplicate permission prompt that would stall the turn.
+        if ertangle_adapter::question::is_question_tool(&p.title) {
+            shared.emit(Event::PermissionResolved {
+                session: sid,
+                req: p.req,
+                decision: Decision::Allow,
+            });
+            return Decision::Allow;
+        }
     }
     let (tx, rx) = std::sync::mpsc::channel();
     lock(&shared.inner)
