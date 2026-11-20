@@ -16,7 +16,9 @@
 use crate::stream::StreamBuf;
 use crate::{AgentControl, AgentEvent, SessionSpec};
 use anyhow::{anyhow, bail, Context, Result};
-use ertangle_core::{new_id, Cost, Decision, PermissionRequest, SessionStatus};
+use ertangle_core::{
+    new_id, Cost, Decision, PermissionRequest, QuestionOption, SessionStatus, UserQuestion,
+};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -39,6 +41,24 @@ struct PendingQuestion {
     multi_select: bool,
     total: usize,
     answers: ElicitationAnswers,
+}
+
+/// Key `parse_acp_elicitations` gives to a form-less prompt (e.g. an MCP tool-call approval).
+const CONFIRM_KEY: &str = "answer";
+const CONFIRM_ALLOW: &str = "Allow";
+const CONFIRM_DENY: &str = "Deny";
+
+/// A form-less elicitation is a plain confirmation: offer Allow / Deny instead of
+/// making the user type a free-form answer.
+fn add_confirm_options(list: &mut [(UserQuestion, String)]) {
+    for (q, key) in list.iter_mut() {
+        if key == CONFIRM_KEY && q.options.is_empty() && !q.multi_select {
+            q.options = vec![
+                QuestionOption::plain(CONFIRM_ALLOW),
+                QuestionOption::plain(CONFIRM_DENY),
+            ];
+        }
+    }
 }
 
 /// Builds elicitation form content that conforms to the schema.
@@ -186,7 +206,8 @@ impl Conn {
         if method == "mcpServer/elicitation/request"
             && (params.get("requestedSchema").is_some() || params.get("options").is_some())
         {
-            let list = crate::question::parse_acp_elicitations(&self.session_id, params);
+            let mut list = crate::question::parse_acp_elicitations(&self.session_id, params);
+            add_confirm_options(&mut list);
             if !list.is_empty() {
                 let id = msg.get("id").cloned().unwrap_or(Value::Null);
                 let total = list.len();
@@ -668,7 +689,8 @@ impl AgentControl for CodexControl {
             bail!("{}", tr!("未知的問題請求：{id}", id = id));
         };
 
-        if answers.is_empty() {
+        let denied = q_key == CONFIRM_KEY && answers == [CONFIRM_DENY];
+        if answers.is_empty() || denied {
             let mut q_map = self
                 .conn
                 .questions
@@ -1056,6 +1078,33 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn formless_elicitation_gets_allow_deny_options() {
+        let params = json!({ "message": "Allow ertangle_send?", "requestedSchema": { "type": "object", "properties": {} } });
+        let mut list = crate::question::parse_acp_elicitations("ses", &params);
+        add_confirm_options(&mut list);
+        let labels: Vec<_> = list[0].0.options.iter().map(|o| o.label.as_str()).collect();
+        assert_eq!(labels, ["Allow", "Deny"]);
+    }
+
+    #[test]
+    fn real_form_fields_keep_their_own_options() {
+        let params =
+            json!({ "requestedSchema": { "properties": { "env": { "enum": ["a", "b"] } } } });
+        let mut list = crate::question::parse_acp_elicitations("ses", &params);
+        add_confirm_options(&mut list);
+        let labels: Vec<_> = list[0].0.options.iter().map(|o| o.label.as_str()).collect();
+        assert_eq!(labels, ["a", "b"]);
+        let params =
+            json!({ "requestedSchema": { "properties": { "name": { "type": "string" } } } });
+        let mut list = crate::question::parse_acp_elicitations("ses", &params);
+        add_confirm_options(&mut list);
+        assert!(
+            list[0].0.options.is_empty(),
+            "free-text field must stay free-text"
+        );
+    }
     use super::*;
 
     #[test]
