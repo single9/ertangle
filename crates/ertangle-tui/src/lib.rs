@@ -14,6 +14,9 @@ mod clipboard;
 mod commands;
 mod diff;
 mod draw;
+// T76: not wired into the UI until the final integration step.
+#[allow(dead_code, unused_imports)]
+mod flow;
 mod help;
 mod history;
 mod input;
