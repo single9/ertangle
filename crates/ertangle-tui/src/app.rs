@@ -68,6 +68,8 @@ pub(crate) enum CenterView {
     Tasks,
     /// 一次顯示最多 4 個 session 的迷你逐字稿。
     Grid,
+    /// T76：session 流程儀表板 (節點板與訊息邊)。
+    Flow,
 }
 
 /// 主區版面模式。
@@ -318,6 +320,10 @@ pub(crate) struct App {
     pub(crate) notify: crate::notify::Notifier,
     /// 任務視圖：游標 (`tasks::visible_task_ids` 的索引)與清單捲動起點。
     pub(crate) task_cursor: usize,
+    /// T76 Flow 視圖：節點板游標 (`FlowModel::nodes` 的索引)。
+    pub(crate) flow_cursor: usize,
+    /// T76：離開 Flow 時要回到的視圖。
+    pub(crate) flow_return: CenterView,
     pub(crate) task_offset: usize,
     /// 最近一次繪製時任務清單的區域，以及每個可見列對應的任務索引 (供滑鼠)。
     pub(crate) tasks_area: Rect,
@@ -455,6 +461,8 @@ impl App {
             tab_areas: Vec::new(),
             notify: crate::notify::Notifier::from_cfg(&cfg.tui),
             task_cursor: 0,
+            flow_cursor: 0,
+            flow_return: CenterView::Transcript,
             task_offset: 0,
             tasks_area: Rect::default(),
             task_rows: Vec::new(),
@@ -1062,7 +1070,7 @@ impl App {
     pub(crate) fn enter_opens_input(&self) -> bool {
         !matches!(
             self.view,
-            CenterView::Diff | CenterView::Tasks | CenterView::Grid
+            CenterView::Diff | CenterView::Tasks | CenterView::Grid | CenterView::Flow
         )
     }
 
@@ -1174,7 +1182,7 @@ pub(crate) fn main_pane_text(app: &App) -> String {
             .collect::<Vec<_>>()
             .join("\n"),
         CenterView::Tasks => crate::tasks::tasks_text(app),
-        CenterView::Grid => String::new(),
+        CenterView::Grid | CenterView::Flow => String::new(),
     }
 }
 
@@ -1484,6 +1492,17 @@ pub(crate) fn project_color(root: &str) -> ratatui::style::Color {
 
 /// 切換「只看本專案／全部專案」。
 /// Expands or collapses the "ended" group of the session sidebar (`None` toggles).
+/// Toggles the Flow view, remembering the view to return to (T76).
+pub(crate) fn toggle_flow(app: &mut App) {
+    app.selection = None;
+    if app.view == CenterView::Flow {
+        app.view = app.flow_return;
+    } else {
+        app.flow_return = app.view;
+        app.view = CenterView::Flow;
+    }
+}
+
 pub(crate) fn toggle_ended(app: &mut App, show: Option<bool>) {
     // Keep the selection on the same session when rows appear/disappear.
     let keep = app.selected_id();

@@ -159,6 +159,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             (":find", tr_noop!("搜尋逐字稿或 diff，如 :find error (同 f)")),
             (":task :broadcast", tr_noop!("新增任務／廣播訊息")),
             (
+                ":flow (F)",
+                tr_noop!("流程儀表板：session 節點、未讀與訊息流向；j/k 選取，Enter 開逐字稿，Esc 返回"),
+            ),
+            (
                 ":tasks :task-status",
                 tr_noop!("任務視圖／改選取任務的狀態 (todo doing blocked review done)"),
             ),

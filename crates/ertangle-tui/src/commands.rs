@@ -334,6 +334,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("bus", ertangle_core::tr_noop!("顯示／隱藏 Bus 浮層")),
     ("task", ertangle_core::tr_noop!("<標題>  新增任務")),
     ("tasks", ertangle_core::tr_noop!("任務視圖：依狀態分組，Enter 跳到負責人")),
+    ("flow", ertangle_core::tr_noop!("流程儀表板：session 節點與訊息流向 (同 F)")),
     (
         "task-status",
         ertangle_core::tr_noop!("<todo|doing|blocked|review|done>  改任務視圖選取任務的狀態"),
@@ -634,6 +635,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             app.view = CenterView::Tasks;
             app.selection = None;
         }
+        "flow" => crate::app::toggle_flow(app),
         "task-status" => crate::tasks::set_selected_status(app, writer, rest)?,
         "thoughts" | "think" => toggle_thoughts(app),
         "tools" => toggle_tools(app),
