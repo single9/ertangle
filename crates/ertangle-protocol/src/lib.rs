@@ -636,6 +636,25 @@ mod tests {
     }
 
     #[test]
+    fn web_answer_question_wire_shape() {
+        let req: Request = decode_line(
+            r#"{"op":"answer_question","session":"ses_1","id":"qst_1","answers":["Option A"]}"#,
+        )
+        .unwrap();
+        let Request::AnswerQuestion {
+            session,
+            id,
+            answers,
+        } = req
+        else {
+            panic!("expected AnswerQuestion")
+        };
+        assert_eq!(session, "ses_1");
+        assert_eq!(id, "qst_1");
+        assert_eq!(answers, vec!["Option A"]);
+    }
+
+    #[test]
     fn question_protocol_roundtrip() {
         let req = Request::AnswerQuestion {
             session: "ses_1".into(),

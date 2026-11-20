@@ -1510,11 +1510,11 @@
         <!-- 待核准置頂橫幅 -->
         <div id="urgent-approval-banner" class="urgent-banner" style="display:none;">
           <div class="urgent-title">
-            <span>待核准操作 (Waiting Approval)</span>
+            <span id="urgent-title-label">待核准操作 (Waiting Approval)</span>
             <span id="urgent-session-id" style="font-family:var(--font-mono); font-size:11px;"></span>
           </div>
           <div id="urgent-detail" class="urgent-desc"></div>
-          <div class="btn-row">
+          <div id="urgent-action-row" class="btn-row">
             <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
             <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
             <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
@@ -2080,6 +2080,7 @@
       sessions: {},
       tasks: {},
       pending_permissions: {},
+      pending_questions: {},
       transcripts: {},
       quotas: {},
       queues: {},
@@ -2089,6 +2090,7 @@
     let currentTab = "overview";
     let daemonEpoch = null;
     let pendingApprovalReq = null;
+    let pendingQuestionId = null;
     let queueMode = false;
     let taskFilter = "all";
     let projectScope = "all";
@@ -3174,23 +3176,50 @@
         }
       }
 
-      // 2. 審查橫幅
-      const pendingKeys = Object.keys(state.pending_permissions || {}).sort((a, b) => {
-        const sa = inScope(state.sessions[state.pending_permissions[a].session]) ? 0 : 1;
-        const sb = inScope(state.sessions[state.pending_permissions[b].session]) ? 0 : 1;
+      // 2. Approval and question banners.
+      const inScopeFirst = (map) => Object.keys(map || {}).sort((a, b) => {
+        const sa = inScope(state.sessions[map[a].session]) ? 0 : 1;
+        const sb = inScope(state.sessions[map[b].session]) ? 0 : 1;
         return sa - sb;
       });
+      const questionKeys = inScopeFirst(state.pending_questions);
+      const pendingKeys = inScopeFirst(state.pending_permissions);
+      const activeQuestion = questionKeys.length ? state.pending_questions[questionKeys[0]] : null;
+      pendingQuestionId = activeQuestion ? activeQuestion.id : null;
       const urgentBanner = document.getElementById("urgent-approval-banner");
       const navBadge = document.getElementById("nav-review-badge");
       const reviewSlot = document.getElementById("review-approval-slot");
+      const urgentTitle = document.getElementById("urgent-title-label");
+      const urgentActionRow = document.getElementById("urgent-action-row");
+      const permissionActions = `
+            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
+            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
+            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>`;
 
-      if (pendingKeys.length > 0) {
+      if (activeQuestion) {
+        pendingApprovalReq = null;
+        urgentBanner.style.display = "block";
+        navBadge.style.display = "block";
+        urgentTitle.innerText = "待回答問題 (Waiting Question)";
+        document.getElementById("urgent-session-id").innerText = activeQuestion.session;
+        document.getElementById("urgent-detail").innerText = `${activeQuestion.header || "提問"}：${activeQuestion.question}`;
+        urgentActionRow.innerHTML = questionAnswerHtml(activeQuestion, "banner");
+        reviewSlot.innerHTML = `
+          <div style="background:#221804; border:1px solid var(--yellow); padding:10px 12px; border-radius:8px;">
+            <div style="color:var(--yellow); font-weight:600; margin-bottom:4px;">${escapeHtml(activeQuestion.header || "提問")}</div>
+            <div style="font-family:var(--font-mono); font-size:12px; margin-bottom:8px;">${escapeHtml(activeQuestion.question)}</div>
+            ${questionAnswerHtml(activeQuestion, "review")}
+          </div>
+        `;
+      } else if (pendingKeys.length > 0) {
         const req = state.pending_permissions[pendingKeys[0]];
         pendingApprovalReq = req;
         urgentBanner.style.display = "block";
         navBadge.style.display = "block";
+        urgentTitle.innerText = "待核准操作 (Waiting Approval)";
         document.getElementById("urgent-session-id").innerText = req.session;
         document.getElementById("urgent-detail").innerText = `${req.title}：${req.detail}`;
+        urgentActionRow.innerHTML = permissionActions;
 
         reviewSlot.innerHTML = `
           <div style="background:#221804; border:1px solid var(--yellow); padding:10px 12px; border-radius:8px;">
@@ -3207,7 +3236,9 @@
         urgentBanner.style.display = "none";
         navBadge.style.display = "none";
         pendingApprovalReq = null;
-        reviewSlot.innerHTML = `<span style="color:var(--text-dim);">目前無等待核准的操作。</span>`;
+        urgentTitle.innerText = "待核准操作 (Waiting Approval)";
+        urgentActionRow.innerHTML = permissionActions;
+        reviewSlot.innerHTML = `<span style="color:var(--text-dim);">目前無等待核准或回答的操作。</span>`;
       }
 
       // 3. 逐字稿重繪
@@ -3667,7 +3698,8 @@
       const sc = curScope();
       const pe = getAllProjects().find(x => x.root === sc);
       const tasks = Object.values(state.tasks || {}).filter(t => inScope(state.sessions[t.assignee]) || inScope(state.sessions[t.created_by]));
-      const pend = Object.values(state.pending_permissions || {}).filter(r => inScope(state.sessions[r.session])).length;
+      const pend = Object.values(state.pending_permissions || {}).filter(r => inScope(state.sessions[r.session])).length
+        + Object.values(state.pending_questions || {}).filter(q => inScope(state.sessions[q.session])).length;
       document.getElementById("ov-summary").innerHTML =
         `<b>${escapeHtml(sc === "all" ? "全部專案" : (pe ? pe.name : "專案"))}</b>` +
         `<span>${ids.length} 個 Session</span><span>存活 ${ids.filter(i => isLive(state.sessions[i])).length}</span>` +
@@ -3743,6 +3775,41 @@
         prompt: null
       }));
       showToast("正在接續原對話…");
+    }
+
+    function questionAnswerHtml(q, scope) {
+      const optionInputs = (q.options || []).map((opt, i) => `
+        <label style="display:flex; gap:6px; align-items:center; margin:3px 0;">
+          <input type="${q.multi_select ? "checkbox" : "radio"}" name="qopt-${scope}-${q.id}" value="${escapeHtml(opt.label)}">
+          <span>${escapeHtml(opt.label)}${opt.description ? ` — ${escapeHtml(opt.description)}` : ""}</span>
+        </label>`).join("");
+      const customInput = q.custom
+        ? `<input id="qst-custom-${scope}" type="text" placeholder="自訂答案 (Other)" style="width:100%; margin:6px 0; padding:6px 8px; background:#111; color:var(--text); border:1px solid var(--border); border-radius:6px;">`
+        : "";
+      return `${optionInputs}${customInput}
+        <button class="btn-pill btn-allow" onclick="submitQuestionAnswer('${scope}')">送出答案</button>`;
+    }
+
+    function submitQuestionAnswer(scope) {
+      if (!pendingQuestionId || !ws) return;
+      const q = state.pending_questions[pendingQuestionId];
+      if (!q) return;
+      const chosen = Array.from(document.querySelectorAll(`input[name="qopt-${scope}-${q.id}"]:checked`))
+        .map(el => el.value);
+      const customEl = document.getElementById(`qst-custom-${scope}`);
+      const custom = customEl ? customEl.value.trim() : "";
+      const answers = chosen.length ? chosen : (custom ? [custom] : []);
+      if (!answers.length) {
+        showToast("請選擇選項或輸入自訂答案");
+        return;
+      }
+      ws.send(JSON.stringify({
+        op: "answer_question",
+        session: q.session,
+        id: q.id,
+        answers: answers
+      }));
+      showToast("已送出問題回答");
     }
 
     function submitPermission(decision) {
