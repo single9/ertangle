@@ -418,6 +418,23 @@ fn busy_session_shows_live_thinking_indicator() {
     );
 }
 
+#[test]
+fn live_thinking_indicator_does_not_overwrite_last_line_when_full() {
+    let mut lines: Vec<String> = (0..50).map(|i| format!("history line {i}")).collect();
+    lines.push("❯ my sent prompt message".into());
+    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let mut app = sample_app(&refs);
+    let text = render(&mut app);
+    assert!(
+        text.contains("my sent prompt message"),
+        "user prompt was overwritten by thinking indicator: {text}"
+    );
+    assert!(
+        squash(&text).contains("思考中"),
+        "thinking indicator is missing: {text}"
+    );
+}
+
 fn cache_lines(lines: Vec<Line<'static>>) -> MdCache {
     MdCache {
         session: "ses_test".into(),

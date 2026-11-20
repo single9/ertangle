@@ -1840,7 +1840,41 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.transcript_area = area;
     app.transcript_inner_w = inner_w;
 
-    let max_off = total.saturating_sub(viewport);
+    // Always show an animated indicator while the selected session is busy with no tool
+    // in flight, even before the first token arrives. Rendering here keeps the markdown
+    // cache deterministic for unit tests.
+    let live_text = selected
+        .as_ref()
+        .and_then(|id| {
+            app.state
+                .sessions
+                .get(id)
+                .filter(|s| s.status == SessionStatus::Busy && s.active_tools.is_empty())
+                .map(|_| id)
+        })
+        .filter(|_| app.transcript_scroll.is_none())
+        .map(|id| {
+            let preview = app
+                .state
+                .transcripts
+                .get(id)
+                .and_then(|buf| buf.back())
+                .and_then(|line| crate::app::strip_thought_prefix(line))
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.chars().take(60).collect::<String>());
+            match preview {
+                Some(p) => format!("{} {} · {}", spinner_frame(), tr!("思考中"), p),
+                None => format!("{} {}", spinner_frame(), tr!("思考中...")),
+            }
+        });
+
+    let content_viewport = if live_text.is_some() {
+        viewport.saturating_sub(1)
+    } else {
+        viewport
+    };
+    let max_off = total.saturating_sub(content_viewport);
     let off = match app.transcript_scroll {
         Some(o) => {
             let o = o.min(max_off);
@@ -1939,7 +1973,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let selection = app.selection;
     let mut visible: Vec<Line> = Vec::new();
     if let Some(c) = &app.md_cache {
-        for (idx, line) in c.lines.iter().enumerate().skip(off).take(viewport) {
+        for (idx, line) in c.lines.iter().enumerate().skip(off).take(content_viewport) {
             let line = match selection.and_then(|sel| selection_columns(sel, idx, inner_w)) {
                 Some((from, to)) => highlight_columns(line, from, to),
                 None => line.clone(),
@@ -1958,46 +1992,14 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         ));
     }
 
-    // Always show an animated indicator while the selected session is busy with no tool
-    // in flight, even before the first token arrives. Rendering here keeps the markdown
-    // cache deterministic for unit tests.
-    let live_text = selected
-        .as_ref()
-        .and_then(|id| {
-            app.state
-                .sessions
-                .get(id)
-                .filter(|s| s.status == SessionStatus::Busy && s.active_tools.is_empty())
-                .map(|_| id)
-        })
-        .filter(|_| app.transcript_scroll.is_none())
-        .map(|id| {
-            let preview = app
-                .state
-                .transcripts
-                .get(id)
-                .and_then(|buf| buf.back())
-                .and_then(|line| crate::app::strip_thought_prefix(line))
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(|s| s.chars().take(60).collect::<String>());
-            match preview {
-                Some(p) => format!("{} {} · {}", spinner_frame(), tr!("思考中"), p),
-                None => format!("{} {}", spinner_frame(), tr!("思考中...")),
-            }
-        });
     if let Some(text) = live_text {
-        let live = Line::styled(
-            text,
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::ITALIC),
-        );
-        if visible.len() == viewport {
-            if let Some(last) = visible.last_mut() {
-                *last = live;
-            }
-        } else {
+        if visible.len() < viewport {
+            let live = Line::styled(
+                text,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::ITALIC),
+            );
             visible.push(live);
         }
     }
@@ -2011,7 +2013,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
     f.render_widget(para, area);
     app.transcript_offset = off;
 
-    if total > viewport {
+    if total > content_viewport {
         let mut sb_state = ScrollbarState::new(max_off).position(off);
         let sb_area = Rect {
             x: area.x + area.width.saturating_sub(1),

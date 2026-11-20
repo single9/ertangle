@@ -75,7 +75,7 @@ install -m 755 ertangle-linux-x86_64 ~/.local/bin/ertangle
 cargo install --git https://github.com/single9/ertangle
 
 # 指定版本
-cargo install --git https://github.com/single9/ertangle --tag v0.3.0
+cargo install --git https://github.com/single9/ertangle --tag v1.0.0
 ```
 
 **方式三：從原始碼建置**
@@ -206,7 +206,7 @@ ertangle
 
 ### 2. 跨 Agent 協作匯流排與任務看板 (MCP & Bus)
 
-Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdio MCP 伺服器：
+Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdio MCP 伺服器：
 
 | 類別 | 工具名稱 | 功能 |
 | --- | --- | --- |
@@ -214,6 +214,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | **訊息傳遞** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | 發送訊息、非同步讀取收件匣、阻塞等待新訊息、同步問答 |
 | **任務看板** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | 建立協作任務、指定負責人、支援 `depends_on` 前置相依性 |
 | **衍生與產出** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | 派生子 Agent、分享產出物、廣播進度狀態 |
+| **互動與核准** | `ertangle_question`, `ertangle_approve` | 提出互動式問題 (單選／複選／文字自填)、工具使用權限核准轉發 |
 | **Git 整合** | `ertangle_diff`, `ertangle_merge` | 查詢自身分支與主分支 diff、請求合併 |
 
 - **空閒提醒 (Unread Nudge on Idle)**：
@@ -287,8 +288,11 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 - **零相依原生 HTTP / WebSocket**：
   - Daemon 內部以純 Rust 同步網路實作，不引入 Node.js 或額外 async 框架，維持單一執行檔與極低記憶體開銷。
 - **App 級大拇指原生設計**：
-  - **待審核懸浮橫幅**：Agent 遇到工具執行或危險指令等待核准時，頂部即時彈出醒目核准卡片，單鍵 Allow / Always / Deny。
-  - **對話回合 (Turn)**：將逐字稿自動重構為結構化對話回合，收攏正文、摺疊 Agent 內部思考過程 (`💭`) 與工具執行記錄。
+  - **待審核懸浮橫幅與互動問答**：Agent 遇到工具執行或危險指令等待核准時，頂部即時彈出醒目核准卡片，單鍵 Allow / Always / Deny；支援互動式問題直接在卡片上點選或輸入文字回覆。
+  - **對話回合 (Turn)**：將逐字稿自動重構為結構化對話回合，收攏正文、摺疊 Agent 內部思考過程 (`⋯`) 與工具執行記錄。
+  - **即時思考動畫**：思考中的對話區塊具備動態呼吸指示器 (`⋯ 思考中`) 與最新思考片段預覽，完全無 emoji。
+  - **斜線命令面板與 Shell 執行**：輸入 `/` 即可喚出命令選單；輸入 `!<命令>` 或 `/sh <命令>` 可直接在該 session 工作目錄執行指令。
+  - **已結束 Session 收合與封存**：自動將已結束的對話摺疊至側欄底部，提供「清理已結束」按鈕與抽屜式封存列表隨時調閱。
   - **對話 Markdown 與程式碼區塊**：完整渲染標題、清單、引言，程式碼區塊附帶一鍵「複製」按鈕。
   - **文字與圖片檔案即時預覽**：點擊對話中的檔案膠囊，直接在面板中即時預覽文字與程式碼內容 (含行號跳轉與高亮)，或直接檢視渲染圖片。
   - **即時 Diff 審查與一鍵 Merge**：在手機端審視 Git 變更，確認無誤後單鍵完成合併。
@@ -314,6 +318,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | --- | --- |
 | `Space` | 開啟 **Which-key 選單** (`s` session、`g` git、`v` 檢視、`m` 訊息、`?` 說明) |
 | `:` 或 `/` | 開啟**命令列** (支援 `Tab` 自動補齊) |
+| `!` | 進入 **Shell 命令模式** (在選取 Session 的工作目錄直接執行命令 `!<命令>`) |
 | `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；支援 `Ctrl-R` 切換角色、`Ctrl-W` 切換 Worktree、`Ctrl-F` 切換 Effort) |
 | `i` / `Enter` | 聚焦輸入框，對選取的 Session 發送 prompt (亦支援 `@peer` 或 `#channel` 傳訊) |
 | `j` / `k` 或 `↑` / `↓` | 移動選取 Session；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
@@ -328,7 +333,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 | 按鍵 | 動作 |
 | --- | --- |
 | `t` | 切換逐字稿顯示模式：Markdown 渲染 ↔ 原始文字 |
-| `T` (或 `:thoughts`) | 顯示 / 隱藏 Agent 的思考行 (`💭`，預設隱藏以加速渲染) |
+| `T` (或 `:thoughts`) | 顯示 / 隱藏 Agent 的思考行 (⋯，預設摺疊為摘要以加速渲染並呈現動態動畫) |
 | `O` (或 `:tools`) | 展開 / 摺疊工具呼叫紀錄 (連續成功呼叫預設摺疊) |
 | `f` (或 `:find <文字>`) | **即時搜尋**逐字稿或 Diff (邊打邊找，`Enter` / `↓` 下一個、`↑` 上一個、`Esc` 退出) |
 | 滑鼠拖曳 | 在逐字稿中央區塊拖曳選取，放開即透過 **OSC 52** 複製至系統剪貼簿 |
@@ -342,6 +347,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 | 按鍵 / 語法 | 功能說明 |
 | --- | --- |
+| `!<命令>` | **在 Session 工作目錄執行 Shell 命令** (不經過 agent，例如 `!cargo test`；亦可在 Normal mode 按 `!` 直達) |
 | `@檔名` | **檔案附件模糊搜尋**：輸入 `@` 片段，自動在專案內搜尋檔案並補齊，送出時自動內嵌文字 (上限 256 KB) 或圖片 (上限 5 MB) |
 | `Ctrl-V` | 貼上系統剪貼簿內的圖片 (Linux 需安裝 `wl-paste` 或 `xclip`) |
 | 拖曳檔案 | 直接將檔案從檔案總管拖進終端機，自動轉換為 `@路徑` 語法 |
@@ -381,12 +387,15 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 - `:spawn [--role <角色>] <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn --role coordinator claude:opus "規劃架構"`)
 - `:playbook [<名稱> <目標需求>]` — 啟動多 Agent 團隊範本 (如 `:playbook tdd-pair 完成登入功能`)；不帶參數開選擇器 (也可按 `Space s b`)
 - `:export [路徑]` — 匯出目前 Session (含子 Session 樹)為 Markdown 至 `.ertangle/exports/<label>-<timestamp>.md`，並透過 OSC 52 複製到剪貼簿
+- `:exec <命令>` (或 `:sh`) — 在選取 Session 的工作目錄直接執行 shell 命令 (不經過 agent，亦可輸入 `!<命令>`)
 - `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
 - `:resume [prompt]` — 接續已結束或中斷的 Session 對話
+- `:restart` — 重新執行 Daemon 並自動接續正在運算中的 Session
 - `:merge [--dry-run] [--resolve] [--strategy merge|squash|rebase]` — 合併選取 Session 的 Worktree 回主分支 (亦可用 `--squash` / `--rebase` 簡寫，支援自動委派解衝突)
 - `:discard` / `:discard!` — (Diff 視圖) 退回游標所在的 hunk 或整個檔案變更
 - `:queue` / `:unqueue` / `:queue clear` — 檢視、取出或清空待送佇列
 - `:rm` / `:clean` — 移除已結束的 Session / 清除所有已結束項目
+- `:prune` — 封存所有已合併且已結束的 Worker Session，並清理其 Git Worktree
 - `:budget <金額>` — 查看或調高當前 Session 的美元預算上限
 - `:quota` — 彈出額度面板：已安裝 agent 的各視窗用量 (progress bar) 與重置倒數
 - `:task <標題>` / `:tasks` — 建立新任務 / 切換到任務看板視圖
@@ -408,10 +417,13 @@ ertangle sessions [--json]                         # 列出所有 session (別�
 ertangle whoami [--session <id>] [--json]          # 查看當前 session 資訊
 ertangle spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
 ertangle resume <session-or-label> ["接續 prompt"] # 接續已中斷的 session
+ertangle restart                                   # 重啟 Daemon 並自動接續執行中的 session
+ertangle exec <session> <command...>               # 在指定 session 工作目錄執行命令 (別名 ertangle sh)
 ertangle handoff <session-or-label> --to <agent> [--note "交接補充"]
 ertangle sleep <session> ; ertangle wake <session>  # 暫停 / 喚醒 Agent 處理程序
 ertangle cancel <session> ; ertangle kill <session> # 中斷回合 / 強制中止處理程序
 ertangle rm <session> [--force]                    # 移除已結束的 session 紀錄
+ertangle prune [--project <path>]                  # 封存已合併且已結束的 worker 並清理 worktree
 
 # 多 Agent 團隊範本與協作報告
 ertangle playbook <name> "<goal>"                  # 展開內建或自訂 playbook，一次啟動整個團隊

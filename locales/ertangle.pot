@@ -3098,19 +3098,19 @@ msgid " Sessions · 全部 "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " (尚無 session：按 n 建立) "
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
 msgid "思考中"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "思考中..."
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " (尚無 session：按 n 建立) "
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs

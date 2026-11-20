@@ -75,7 +75,7 @@ install -m 755 ertangle-linux-x86_64 ~/.local/bin/ertangle
 cargo install --git https://github.com/single9/ertangle
 
 # Pin a specific version
-cargo install --git https://github.com/single9/ertangle --tag v0.3.0
+cargo install --git https://github.com/single9/ertangle --tag v1.0.0
 ```
 
 **Option 3: Build from source**
@@ -204,7 +204,7 @@ What you see in the TUI:
 
 ### 2. Multi-Agent Bus & Task Board (MCP)
 
-Every structured agent session is automatically injected with a stdio MCP server containing **14 collaboration tools**:
+Every structured agent session is automatically injected with a stdio MCP server containing **16 collaboration tools**:
 
 | Category | Tool Name | Description |
 | --- | --- | --- |
@@ -212,6 +212,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 | **Messaging** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | Send direct/broadcast messages, non-blocking inbox reads, blocking wait, synchronous Q&A |
 | **Task Board** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | Create tasks, assign owners, specify `depends_on` prerequisite dependencies |
 | **Spawning & Output** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | Spawn sub-agents, share artifacts (files, PR links), broadcast status summaries |
+| **Interaction & Approval** | `ertangle_question`, `ertangle_approve` | Ask interactive single/multi-select questions, forward tool permission approvals |
 | **Git Operations** | `ertangle_diff`, `ertangle_merge` | Query branch diff vs. main branch, request worktree merge |
 
 - **Unread Nudge on Idle**:
@@ -285,8 +286,11 @@ Every structured agent session is automatically injected with a stdio MCP server
 - **Zero-Dependency Native HTTP / WebSocket**:
   - Built directly into the single binary with pure Rust standard networking—no Node.js, npm, or heavy async dependencies required.
 - **Thumb-Friendly Native Mobile PWA**:
-  - **Approval Banner**: Pops up immediately when agents request tool execution permissions, offering one-tap Allow / Always / Deny.
-  - **Conversational Turns**: Restructures raw transcripts into clean turns, grouping messages, thought folds (`💭`), and tool call results.
+  - **Approval Banner & Interactive Questions**: Pops up immediately when agents request tool execution permissions (Allow / Always / Deny) or ask interactive questions (single/multi-select options or freeform text).
+  - **Conversational Turns**: Restructures raw transcripts into clean turns, grouping messages, thought folds (`⋯`), and tool call results.
+  - **Live Thinking Animation**: Active reasoning blocks display an animated pulse indicator (`⋯ 思考中`) with the latest thought preview, completely emoji-free.
+  - **Slash Command Palette & Shell Execution**: Type `/` to open the command palette; type `!<cmd>` or `/sh <cmd>` to run shell commands in the session's workspace.
+  - **Folded Ended Sessions & Pruning**: Automatically folds ended sessions at the bottom of the sidebar, with a "Prune Ended" button and archived session drawer.
   - **Full Markdown & Code Copy**: Clean typography for headers, quotes, lists, and formatted code blocks with a one-tap copy button.
   - **Text & Image File Previews**: Tap interactive file pills to preview text/code files (with line jumping and highlights) or view images directly.
   - **Git Diff Review & One-Tap Merge**: Review branch diffs and merge back to main directly from your phone.
@@ -312,6 +316,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 | --- | --- |
 | `Space` | Open **Which-key menu** (`s` session, `g` git, `v` view, `m` message, `?` help) |
 | `:` or `/` | Open **Command-line** (supports `Tab` completion) |
+| `!` | Enter **Shell Command mode** (run shell commands directly in the selected session's workspace `!<cmd>`) |
 | `n` | Create new session (select Agent, Model, input Prompt; supports `Ctrl-R` for Role, `Ctrl-W` for Worktree, `Ctrl-F` for Effort) |
 | `i` / `Enter` | Focus input box to send prompt (supports `@peer` and `#channel` routing) |
 | `j` / `k` or `↑` / `↓` | Select previous/next session; move line cursor in Diff; select task in Tasks view |
@@ -326,7 +331,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 | Key | Action |
 | --- | --- |
 | `t` | Toggle transcript mode: Markdown rendering ↔ Raw text |
-| `T` (or `:thoughts`) | Toggle agent thought lines (`💭`, hidden by default for speed) |
+| `T` (or `:thoughts`) | Toggle agent thought lines (`⋯`, folded by default with animated live spinner) |
 | `O` (or `:tools`) | Fold / unfold tool calls (consecutive successful calls are folded by default) |
 | `f` (or `:find <text>`) | **Incremental search** in transcript or diff (`Enter`/`↓` next, `↑` previous, `Esc` exit) |
 | Mouse Drag | Select text in center pane; release to copy via **OSC 52** |
@@ -340,6 +345,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 
 | Key / Syntax | Description |
 | --- | --- |
+| `!<cmd>` | **Execute Shell Command in Session Workspace** (runs directly without agent intervention, e.g. `!cargo test`; or press `!` in Normal mode) |
 | `@filename` | **Fuzzy file attachment**: Type `@` to fuzzy search repo files; auto-attaches text (up to 256 KB) or images (up to 5 MB) |
 | `Ctrl-V` | Paste image from system clipboard (requires `wl-paste` or `xclip` on Linux) |
 | Drag & Drop | Drag files from file manager into terminal to auto-insert `@path` |
@@ -379,11 +385,15 @@ Press `:` to open the command line with `Tab` completion:
 - `:spawn [--role <role>] <agent>[:model] <prompt>` — Spawn a new agent session (e.g., `:spawn --role coordinator claude:opus "plan architecture"`)
 - `:playbook [<name> <goal>]` — Launch a multi-agent team playbook (e.g., `:playbook tdd-pair implement login`); no args opens the picker (also `Space s b`)
 - `:export [path]` — Export the selected session (and its sub-session tree) as Markdown to `.ertangle/exports/<label>-<timestamp>.md` and copy it via OSC 52
+- `:exec <cmd>` (or `:sh`) — Execute a shell command in the session workspace directly (bypass agent; or type `!<cmd>`)
 - `:handoff <agent> [note]` — Hand over current session to another agent
 - `:resume [prompt]` — Reconnect to an exited session and continue dialogue
+- `:restart` — Re-execute daemon and automatically resume in-flight sessions
+- `:merge [--dry-run] [--resolve] [--strategy merge|squash|rebase]` — Merge session branch back to main
 - `:discard` / `:discard!` — (Diff view) Revert the hunk or entire file at cursor
 - `:queue` / `:unqueue` / `:queue clear` — View, pop, or clear prompt queue
 - `:rm` / `:clean` — Remove an exited session / purge all finished sessions
+- `:prune` — Archive merged and ended worker sessions and remove their worktrees
 - `:budget <amount>` — View or increase session USD budget cap
 - `:quota` — Display rate limit windows and reset countdowns for all agent accounts
 - `:task <title>` / `:tasks` — Create task / switch to Tasks board view
@@ -405,10 +415,13 @@ ertangle sessions [--json]                         # List all sessions (alias: e
 ertangle whoami [--session <id>] [--json]          # Show current session metadata
 ertangle spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
 ertangle resume <session-or-label> ["prompt"]      # Resume an exited session
+ertangle restart                                   # Restart daemon and auto-resume in-flight sessions
+ertangle exec <session> <command...>               # Run shell command in session workspace (alias: ertangle sh)
 ertangle handoff <session-or-label> --to <agent> [--note "Handoff notes"]
 ertangle sleep <session> ; ertangle wake <session>  # Suspend / wake agent processes
 ertangle cancel <session> ; ertangle kill <session> # Interrupt turn / kill process
 ertangle rm <session> [--force]                    # Remove exited session record
+ertangle prune [--project <path>]                  # Archive merged & ended workers and clean worktrees
 
 # Multi-Agent Playbooks & Collaboration Reports
 ertangle playbook <name> "<goal>"                  # Launch a whole team from a built-in or custom playbook

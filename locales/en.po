@@ -3112,20 +3112,20 @@ msgid " Sessions · 全部 "
 msgstr " Sessions · all "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " (尚無 session：按 n 建立) "
-msgstr " (no sessions: press n to create one) "
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
-msgstr "Agent output appears here. Press i to type a prompt, n to create a session, g for the Diff view."
-
-#: crates/ertangle-tui/src/draw.rs
 msgid "思考中"
 msgstr "Thinking"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "思考中..."
 msgstr "Thinking..."
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " (尚無 session：按 n 建立) "
+msgstr " (no sessions: press n to create one) "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
+msgstr "Agent output appears here. Press i to type a prompt, n to create a session, g for the Diff view."
 
 #: crates/ertangle-tui/src/draw.rs
 msgid " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k 選行 · {{/}} hunk · (/) 檔案 · Enter 摺疊 · X 退回 · c 註解 · M 合併 "
