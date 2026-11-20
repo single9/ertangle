@@ -1,5 +1,6 @@
 /target
 /dist
+.ertangle/
 .termade/
 *.sock
 .fuse_hidden*

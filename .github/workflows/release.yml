@@ -31,10 +31,10 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { os: ubuntu-latest,    target: x86_64-unknown-linux-gnu,  asset: termade-linux-x86_64 }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, asset: termade-linux-arm64 }
-          - { os: macos-latest,     target: aarch64-apple-darwin,      asset: termade-macos-arm64 }
-          - { os: macos-15-intel,   target: x86_64-apple-darwin,       asset: termade-macos-x86_64 }
+          - { os: ubuntu-latest,    target: x86_64-unknown-linux-gnu,  asset: ertangle-linux-x86_64 }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, asset: ertangle-linux-arm64 }
+          - { os: macos-latest,     target: aarch64-apple-darwin,      asset: ertangle-macos-arm64 }
+          - { os: macos-15-intel,   target: x86_64-apple-darwin,       asset: ertangle-macos-x86_64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
       - name: 打包
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/termade dist/${{ matrix.asset }}
+          cp target/${{ matrix.target }}/release/ertangle dist/${{ matrix.asset }}
           tar -C dist -czf dist/${{ matrix.asset }}.tar.gz ${{ matrix.asset }}
           rm dist/${{ matrix.asset }}
           cd dist && (sha256sum ${{ matrix.asset }}.tar.gz 2>/dev/null || shasum -a 256 ${{ matrix.asset }}.tar.gz) > ${{ matrix.asset }}.tar.gz.sha256
@@ -67,21 +67,21 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: termade-macos-*
+          pattern: ertangle-macos-*
           path: in
           merge-multiple: true
       - name: 合併為 universal2
         run: |
           mkdir -p arm x86 dist
-          tar -xzf in/termade-macos-arm64.tar.gz -C arm
-          tar -xzf in/termade-macos-x86_64.tar.gz -C x86
-          lipo -create arm/termade-macos-arm64 x86/termade-macos-x86_64 -output termade-macos-universal
-          lipo -info termade-macos-universal
-          tar -czf dist/termade-macos-universal.tar.gz termade-macos-universal
-          cd dist && shasum -a 256 termade-macos-universal.tar.gz > termade-macos-universal.tar.gz.sha256
+          tar -xzf in/ertangle-macos-arm64.tar.gz -C arm
+          tar -xzf in/ertangle-macos-x86_64.tar.gz -C x86
+          lipo -create arm/ertangle-macos-arm64 x86/ertangle-macos-x86_64 -output ertangle-macos-universal
+          lipo -info ertangle-macos-universal
+          tar -czf dist/ertangle-macos-universal.tar.gz ertangle-macos-universal
+          cd dist && shasum -a 256 ertangle-macos-universal.tar.gz > ertangle-macos-universal.tar.gz.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: termade-macos-universal
+          name: ertangle-macos-universal
           path: dist/*
 
   publish:
