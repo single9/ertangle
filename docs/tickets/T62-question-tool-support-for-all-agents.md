@@ -2,7 +2,7 @@
 
 Priority: P1　Scope: `ertangle-protocol`, `ertangle-core`, `ertangle-daemon`, `ertangle-adapter`, `ertangle-tui`, web　Depends on: —
 
-Status: needs-triage
+Status: ready-for-agent
 
 ## Problem
 
