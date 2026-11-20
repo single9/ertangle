@@ -433,6 +433,42 @@ fn live_thinking_indicator_does_not_overwrite_last_line_when_full() {
         squash(&text).contains("思考中"),
         "thinking indicator is missing: {text}"
     );
+    let sq = squash(&text);
+    let prompt_pos = sq
+        .find("mysentpromptmessage")
+        .expect("user prompt in squashed text");
+    let thinking_pos = sq
+        .find("思考中")
+        .expect("thinking indicator in squashed text");
+    assert!(
+        prompt_pos < thinking_pos,
+        "thinking indicator should be below the prompt: prompt={prompt_pos}, thinking={thinking_pos}"
+    );
+}
+
+#[test]
+fn live_thinking_indicator_shows_thought_preview_below_prompt() {
+    let mut lines: Vec<String> = (0..50).map(|i| format!("history line {i}")).collect();
+    lines.push("❯ another user question".into());
+    lines.push("⋯ searching the code for details".into());
+    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let mut app = sample_app(&refs);
+    let text = render(&mut app);
+    let sq = squash(&text);
+    let prompt_pos = sq
+        .find("anotheruserquestion")
+        .expect("user prompt in squashed text");
+    let thinking_pos = sq
+        .find("思考中")
+        .expect("thinking indicator in squashed text");
+    assert!(
+        prompt_pos < thinking_pos,
+        "thinking indicator should be below the prompt: prompt={prompt_pos}, thinking={thinking_pos}"
+    );
+    assert!(
+        sq.contains("searchingthecode"),
+        "thought preview should appear in live indicator: {sq}"
+    );
 }
 
 fn cache_lines(lines: Vec<Line<'static>>) -> MdCache {
