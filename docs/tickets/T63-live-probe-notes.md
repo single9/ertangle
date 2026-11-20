@@ -88,12 +88,37 @@ The question disappeared from `pending_questions`, the transcript showed `✓ {"
 
 **Result: PASS for the web wire path.** The browser rendering itself was checked with `node --check`; a real browser click is still outstanding.
 
+## Probe 3 — Headless browser rendering and click
+
+A pending question from a separate OpenCode ACP session was opened in headless Chrome through the DevTools Protocol. The chat banner rendered as:
+
+```json
+{"display":"block","title":"待回答問題 (Waiting Question)","detail":"question：{}"}
+```
+
+The review panel and banner both exposed the question's custom text input and the `submitQuestionAnswer('banner')` button. Typing `Vue` and pressing the button called the web client's answer path without a JavaScript exception.
+
+**Result: PARTIAL.** The browser UI renders pending questions and the submit handler runs. The question did not clear because it came from an ACP adapter event rather than the MCP waiter; `ctl.resolve_question` failed for that id, so no `question_resolved` event was emitted. This is the ACP tool-call fallback gap listed below.
+
+## Probe 4 — ACP native `question` tool produces unusable question payloads
+
+Session `ses_c093f04f28e9` used OpenCode's native `question` tool instead of the MCP tool. The event log showed:
+
+- seq 93 `question_requested` with `question: "{}"`, `header: "question"`, `options: []`, created from a `session/update` tool call named `question` whose input was `{}`.
+- seq 95 another `question_requested` with `header: "UI Framework"`, `question: "Questions"`, `options: []`, created from an ACP `elicitation/create` schema.
+
+Both pending questions were unanswerable: no options, no meaningful question text, and answering them did not emit `question_resolved`.
+
+**Result: FAIL.** This is direct evidence for the ACP tool-call fallback and elicitation parsing items. The worker received these details during implementation.
+
 ## Coverage summary
 
 | Path | Probe | Status |
 | --- | --- | --- |
 | OpenCode ACP + `ertangle_question` MCP | Probe 1 | PASS |
 | Web WebSocket `answer_question` | Probe 2 | PASS (wire path) |
+| Web DOM rendering and submit handler | Probe 3 | PARTIAL (blocked by ACP fallback) |
+| OpenCode native `question` tool | Probe 4 | FAIL (pending worker fix) |
 | Claude native `AskUserQuestion` | — | Pending worker implementation |
 | Codex `item/tool/requestUserInput` | — | Pending worker implementation |
 | ACP raw `tool_call` fallback | — | Pending worker implementation |
