@@ -8,7 +8,7 @@ Status: ready-for-agent
 
 T62 landed the shared question model, protocol requests, daemon waiter, MCP fallback, adapter normalization, and a TUI picker. Several acceptance criteria remain unmet:
 
-1. **Web UI cannot answer.** `crates/ertangle-daemon/src/web/index.html` only records `question_requested` and `question_resolved` in state. There is no picker or answer request.
+1. **Web UI cannot answer (fixed in `389a602`).** The web client now renders pending questions in the chat banner and review panel with option, multi-select, and custom answers, and submits `Request::AnswerQuestion`. Live browser verification is still pending.
 2. **Claude native `AskUserQuestion` has no answer path.** `crates/ertangle-adapter/src/claude.rs` emits `AgentEvent::Question` for the tool call, but `ClaudeControl` does not override `resolve_question`. The question times out unless the agent uses the `ertangle_question` MCP tool.
 3. **Only the first question is handled.** `parse_tool_call_question`, `parse_acp_elicitation`, and `parse_codex_user_input` normalize a single question; agents can send up to three.
 4. **ACP tool-call fallback cannot be answered.** `acp.rs` emits `AgentEvent::Question` for a recognized `tool_call`, but no pending entry is stored for that id, so `resolve_question` fails.
