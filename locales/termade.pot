@@ -266,7 +266,7 @@ msgid "只重播序號大於此值的事件"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "合併策略：merge、squash、rebase；省略時使用全域 [git] merge_strategy (預設 merge)"
+msgid "合併策略：merge | squash | rebase"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -3923,7 +3923,7 @@ msgid "worktree 共用 cargo target (編譯排隊、不重複)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
-msgid "worktree 合併策略 (merge/squash/rebase)"
+msgid "worktree 合併策略"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
@@ -3950,7 +3950,7 @@ msgstr ""
 msgid "介面語言"
 msgstr ""
 
-#: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
+#: crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs crates/termade-tui/src/settings.rs
 msgid "未設定"
 msgstr ""
 
@@ -3996,22 +3996,6 @@ msgstr ""
 
 #: crates/termade-tui/src/settings.rs
 msgid "不問 (effort 調降、model 拒絕)"
-msgstr ""
-
-#: crates/termade-tui/src/settings.rs
-msgid "未設定 (merge)"
-msgstr ""
-
-#: crates/termade-tui/src/settings.rs
-msgid "一般合併 (保留提交記錄)"
-msgstr ""
-
-#: crates/termade-tui/src/settings.rs
-msgid "壓成單一提交"
-msgstr ""
-
-#: crates/termade-tui/src/settings.rs
-msgid "rebase 後快轉 (線性歷史)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs

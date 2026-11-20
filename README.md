@@ -184,7 +184,7 @@ termade
 - **Worktree 獨立分支**：每個 session 使用專屬 `git worktree` 與 `termade/<session>` 分支，互不干擾。
 - **即時彩色 Diff**：在 TUI 按 `Tab` 切換至 Diff 視圖，按 `{` / `}` 跳轉 hunk，`(` / `)` 跳轉上／下一個檔案，`Enter` (或 `v`) 摺疊／展開單一檔案，按 `X` (或 `:discard`) 安全退回選取的 hunk 或整個檔案變更。
 - **行內註解審查 (Review Comment)**：在 Diff 視圖按 `c`，直接對該行留下修改建議 (例如：「請補上邊界條件檢查」)，系統會自動將註解送回該 Agent 要求修正。
-- **安全合併與衝突解決 (Merge & Conflict Resolution)**：按 `M` 或執行 `termade merge`，系統會先執行 pre-check (支援全域 `pre_merge_command` 守門驗證)，自動 commit worktree 變更並合併回主分支。合併策略可選 `merge` (預設，保留提交記錄)、`squash` (壓成單一提交) 或 `rebase` (線性歷史)。若發生衝突，可透過 `:merge --resolve` (或 Which-key `Space g r`) 將衝突標記保留於隔離 Worktree，主分支保持乾淨，並自動委派該 Agent 進行解衝突與重新驗證。
+- **安全合併與衝突解決 (Merge & Conflict Resolution)**：按 `M` 或執行 `termade merge` 合併回主分支，策略可選 `merge` / `squash` / `rebase`。衝突時可用 `:merge --resolve` 委派 Agent 處理。
 - **清理 (GC)**：按 `G` 或執行 `termade gc`，自動清除已結束且已合併的 Worktree，絕不誤刪未合併成果。
 
 ### 2. 跨 Agent 協作匯流排與任務看板 (MCP & Bus)
@@ -517,10 +517,10 @@ worktree = true
 [git]
 # Git 與 worktree 設定 (安全起見只認全域設定，專案層不可覆寫)
 pre_merge_command = "cargo test"       # 合併前驗證指令；非 0 退出則中止合併
-merge_strategy = "squash"              # worktree 合併預設策略：merge / squash / rebase
+merge_strategy = "squash"              # 合併策略：merge / squash / rebase
 ```
 
-`merge_strategy` 也可以在 TUI 設定面板 (`:settings` → Git 與 worktree) 切換。優先順序為 CLI／`:merge`／MCP 明確指定 > 全域 `merge_strategy` > `merge`。
+`merge_strategy` 也可在 TUI 設定面板 (`:settings`) 切換；明確指定優先。
 
 > [!NOTE]
 > 介面語言也可以在設定面板 (`:settings`) 切換，立即生效。daemon 回傳的訊息跟 daemon 啟動時的語言走，切換後要重啟 daemon 才會一致。想協助翻譯請見 [翻譯指南](docs/TRANSLATING.md)。

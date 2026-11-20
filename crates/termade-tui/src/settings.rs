@@ -198,7 +198,7 @@ impl Item {
             Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
             Item::AutoResume => tr!("daemon 重啟時自動接續執行中的 session"),
             Item::SharedCargoTarget => tr!("worktree 共用 cargo target (編譯排隊、不重複)"),
-            Item::MergeStrategy => tr!("worktree 合併策略 (merge/squash/rebase)"),
+            Item::MergeStrategy => tr!("worktree 合併策略"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
             Item::InjectSkill => tr!("把 termade-ade skill 注入協作說明"),
             Item::TokenHints => tr!("把省 token 提示注入協作說明"),
@@ -329,10 +329,10 @@ impl Item {
                 .map(|l| pair(l, l))
                 .collect(),
             Item::MergeStrategy => vec![
-                pair("", &tr!("未設定 (merge)")),
-                pair("merge", &tr!("一般合併 (保留提交記錄)")),
-                pair("squash", &tr!("壓成單一提交")),
-                pair("rebase", &tr!("rebase 後快轉 (線性歷史)")),
+                pair("", &tr!("未設定")),
+                pair("merge", "merge"),
+                pair("squash", "squash"),
+                pair("rebase", "rebase"),
             ],
             Item::WebCompanion => {
                 let port = s.cfg.web.resolved_port();

@@ -457,7 +457,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     },
                     "strategy": {
                         "type": "string",
-                        "description": "Merge strategy: merge | squash | rebase (default: global [git] merge_strategy or merge)",
+                        "description": "Merge strategy: merge | squash | rebase",
                         "enum": ["merge", "squash", "rebase"]
                     }
                 },

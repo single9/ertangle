@@ -356,7 +356,7 @@ enum Cmd {
         /// 若發生衝突，自動保留標記於 worktree 並委派 agent 解衝突
         #[arg(long)]
         resolve: bool,
-        /// 合併策略：merge、squash、rebase；省略時使用全域 [git] merge_strategy (預設 merge)
+        /// 合併策略：merge | squash | rebase
         #[arg(long, value_parser = ["merge", "squash", "rebase"])]
         strategy: Option<String>,
     },
