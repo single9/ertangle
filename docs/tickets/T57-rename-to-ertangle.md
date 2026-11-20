@@ -2,7 +2,7 @@
 
 優先度：P1　範圍：全專案 (crate、CLI、MCP、設定、文件)　相依：—
 
-Status: ready-for-agent
+Status: done
 
 ## 問題
 
