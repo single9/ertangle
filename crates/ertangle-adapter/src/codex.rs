@@ -1,16 +1,16 @@
-//! Codex 的原生 adapter (`codex app-server`)。
+//! Native adapter for Codex (`codex app-server`).
 //!
-//! Codex 的 app server 是 stdio 上的 JSON-RPC (實驗性，但介面穩定且可自我描述：
-//! `codex app-server generate-json-schema` 會吐出完整 schema)。
+//! Codex's app server is JSON-RPC over stdio (experimental, but has a stable and self-describing interface:
+//! `codex app-server generate-json-schema` outputs the complete schema).
 //!
-//! 用到的子集：
+//! Subset used:
 //! * `initialize`
 //! * `thread/start` → `thread.id`
-//! * `turn/start` (帶 `input`)
+//! * `turn/start` (with `input`)
 //! * `turn/interrupt`
-//! * 通知：`item/agentMessage/delta`、`item/completed`、`turn/completed`、
+//! * Notifications: `item/agentMessage/delta`, `item/completed`, `turn/completed`,
 //!   `thread/tokenUsage/updated`
-//! * 核准 (server→client 請求)：`item/commandExecution/requestApproval`、
+//! * Approvals (server→client requests): `item/commandExecution/requestApproval`,
 //!   `item/fileChange/requestApproval`
 
 use crate::stream::StreamBuf;
@@ -34,13 +34,13 @@ struct Conn {
     stdin: Mutex<ChildStdin>,
     next_id: AtomicI64,
     pending: Mutex<HashMap<i64, Sender<Value>>>,
-    /// 核准：內部 req id -> JSON-RPC id。
+    /// Approvals: internal req id -> JSON-RPC id.
     perms: Mutex<HashMap<String, Value>>,
-    /// 目前的 thread / turn id。
+    /// Current thread / turn id.
     thread: Mutex<String>,
     turn: Mutex<String>,
     stream: Mutex<StreamBuf>,
-    /// 本回合已回報過的錯誤文字 (`error` 通知與 `turn/completed` 不重複送)。
+    /// Error text already reported in this turn (avoid duplicate reporting between `error` notifications and `turn/completed`).
     last_error: Mutex<Option<String>>,
     tx: Sender<AgentEvent>,
 }
@@ -55,7 +55,7 @@ impl Conn {
         Ok(())
     }
 
-    /// 送請求並等待回應。
+    /// Sends a request and waits for response.
     fn call(&self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (s, r) = mpsc::channel();
@@ -87,12 +87,12 @@ impl Conn {
         }
     }
 
-    /// 處理一行 stdout。
+    /// Processes a single stdout line.
     fn on_line(&self, line: &str) {
         let Ok(msg) = serde_json::from_str::<Value>(line) else {
             return;
         };
-        // 1) 我們送出的請求的回應。
+        // 1) Response to a request we sent.
         if let Some(id) = msg.get("id") {
             if msg.get("method").is_none() {
                 let id = id.as_i64().unwrap_or(-1);
@@ -108,12 +108,12 @@ impl Conn {
             }
         }
         let method = msg["method"].as_str().unwrap_or("");
-        // 2) server → client 的請求 (需要我們回覆)。
+        // 2) Server -> client requests (requiring our response).
         if msg.get("id").is_some() && !method.is_empty() {
             self.on_server_request(method, &msg);
             return;
         }
-        // 3) 通知。
+        // 3) Notifications.
         self.on_notification(method, &msg["params"]);
     }
 
@@ -156,7 +156,7 @@ impl Conn {
                 )
             }
             other => {
-                // 不認識的請求一律回錯誤，避免 Codex 卡住等我們。
+                // Always return an error for unrecognized requests to prevent Codex from hanging.
                 let id = msg.get("id").cloned().unwrap_or(Value::Null);
                 let _ = self.write(&json!({
                     "jsonrpc":"2.0","id":id,
@@ -258,7 +258,7 @@ impl Conn {
             }
             "error" => {
                 tracing::warn!("codex error 通知：{}", p);
-                // `willRetry: true` 時 codex 會自己重試，不算失敗，不打擾使用者。
+                // When `willRetry: true`, Codex retries automatically; not considered failure, don't disturb the user.
                 if p["willRetry"].as_bool() != Some(true) {
                     let err = if p["error"].is_null() { p } else { &p["error"] };
                     self.report_error(err);
@@ -268,8 +268,8 @@ impl Conn {
         }
     }
 
-    /// 把 codex 的錯誤 (`error` 通知的 `error`，或 `turn.error`)送到逐字稿與 status note。
-    /// 同一個回合內相同文字只回報一次。
+    /// Forwards Codex errors (`error` from `error` notifications, or `turn.error`) to transcript and status note.
+    /// Reports identical text only once per turn.
     fn report_error(&self, err: &Value) {
         let text = error_text(err);
         {
@@ -337,7 +337,7 @@ impl Conn {
                 });
             }
             "agentMessage" => {
-                // 有 delta 時文字已經送過，這裡只收尾。
+                // Text was already emitted via deltas; here only finalize.
                 self.flush_stream();
             }
             _ => {}
@@ -345,7 +345,7 @@ impl Conn {
     }
 }
 
-/// 錯誤文字：優先取 `message`，沒有就用整個 JSON 的前 300 字。
+/// Error text: prefers `message`, otherwise uses the first 300 characters of the full JSON.
 fn error_text(err: &Value) -> String {
     match err["message"].as_str().filter(|m| !m.is_empty()) {
         Some(m) => m.to_string(),
@@ -353,7 +353,7 @@ fn error_text(err: &Value) -> String {
     }
 }
 
-/// 是否為認證錯誤 (401、token 失效、未授權)。
+/// Whether this is an authentication error (401, token revoked, unauthorized).
 fn is_auth_error(err: &Value) -> bool {
     let t = err.to_string().to_ascii_lowercase();
     t.contains("401") || t.contains("token_revoked") || t.contains("unauthorized")
@@ -379,13 +379,13 @@ impl ApprovalKind {
 }
 
 // ---------------------------------------------------------------------------
-// 控制把手
+// Control handle
 // ---------------------------------------------------------------------------
 
 struct CodexControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
-    /// 執行期切換的 model／effort；每個 `turn/start` 都帶上。
+    /// Runtime switched model/effort; included in every `turn/start`.
     overrides: Mutex<(Option<String>, Option<String>)>,
 }
 
@@ -431,7 +431,7 @@ impl AgentControl for CodexControl {
         Ok(())
     }
 
-    /// 存起來，下一個 `turn/start` 帶 `model`／`effort`(schema 已確認兩者都是 `TurnStartParams` 欄位)。
+    /// Saved to pass `model`/`effort` in the next `turn/start` (schema confirms both are `TurnStartParams` fields).
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         if let Some(e) = effort {
             crate::check_effort(e)?;
@@ -541,7 +541,7 @@ impl AgentControl for CodexControl {
                 }))
             }
             ApprovalKind::Command | ApprovalKind::File => {
-                // Codex 的 decision 是 camelCase 字串。
+                // Codex decision is a camelCase string.
                 let verdict = match (kind, decision) {
                     (_, Decision::Allow) => "accept",
                     (_, Decision::AllowAlways) => "acceptForSession",
@@ -562,7 +562,7 @@ impl AgentControl for CodexControl {
 }
 
 // ---------------------------------------------------------------------------
-// 啟動
+// Startup
 // ---------------------------------------------------------------------------
 
 pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
@@ -577,7 +577,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if sandbox == "danger-full-access" {
         cmd.args(["-c", "sandbox_mode=\"danger-full-access\""]);
     } else {
-        // 預設讓 workspace-write sandbox 具備網路存取，避免 Linux 上 bwrap --unshare-net 觸發
+        // Give workspace-write sandbox network access by default to avoid Linux bwrap --unshare-net triggering
         // `loopback: Failed RTM_NEWADDR: Operation not permitted`
         cmd.args(["-c", "sandbox_workspace_write.network_access=true"]);
     }
@@ -662,7 +662,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                     Err(_) => break,
                 }
             }
-            // stdout 關閉＝處理程序已結束：丟掉等待中的請求，握手不必乾等逾時。
+            // stdout closed = process exited: discard pending requests so handshake does not wait for timeout.
             conn.pending
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
@@ -693,7 +693,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         });
     }
 
-    // 握手：initialize → thread/start。
+    // Handshake: initialize -> thread/start.
     conn.call(
         "initialize",
         json!({ "clientInfo": { "name": "ertangle", "title": "ertangle", "version": env!("CARGO_PKG_VERSION") } }),
@@ -701,7 +701,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     )
     .with_context(|| tr!("codex `initialize` 失敗"))?;
 
-    // 接續時改用 `thread/resume` (歷史回合放在回應裡，不會以通知重播)。
+    // When resuming, use `thread/resume` instead (historical turns are in response, not replayed via notifications).
     let method = if spec.resume.is_some() {
         "thread/resume"
     } else {
@@ -719,7 +719,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if let Some(model) = started["model"].as_str() {
         let _ = tx.send(AgentEvent::Model(model.to_string()));
     }
-    // 啟動時查一次帳號額度 (沒登入或舊版 codex 不支援就略過)。
+    // Query account quota once on startup (skipped if not logged in or unsupported by older codex versions).
     if let Ok(r) = conn.call("account/rateLimits/read", json!({}), CALL_TIMEOUT) {
         if let Some(q) = parse_rate_limits(&r["rateLimits"]) {
             let _ = tx.send(AgentEvent::Quota(q));
@@ -738,7 +738,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     Ok(Box::new(control))
 }
 
-/// 解析 Codex 的 `RateLimitSnapshot`(`account/rateLimits/read` 與更新通知共用)。
+/// Parses Codex `RateLimitSnapshot` (shared between `account/rateLimits/read` and update notifications).
 pub(crate) fn parse_rate_limits(snap: &Value) -> Option<ertangle_core::Quota> {
     let mut windows = Vec::new();
     for key in ["primary", "secondary"] {
@@ -769,9 +769,9 @@ pub(crate) fn parse_rate_limits(snap: &Value) -> Option<ertangle_core::Quota> {
     })
 }
 
-/// `thread/start` 參數：cwd、approvalPolicy，加上可選的 model 與 sandbox (官方文件範例：
-/// `"model"`、`"sandbox": "workspace-write"`；`read_only` 對應 `read-only`)。
-/// Codex `turn/start` 的 input：文字 (含內嵌文字檔)加上 data URL 圖片。
+/// `thread/start` parameters: cwd, approvalPolicy, plus optional model and sandbox (official doc examples:
+/// `"model"`, `"sandbox": "workspace-write"`; `read_only` maps to `read-only`).
+/// Codex `turn/start` input: text (including inlined text files) plus data URL images.
 fn turn_input(text: &str, atts: &[ertangle_core::Attachment]) -> Value {
     let mut items =
         vec![json!({ "type": "text", "text": ertangle_core::compose_text(text, atts, false) })];
@@ -783,8 +783,8 @@ fn turn_input(text: &str, atts: &[ertangle_core::Attachment]) -> Value {
     Value::Array(items)
 }
 
-/// `thread/start` 或 (`spec.resume` 有值時)`thread/resume` 的參數。
-/// 兩者接受同一組覆寫欄位；接續時多帶 `threadId`，並用 `excludeTurns` 省掉回應裡的歷史回合。
+/// Parameters for `thread/start` or `thread/resume` (when `spec.resume` is set).
+/// Both accept the same set of override fields; resumption additionally includes `threadId` and uses `excludeTurns` to omit historical turns.
 fn thread_open_params(spec: &SessionSpec) -> Value {
     let mut p = thread_start_params(spec);
     if let Some(id) = &spec.resume {
@@ -794,11 +794,11 @@ fn thread_open_params(spec: &SessionSpec) -> Value {
     p
 }
 
-/// 檢查 Linux 上 bwrap 是否可正常建立 user namespace 與 sandbox。
+/// Checks whether bwrap can create user namespaces and sandboxes normally on Linux.
 ///
-/// 在 Ubuntu 24.04+ 等啟用 `kernel.apparmor_restrict_unprivileged_userns = 1` 的環境下，
-/// 未經 AppArmor profile 授權的 bwrap 會在建立 uid map 時失敗 (`Permission denied`)。
-/// 遇到此情況應退回 `danger-full-access`，避免 Codex 在每次執行指令時因 bwrap 失敗中斷。
+/// On environments like Ubuntu 24.04+ with `kernel.apparmor_restrict_unprivileged_userns = 1`,
+/// bwrap without an AppArmor profile authorization fails when creating uid maps (`Permission denied`).
+/// In this case, fall back to `danger-full-access` to prevent Codex from aborting on command execution.
 #[cfg(target_os = "linux")]
 pub fn is_bwrap_usable() -> bool {
     static CACHE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -826,11 +826,11 @@ pub fn is_bwrap_usable() -> bool {
     true
 }
 
-/// 解析 Codex 使用的 sandbox 模式。
+/// Resolves the sandbox mode used by Codex.
 ///
-/// 若 `spec.sandbox` 已顯式指定，則予以尊重；若為 `None`，在 `bwrap` 無法正常執行或
-/// `permission` 為 `Bypass` 時退回 `"danger-full-access"`，否則依據 `read_only`
-/// 決定為 `"read-only"` 或 `"workspace-write"`。
+/// Respects `spec.sandbox` if explicitly specified; if `None`, falls back to `"danger-full-access"`
+/// when `bwrap` cannot run normally or `permission` is `Bypass`, otherwise selects `"read-only"`
+/// or `"workspace-write"` based on `read_only`.
 pub fn resolve_codex_sandbox(spec: &SessionSpec, bwrap_ok: bool) -> String {
     if let Some(s) = &spec.sandbox {
         return s.clone();
@@ -858,7 +858,7 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
         }
     });
     if let Some(e) = &spec.effort {
-        // thread 層級的 config 覆寫，等同 `-c model_reasoning_effort=...`。
+        // Thread-level config override, equivalent to `-c model_reasoning_effort=...`.
         config["model_reasoning_effort"] = json!(e);
     }
     p["config"] = config;
@@ -876,7 +876,7 @@ mod tests {
 
     #[test]
     fn approval_verdict_mapping() {
-        // 只驗證對應表本身 (不需真的跑 codex)。
+        // Only validates the mapping table itself (no need to actually run codex).
         let cases = [
             (ApprovalKind::Command, Decision::Allow, "accept"),
             (
@@ -900,7 +900,7 @@ mod tests {
         assert_eq!(ApprovalKind::McpElicitation.as_str(), "mcp_elicitation");
         assert_eq!(ApprovalKind::Permissions.as_str(), "permissions");
 
-        // 驗證 MCP elicitation 與 permissions 的回傳結構
+        // Validate return structure for MCP elicitation and permissions
         let mcp_allow = match Decision::Allow {
             Decision::Allow | Decision::AllowAlways => json!({"action": "accept", "content": {}}),
             Decision::Deny => json!({"action": "decline"}),
@@ -973,7 +973,7 @@ mod tests {
             thread_start_params(&bypass)["sandbox"],
             "danger-full-access"
         );
-        // 開新對話不帶 threadId；接續時帶上，其餘覆寫欄位照舊。
+        // New conversations do not carry threadId; resumption includes it while keeping other override fields intact.
         assert!(thread_open_params(&spec)["threadId"].is_null());
         let mut re = spec.clone();
         re.resume = Some("thr-1".into());
@@ -1013,7 +1013,7 @@ mod tests {
             rows: 24,
         };
 
-        // bwrap_ok = true: 依照 read_only 與 permission 決定
+        // bwrap_ok = true: decided by read_only and permission
         assert_eq!(resolve_codex_sandbox(&spec, true), "workspace-write");
         let mut ro = spec.clone();
         ro.read_only = true;
@@ -1022,12 +1022,12 @@ mod tests {
         bypass.permission = ertangle_core::PermissionPolicy::Bypass;
         assert_eq!(resolve_codex_sandbox(&bypass, true), "danger-full-access");
 
-        // bwrap_ok = false: AppArmor / userns 限制時退回 danger-full-access
+        // bwrap_ok = false: falls back to danger-full-access under AppArmor / userns restrictions
         assert_eq!(resolve_codex_sandbox(&spec, false), "danger-full-access");
         assert_eq!(resolve_codex_sandbox(&ro, false), "danger-full-access");
         assert_eq!(resolve_codex_sandbox(&bypass, false), "danger-full-access");
 
-        // 顯式設定 spec.sandbox 時始終尊重
+        // Always respect explicit spec.sandbox setting
         let mut explicit = spec.clone();
         explicit.sandbox = Some("workspace-write".into());
         assert_eq!(resolve_codex_sandbox(&explicit, true), "workspace-write");

@@ -1,11 +1,11 @@
-//! `ertangle-core` — 領域模型。
+//! `ertangle-core` — Domain model.
 //!
-//! 這裡只放「與執行環境無關」的型別：agent 種類、session、事件、訊息匯流排、任務。
-//! daemon、adapter、TUI 都共用這一組型別，因此它是整個系統的契約。
+//! Contains environment-agnostic types only: agent kinds, sessions, events, message bus, tasks.
+//! The daemon, adapter, and TUI all share this set of types, making it the contract for the entire system.
 //!
-//! 設計原則：
-//! * **Event 是唯一真相**：所有狀態都是把事件 fold 進 [`State`] 的結果。
-//! * 事件可序列化、可落地、可重播，讓 TUI 斷線後能無縫重建畫面。
+//! Design principles:
+//! * **Event is the single source of truth**: all state is the result of folding events into [`State`].
+//! * Events are serializable, persistable, and replayable, enabling TUIs to rebuild views seamlessly after disconnects.
 
 pub mod i18n;
 
@@ -14,27 +14,27 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tr::tr;
 
-/// 舊名稱 (termade) 的環境變數前綴；相容層保留至 v1.0。
+/// Environment variable prefix for the legacy name (termade); compatibility layer retained until v1.0.
 const LEGACY_ENV_PREFIX: &str = "TERMADE_";
 const ENV_PREFIX: &str = "ERTANGLE_";
 
-/// 把 `ERTANGLE_X` 對應到舊的 `TERMADE_X`；非 `ERTANGLE_` 開頭的名稱沒有舊名。
+/// Maps `ERTANGLE_X` to legacy `TERMADE_X`; names not starting with `ERTANGLE_` have no legacy counterpart.
 fn legacy_env_name(name: &str) -> Option<String> {
     name.strip_prefix(ENV_PREFIX)
         .map(|rest| format!("{LEGACY_ENV_PREFIX}{rest}"))
 }
 
-/// 以注入的查詢函式讀取環境變數：先讀新名稱，未設定再退回舊名稱。
+/// Reads environment variable with injected lookup function: reads new name first, falls back to legacy name if unset.
 fn env_lookup<T>(name: &str, get: impl Fn(&str) -> Option<T>) -> Option<T> {
     get(name).or_else(|| legacy_env_name(name).and_then(|old| get(&old)))
 }
 
-/// 讀取環境變數 (`ERTANGLE_X`，未設定時退回舊的 `TERMADE_X`)；非 unicode 值視為未設定。
+/// Reads environment variable (`ERTANGLE_X`, falling back to legacy `TERMADE_X` if unset); non-unicode values treated as unset.
 pub fn env_var(name: &str) -> Option<String> {
     env_lookup(name, |k| std::env::var(k).ok())
 }
 
-/// 同 [`env_var`]，但回傳原始 `OsString`。
+/// Same as [`env_var`], but returns raw `OsString`.
 pub fn env_var_os(name: &str) -> Option<std::ffi::OsString> {
     env_lookup(name, |k| std::env::var_os(k))
 }
@@ -69,7 +69,7 @@ mod env_compat_tests {
     }
 }
 
-/// 目前時間 (Unix epoch 毫秒)。
+/// Current time (Unix epoch milliseconds).
 pub fn now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -77,7 +77,7 @@ pub fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
-/// 產生一個帶前綴的隨機 id，例如 `ses_3f2a…`。
+/// Generates a prefixed random ID, e.g. `ses_3f2a…`.
 pub fn new_id(prefix: &str) -> String {
     let u = uuid::Uuid::new_v4().simple().to_string();
     format!("{prefix}_{}", &u[..12])
@@ -87,14 +87,14 @@ pub type SessionId = String;
 pub type MsgId = String;
 pub type TaskId = String;
 
-/// 每個事件的單調序號，用來做增量同步 (`since`)。
+/// Monotonic sequence number for each event, used for incremental sync (`since`).
 pub type Seq = u64;
 
 // ---------------------------------------------------------------------------
 // Agent
 // ---------------------------------------------------------------------------
 
-/// 支援的 agent 種類。
+/// Supported agent kinds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentKind {
@@ -102,12 +102,12 @@ pub enum AgentKind {
     ClaudeCode,
     Codex,
     Antigravity,
-    /// 使用者自訂：直接給可執行程式。
+    /// Custom user agent: specifies executable directly.
     Custom(String),
 }
 
 impl AgentKind {
-    /// 穩定識別字 (給 CLI / 設定檔用)。
+    /// Stable identifier (for CLI / configuration).
     pub fn id(&self) -> &str {
         match self {
             AgentKind::OpenCode => "opencode",
@@ -128,7 +128,7 @@ impl AgentKind {
         })
     }
 
-    /// 可選的四種內建 agent (不含 Custom)。
+    /// Four built-in selectable agents (excluding Custom).
     pub fn builtins() -> [AgentKind; 4] {
         [
             AgentKind::OpenCode,
@@ -138,7 +138,7 @@ impl AgentKind {
         ]
     }
 
-    /// 互動模式 (PTY 直通)的啟動指令。
+    /// Launch command for interactive mode (PTY passthrough).
     pub fn pty_command(&self) -> (&str, Vec<&'static str>) {
         match self {
             AgentKind::OpenCode => ("opencode", vec![]),
@@ -149,10 +149,10 @@ impl AgentKind {
         }
     }
 
-    /// 原生結構化協定的啟動指令 (若有)。
+    /// Launch command for native structured protocol (if supported).
     ///
-    /// OpenCode 與 Antigravity 都直接提供原生 ACP (`opencode acp` / `agy acp`)，
-    /// 無需額外 npm 套件；Claude 與 Codex 走各自的結構化介面 (見 adapter crate)。
+    /// OpenCode and Antigravity provide native ACP directly (`opencode acp` / `agy acp`),
+    /// without extra npm packages; Claude and Codex use their respective structured interfaces (see adapter crate).
     pub fn acp_command(&self) -> Option<(&str, Vec<&'static str>)> {
         match self {
             AgentKind::OpenCode => Some(("opencode", vec!["acp"])),
@@ -172,16 +172,16 @@ impl std::fmt::Display for AgentKind {
 // Session
 // ---------------------------------------------------------------------------
 
-/// 一個 agent 在此系統中的角色。
+/// Role of an agent in this system.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
-    /// 拆任務、產生 worker、整合結果。
+    /// Breaks down tasks, spawns workers, and integrates results.
     Coordinator,
-    /// 實際動手改檔。
+    /// Directly modifies files.
     #[default]
     Worker,
-    /// 只讀、負責審查。
+    /// Read-only, responsible for review.
     Reviewer,
     Custom(String),
 }
@@ -212,14 +212,14 @@ pub enum SessionStatus {
     Idle,
     Busy,
     WaitingApproval,
-    /// 閒置休眠 (處理程序已 SIGSTOP 暫停，收到新訊息或喚醒時自動 SIGCONT)。
+    /// Idle sleep (process paused with SIGSTOP, automatically resumed with SIGCONT on new messages or wakeup).
     Sleeping,
     Exited,
     Failed,
 }
 
 impl SessionStatus {
-    /// 給 TUI 用的單字元指示。
+    /// Single-character indicator for TUI display.
     pub fn glyph(self) -> &'static str {
         match self {
             SessionStatus::Starting => "◌",
@@ -243,11 +243,11 @@ pub struct Cost {
     pub output_tokens: u64,
 }
 
-/// session 目前的 context 用量 (對話已佔用的 token 數與模型的 context 視窗)。
+/// Current context usage of a session (tokens used by conversation and the model context window).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextUsage {
     pub used: u64,
-    /// 模型的 context 視窗大小；agent 尚未回報時為 `None`。
+    /// Model context window size; `None` when the agent has not yet reported.
     pub window: Option<u64>,
 }
 
@@ -258,7 +258,7 @@ impl ContextUsage {
             .map(|w| self.used as f32 * 100.0 / w as f32)
     }
 
-    /// `36k/1M 4%`；視窗未知時只顯示 `36k`。
+    /// `36k/1M 4%`; displays only `36k` when window size is unknown.
     pub fn short(&self) -> String {
         match (self.window, self.percent()) {
             (Some(w), Some(p)) => {
@@ -269,7 +269,7 @@ impl ContextUsage {
     }
 }
 
-/// token 數的簡短寫法：`950`、`36k`、`1.5M`。
+/// Short representation of token count: `950`, `36k`, `1.5M`.
 pub fn human_tokens(n: u64) -> String {
     match n {
         0..=999 => n.to_string(),
@@ -285,7 +285,7 @@ pub fn human_tokens(n: u64) -> String {
     }
 }
 
-/// 把美金上限格式化成簡短字串：整數省略小數 (`$5`)，否則保留兩位 (`$2.50`)。
+/// Formats USD budget into short string: omits decimals for whole amounts (`$5`), otherwise retains two decimals (`$2.50`).
 pub fn format_usd_limit(limit: f64) -> String {
     if (limit - limit.round()).abs() < 1e-6 {
         format!("${:.0}", limit)
@@ -294,82 +294,82 @@ pub fn format_usd_limit(limit: f64) -> String {
     }
 }
 
-/// 一個 agent 的執行實例。
+/// A running instance of an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: SessionId,
     pub kind: AgentKind,
-    /// 人類可讀標籤，例如 `worker/eu-zip`。
+    /// Human-readable label, e.g. `worker/eu-zip`.
     pub label: String,
-    /// 工作目錄 (可能是 worktree 路徑)。
+    /// Working directory (may be a worktree path).
     pub cwd: String,
-    /// 若在 worktree 中，記錄分支名。
+    /// Records branch name if within a worktree.
     pub branch: Option<String>,
     pub role: Role,
     pub status: SessionStatus,
     pub model: Option<String>,
     pub cost: Cost,
-    /// 誰產生的 (人或某個 session)。
+    /// Creator (human or session ID).
     pub parent: Option<SessionId>,
     pub created_ms: u64,
-    /// adapter 用的傳輸方式 (顯示用)。
+    /// Transport used by adapter (for display).
     pub transport: String,
-    /// agent 透過 `ertangle_status` 回報的簡短進度說明。
+    /// Short progress note reported by the agent via `ertangle_status`.
     #[serde(default)]
     pub status_note: Option<String>,
-    /// 建立 worktree 時所屬的主 repo 根目錄 (merge／gc／pr 用)。
+    /// Root directory of the main repo when creating a worktree (for merge/gc/pr).
     #[serde(default)]
     pub repo_root: Option<String>,
-    /// 此 session 的權限政策 (舊 log 沒有此欄位時為 `auto`)。
+    /// Permission policy for this session (`auto` if absent in older logs).
     #[serde(default)]
     pub permission: PermissionPolicy,
-    /// context 用量 (agent 回報；舊 log 沒有此欄位)。
+    /// Context usage (reported by agent; absent in older logs).
     #[serde(default)]
     pub context: Option<ContextUsage>,
-    /// agent 原生的對話 id (Claude session id、Codex thread id、ACP sessionId)，接續用。
-    /// `None` 表示這個 session 不能接續 (舊 log、PTY，或 agent 沒有宣告載入能力)。
+    /// Native conversation ID of the agent (Claude session id, Codex thread id, ACP sessionId) for resumption.
+    /// `None` indicates this session cannot be resumed (older logs, PTY, or agent did not declare load capability).
     #[serde(default)]
     pub native_id: Option<String>,
-    /// 此 session 的成本上限 (美元；解析後的實際上限)。
+    /// Cost limit for this session (USD; resolved actual limit).
     #[serde(default)]
     pub budget_usd: Option<f64>,
-    /// 是否已達成本上限 (達上限後中斷回合並拒絕新 prompt，直到人工調高)。
+    /// Whether the cost limit has been reached (interrupts turn and rejects new prompts until manually raised).
     #[serde(default)]
     pub over_budget: bool,
-    /// 被誰接手 (交接後由 `Event::SessionHandedOff` 設定；舊 log 沒有此欄位)。
+    /// Successor session (set by `Event::SessionHandedOff` after handoff; absent in older logs).
     #[serde(default)]
     pub handed_off_to: Option<SessionId>,
-    /// 目前的推理強度 (啟動時解析出的值，或執行期切換後的值；舊 log 沒有此欄位)。
+    /// Current reasoning effort (resolved at startup or updated at runtime; absent in older logs).
     #[serde(default)]
     pub effort: Option<String>,
-    /// agent 回報的原生斜線指令名稱 (不含 `/`；Claude `slash_commands`、ACP `available_commands_update`)。
+    /// Native slash commands reported by agent (without `/`; Claude `slash_commands`, ACP `available_commands_update`).
     #[serde(default)]
     pub slash_commands: Vec<String>,
-    /// 目前正在執行中的工具或 Subagent。
+    /// Currently executing tools or subagents.
     #[serde(default)]
     pub active_tools: Vec<ActiveTool>,
-    /// 背景殘留的子處理程序清單。
+    /// List of remaining background child processes.
     #[serde(default)]
     pub bg_procs: Vec<BgProc>,
-    /// 累計的工具呼叫次數 (只算開始事件；回合數的近似值，舊 log 沒有此欄位)。
+    /// Cumulative tool call count (counts start events only; approximate turn count, absent in older logs).
     #[serde(default)]
     pub tool_calls: u32,
 }
 
 impl Session {
-    /// 這個 session 屬於哪個專案：worktree 看主 repo，否則就是工作目錄。
+    /// Which project this session belongs to: main repo for worktrees, otherwise working directory.
     pub fn project_root(&self) -> &str {
         self.repo_root.as_deref().unwrap_or(&self.cwd)
     }
 
-    /// 有設定成本上限時回傳 `$1.20/$5` 格式的字串。
+    /// Returns string formatted as `$1.20/$5` when cost limit is configured.
     pub fn format_budget(&self) -> Option<String> {
         self.budget_usd
             .map(|limit| format!("${:.2}/{}", self.cost.usd, format_usd_limit(limit)))
     }
 }
 
-/// 目前正在執行中的工具或 Subagent。
+/// Currently executing tool or subagent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActiveTool {
     pub name: String,
@@ -378,7 +378,7 @@ pub struct ActiveTool {
     pub is_subagent: bool,
 }
 
-/// 背景殘留的子處理程序。
+/// Remaining background child process.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BgProc {
     pub pid: u32,
@@ -388,7 +388,7 @@ pub struct BgProc {
     pub elapsed_secs: u64,
 }
 
-/// 判斷一個工具名稱是否為原生 Subagent 工具。
+/// Checks if a tool name represents a native subagent tool.
 pub fn is_subagent_tool(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     matches!(
@@ -401,7 +401,7 @@ pub fn is_subagent_tool(name: &str) -> bool {
 // Bus / Task / Artifact
 // ---------------------------------------------------------------------------
 
-/// 訊息的收件者。
+/// Recipient of a message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Target {
@@ -411,10 +411,10 @@ pub enum Target {
 }
 
 impl Target {
-    /// 從字串解析收件目標：
-    /// * `*` 或 `broadcast` → [`Target::Broadcast`]
-    /// * `#name` 或 `channel:name` → [`Target::Channel`]
-    /// * `@id` 或其他字串 → [`Target::Direct`]
+    /// Parses recipient target from string:
+    /// * `*` or `broadcast` -> [`Target::Broadcast`]
+    /// * `#name` or `channel:name` -> [`Target::Channel`]
+    /// * `@id` or other string -> [`Target::Direct`]
     pub fn parse(s: &str) -> Target {
         let s = s.trim();
         if s == "*" || s.eq_ignore_ascii_case("broadcast") {
@@ -434,12 +434,12 @@ impl Target {
 pub enum MsgKind {
     #[default]
     Chat,
-    /// 交接工作。
+    /// Hands off task.
     Handoff,
     Question,
     Answer,
     Status,
-    /// 分享產出 (檔案 / 分支 / diff)。
+    /// Shares artifacts (file / branch / diff).
     Artifact,
 }
 
@@ -481,10 +481,10 @@ pub struct BusMessage {
 }
 
 impl BusMessage {
-    /// 這則訊息是否應該進某個 session 的收件匣。
+    /// Whether this message should enter a specific session's inbox.
     ///
-    /// * 自己發出的廣播/頻道訊息不會退回自己收件匣。
-    /// * `Direct` 同時比對 `session_id` 與人類可讀 `label`。
+    /// * Broadcast/channel messages sent by self are not delivered to own inbox.
+    /// * `Direct` matches both `session_id` and human-readable `label`.
     pub fn matches_recipient(&self, session_id: &str, label: Option<&str>) -> bool {
         match &self.to {
             Target::Broadcast | Target::Channel(_) => self.from != session_id,
@@ -569,7 +569,7 @@ impl ArtifactKind {
     }
 }
 
-/// agent 分享的產出物 (檔案、分支或 diff)。
+/// Artifact shared by agent (file, branch, or diff).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: String,
@@ -581,18 +581,18 @@ pub struct Artifact {
     pub ts: u64,
 }
 
-/// 審查者在 diff 行內留下的註解 (M3 review 迴圈)。
+/// Inline review comment on a diff line (M3 review loop).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewComment {
     pub id: String,
     pub session: SessionId,
-    /// 檔案與行號或 diff 行內容摘要。
+    /// File and line number or summary of diff line content.
     pub location: String,
     pub comment: String,
     pub ts: u64,
 }
 
-/// Worktree 摘要資訊 (M3 工作區管理)。
+/// Worktree summary information (M3 workspace management).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorktreeInfo {
     pub session: SessionId,
@@ -605,30 +605,30 @@ pub struct WorktreeInfo {
 }
 
 // ---------------------------------------------------------------------------
-// 核准
+// Permissions
 // ---------------------------------------------------------------------------
 
-/// 統一權限政策：決定 agent 執行工具時要不要問人。
+/// Unified permission policy: determines whether agent tool execution requires human approval.
 ///
-/// 每個 adapter 會把這個政策翻譯成自己協定支援的形式：
-/// * ACP (OpenCode / Antigravity)：`Ask` = 轉發 `session/request_permission`；
-///   `Auto` / `Bypass` = adapter 直接代為核准。
-/// * Claude：以 `--permission-mode` 旗標對應。
-/// * Codex：以 `thread/start` 的 `approvalPolicy` 對應。
+/// Each adapter translates this policy into its protocol-supported form:
+/// * ACP (OpenCode / Antigravity): `Ask` = forwards `session/request_permission`;
+///   `Auto` / `Bypass` = auto-approved directly by adapter.
+/// * Claude: maps to `--permission-mode` flags.
+/// * Codex: maps to `approvalPolicy` in `thread/start`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionPolicy {
-    /// 逐項詢問 (ACP 會把請求轉給 client；不支援的協定則盡量保守)。
+    /// Prompts for each item (ACP forwards requests to client; unsupported protocols remain conservative).
     Ask,
-    /// 自動核准安全操作 (預設)：不中斷流程，但仍保留協定層級的界線。
+    /// Auto-approves safe operations (default): does not interrupt workflows while maintaining protocol boundaries.
     #[default]
     Auto,
-    /// 完全跳過權限檢查，agent 想做什麼都行 (危險)。
+    /// Bypasses all permission checks; agent can perform any operation (dangerous).
     Bypass,
 }
 
 impl PermissionPolicy {
-    /// 寬鬆程度：`ask` < `auto` < `bypass`。
+    /// Permissiveness: `ask` < `auto` < `bypass`.
     pub fn rank(&self) -> u8 {
         match self {
             PermissionPolicy::Ask => 0,
@@ -637,7 +637,7 @@ impl PermissionPolicy {
         }
     }
 
-    /// 取兩者中較嚴格的。
+    /// Takes the more restrictive of the two.
     pub fn min_policy(self, other: PermissionPolicy) -> PermissionPolicy {
         if other.rank() < self.rank() {
             other
@@ -663,12 +663,12 @@ impl PermissionPolicy {
         })
     }
 
-    /// 是否要由 adapter 自行代為核准 (不轉發給人)。
+    /// Whether the adapter auto-approves requests directly (without forwarding to human).
     pub fn auto_approves(&self) -> bool {
         matches!(self, PermissionPolicy::Auto | PermissionPolicy::Bypass)
     }
 
-    /// Claude Code 的 CLI 旗標。
+    /// CLI flags for Claude Code.
     pub fn claude_flags(&self) -> Vec<&'static str> {
         match self {
             PermissionPolicy::Ask => vec!["--permission-mode", "manual"],
@@ -677,15 +677,15 @@ impl PermissionPolicy {
         }
     }
 
-    /// Codex app-server 的 CLI 旗標。
+    /// CLI flags for Codex app-server.
     ///
-    /// `codex app-server` 不透過命令列吃權限設定，而是用 `thread/start` 的
-    /// `approvalPolicy` (見 [`PermissionPolicy::codex_approval_policy`])，因此這裡一律為空。
+    /// `codex app-server` does not accept permission settings via CLI flags; it uses
+    /// `approvalPolicy` (see [`PermissionPolicy::codex_approval_policy`]), so this is always empty.
     pub fn codex_flags(&self) -> Vec<&'static str> {
         vec![]
     }
 
-    /// Codex `thread/start` 的 `approvalPolicy` 值。
+    /// `approvalPolicy` value for Codex `thread/start`.
     pub fn codex_approval_policy(&self) -> &'static str {
         match self {
             PermissionPolicy::Ask => "untrusted",
@@ -705,20 +705,20 @@ impl std::fmt::Display for PermissionPolicy {
 #[serde(rename_all = "snake_case")]
 pub enum Decision {
     Allow,
-    /// 本次 session 內一律允許同類請求。
+    /// Always allows similar requests within this session.
     AllowAlways,
     Deny,
 }
 
-/// agent 送出的核准請求 (已正規化，不分來源協定)。
+/// Normalized permission request sent by agent (regardless of source protocol).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionRequest {
-    /// adapter 內部的請求 id，回覆時要帶回。
+    /// Internal request ID for adapter, returned upon reply.
     pub req: String,
     pub session: SessionId,
-    /// 簡短標題，例如 `Bash`、`Edit`。
+    /// Short title, e.g. `Bash`, `Edit`.
     pub title: String,
-    /// 細節 (指令、路徑、diff 摘要)。
+    /// Details (command, path, diff summary).
     pub detail: String,
 }
 
@@ -726,12 +726,12 @@ pub struct PermissionRequest {
 // Event
 // ---------------------------------------------------------------------------
 
-/// 系統中發生的事。append-only、可序列化、可重播。
+/// System events. Append-only, serializable, replayable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[allow(clippy::large_enum_variant)]
 pub enum Event {
-    /// log 輪替後寫在新檔第一行的完整狀態；重播時以它為起點。seq 沿用輪替當下的值。
+    /// Complete state written to first line of new log file after rotation; replay begins from here. seq inherits value from rotation time.
     Snapshot {
         state: Box<State>,
     },
@@ -742,41 +742,41 @@ pub enum Event {
         session: SessionId,
         status: SessionStatus,
     },
-    /// agent 回報 session 的 context 用量。
+    /// Agent reports session context usage.
     SessionContext {
         session: SessionId,
         used: u64,
         window: Option<u64>,
     },
-    /// agent 回報帳號額度 (用量百分比與重置時間)。
+    /// Agent reports account quota (usage percentage and reset time).
     QuotaUpdated {
         quota: Quota,
     },
-    /// agent 回報額度用完／被限流 (可交接給其他 agent)。
+    /// Agent reports quota exhausted / rate limited (can hand off to other agents).
     SessionLimited {
         session: SessionId,
         detail: String,
     },
-    /// session 從清單移除 (啟動失敗或使用者清除已結束的 session)。
+    /// Session removed from list (startup failure or user cleared terminated session).
     SessionRemoved {
         session: SessionId,
     },
-    /// agent 回報 (或設定指定)的實際 model。
+    /// Actual model reported by agent (or specified in settings).
     SessionModel {
         session: SessionId,
         model: String,
     },
-    /// agent 回報的原生斜線指令。
+    /// Native slash commands reported by agent.
     SessionCommands {
         session: SessionId,
         commands: Vec<String>,
     },
-    /// 執行期切換 (或啟動時設定)的推理強度。
+    /// Reasoning effort switched at runtime (or configured at startup).
     SessionEffort {
         session: SessionId,
         effort: String,
     },
-    /// agent 回報的原生對話 id (接續用)。
+    /// Native conversation ID reported by agent (for resumption).
     SessionNativeId {
         session: SessionId,
         native_id: String,
@@ -785,31 +785,31 @@ pub enum Event {
         session: SessionId,
         label: String,
     },
-    /// agent 透過 `ertangle_status` 更新的簡短狀態說明。
+    /// Short status note updated by agent via `ertangle_status`.
     SessionNote {
         session: SessionId,
         note: String,
     },
-    /// 交接完成：`to` 接手 `from` 的工作 (匯流排訊息會轉給接手者)。
+    /// Handoff complete: `to` takes over work from `from` (bus messages are routed to successor).
     SessionHandedOff {
         from: SessionId,
         to: SessionId,
     },
-    /// 送給 agent 的 prompt (顯示在逐字稿，讓對話有上下文)。
+    /// Prompt sent to agent (displayed in transcript for conversational context).
     UserPrompt {
         session: SessionId,
         text: String,
-        /// 誰送的：`None` = 使用者；否則是送出的 agent session id，或 [`PROMPT_FROM_ERTANGLE`]
-        /// (daemon 自己產生的提醒、通知與交接簡報)。
+        /// Sender: `None` = user; otherwise sender agent session ID, or [`PROMPT_FROM_ERTANGLE`]
+        /// (daemon-generated reminders, notifications, and handoff briefs).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         from: Option<String>,
     },
-    /// agent 的文字輸出 (串流 chunk 或整行)。
+    /// Text output from agent (streaming chunk or complete line).
     Output {
         session: SessionId,
         text: String,
     },
-    /// session 的背景子處理程序清單更新。
+    /// Session background child process list updated.
     SessionBgProcs {
         session: SessionId,
         procs: Vec<BgProc>,
@@ -819,7 +819,7 @@ pub enum Event {
         name: String,
         #[serde(default)]
         input: String,
-        /// `None` = 進行中；`Some(true/false)` = 結束且成功/失敗。
+        /// `None` = in progress; `Some(true/false)` = completed with success/failure.
         ok: Option<bool>,
         #[serde(default)]
         output: Option<String>,
@@ -852,29 +852,29 @@ pub enum Event {
         session: SessionId,
         cost: Cost,
     },
-    /// session 達到成本上限 (已中斷當前回合，並將 `over_budget` 設為 `true`)。
+    /// Session reached cost limit (interrupted current turn and set `over_budget` to `true`).
     SessionOverBudget {
         session: SessionId,
         spent: f64,
         limit: f64,
     },
-    /// 人工調整 session 的成本上限 (同時解除 `over_budget`)。
+    /// Manually adjusted session cost limit (also clears `over_budget`).
     SessionBudget {
         session: SessionId,
         budget_usd: Option<f64>,
     },
-    /// event log 寫入健康狀態 (`ok == false` 表示寫入失敗，TUI 顯示 `log ✗`)。
+    /// Event log write health status (`ok == false` indicates write failure, TUI displays `log ✗`).
     LogHealth {
         ok: bool,
     },
-    /// session 的待送 prompt 佇列變動 (`items` 為原始輸入文字清單，不含附件內容)。
+    /// Session queued prompts changed (`items` contains raw input text list, excluding attachment content).
     QueueChanged {
         session: SessionId,
         items: Vec<String>,
     },
 }
 
-/// 事件 + 序號 + 時間，是對外 (socket / log)傳遞的單位。
+/// Event + sequence number + timestamp; unit of external communication (socket / log).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Record {
     pub seq: Seq,
@@ -884,19 +884,19 @@ pub struct Record {
 }
 
 // ---------------------------------------------------------------------------
-// State：事件的 fold 結果
+// State: fold result of events
 // ---------------------------------------------------------------------------
 
-/// transcript 每個 session 最多保留的行數 (避免長對話吃記憶體)。
+/// Maximum transcript lines retained per session (prevents memory growth on long conversations).
 pub const TRANSCRIPT_CAP: usize = 4000;
-/// `UserPrompt.from` 的值：daemon 自己產生的 prompt (未讀提醒、衝突通知、交接簡報、自動接續)。
+/// Value of `UserPrompt.from`: daemon-generated prompt (unread reminder, conflict notification, handoff brief, auto-resume).
 pub const PROMPT_FROM_ERTANGLE: &str = "ertangle";
-/// 逐字稿中使用者 prompt 的第一行前綴。
+/// Prefix for the first line of user prompts in transcript.
 pub const USER_PROMPT_MARK: &str = "❯ ";
-/// 逐字稿中非使用者 (其他 agent 或 ertangle) 送來的 prompt 第一行前綴，後面接 `[來源] `。
+/// Prefix for the first line of non-user prompts (other agents or ertangle) in transcript, followed by `[source] `.
 pub const OTHER_PROMPT_MARK: &str = "» ";
 
-/// 逐字稿的一行若是 prompt 的第一行，回傳 (來源名稱，`None` = 使用者；prompt 文字)。
+/// If a transcript line is the first line of a prompt, returns (source name, `None` = user; prompt text).
 pub fn parse_prompt_line(line: &str) -> Option<(Option<&str>, &str)> {
     if let Some(rest) = line.strip_prefix(USER_PROMPT_MARK) {
         return Some((None, rest));
@@ -905,13 +905,13 @@ pub fn parse_prompt_line(line: &str) -> Option<(Option<&str>, &str)> {
     let (name, text) = rest.split_once("] ")?;
     Some((Some(name), text))
 }
-/// 已移除但具 `native_id` 的歷史 session 保留上限 (供接續選擇器瀏覽)。
+/// Maximum retained archived sessions with `native_id` (for browsing in resumption selector).
 pub const ARCHIVED_SESSIONS_CAP: usize = 100;
-/// 封存歷史 session 保留的逐字稿行數上限。
+/// Maximum transcript lines retained for archived historical sessions.
 pub const ARCHIVED_TRANSCRIPT_CAP: usize = 200;
-/// bus 訊息保留上限。
+/// Maximum retained bus messages.
 pub const MESSAGE_CAP: usize = 1000;
-/// artifact 保留上限。
+/// Maximum retained artifacts.
 pub const ARTIFACT_CAP: usize = 500;
 
 fn default_true() -> bool {
@@ -922,7 +922,7 @@ fn default_true() -> bool {
 pub struct State {
     pub seq: Seq,
     pub sessions: BTreeMap<SessionId, Session>,
-    /// 已從清單移除但具備 `native_id` 的歷史 session (供接續原對話)。
+    /// Historical sessions removed from active list with `native_id` (for resuming original conversation).
     #[serde(default)]
     pub archived_sessions: BTreeMap<SessionId, Session>,
     pub tasks: BTreeMap<TaskId, Task>,
@@ -931,17 +931,17 @@ pub struct State {
     pub artifacts: Vec<Artifact>,
     #[serde(default)]
     pub reviews: Vec<ReviewComment>,
-    /// 尚未回覆的核准請求。
+    /// Pending approval requests.
     pub pending_permissions: BTreeMap<String, PermissionRequest>,
-    /// session id → 輸出文字行。
+    /// Session ID -> output text lines.
     pub transcripts: HashMap<SessionId, VecDeque<String>>,
-    /// event log 寫入健康狀態 (預設正常)。
+    /// Event log write health status (defaults to normal).
     #[serde(default = "default_true")]
     pub log_ok: bool,
-    /// 各 agent 最近一次回報的額度 (agent id → 額度)。
+    /// Latest quota reported by each agent (agent ID -> quota).
     #[serde(default)]
     pub quotas: BTreeMap<String, Quota>,
-    /// 各 session 排隊中的 prompt 原始輸入文字清單 (session id → items)。
+    /// Queued raw prompt text list per session (session ID -> items).
     #[serde(default)]
     pub queues: BTreeMap<SessionId, Vec<String>>,
 }
@@ -978,7 +978,7 @@ impl State {
         }
     }
 
-    /// 將已結束的 session 從活動清單移出；若具備 `native_id` 則封存至 `archived_sessions` 供日後接續。
+    /// Moves terminated session from active list; archives to `archived_sessions` if possessing `native_id` for future resumption.
     pub fn archive_session(&mut self, session: &str) {
         if let Some(mut s) = self.sessions.remove(session) {
             if s.native_id.is_some() {
@@ -1029,7 +1029,7 @@ impl State {
         self.pending_permissions.retain(|_, p| p.session != session);
     }
 
-    /// 把一個事件套用到狀態上。`rec.seq` 會更新 `self.seq`。
+    /// Applies an event to state. `rec.seq` updates `self.seq`.
     pub fn apply(&mut self, rec: &Record) {
         self.seq = self.seq.max(rec.seq);
         match &rec.event {
@@ -1060,9 +1060,9 @@ impl State {
                 window,
             } => {
                 if let Some(s) = self.sessions.get_mut(session) {
-                    // 視窗大小只在 agent 回報時更新，沒回報就沿用上一次的。
+                    // Window size is updated only when reported by agent; reuses previous size otherwise.
                     let window = window.or(s.context.and_then(|c| c.window));
-                    // used == 0 表示這次只補視窗大小，沿用上一次的用量。
+                    // used == 0 indicates window size update only; reuses previous usage.
                     let used = if *used == 0 {
                         s.context.map_or(0, |c| c.used)
                     } else {
@@ -1128,8 +1128,8 @@ impl State {
                 text,
                 from,
             } => {
-                // 第一行加上前綴：使用者是 `❯ `，其他來源是 `» [來源] ` (agent 以 label 顯示)；
-                // 多行 prompt 的後續行縮排對齊。
+                // Prefix first line: `❯ ` for user, `» [source] ` for other sources (agent shown by label);
+                // indent subsequent lines of multi-line prompts.
                 let head = match from {
                     None => USER_PROMPT_MARK.to_string(),
                     Some(f) => {
@@ -1158,7 +1158,7 @@ impl State {
             }
             Event::Output { session, text } => {
                 let buf = self.transcripts.entry(session.clone()).or_default();
-                // 尾端換行不該產生一個空行；中間的空行則保留。
+                // Trailing newline should not produce an empty line; intermediate empty lines are preserved.
                 let mut parts: Vec<&str> = text.split('\n').collect();
                 if parts.last() == Some(&"") {
                     parts.pop();
@@ -1207,7 +1207,7 @@ impl State {
                     };
                     self.push_transcript_line(session, line);
                 } else if let Some(ok) = ok {
-                    // 工具結果：成功只顯示第一行摘要，失敗要看得到原因。
+                    // Tool results: show one-line summary on success, show failure reason on error.
                     let out = output.as_deref().unwrap_or("");
                     let first = out.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
                     let extra = out
@@ -1304,7 +1304,7 @@ impl State {
         }
     }
 
-    /// 計算 `sid` 的深度 (人直接產生的 session 為第 0 層，子 agent 依序遞增)。
+    /// Calculates depth of `sid` (human-created sessions are level 0, child agents increment sequentially).
     pub fn session_depth(&self, sid: &str) -> usize {
         let mut depth = 0;
         let mut cur = sid;
@@ -1324,7 +1324,7 @@ impl State {
         depth
     }
 
-    /// 沿著 `parent` 往上找到該 session 所屬樹的根 session id。
+    /// Traverses upward along `parent` to find the root session ID of the tree.
     pub fn tree_root(&self, sid: &str) -> SessionId {
         let mut cur = sid;
         let mut seen = std::collections::HashSet::new();
@@ -1342,7 +1342,7 @@ impl State {
         cur.to_string()
     }
 
-    /// 取得與 `sid` 同一棵樹的所有 session id (根與所有後代)。
+    /// Returns all session IDs in the same tree as `sid` (root and all descendants).
     pub fn tree_sessions(&self, sid: &str) -> Vec<SessionId> {
         let root = self.tree_root(sid);
         self.sessions
@@ -1352,7 +1352,7 @@ impl State {
             .collect()
     }
 
-    /// 計算與 `sid` 同一棵樹 (根與所有後代)的美金總花費。
+    /// Calculates total USD cost for the same tree as `sid` (root and all descendants).
     pub fn tree_cost_usd(&self, sid: &str) -> f64 {
         let root = self.tree_root(sid);
         self.sessions
@@ -1362,7 +1362,7 @@ impl State {
             .sum()
     }
 
-    /// 計算 `parent_id` 目前仍在執行 (live)的直接子 session 數量。
+    /// Counts live direct child sessions currently running under `parent_id`.
     pub fn live_children_count(&self, parent_id: &str) -> usize {
         self.sessions
             .values()
@@ -1370,7 +1370,7 @@ impl State {
             .count()
     }
 
-    /// 方便 TUI 依建立時間排序取得 session 清單。
+    /// Helper for TUI to retrieve sessions sorted by creation time.
     pub fn sessions_sorted(&self) -> Vec<&Session> {
         let mut v: Vec<&Session> = self.sessions.values().collect();
         v.sort_by_key(|s| s.created_ms);
@@ -1381,7 +1381,7 @@ impl State {
         self.sessions.values().filter(|s| s.status.is_live())
     }
 
-    /// 計算所有 session 的累計成本與 token 用量。
+    /// Calculates cumulative cost and token usage across all sessions.
     pub fn total_cost(&self) -> Cost {
         let mut total = Cost::default();
         for s in self.sessions.values() {
@@ -1392,8 +1392,8 @@ impl State {
         total
     }
 
-    /// 任務還沒完成的前置任務 (`depends_on` 裡存在且狀態不是 `done` 的)。
-    /// 找不到的 id 不算：它永遠不會完成，算進去會讓任務卡死。
+    /// Incomplete prerequisite tasks (present in `depends_on` with status other than `done`).
+    /// Missing IDs do not count: they will never complete, and counting them would deadlock the task.
     pub fn unfinished_deps(&self, task: &Task) -> Vec<&Task> {
         task.depends_on
             .iter()
@@ -1402,7 +1402,7 @@ impl State {
             .collect()
     }
 
-    /// 以 `id` 或 `label` 解析 session id (優先回傳完全匹配的 id，其次為存活中的同 label session)。
+    /// Resolves session ID by `id` or `label` (prefers exact ID match, then live session with matching label).
     pub fn resolve_session_id(&self, id_or_label: &str) -> Option<SessionId> {
         let needle = id_or_label.trim().trim_start_matches('@');
         if self.sessions.contains_key(needle) {
@@ -1421,7 +1421,7 @@ impl State {
             .map(|s| s.id.clone())
     }
 
-    /// 以 `id`、`label` 或 `native_id` 尋找供 `:resume` 使用的目標 session；回傳 `(Session, is_archived)`。
+    /// Finds target session for `:resume` by `id`, `label`, or `native_id`; returns `(Session, is_archived)`.
     pub fn resolve_resumable_session(&self, id_or_label: &str) -> Option<(Session, bool)> {
         let needle = id_or_label.trim().trim_start_matches('@');
         if needle.is_empty() {
@@ -1476,7 +1476,7 @@ impl State {
         None
     }
 
-    /// 沿 `handed_off_to` 走到最後一個接手者；遇到環或超過 16 層就停在目前這個。
+    /// Follows `handed_off_to` chain to final successor; stops at current node on cycles or exceeding 16 levels.
     pub fn successor_of(&self, id: &str) -> SessionId {
         let mut cur = id.to_string();
         let mut seen = vec![cur.clone()];
@@ -1497,7 +1497,7 @@ impl State {
         cur
     }
 
-    /// 取得某個 session 在 `after_msg_id` 之後收到的訊息。
+    /// Retrieves messages received by a session after `after_msg_id`.
     pub fn inbox_for(&self, session_id: &str, after_msg_id: Option<&str>) -> Vec<BusMessage> {
         let resolved = self
             .resolve_session_id(session_id)
@@ -1514,10 +1514,10 @@ impl State {
             .collect()
     }
 
-    /// 把 session (以及選擇性的整棵子 session 樹)匯出成可直接貼到 PR／Issue 的 Markdown 報告。
+    /// Exports a session (and optionally entire child session tree) into a Markdown report suitable for PR / Issue description.
     ///
-    /// 包含元資料、子 session 階層、關聯任務、逐字稿與選填的 git diff；
-    /// 整份輸出都會經過 [`redact_secrets`] 遮罩，避免貼到外部服務時外洩金鑰。
+    /// Includes metadata, child session hierarchy, associated tasks, transcript, and optional git diff;
+    /// entire output is masked with [`redact_secrets`] to prevent leaking keys to external services.
     pub fn export_markdown(
         &self,
         root_id: &str,
@@ -1543,7 +1543,7 @@ impl State {
         } else {
             vec![root_session]
         };
-        // 根 session 永遠排第一，即使子 session 的建立時間較早。
+        // Root session always comes first, even if child sessions were created earlier.
         if let Some(pos) = members.iter().position(|s| s.id == root) {
             let root_ref = members.remove(pos);
             members.insert(0, root_ref);
@@ -1673,7 +1673,7 @@ impl State {
             match lines {
                 Some(lines) if !lines.is_empty() => {
                     out.push_str("```text\n");
-                    // 成功的工具結果在逐字稿裡只是噪音；失敗 (`✗`) 與使用者提示 (`❯`) 保留。
+                    // Successful tool results are noise in transcripts; failures (`✗`) and user prompts (`❯`) are retained.
                     for line in lines.iter().filter(|l| !l.starts_with("  ✓")) {
                         out.push_str(line);
                         out.push('\n');
@@ -1697,7 +1697,7 @@ impl State {
     }
 }
 
-/// `SessionStatus` 的人類可讀文字 (報告用)。
+/// Human-readable text for `SessionStatus` (for reports).
 fn status_text(status: SessionStatus) -> String {
     match status {
         SessionStatus::Starting => tr!("啟動中"),
@@ -1711,12 +1711,12 @@ fn status_text(status: SessionStatus) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Policy Engine & 秘密保護 (M4)
+// Policy Engine & Secret Protection (M4)
 // ---------------------------------------------------------------------------
 
-/// 權限規則引擎：在 `PermissionPolicy` 之前先過濾明確安全與高風險操作。
+/// Permission rule engine: filters unambiguously safe and high-risk operations before `PermissionPolicy`.
 ///
-/// 可由 `~/.config/ertangle/policy.toml` (或專案 `.ertangle/policy.toml`)覆寫：
+/// Overridable via `~/.config/ertangle/policy.toml` (or project `.ertangle/policy.toml`):
 /// ```toml
 /// allow = ["Read", "Grep", "Glob", "git status"]
 /// deny = ["rm -rf /", "git push --force", "/.ssh/"]
@@ -1752,7 +1752,7 @@ impl Default for PolicyEngine {
 }
 
 impl PolicyEngine {
-    /// 從簡易 TOML 文字解析規則 (未指定的區塊保留預設值)。
+    /// Parses rules from simple TOML text (unspecified sections retain default values).
     pub fn parse_toml(src: &str) -> Self {
         let mut engine = Self::default();
         for raw_line in src.lines() {
@@ -1773,20 +1773,20 @@ impl PolicyEngine {
         engine
     }
 
-    /// 評估一個核准請求：
-    /// * 命中 `deny` → `Some(Decision::Deny)`
-    /// * 命中 `allow` → `Some(Decision::Allow)`
-    /// * 其餘 → `None` (交由 session 的 `PermissionPolicy` 或人類決定)
+    /// Evaluates a permission request:
+    /// * Matches `deny` -> `Some(Decision::Deny)`
+    /// * Matches `allow` -> `Some(Decision::Allow)`
+    /// * Otherwise -> `None` (deferred to session `PermissionPolicy` or human)
     pub fn evaluate(&self, title: &str, detail: &str) -> Option<Decision> {
         let combined = format!("{title} {detail}");
-        // deny 維持保守的子字串比對：寧可多擋。
+        // deny maintains conservative substring matching: prefer false positives.
         for pat in &self.deny {
             if !pat.is_empty() && combined.contains(pat.as_str()) {
                 return Some(Decision::Deny);
             }
         }
-        // allow 要嚴格：工具名稱完全相等，或指令以該規則為「整詞前綴」，
-        // 避免 `Read` 命中 `README`。
+        // allow must be strict: exact tool name match, or command matches rule as full-word prefix,
+        // preventing `Read` from matching `README`.
         let command = command_text(detail);
         for pat in &self.allow {
             if pat.is_empty() {
@@ -1803,7 +1803,7 @@ impl PolicyEngine {
         None
     }
 
-    /// 疊上 repo 層級規則：`deny` 取聯集 (不能移除全域 deny)，`allow` 也合併。
+    /// Layers repo-level rules: `deny` takes union (cannot remove global deny), `allow` also merges.
     pub fn merged_with(&self, local: &PolicyEngine) -> PolicyEngine {
         let mut out = self.clone();
         for d in &local.deny {
@@ -1820,7 +1820,7 @@ impl PolicyEngine {
     }
 }
 
-/// `text` 是否以 `pat` 開頭，且 `pat` 結束處是詞邊界 (空白或結尾)。
+/// Whether `text` starts with `pat` and ends at a word boundary (whitespace or end of string).
 fn word_prefix(text: &str, pat: &str) -> bool {
     let t = text.trim_start();
     t.starts_with(pat)
@@ -1830,9 +1830,9 @@ fn word_prefix(text: &str, pat: &str) -> bool {
             .is_none_or(char::is_whitespace)
 }
 
-/// 從核准請求的 `detail` (通常是 JSON rawInput)取出指令字串。
+/// Extracts command string from permission request `detail` (usually JSON rawInput).
 fn command_text(detail: &str) -> Option<String> {
-    // 不是 JSON 時，整段當作指令文字。
+    // When not JSON, treat entire string as command text.
     let Ok(v) = serde_json::from_str::<serde_json::Value>(detail) else {
         return Some(detail.to_string());
     };
@@ -1854,7 +1854,7 @@ fn parse_string_array(s: &str) -> Vec<String> {
         .collect()
 }
 
-/// 把工具輸入 (JSON 字串)濃縮成一行人看得懂的摘要：優先 command／file_path／pattern 等欄位。
+/// Summarizes tool input (JSON string) into a human-readable one-line summary: prefers command/file_path/pattern fields.
 pub fn tool_summary(input: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(input).ok()?;
     let one_line = |s: &str| -> String {
@@ -1886,7 +1886,7 @@ pub fn tool_summary(input: &str) -> Option<String> {
                     }
                 }
             }
-            // ACP 的 shell 工具在 `tool_call` 階段只帶 `cwd`，把整個 JSON 印出來只是噪音。
+            // Shell tool in ACP only provides `cwd` during `tool_call`; dumping the full JSON is noise.
             if m.keys()
                 .all(|k| matches!(k.as_str(), "cwd" | "workdir" | "timeout"))
             {
@@ -1923,31 +1923,31 @@ mod tool_summary_tests {
     }
 }
 
-/// 某個額度視窗 (例如 Claude 的 5 小時／7 天)。
+/// A specific quota window (e.g. Claude 5 hours / 7 days).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QuotaWindow {
-    /// 顯示名稱：`5h`、`7d`、`30d`…
+    /// Display name: `5h`, `7d`, `30d`…
     pub name: String,
     pub used_percent: f32,
-    /// 重置時間 (epoch 毫秒)。
+    /// Reset timestamp (epoch milliseconds).
     pub resets_at_ms: Option<u64>,
 }
 
-/// 某個 agent 帳號目前的額度狀態 (由 agent 自己回報，非 ertangle 估算)。
+/// Current quota status for an agent account (reported by agent itself, not estimated by ertangle).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Quota {
-    /// agent 種類 id，例如 `claude`、`codex`。
+    /// Agent kind ID, e.g. `claude`, `codex`.
     pub agent: String,
     pub windows: Vec<QuotaWindow>,
-    /// 已達上限／被限流。
+    /// Quota limit reached / rate limited.
     pub reached: bool,
-    /// agent 回報「接近上限」(例如 Claude 的 `allowed_warning`)，仍可使用。
+    /// Agent reported approaching limit warning (e.g. Claude `allowed_warning`), still usable.
     #[serde(default)]
     pub warning: bool,
     pub updated_ms: u64,
 }
 
-/// 把剩餘毫秒轉成 `2h13m`／`45m`／`3d4h`。
+/// Converts remaining milliseconds into `2h13m` / `45m` / `3d4h`.
 pub fn format_remaining(ms: u64) -> String {
     let mins = ms / 60_000;
     match mins {
@@ -1959,7 +1959,7 @@ pub fn format_remaining(ms: u64) -> String {
 }
 
 impl Quota {
-    /// 單行摘要：`claude 5h 39% (重置 1h20m) 7d 22%`。已過重置時間的視窗顯示 `已重置`。
+    /// One-line summary: `claude 5h 39% (reset 1h20m) 7d 22%`. Windows past reset time show `reset`.
     pub fn summary(&self, now_ms: u64) -> String {
         let parts: Vec<String> = self
             .windows
@@ -1983,7 +1983,7 @@ impl Quota {
         format!("{}{} {}", self.agent, reached, parts.join(" · "))
     }
 
-    /// 最吃緊的視窗用量 (百分比)。
+    /// Tightest window usage (percentage).
     pub fn max_used(&self) -> f32 {
         self.windows
             .iter()
@@ -1992,7 +1992,7 @@ impl Quota {
     }
 }
 
-/// 視窗長度 (分鐘)轉成顯示名稱。
+/// Converts window duration (minutes) to display name.
 pub fn window_name(mins: u64) -> String {
     match mins {
         300 => "5h".into(),
@@ -2004,7 +2004,7 @@ pub fn window_name(mins: u64) -> String {
     }
 }
 
-/// 錯誤文字是否像額度用完／被限流 (各 agent 的訊息不一，採保守的關鍵字比對)。
+/// Whether error text resembles quota exhaustion / rate limiting (conservative keyword matching across diverse agent messages).
 pub fn looks_like_limit(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
     (t.contains("limit")
@@ -2020,34 +2020,34 @@ pub fn looks_like_limit(text: &str) -> bool {
         || t.contains("429")
 }
 
-/// 隨 prompt 一起送出的附件 (檔案或圖片)。內容由送出端 (TUI／CLI)讀好並內嵌，
-/// 所以遠端 daemon 也不需要存取同一個檔案系統。
+/// Attachments sent with a prompt (files or images). Content is read and inlined by the sender (TUI/CLI),
+/// so the remote daemon does not need access to the same filesystem.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Attachment {
-    /// 顯示用檔名。
+    /// Display filename.
     pub name: String,
-    /// MIME 類型，例如 `image/png`、`text/plain`。
+    /// MIME type, e.g. `image/png`, `text/plain`.
     pub mime: String,
-    /// 原始路徑 (僅供參考／PTY 使用)。
+    /// Original path (for reference / PTY use only).
     #[serde(default)]
     pub path: Option<String>,
-    /// 圖片的 base64 內容。
+    /// Base64 content of image.
     #[serde(default)]
     pub data: Option<String>,
-    /// 文字檔的內容。
+    /// Content of text file.
     #[serde(default)]
     pub text: Option<String>,
     pub size: u64,
-    /// 使用者原始輸入文字 (含 `@檔名`，供排隊預覽與 `:unqueue` 還原使用)。
+    /// Raw user input text (including `@filename`, for queue preview and `:unqueue` restoration).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_prompt: Option<String>,
 }
 
-/// 圖片附件大小上限 (5 MB)與文字檔內嵌上限 (256 KB)。
+/// Image attachment size limit (5 MB) and text file embedding limit (256 KB).
 pub const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: u64 = 256 * 1024;
 
-/// 依副檔名猜測圖片 MIME；不是圖片回傳 `None`。
+/// Guesses image MIME type from file extension; returns `None` if not an image.
 pub fn image_mime(path: &std::path::Path) -> Option<&'static str> {
     match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
         "png" => Some("image/png"),
@@ -2058,7 +2058,7 @@ pub fn image_mime(path: &std::path::Path) -> Option<&'static str> {
     }
 }
 
-/// 標準 base64 編碼 (含 padding)。
+/// Standard base64 encoding (with padding).
 pub fn base64_encode(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
@@ -2083,8 +2083,8 @@ pub fn base64_encode(bytes: &[u8]) -> String {
 }
 
 impl Attachment {
-    /// 讀取檔案成附件：圖片內嵌 base64 (上限 5 MB)；UTF-8 文字檔內嵌內容 (上限 256 KB，
-    /// 超過就只帶路徑)；其他二進位檔只帶路徑。
+    /// Reads file into an attachment: inlines base64 for images (up to 5 MB); inlines content for UTF-8 text files
+    /// (up to 256 KB; carries path only if exceeded); other binary files carry path only.
     pub fn load(path: &std::path::Path) -> Result<Attachment, String> {
         let meta = std::fs::metadata(path)
             .map_err(|e| tr!("無法讀取 {path}：{e}", path = path.display(), e = e))?;
@@ -2135,7 +2135,7 @@ impl Attachment {
         self.mime.starts_with("image/")
     }
 
-    /// 一行摘要，用於 transcript：`📎 name (image/png, 12 KB)`。
+    /// One-line summary for transcript: `📎 name (image/png, 12 KB)`.
     pub fn summary(&self) -> String {
         format!(
             "📎 {} ({}, {} KB)",
@@ -2146,8 +2146,8 @@ impl Attachment {
     }
 }
 
-/// 把附件併入 prompt 文字：文字檔以 fenced block 內嵌；圖片在 `images_as_text` 為真時改成一行說明
-/// (給不支援圖片區塊的 agent)。
+/// Merges attachments into prompt text: inlines text files in fenced blocks; converts images to a descriptive line
+/// when `images_as_text` is true (for agents without image block support).
 pub fn compose_text(text: &str, atts: &[Attachment], images_as_text: bool) -> String {
     let mut out = text.to_string();
     for a in atts {
@@ -2182,7 +2182,7 @@ pub fn compose_text(text: &str, atts: &[Attachment], images_as_text: bool) -> St
     out
 }
 
-/// 遮罩文字中的常見金鑰與憑證樣式 (寫入 event log 前保護秘密)。
+/// Masks common secrets and token patterns in text (protects secrets before writing to event log).
 pub fn redact_secrets(input: &str) -> String {
     const PREFIXES: &[&str] = &["sk-", "ghp_", "gho_", "AIza", "AKIA", "xoxb-"];
     let mut out = String::with_capacity(input.len());
@@ -2474,7 +2474,7 @@ pub(crate) mod tests {
             },
         ));
         assert_eq!(st.sessions["s1"].native_id.as_deref(), Some("abc"));
-        // 接續後 agent 換了 id：以最新的為準。
+        // After resumption the agent changed its ID: latest takes precedence.
         st.apply(&rec(
             3,
             Event::SessionNativeId {
@@ -2484,7 +2484,7 @@ pub(crate) mod tests {
         ));
         assert_eq!(st.sessions["s1"].native_id.as_deref(), Some("def"));
 
-        // 舊 log 的 Session 沒有 native_id 欄位。
+        // Sessions in older logs do not have the native_id field.
         let mut v = serde_json::to_value(sample_session("old")).unwrap();
         v.as_object_mut().unwrap().remove("native_id");
         let s: Session = serde_json::from_value(v).unwrap();
@@ -2512,7 +2512,7 @@ pub(crate) mod tests {
     #[test]
     fn allow_rules_match_whole_words_only() {
         let p = PolicyEngine::default();
-        // `cat README.md` 不能因 `Read` 被放行
+        // `cat README.md` must not be allowed because of `Read`
         assert_eq!(
             p.evaluate("cat README.md", r#"{"command":"cat README.md"}"#),
             None
@@ -2611,7 +2611,7 @@ pub(crate) mod tests {
         assert_eq!(parse_prompt_line(t[3]), Some((None, "mine")));
         assert_eq!(parse_prompt_line("» quote"), None);
         assert_eq!(parse_prompt_line("plain"), None);
-        // 舊事件沒有 `from`：視為使用者。
+        // Older events do not have `from`: treat as user.
         let old: Event =
             serde_json::from_str(r#"{"kind":"user_prompt","session":"w","text":"x"}"#).unwrap();
         assert!(matches!(old, Event::UserPrompt { from: None, .. }));
@@ -2619,7 +2619,7 @@ pub(crate) mod tests {
 
     #[test]
     fn record_wire_format_is_flat() {
-        // Web 版 (`web/index.html` 的 applyRecord) 依賴事件欄位在頂層；改成巢狀會讓即時更新全部失效。
+        // Web version (applyRecord in `web/index.html`) relies on top-level event fields; nesting would break all real-time updates.
         let r = Record {
             seq: 7,
             ts: 1,
@@ -2654,7 +2654,7 @@ pub(crate) mod tests {
         st.apply(&rec(2, call(None, "Bash")));
         st.apply(&rec(3, call(Some(true), "Bash")));
         st.apply(&rec(4, call(None, "Read")));
-        // 沒有名稱的開始事件不算。
+        // Start events without a name do not count.
         st.apply(&rec(5, call(None, "")));
         assert_eq!(st.sessions["s1"].tool_calls, 2);
     }
@@ -2675,7 +2675,7 @@ pub(crate) mod tests {
             },
         ));
 
-        // 工具開始執行
+        // Tool starts executing
         st.apply(&rec(
             2,
             Event::ToolCall {
@@ -2690,7 +2690,7 @@ pub(crate) mod tests {
         assert_eq!(st.sessions["s1"].active_tools[0].name, "Bash");
         assert!(!st.sessions["s1"].active_tools[0].is_subagent);
 
-        // 原生 Subagent 開始執行
+        // Native subagent starts executing
         st.apply(&rec(
             3,
             Event::ToolCall {
@@ -2704,7 +2704,7 @@ pub(crate) mod tests {
         assert_eq!(st.sessions["s1"].active_tools.len(), 2);
         assert!(st.sessions["s1"].active_tools[1].is_subagent);
 
-        // 第一個工具結束
+        // First tool completes
         st.apply(&rec(
             4,
             Event::ToolCall {
@@ -2718,7 +2718,7 @@ pub(crate) mod tests {
         assert_eq!(st.sessions["s1"].active_tools.len(), 1);
         assert_eq!(st.sessions["s1"].active_tools[0].name, "Task");
 
-        // 回合結束轉為 Idle，清空殘餘 active_tools
+        // Turn ends and transitions to Idle, clearing remaining active_tools
         st.apply(&rec(
             5,
             Event::SessionStatus {
@@ -2728,7 +2728,7 @@ pub(crate) mod tests {
         ));
         assert!(st.sessions["s1"].active_tools.is_empty());
 
-        // 背景處理程序事件更新
+        // Background process event updates
         st.apply(&rec(
             6,
             Event::SessionBgProcs {
@@ -2824,7 +2824,7 @@ pub(crate) mod tests {
         assert!(md.contains("sk-<REDACTED>"), "{md}");
         assert!(!md.contains("sk-1234567890abcdefghijklmnop"), "{md}");
 
-        // 不含子樹時只有根 session 的任務與花費。
+        // Without subtree, contains only root session tasks and costs.
         let md_flat = st.export_markdown("root", false, None).unwrap();
         assert!(!md_flat.contains("子 Session 階層"), "{md_flat}");
         assert!(!md_flat.contains("### worker/impl"), "{md_flat}");
@@ -2926,7 +2926,7 @@ mod attachment_tests {
         });
         let c = st.sessions["s1"].context.unwrap();
         assert_eq!((c.used, c.window), (36_000, Some(200_000)));
-        // 之後只有用量更新時沿用視窗
+        // Reuses window when only usage updates later
         st.apply(&Record {
             seq: 4,
             ts: 0,
@@ -3017,10 +3017,10 @@ mod attachment_tests {
         handoff(&mut st, 11, "b", "c");
         assert_eq!(st.successor_of("a"), "c");
         assert_eq!(st.successor_of("unknown"), "unknown");
-        // 環：c → a，不會無限迴圈，停在環上的最後一個新節點。
+        // Cycle: c -> a, terminates on the last new node in the cycle without infinite looping.
         handoff(&mut st, 12, "c", "a");
         assert_eq!(st.successor_of("a"), "c");
-        // 自己接手自己。
+        // Handoff to itself.
         handoff(&mut st, 13, "a", "a");
         assert_eq!(st.successor_of("a"), "a");
     }
@@ -3111,7 +3111,7 @@ mod attachment_tests {
             assert_eq!(found.id, "ses_arch");
         }
 
-        // 再次啟動 (接續) 時應從 archived_sessions 移除並回到 sessions。
+        // Upon relaunch (resumption), it should be removed from archived_sessions and return to sessions.
         st.apply(&Record {
             seq: 4,
             ts: 103,

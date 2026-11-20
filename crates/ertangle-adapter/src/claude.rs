@@ -1,9 +1,9 @@
-//! Claude Code 的原生 adapter (`--input-format stream-json --output-format stream-json`)。
+//! Native adapter for Claude Code (`--input-format stream-json --output-format stream-json`).
 //!
-//! 這是雙向 NDJSON：我們往 stdin 寫「使用者訊息」，Claude 往 stdout 吐事件。
-//! 因為 Claude Code 沒有原生 ACP，這是它唯一「零額外相依性」的結構化介面。
+//! This is bidirectional NDJSON: we write user messages to stdin, and Claude emits events on stdout.
+//! Since Claude Code does not provide native ACP, this is its only structured interface with zero extra dependencies.
 //!
-//! 觀察到的 wire 形狀 (claude 2.1.x)：
+//! Observed wire shape (claude 2.1.x):
 //!
 //! ```text
 //! → {"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}
@@ -27,11 +27,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tr::tr;
 
-/// 讀取執行中的 Claude 事件流。
+/// Reads the running Claude event stream.
 struct Conn {
     stdin: Mutex<ChildStdin>,
     stream: Mutex<StreamBuf>,
-    /// 這一則訊息是否已經用 delta 串流過 (避免與完整 assistant 訊息重複)。
+    /// Whether this message has already streamed via deltas (avoids duplicate output with the full assistant message).
     saw_delta: AtomicBool,
     tx: Sender<AgentEvent>,
 }
@@ -57,7 +57,7 @@ impl Conn {
         }
     }
 
-    /// 處理一行 stdout。
+    /// Processes a single stdout line.
     fn on_line(&self, line: &str) {
         let Ok(msg) = serde_json::from_str::<Value>(line) else {
             return;
@@ -92,16 +92,16 @@ impl Conn {
                     let _ = self.tx.send(AgentEvent::Commands(names));
                 }
             }
-            // 每次都送：接續後 id 可能換新，以最新的為準。
+            // Send every time: after resuming the ID may change; the latest takes precedence.
             if let Some(id) = msg["session_id"].as_str().filter(|s| !s.is_empty()) {
                 let _ = self.tx.send(AgentEvent::NativeId(id.to_string()));
             }
-            // 狀態由 daemon 在啟動完成時設為 Idle，回合結束由 `result` 設回 Idle；
-            // 這裡不能送 Idle，否則初始 prompt 還在處理時畫面會顯示閒置。
+            // Status is set to Idle by the daemon upon startup completion and restored to Idle by `result` at turn end;
+            // do not emit Idle here, otherwise the UI would appear idle while the initial prompt is still being processed.
         }
     }
 
-    /// 逐字串流 (需要 `--include-partial-messages`)。
+    /// Word-by-word streaming (requires `--include-partial-messages`).
     fn on_stream_event(&self, msg: &Value) {
         let ev = &msg["event"];
         match ev["type"].as_str().unwrap_or("") {
@@ -139,7 +139,7 @@ impl Conn {
                     _ => {}
                 }
             }
-            // 工具呼叫開始時先把文字收尾，順序才對。
+            // Finish text output when a tool call starts so the order is correct.
             "content_block_start" if ev["content_block"]["type"].as_str() == Some("tool_use") => {
                 self.flush_stream();
             }
@@ -147,7 +147,7 @@ impl Conn {
         }
     }
 
-    /// 完整的 assistant 訊息：補上工具呼叫，以及 (沒開 partial 時的)文字。
+    /// Full assistant message: attaches tool calls and text (when partial messages are disabled).
     fn on_assistant(&self, msg: &Value) {
         let content = msg["message"]["content"]
             .as_array()
@@ -156,7 +156,7 @@ impl Conn {
         for block in &content {
             match block["type"].as_str().unwrap_or("") {
                 "text" => {
-                    // 已經用 delta 串流過就不要再輸出一次。
+                    // Do not output again if already streamed via delta.
                     if self.saw_delta.load(Ordering::SeqCst) {
                         self.flush_stream();
                     } else {
@@ -179,7 +179,7 @@ impl Conn {
                 _ => {}
             }
         }
-        // context 用量 = 這一則 assistant 訊息的輸入側 token (含快取)；視窗大小在 `result` 才知道。
+        // Context usage = input tokens for this assistant message (including cache); window size is only known at `result`.
         let u = &msg["message"]["usage"];
         if !u.is_null() {
             let used = u["input_tokens"].as_u64().unwrap_or(0)
@@ -189,11 +189,11 @@ impl Conn {
                 let _ = self.tx.send(AgentEvent::Context { used, window: None });
             }
         }
-        // 不在這裡送逐訊息的 usage：它只有單則訊息的 token 數，會把累計值蓋成很小的數字，
-        // 讓畫面上的成本與 token 在回合中途往回跳。累計值只以 `result` 為準。
+        // Do not emit per-message usage here: it only has tokens for a single message, which would overwrite
+        // cumulative totals with smaller numbers causing costs and tokens to jump backward mid-turn. Cumulative values rely on `result`.
     }
 
-    /// 工具結果 (Claude 用 `user` 訊息回報)。
+    /// Tool result (Claude reports this via a `user` message).
     fn on_tool_results(&self, msg: &Value) {
         let content = msg["message"]["content"]
             .as_array()
@@ -206,7 +206,7 @@ impl Conn {
             let ok = !block["is_error"].as_bool().unwrap_or(false);
             let output = match &block["content"] {
                 Value::String(s) => s.clone(),
-                // MCP 工具回傳 [{"type":"text","text":...}]：取出文字，不顯示 JSON 外殼。
+                // MCP tool returns [{"type":"text","text":...}]: extract text, do not show JSON envelope.
                 Value::Array(parts) if parts.iter().all(|p| p["text"].is_string()) => parts
                     .iter()
                     .filter_map(|p| p["text"].as_str())
@@ -229,7 +229,7 @@ impl Conn {
             .as_object()
             .and_then(|m| m.values().filter_map(|v| v["contextWindow"].as_u64()).max())
         {
-            // 用量沿用最近一則 assistant 訊息的值，這裡只補上視窗大小。
+            // Reuse usage from the latest assistant message; here only fill in the window size.
             let _ = self.tx.send(AgentEvent::Context {
                 used: 0,
                 window: Some(window),
@@ -254,11 +254,11 @@ impl Conn {
     }
 }
 
-/// 解析 `rate_limit_event`：`unifiedWindows` 每個視窗有 `utilization`(0..1)與 `resetsAt` (秒)。
+/// Parses `rate_limit_event`: each window in `unifiedWindows` has `utilization` (0..1) and `resetsAt` (seconds).
 pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<ertangle_core::Quota> {
     let info = &msg["rate_limit_info"];
     let mut windows: Vec<ertangle_core::QuotaWindow> = Vec::new();
-    // `allowed_warning` (接近上限的提醒) 仍可使用，只有 `rejected` 之類非 `allowed*` 的狀態才算用完。
+    // `allowed_warning` (approaching limit warning) is still usable; only non-`allowed*` statuses like `rejected` count as exhausted.
     let blocked = |v: &Value| v.as_str().is_some_and(|s| !s.starts_with("allowed"));
     let mut reached = blocked(&info["status"]);
     let warns = |v: &Value| v.as_str() == Some("allowed_warning");
@@ -295,7 +295,7 @@ pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<ertangle_core::Quota
     })
 }
 
-/// 從 Anthropic 的 usage 區塊估算成本 (Claude 只在 `result` 給總額)。
+/// Estimates cost from Anthropic's usage block (Claude only provides totals in `result`).
 fn result_cost(msg: &Value) -> Option<Cost> {
     let usd = msg["total_cost_usd"].as_f64()?;
     let usage = &msg["usage"];
@@ -317,10 +317,10 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// 控制把手
+// Control handle
 // ---------------------------------------------------------------------------
 
-/// 切換 model 的控制訊息。
+/// Control message for switching models.
 fn set_model_request(model: &str) -> Value {
     json!({
         "type": "control_request",
@@ -347,7 +347,7 @@ impl AgentControl for ClaudeControl {
         }))
     }
 
-    /// 送一個 interrupt 控制訊息 (best-effort；Claude 沒有公開的取消 API)。
+    /// Sends an interrupt control message (best-effort; Claude has no public cancellation API).
     fn cancel(&self) -> Result<()> {
         self.conn.flush_stream();
         self.conn.send_raw(&json!({
@@ -382,7 +382,7 @@ impl AgentControl for ClaudeControl {
         crate::signal_pgid(pid, "-CONT").or_else(|_| crate::signal_pid(pid, "-CONT"))
     }
 
-    /// Claude 的逐項核准透過 `--permission-prompt-tool` (MCP `ertangle_approve`) 由 daemon 處理。
+    /// Claude's per-item permissions are handled by the daemon via `--permission-prompt-tool` (MCP `ertangle_approve`).
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
         bail!(
             "{}",
@@ -394,7 +394,7 @@ impl AgentControl for ClaudeControl {
         "stream-json"
     }
 
-    /// `control_request` 的 `set_model` (實測可用)與 `apply_flag_settings`(effortLevel)。
+    /// `control_request` for `set_model` (verified working) and `apply_flag_settings` (effortLevel).
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         if let Some(e) = effort {
             crate::check_effort(e)?;
@@ -414,10 +414,10 @@ impl AgentControl for ClaudeControl {
 }
 
 // ---------------------------------------------------------------------------
-// 啟動
+// Startup
 // ---------------------------------------------------------------------------
 
-/// Claude 的 user content：文字 (含內嵌的文字檔)加上 base64 圖片區塊。
+/// Claude's user content: text (including inlined text files) plus base64 image blocks.
 fn user_content(text: &str, atts: &[ertangle_core::Attachment]) -> Value {
     let mut blocks =
         vec![json!({ "type": "text", "text": ertangle_core::compose_text(text, atts, false) })];
@@ -432,7 +432,7 @@ fn user_content(text: &str, atts: &[ertangle_core::Attachment]) -> Value {
     Value::Array(blocks)
 }
 
-/// 權限與系統提示相關的命令列參數 (唯讀、放行／禁止工具、固定放行的 ertangle MCP 工具、附加系統提示)。
+/// Command-line arguments related to permissions and system prompt (read-only, allowed/disallowed tools, fixed ertangle MCP tools, appended system prompt).
 pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     if let Some(e) = &spec.effort {
@@ -446,7 +446,7 @@ pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     } else {
         out.extend(spec.permission.claude_flags().into_iter().map(String::from));
     }
-    // 非 bypass 時，需要核准的工具呼叫交給 ertangle (規則引擎／使用者)決定。
+    // When not bypass, tool calls requiring approval are deferred to ertangle (rule engine / user).
     if spec.mcp_exe.is_some() && spec.permission != ertangle_core::PermissionPolicy::Bypass {
         out.extend([
             "--permission-prompt-tool".into(),
@@ -471,7 +471,7 @@ pub fn permission_args(spec: &SessionSpec) -> Vec<String> {
     out
 }
 
-/// 固定的 stream-json 參數，加上 model 與接續 (`--resume <id>`：接回原對話，實測 id 不變)。
+/// Fixed stream-json arguments plus model and resume (`--resume <id>`: reconnects to original conversation; verified ID does not change).
 fn base_args(spec: &SessionSpec) -> Vec<String> {
     let mut out: Vec<String> = [
         "-p",
@@ -570,7 +570,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         let child = child.clone();
         let tx = tx.clone();
         std::thread::spawn(move || {
-            // try_wait 輪詢：不能在阻塞 wait 期間握著鎖，否則 kill() 會死鎖。
+            // Poll with try_wait: do not hold lock during blocking wait, otherwise kill() will deadlock.
             let code = loop {
                 let status = {
                     let mut c = child.lock().unwrap_or_else(|e| e.into_inner());

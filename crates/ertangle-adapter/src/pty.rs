@@ -1,7 +1,7 @@
-//! PTY 直通 adapter。
+//! PTY passthrough adapter.
 //!
-//! 把 agent CLI 當成一個在偽終端機裡跑的互動處理程序：輸出直接變成 [`AgentEvent::Output`]，
-//! 使用者輸入寫回 PTY。這條路**對任何 CLI agent 都有效**，是萬用後備。
+//! Treats the agent CLI as an interactive process running inside a pseudo-terminal: output directly becomes [`AgentEvent::Output`],
+//! and user input is written back to the PTY. This approach **works for any CLI agent** and serves as a universal fallback.
 
 use crate::{AgentControl, AgentEvent, SessionSpec};
 use anyhow::{Context, Result};
@@ -66,7 +66,7 @@ impl AgentControl for PtyControl {
         Ok(())
     }
 
-    /// PTY 沒有結構化協定，無法逐項核准。
+    /// PTY has no structured protocol and cannot handle per-item permission approval.
     fn resolve_permission(&self, _req: &str, _decision: Decision) -> Result<()> {
         Ok(())
     }
@@ -124,11 +124,11 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
-    // 讀取輸出：剝掉終端機控制碼後即時送出，但略過「整段都是空白」的重繪 chunk。
+    // Read output: strip terminal escape codes and send in real time, but skip redraw chunks that are entirely whitespace.
     //
-    // 註：全螢幕 TUI (opencode/claude/agy 互動模式)是螢幕導向輸出，只靠 escape
-    // 序列定位，純文字抽取天生不完美。可讀的結構化輸出請走 ACP / headless；
-    // 這裡是萬用後備。完整的 vt100 終端機模擬留待後續。
+    // Note: Fullscreen TUIs (opencode/claude/agy interactive mode) use screen-oriented output positioned
+    // solely with escape sequences, so plain text extraction is inherently imperfect. For readable structured output,
+    // use ACP / headless; this is a universal fallback. Full vt100 terminal emulation is deferred for later.
     {
         let tx = tx.clone();
         std::thread::spawn(move || {
@@ -147,13 +147,13 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                             break;
                         }
                     }
-                    Err(_) => break, // 子處理程序結束時 Linux 會回 EIO
+                    Err(_) => break, // Linux returns EIO when the child process exits
                 }
             }
         });
     }
 
-    // 等待結束 (用 try_wait 輪詢，避免在阻塞 wait 期間一直握著鎖而讓 kill 死鎖)。
+    // Wait for termination (poll with try_wait to avoid holding the lock during a blocking wait, which would deadlock kill).
     let child = Arc::new(Mutex::new(child));
     {
         let child = child.clone();
