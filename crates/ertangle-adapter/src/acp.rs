@@ -26,18 +26,38 @@ const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
 /// `session/load` must wait for the agent to replay the entire history, which takes longer than a normal call for long conversations.
 const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 
+/// Collected answers for a multi-field elicitation: field key -> (multi-select, answers).
+type ElicitationAnswers = Arc<Mutex<HashMap<String, (bool, Vec<String>)>>>;
+
 /// Pending question state for ACP elicitation or tool-call fallback.
 enum PendingAcpQuestion {
     Elicitation {
         rpc_id: Value,
         key: String,
+        multi_select: bool,
         total: usize,
-        answers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+        answers: ElicitationAnswers,
     },
     ToolCall {
         total: usize,
         answers: Arc<Mutex<Vec<String>>>,
     },
+}
+
+/// Builds form content that conforms to the ACP elicitation schema.
+///
+/// Single-select fields carry a scalar string; only multi-select fields carry an array.
+fn elicitation_accept_content(entries: &[(String, bool, Vec<String>)]) -> Value {
+    let mut content = serde_json::Map::new();
+    for (key, multi_select, answers) in entries {
+        let value = if !multi_select && answers.len() == 1 {
+            json!(answers[0])
+        } else {
+            json!(answers)
+        };
+        content.insert(key.clone(), value);
+    }
+    Value::Object(content)
 }
 
 struct Conn {
@@ -341,11 +361,15 @@ impl Conn {
         let shared_answers = Arc::new(Mutex::new(HashMap::new()));
         let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
         for (q, key) in list {
+            let mut answers = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
+            answers.insert(key.clone(), (q.multi_select, Vec::new()));
+            drop(answers);
             q_map.insert(
                 q.id.clone(),
                 PendingAcpQuestion::Elicitation {
                     rpc_id: jid.clone(),
                     key,
+                    multi_select: q.multi_select,
                     total,
                     answers: Arc::clone(&shared_answers),
                 },
@@ -367,6 +391,7 @@ impl Conn {
             PendingAcpQuestion::Elicitation {
                 rpc_id,
                 key,
+                multi_select,
                 total,
                 answers: shared_answers,
             } => {
@@ -378,16 +403,10 @@ impl Conn {
                     });
                     drop(q_map);
 
-                    self.respond(
-                        &rpc_id,
-                        json!({
-                            "action": "decline",
-                            "outcome": { "outcome": "cancelled" }
-                        }),
-                    );
+                    self.respond(&rpc_id, json!({ "action": "decline" }));
                 } else {
                     let mut map = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
-                    map.insert(key, answers.to_vec());
+                    map.insert(key, (multi_select, answers.to_vec()));
                     if map.len() == total {
                         let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
                         q_map.retain(|_, v| match v {
@@ -396,16 +415,17 @@ impl Conn {
                         });
                         drop(q_map);
 
-                        let mut content = serde_json::Map::new();
-                        for (k, v) in map.iter() {
-                            content.insert(k.clone(), json!(v));
-                        }
+                        let entries: Vec<(String, bool, Vec<String>)> = map
+                            .iter()
+                            .map(|(k, (multi, ans))| (k.clone(), *multi, ans.clone()))
+                            .collect();
+                        drop(map);
+
                         self.respond(
                             &rpc_id,
                             json!({
                                 "action": "accept",
-                                "content": content,
-                                "outcome": { "outcome": "selected" }
+                                "content": elicitation_accept_content(&entries)
                             }),
                         );
                     }
@@ -1035,6 +1055,26 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
 #[cfg(test)]
 mod model_tests {
     use super::*;
+
+    #[test]
+    fn elicitation_content_uses_scalar_for_single_select() {
+        let entries = vec![
+            ("strategy".to_string(), false, vec!["balanced".to_string()]),
+            (
+                "tags".to_string(),
+                true,
+                vec!["api".to_string(), "ui".to_string()],
+            ),
+        ];
+        assert_eq!(
+            elicitation_accept_content(&entries),
+            json!({ "strategy": "balanced", "tags": ["api", "ui"] })
+        );
+        assert_eq!(
+            elicitation_accept_content(&[("custom".to_string(), false, Vec::new())]),
+            json!({ "custom": [] })
+        );
+    }
 
     #[test]
     fn extracts_request_id_with_safe_fallback() {

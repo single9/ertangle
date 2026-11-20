@@ -29,12 +29,30 @@ use tr::tr;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Collected answers for a multi-field elicitation: field key -> (multi-select, answers).
+type ElicitationAnswers = Arc<Mutex<HashMap<String, (bool, Vec<String>)>>>;
+
 struct PendingQuestion {
     rpc_id: Value,
     method: String,
     q_key: String,
+    multi_select: bool,
     total: usize,
-    answers: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    answers: ElicitationAnswers,
+}
+
+/// Builds elicitation form content that conforms to the schema.
+fn elicitation_content(entries: &[(String, bool, Vec<String>)]) -> Value {
+    let mut content = serde_json::Map::new();
+    for (key, multi_select, answers) in entries {
+        let value = if !multi_select && answers.len() == 1 {
+            json!(answers[0])
+        } else {
+            json!(answers)
+        };
+        content.insert(key.clone(), value);
+    }
+    Value::Object(content)
 }
 
 /// Build the JSON-RPC result for Codex `item/tool/requestUserInput`.
@@ -155,6 +173,7 @@ impl Conn {
                             rpc_id: id.clone(),
                             method: method.to_string(),
                             q_key,
+                            multi_select: q.multi_select,
                             total,
                             answers: Arc::clone(&shared_answers),
                         },
@@ -174,12 +193,16 @@ impl Conn {
                 let shared_answers = Arc::new(Mutex::new(HashMap::new()));
                 let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
                 for (q, q_key) in list {
+                    let mut answers = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
+                    answers.insert(q_key.clone(), (q.multi_select, Vec::new()));
+                    drop(answers);
                     q_map.insert(
                         q.id.clone(),
                         PendingQuestion {
                             rpc_id: id.clone(),
                             method: method.to_string(),
                             q_key,
+                            multi_select: q.multi_select,
                             total,
                             answers: Arc::clone(&shared_answers),
                         },
@@ -637,6 +660,7 @@ impl AgentControl for CodexControl {
             rpc_id,
             method,
             q_key,
+            multi_select,
             total,
             answers: shared_answers,
         }) = entry
@@ -666,7 +690,7 @@ impl AgentControl for CodexControl {
         }
 
         let mut map = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
-        map.insert(q_key, answers.to_vec());
+        map.insert(q_key, (multi_select, answers.to_vec()));
         if map.len() == total {
             let mut q_map = self
                 .conn
@@ -678,14 +702,14 @@ impl AgentControl for CodexControl {
 
             if method == "item/tool/requestUserInput" {
                 let result = if map.len() == 1 {
-                    if let Some((k, ans)) = map.iter().next() {
+                    if let Some((k, (_, ans))) = map.iter().next() {
                         user_input_answer_result(ans, k)
                     } else {
                         json!({ "answers": {} })
                     }
                 } else {
                     let mut answers_by_id = serde_json::Map::new();
-                    for (k, ans) in map.iter() {
+                    for (k, (_, ans)) in map.iter() {
                         answers_by_id.insert(k.clone(), json!({ "answers": ans, "other": null }));
                     }
                     json!({ "answers": answers_by_id })
@@ -696,16 +720,17 @@ impl AgentControl for CodexControl {
                     "result": result
                 }))
             } else {
-                let mut content = serde_json::Map::new();
-                for (k, ans) in map.iter() {
-                    content.insert(k.clone(), json!(ans));
-                }
+                let entries: Vec<(String, bool, Vec<String>)> = map
+                    .iter()
+                    .map(|(k, (multi, ans))| (k.clone(), *multi, ans.clone()))
+                    .collect();
+                drop(map);
                 self.conn.write(&json!({
                     "jsonrpc": "2.0",
                     "id": rpc_id,
                     "result": {
                         "action": "accept",
-                        "content": content
+                        "content": elicitation_content(&entries)
                     }
                 }))
             }
@@ -1032,6 +1057,22 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn elicitation_content_uses_scalar_for_single_select() {
+        let entries = vec![
+            ("env".to_string(), false, vec!["production".to_string()]),
+            (
+                "features".to_string(),
+                true,
+                vec!["a".to_string(), "b".to_string()],
+            ),
+        ];
+        assert_eq!(
+            elicitation_content(&entries),
+            json!({ "env": "production", "features": ["a", "b"] })
+        );
+    }
 
     #[test]
     fn user_input_answer_result_has_codex_shape() {
