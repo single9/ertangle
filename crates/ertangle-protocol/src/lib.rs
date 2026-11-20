@@ -371,6 +371,13 @@ pub enum Request {
         #[serde(default)]
         force: bool,
     },
+    /// Archive every ended session that is merged or has no worktree, removing merged
+    /// worktrees safely. Live sessions and unmerged work are never touched.
+    Prune {
+        /// Restrict to sessions of this project root (absolute path); `None` = all.
+        #[serde(default)]
+        project: Option<String>,
+    },
     /// 對某個 session 的 diff 行留下審查註解並送回該 agent 修正。
     ReviewComment {
         session: SessionId,

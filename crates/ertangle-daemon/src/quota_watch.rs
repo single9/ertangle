@@ -571,6 +571,7 @@ mod tests {
                 active_tools: Vec::new(),
                 bg_procs: Vec::new(),
                 tool_calls: 0,
+                ended_ms: None,
             }
         }
 

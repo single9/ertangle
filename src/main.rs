@@ -374,6 +374,12 @@ enum Cmd {
         #[arg(long)]
         body: String,
     },
+    /// Archive ended sessions that are merged or have no worktree
+    Prune {
+        /// Only sessions of this project root (default: all projects)
+        #[arg(long)]
+        project: Option<String>,
+    },
     /// 清理已結束或指定的 worktree (M3)
     Gc {
         /// 只清理特定 session 的 worktree；未指定則清理所有已結束者
@@ -666,6 +672,7 @@ fn main() -> Result<()> {
             body,
         } => cmd_pr(session, title, body),
         Cmd::Gc { session, force } => cmd_gc(session, force),
+        Cmd::Prune { project } => cmd_prune(project),
         Cmd::Cost { json } => cmd_cost(json),
         Cmd::Budget { session, amount } => cmd_budget(session, amount),
         Cmd::Quota { json } => cmd_quota(json),

@@ -85,3 +85,11 @@ pub(crate) fn cmd_gc(session: Option<String>, force: bool) -> Result<()> {
     }
     Ok(())
 }
+
+pub(crate) fn cmd_prune(project: Option<String>) -> Result<()> {
+    let frame = roundtrip(&Request::Prune { project })?;
+    if let Frame::Ok { note: Some(n) } = frame {
+        println!("{n}");
+    }
+    Ok(())
+}

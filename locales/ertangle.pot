@@ -178,6 +178,14 @@ msgid "Agent 種類：opencode / claude / codex / antigravity；可加 `:model` 
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "Archive ended sessions that are merged or have no worktree"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "Only sessions of this project root (default: all projects)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "Project directory (TUI default and session spawn cwd)"
 msgstr ""
 
@@ -2019,6 +2027,26 @@ msgstr ""
 
 #: crates/ertangle-daemon/src/server.rs
 msgid "ertangle Web 版已啟動：{url}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/sweep.rs
+msgid "已封存 {n} 個 session"
+msgstr ""
+
+#: crates/ertangle-daemon/src/sweep.rs
+msgid "；略過 {count} 個：{list}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/sweep.rs
+msgid "worktree 仍被 {user} 使用"
+msgstr ""
+
+#: crates/ertangle-daemon/src/sweep.rs
+msgid "移除失敗：{e}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/sweep.rs
+msgid "未自動封存：{reason}"
 msgstr ""
 
 #: crates/ertangle-daemon/src/web.rs

@@ -449,6 +449,30 @@ impl WebCfg {
     }
 }
 
+/// Session retention settings (`[sessions]`).
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct SessionsCfg {
+    /// Maximum archived sessions kept for `:resume` browsing (default 100).
+    pub archive_max: Option<usize>,
+    /// Archived sessions older than this many days (since they ended) are dropped (default 30).
+    pub archive_max_days: Option<u64>,
+}
+
+impl SessionsCfg {
+    /// Effective archive count limit.
+    pub fn archive_max(&self) -> usize {
+        self.archive_max
+            .unwrap_or(ertangle_core::ARCHIVED_SESSIONS_CAP)
+    }
+
+    /// Effective archive age limit in days.
+    pub fn archive_max_days(&self) -> u64 {
+        self.archive_max_days
+            .unwrap_or(ertangle_core::ARCHIVED_MAX_DAYS)
+    }
+}
+
 /// Git 與 worktree 相關設定 ([git])。
 /// 為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫任意 shell 指令。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
@@ -480,6 +504,8 @@ pub struct Config {
     pub tui: TuiCfg,
     /// Git 與 worktree 設定；為安全起見僅讀取全域設定檔。
     pub git: GitCfg,
+    /// Session retention (`[sessions]`); global config only.
+    pub sessions: SessionsCfg,
     /// Web 版支援設定；為安全起見僅讀取全域設定檔。
     pub web: WebCfg,
     /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。

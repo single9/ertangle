@@ -4,6 +4,8 @@
 #[allow(dead_code)]
 pub(super) const HELP_STRINGS: &[&str] = &[
     ertangle_core::tr_noop!("Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)"),
+    ertangle_core::tr_noop!("Archive ended sessions that are merged or have no worktree"),
+    ertangle_core::tr_noop!("Only sessions of this project root (default: all projects)"),
     ertangle_core::tr_noop!("Project directory (TUI default and session spawn cwd)"),
     ertangle_core::tr_noop!("Scope: here (this project only) / all (all projects, default)"),
     ertangle_core::tr_noop!("Session id 或標籤"),

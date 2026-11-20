@@ -31,6 +31,7 @@ fn sample_app(lines: &[&str]) -> App {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
     app.state.sessions.insert(s.id.clone(), s);
     let deque: VecDeque<String> = lines.iter().map(|l| l.to_string()).collect();
@@ -1379,6 +1380,7 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
     for s in [
         mk("a", "/work/alpha", None),
@@ -2196,6 +2198,7 @@ fn resume_picker_lists_ended_filters_and_resumes() {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
 
     // 2. 舊的已結束 session，具備 native_id (可接續)
@@ -2225,6 +2228,7 @@ fn resume_picker_lists_ended_filters_and_resumes() {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
 
     // 3. 新的失敗 session，沒有 native_id (不可接續)
@@ -2254,6 +2258,7 @@ fn resume_picker_lists_ended_filters_and_resumes() {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
 
     app.state.sessions.insert("ses_live".into(), s_live);
@@ -4019,6 +4024,7 @@ fn test_resume_picker_scope_filtering_and_parent_resolution() {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
     app.state
         .sessions
@@ -4139,6 +4145,7 @@ fn test_resume_picker_tab_toggle_and_project_command() {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
     app.state.sessions.insert("ses_ended".into(), s_ended);
 
@@ -4237,6 +4244,7 @@ fn test_question_picker_single_and_multi_select() {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
     app.state.sessions.insert("ses_q".into(), s);
     app.selected = 0;
@@ -4426,6 +4434,7 @@ fn make_test_session(id: &str) -> Session {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     }
 }
 

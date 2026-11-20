@@ -335,6 +335,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     };
     shared.emit(Event::SessionStarted {
         session: session.clone(),
@@ -1260,18 +1261,28 @@ pub(crate) fn handle_remove(shared: &Arc<Shared>, reply: &ClientTx, session: Str
     let _ = reply.send(Frame::ok_note(tr!("已移除 {label}", label = s.label)));
 }
 
+/// Kills a live session's agent process and marks it exited. Returns the resolved id, or
+/// `None` when no live control handle exists for `session`.
+pub(crate) fn stop_session(
+    shared: &Arc<Shared>,
+    session: &str,
+) -> Option<ertangle_core::SessionId> {
+    let (sid, ctl) = shared.control(session)?;
+    let _ = ctl.kill();
+    // 立刻拿掉控制把手：處理程序的結束事件要過一會才到，這段期間送來的 prompt
+    // 不該再寫進已經被殺掉的處理程序 (會把剛標成結束的 session 又變回 busy，擋住接續)。
+    lock(&shared.inner).sessions.remove(&sid);
+    shared.emit(Event::SessionExited {
+        session: sid.clone(),
+        code: None,
+    });
+    shared.clear_queue_for_ended(&sid, false);
+    Some(sid)
+}
+
 pub(crate) fn handle_kill(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
-    match shared.control(&session) {
-        Some((sid, ctl)) => {
-            let _ = ctl.kill();
-            // 立刻拿掉控制把手：處理程序的結束事件要過一會才到，這段期間送來的 prompt
-            // 不該再寫進已經被殺掉的處理程序 (會把剛標成結束的 session 又變回 busy，擋住接續)。
-            lock(&shared.inner).sessions.remove(&sid);
-            shared.emit(Event::SessionExited {
-                session: sid.clone(),
-                code: None,
-            });
-            shared.clear_queue_for_ended(&sid, false);
+    match stop_session(shared, &session) {
+        Some(_) => {
             let _ = reply.send(Frame::ok());
         }
         None => {

@@ -136,6 +136,13 @@ pub(crate) fn handle_merge(
             match merge_worktree_strategy(&session_repo(&default_cwd, &s), &s, strategy, dry_run) {
                 Ok(msg) => {
                     let _ = reply.send(Frame::ok_note(msg));
+                    if !dry_run {
+                        // A merged, finished worker can be archived right away.
+                        let sh = shared.clone();
+                        std::thread::spawn(move || {
+                            sh.sweep_workers();
+                        });
+                    }
                 }
                 Err(e) => {
                     if let Some(conflict) = e.downcast_ref::<MergeConflict>() {

@@ -236,6 +236,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         Request::WorktreeGc { session, force } => {
             worktree::handle_gc(shared, reply, session, force)
         }
+        Request::Prune { project } => crate::sweep::handle_prune(shared, reply, project),
         Request::ReviewComment {
             session,
             location,

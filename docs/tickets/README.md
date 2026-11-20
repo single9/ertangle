@@ -77,6 +77,7 @@
 | [T70](T70-inbox-cursor-and-dead-assignee.md) | Persist inbox cursors; warn on dead task assignee | P2 | — |
 | [T71](T71-web-review-question-stale.md) | Web: question card stays in Review after answering | P1 | — |
 | [T72](T72-tui-picker-remote-resolve-and-editing.md) | TUI picker: close on remote answer, editable custom answer | P1 | — |
+| [T73](T73-session-cleanup.md) | Session cleanup: auto-archive merged workers, retention, prune | P2 | — |
 
 ## Language convention
 

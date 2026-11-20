@@ -354,9 +354,18 @@ pub struct Session {
     /// Cumulative tool call count (counts start events only; approximate turn count, absent in older logs).
     #[serde(default)]
     pub tool_calls: u32,
+    /// When the session last stopped being live (ms since epoch). Drives the retention
+    /// clocks for ended sessions and archived entries; absent in older logs.
+    #[serde(default)]
+    pub ended_ms: Option<u64>,
 }
 
 impl Session {
+    /// Time the session ended, falling back to creation time for older logs.
+    pub fn ended_or_created_ms(&self) -> u64 {
+        self.ended_ms.unwrap_or(self.created_ms)
+    }
+
     /// Which project this session belongs to: main repo for worktrees, otherwise working directory.
     pub fn project_root(&self) -> &str {
         self.repo_root.as_deref().unwrap_or(&self.cwd)
@@ -831,6 +840,10 @@ pub enum Event {
     SessionRemoved {
         session: SessionId,
     },
+    /// Archived sessions dropped by retention (count or age limit).
+    ArchivePruned {
+        sessions: Vec<SessionId>,
+    },
     /// Actual model reported by agent (or specified in settings).
     SessionModel {
         session: SessionId,
@@ -989,8 +1002,10 @@ pub fn parse_prompt_line(line: &str) -> Option<(Option<&str>, &str)> {
     let (name, text) = rest.split_once("] ")?;
     Some((Some(name), text))
 }
-/// Maximum retained archived sessions with `native_id` (for browsing in resumption selector).
+/// Default maximum retained archived sessions with `native_id` (for browsing in resumption selector).
 pub const ARCHIVED_SESSIONS_CAP: usize = 100;
+/// Default maximum age of archived sessions, counted from when they ended.
+pub const ARCHIVED_MAX_DAYS: u64 = 30;
 /// Maximum transcript lines retained for archived historical sessions.
 pub const ARCHIVED_TRANSCRIPT_CAP: usize = 200;
 /// Maximum retained bus messages.
@@ -1113,18 +1128,6 @@ impl State {
                     }
                 }
                 self.archived_sessions.insert(session.to_string(), s);
-                while self.archived_sessions.len() > ARCHIVED_SESSIONS_CAP {
-                    let Some(oldest_id) = self
-                        .archived_sessions
-                        .values()
-                        .min_by_key(|a| (a.created_ms, a.id.clone()))
-                        .map(|a| a.id.clone())
-                    else {
-                        break;
-                    };
-                    self.archived_sessions.remove(&oldest_id);
-                    self.transcripts.remove(&oldest_id);
-                }
             } else {
                 self.transcripts.remove(session);
             }
@@ -1134,6 +1137,30 @@ impl State {
         self.queues.remove(session);
         self.pending_permissions.retain(|_, p| p.session != session);
         self.pending_questions.retain(|_, q| q.session != session);
+    }
+
+    /// Archived session ids that exceed the retention limits: older than `max_days`
+    /// (counted from when they ended) or beyond the newest `max_count` entries.
+    pub fn archived_to_prune(
+        &self,
+        now_ms: u64,
+        max_count: usize,
+        max_days: u64,
+    ) -> Vec<SessionId> {
+        let max_age_ms = max_days.saturating_mul(86_400_000);
+        let mut by_age: Vec<(&SessionId, u64)> = self
+            .archived_sessions
+            .iter()
+            .map(|(id, s)| (id, s.ended_or_created_ms()))
+            .collect();
+        // Newest first; ties broken by id for determinism.
+        by_age.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+        by_age
+            .into_iter()
+            .enumerate()
+            .filter(|(i, (_, ended))| *i >= max_count || now_ms.saturating_sub(*ended) > max_age_ms)
+            .map(|(_, (id, _))| id.clone())
+            .collect()
     }
 
     /// Applies an event to state. `rec.seq` updates `self.seq`.
@@ -1146,11 +1173,20 @@ impl State {
             }
             Event::SessionStarted { session } => {
                 self.archived_sessions.remove(&session.id);
-                self.sessions.insert(session.id.clone(), session.clone());
+                let mut session = session.clone();
+                if session.status.is_live() {
+                    session.ended_ms = None;
+                }
+                self.sessions.insert(session.id.clone(), session);
             }
             Event::SessionStatus { session, status } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = *status;
+                    s.ended_ms = if status.is_live() {
+                        None
+                    } else {
+                        s.ended_ms.or(Some(rec.ts))
+                    };
                     if *status != SessionStatus::Busy && *status != SessionStatus::WaitingApproval {
                         s.active_tools.clear();
                     }
@@ -1187,12 +1223,19 @@ impl State {
             Event::SessionLimited { session, detail } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.status = SessionStatus::Failed;
+                    s.ended_ms = s.ended_ms.or(Some(rec.ts));
                     let d: String = detail.chars().take(80).collect();
                     s.status_note = Some(tr!("額度用完：{d} (可用 handoff 交接)", d = d));
                 }
             }
             Event::SessionRemoved { session } => {
                 self.archive_session(session);
+            }
+            Event::ArchivePruned { sessions } => {
+                for id in sessions {
+                    self.archived_sessions.remove(id);
+                    self.transcripts.remove(id);
+                }
             }
             Event::SessionModel { session, model } => {
                 if let Some(s) = self.sessions.get_mut(session) {
@@ -1391,6 +1434,7 @@ impl State {
                     if s.status.is_live() {
                         s.status = SessionStatus::Exited;
                     }
+                    s.ended_ms = s.ended_ms.or(Some(rec.ts));
                 }
             }
             Event::Cost { session, cost } => {
@@ -2370,6 +2414,7 @@ pub(crate) mod tests {
             active_tools: Vec::new(),
             bg_procs: Vec::new(),
             tool_calls: 0,
+            ended_ms: None,
         }
     }
 
@@ -3341,5 +3386,109 @@ mod inbox_cursor_tests {
         assert_eq!(st.inbox_cursors.get("s1").map(String::as_str), Some("m9"));
         let back: State = serde_json::from_str(&serde_json::to_string(&st).unwrap()).unwrap();
         assert_eq!(back.inbox_cursors, st.inbox_cursors);
+    }
+}
+
+#[cfg(test)]
+mod archive_retention_tests {
+    use super::*;
+
+    const DAY: u64 = 86_400_000;
+
+    fn archived(id: &str, ended_ms: Option<u64>, created_ms: u64) -> Session {
+        let mut s = crate::tests::sample_session(id);
+        s.created_ms = created_ms;
+        s.ended_ms = ended_ms;
+        s
+    }
+
+    fn rec(seq: u64, ts: u64, event: Event) -> Record {
+        Record { seq, ts, event }
+    }
+
+    #[test]
+    fn ended_ms_is_set_once_on_exit_and_cleared_when_live_again() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            10,
+            Event::SessionStarted {
+                session: crate::tests::sample_session("a"),
+            },
+        ));
+        st.apply(&rec(
+            2,
+            100,
+            Event::SessionExited {
+                session: "a".into(),
+                code: Some(0),
+            },
+        ));
+        assert_eq!(st.sessions["a"].ended_ms, Some(100));
+        st.apply(&rec(
+            3,
+            200,
+            Event::SessionStatus {
+                session: "a".into(),
+                status: SessionStatus::Failed,
+            },
+        ));
+        assert_eq!(st.sessions["a"].ended_ms, Some(100), "first end time wins");
+        st.apply(&rec(
+            4,
+            300,
+            Event::SessionStatus {
+                session: "a".into(),
+                status: SessionStatus::Idle,
+            },
+        ));
+        assert_eq!(st.sessions["a"].ended_ms, None);
+    }
+
+    #[test]
+    fn retention_drops_entries_older_than_max_days_by_ended_time() {
+        let mut st = State::new();
+        let now = 100 * DAY;
+        // Created long ago but ended recently: kept. Ended 31 days ago: dropped.
+        st.archived_sessions
+            .insert("fresh".into(), archived("fresh", Some(now - DAY), 0));
+        st.archived_sessions
+            .insert("old".into(), archived("old", Some(now - 31 * DAY), 0));
+        // Old logs without ended time fall back to creation time.
+        st.archived_sessions
+            .insert("legacy".into(), archived("legacy", None, now - 40 * DAY));
+        let mut dropped = st.archived_to_prune(now, 100, 30);
+        dropped.sort();
+        assert_eq!(dropped, vec!["legacy".to_string(), "old".to_string()]);
+    }
+
+    #[test]
+    fn retention_keeps_newest_entries_within_count_limit() {
+        let mut st = State::new();
+        let now = 10 * DAY;
+        for (i, id) in ["a", "b", "c"].into_iter().enumerate() {
+            st.archived_sessions
+                .insert(id.into(), archived(id, Some(now - 3 + i as u64), 0));
+        }
+        assert_eq!(st.archived_to_prune(now, 2, 30), vec!["a".to_string()]);
+        assert!(st.archived_to_prune(now, 3, 30).is_empty());
+    }
+
+    #[test]
+    fn archive_pruned_event_removes_entries_and_transcripts() {
+        let mut st = State::new();
+        st.archived_sessions
+            .insert("x".into(), archived("x", Some(1), 0));
+        st.transcripts
+            .insert("x".into(), VecDeque::from(["l".to_string()]));
+        st.apply(&rec(
+            1,
+            2,
+            Event::ArchivePruned {
+                sessions: vec!["x".into()],
+            },
+        ));
+        assert!(st.archived_sessions.is_empty());
+        assert!(!st.transcripts.contains_key("x"));
     }
 }

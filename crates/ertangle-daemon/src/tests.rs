@@ -277,6 +277,7 @@ fn add_session(
             active_tools: Vec::new(),
             bg_procs: Vec::new(),
             tool_calls: 0,
+            ended_ms: None,
         },
     );
     inner.sessions.insert(
@@ -922,6 +923,7 @@ fn wt_session(repo: &Path, id: &str) -> Session {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     }
 }
 
@@ -1451,6 +1453,7 @@ fn restart_session(id: &str, status: SessionStatus) -> Session {
         active_tools: Vec::new(),
         bg_procs: Vec::new(),
         tool_calls: 0,
+        ended_ms: None,
     }
 }
 
@@ -4628,4 +4631,212 @@ fn task_for_live_assignee_has_no_warning() {
         panic!("expected ok");
     };
     assert!(crate::mcp::note_warning(&note).is_none());
+}
+
+// -----------------------------------------------------------------------
+// T73: auto-archive workers, periodic sweep, prune
+// -----------------------------------------------------------------------
+
+fn sweep_shared(tag: &str) -> (Arc<Shared>, PathBuf) {
+    let repo = temp_repo(tag);
+    let shared = Shared::restore(
+        Path::new("/dev/null"),
+        PolicyEngine::default(),
+        repo.clone(),
+        None,
+    )
+    .unwrap();
+    (shared, repo)
+}
+
+/// Agent-spawned (parent set), resumable worker with a merged worktree.
+fn start_worker(shared: &Arc<Shared>, repo: &Path, id: &str, status: SessionStatus) -> Session {
+    let mut s = wt_session(repo, id);
+    s.parent = Some("ses_boss".into());
+    s.native_id = Some(format!("nat-{id}"));
+    s.status = status;
+    shared.emit(Event::SessionStarted { session: s.clone() });
+    s
+}
+
+fn add_task(shared: &Arc<Shared>, id: &str, assignee: &str, status: TaskStatus) {
+    let mut inner = lock(&shared.inner);
+    inner.state.tasks.insert(
+        id.into(),
+        ertangle_core::Task {
+            id: id.into(),
+            title: id.into(),
+            detail: String::new(),
+            status,
+            assignee: Some(assignee.into()),
+            created_by: None,
+            depends_on: vec![],
+            updated_ms: 0,
+        },
+    );
+}
+
+fn is_active(shared: &Arc<Shared>, id: &str) -> bool {
+    lock(&shared.inner).state.sessions.contains_key(id)
+}
+
+fn is_archived(shared: &Arc<Shared>, id: &str) -> bool {
+    lock(&shared.inner).state.archived_sessions.contains_key(id)
+}
+
+fn commit_in(dir: &Path) {
+    fs::write(dir.join("new.txt"), "x\n").unwrap();
+    git(dir, &["add", "."]);
+    git(
+        dir,
+        &["-c", "commit.gpgsign=false", "commit", "-qm", "work"],
+    );
+}
+
+#[test]
+fn merged_worker_with_done_tasks_is_archived_and_worktree_removed() {
+    let (shared, repo) = sweep_shared("t73a");
+    let s = start_worker(&shared, &repo, "ses_w", SessionStatus::Exited);
+    add_task(&shared, "task_1", "ses_w", TaskStatus::Done);
+    let report = shared.sweep_workers();
+    assert_eq!(report.archived, 1, "{report:?}");
+    assert!(!is_active(&shared, "ses_w"));
+    assert!(is_archived(&shared, "ses_w"));
+    assert!(!Path::new(&s.cwd).exists());
+    assert!(!crate::git::branch_exists(
+        &repo,
+        s.branch.as_deref().unwrap()
+    ));
+}
+
+#[test]
+fn worker_with_open_task_or_busy_status_is_not_archived() {
+    let (shared, repo) = sweep_shared("t73b");
+    start_worker(&shared, &repo, "ses_open", SessionStatus::Exited);
+    add_task(&shared, "task_1", "ses_open", TaskStatus::Doing);
+    start_worker(&shared, &repo, "ses_busy", SessionStatus::Busy);
+    let report = shared.sweep_workers();
+    assert_eq!(report.archived, 0, "{report:?}");
+    assert!(is_active(&shared, "ses_open"));
+    assert!(is_active(&shared, "ses_busy"));
+}
+
+#[test]
+fn human_spawned_session_is_never_auto_archived() {
+    let (shared, repo) = sweep_shared("t73c");
+    let mut s = wt_session(&repo, "ses_h");
+    s.native_id = Some("nat".into());
+    shared.emit(Event::SessionStarted { session: s });
+    shared.sweep_workers();
+    assert!(is_active(&shared, "ses_h"));
+    assert!(!is_archived(&shared, "ses_h"));
+}
+
+#[test]
+fn unmerged_worker_is_kept_with_explanatory_note() {
+    let (shared, repo) = sweep_shared("t73d");
+    let s = start_worker(&shared, &repo, "ses_u", SessionStatus::Exited);
+    commit_in(Path::new(&s.cwd));
+    let report = shared.sweep_workers();
+    assert_eq!(report.archived, 0);
+    assert!(is_active(&shared, "ses_u"));
+    assert!(Path::new(&s.cwd).exists(), "unmerged work must survive");
+    let note = lock(&shared.inner).state.sessions["ses_u"]
+        .status_note
+        .clone()
+        .unwrap_or_default();
+    assert!(note.contains("未自動封存"), "{note}");
+    // A second sweep must not emit another note event.
+    let seq = lock(&shared.inner).seq;
+    shared.sweep_workers();
+    assert_eq!(lock(&shared.inner).seq, seq);
+}
+
+#[test]
+fn idle_live_worker_without_tasks_is_stopped_and_archived() {
+    let (shared, repo) = sweep_shared("t73e");
+    let s = start_worker(&shared, &repo, "ses_i", SessionStatus::Idle);
+    let ctl = MockCtl::default();
+    lock(&shared.inner).sessions.insert(
+        "ses_i".into(),
+        crate::SessionEntry {
+            ctl: ctl.as_ctl(),
+            run: "run".into(),
+        },
+    );
+    shared.sweep_workers();
+    assert!(is_archived(&shared, "ses_i"));
+    assert!(!Path::new(&s.cwd).exists());
+}
+
+#[test]
+fn prune_archives_merged_ended_sessions_and_skips_unmerged_and_live() {
+    let (shared, repo) = sweep_shared("t73f");
+    start_worker(&shared, &repo, "ses_m", SessionStatus::Exited);
+    let u = start_worker(&shared, &repo, "ses_u", SessionStatus::Failed);
+    commit_in(Path::new(&u.cwd));
+    start_worker(&shared, &repo, "ses_live", SessionStatus::Busy);
+    let report = shared.prune_sessions(None);
+    assert_eq!(report.archived, 1, "{report:?}");
+    assert_eq!(report.skipped.len(), 1);
+    assert!(is_archived(&shared, "ses_m"));
+    assert!(is_active(&shared, "ses_u"));
+    assert!(is_active(&shared, "ses_live"));
+}
+
+#[test]
+fn prune_respects_project_filter() {
+    let (shared, repo) = sweep_shared("t73g");
+    start_worker(&shared, &repo, "ses_m", SessionStatus::Exited);
+    let report = shared.prune_sessions(Some("/somewhere/else"));
+    assert_eq!(report.archived, 0);
+    assert!(is_active(&shared, "ses_m"));
+}
+
+#[test]
+fn ended_session_retention_counts_from_end_time_not_creation() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_old",
+        "w/old",
+        SessionStatus::Exited,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    let now = now_millis();
+    {
+        let mut inner = lock(&shared.inner);
+        let s = inner.state.sessions.get_mut("ses_old").unwrap();
+        s.created_ms = now - 10 * 3_600_000;
+        s.ended_ms = Some(now - 60_000);
+    }
+    shared.prune_ended_sessions(now, &HashSet::new());
+    assert!(is_active(&shared, "ses_old"), "ended a minute ago");
+    shared.prune_ended_sessions(now + 2 * 3_600_000, &HashSet::new());
+    assert!(!is_active(&shared, "ses_old"), "ended over an hour ago");
+}
+
+#[test]
+fn prune_archive_drops_entries_past_default_age() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_a",
+        "w/a",
+        SessionStatus::Exited,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    let now = now_millis();
+    {
+        let mut inner = lock(&shared.inner);
+        let mut s = inner.state.sessions.remove("ses_a").unwrap();
+        s.ended_ms = Some(now - 31 * 86_400_000);
+        inner.state.archived_sessions.insert("ses_a".into(), s);
+    }
+    shared.prune_archive(now);
+    assert!(!is_archived(&shared, "ses_a"));
 }
