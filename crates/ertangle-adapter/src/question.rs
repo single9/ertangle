@@ -77,12 +77,14 @@ pub fn parse_tool_call_questions(session: &str, name: &str, input_json: &str) ->
                 options: Vec::new(),
                 multi_select: false,
                 custom: true,
+                group: None,
             }];
         }
     };
 
     // Case 1: questions array `{"questions": [...]}`
     if let Some(questions) = val.get("questions").and_then(|q| q.as_array()) {
+        let group = (questions.len() > 1).then(|| new_id("qgrp"));
         let mut list = Vec::new();
         for (i, item) in questions.iter().enumerate() {
             let question = item
@@ -123,6 +125,7 @@ pub fn parse_tool_call_questions(session: &str, name: &str, input_json: &str) ->
                 options,
                 multi_select,
                 custom,
+                group: group.clone(),
             });
         }
         if !list.is_empty() {
@@ -154,6 +157,7 @@ pub fn parse_tool_call_questions(session: &str, name: &str, input_json: &str) ->
             options,
             multi_select,
             custom,
+            group: None,
         }];
     }
 
@@ -166,6 +170,7 @@ pub fn parse_tool_call_questions(session: &str, name: &str, input_json: &str) ->
         options: Vec::new(),
         multi_select: false,
         custom: true,
+        group: None,
     }]
 }
 
@@ -195,6 +200,7 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
     let mut out = Vec::new();
     let schema = params.get("requestedSchema").unwrap_or(params);
     if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
+        let group = (props.len() > 1).then(|| new_id("qgrp"));
         for (k, v) in props {
             let header = v.get("title").and_then(|t| t.as_str()).map(str::to_string);
             let mut desc = v
@@ -240,6 +246,7 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
                     options,
                     multi_select,
                     custom: true,
+                    group: group.clone(),
                 },
                 k.clone(),
             ));
@@ -247,6 +254,7 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
     }
 
     if let Some(fields) = params.get("fields").and_then(|f| f.as_array()) {
+        let group = (fields.len() > 1).then(|| new_id("qgrp"));
         for f in fields {
             let key = f
                 .get("key")
@@ -278,6 +286,7 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
                     options,
                     multi_select,
                     custom: true,
+                    group: group.clone(),
                 },
                 key,
             ));
@@ -299,6 +308,7 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
                 options: Vec::new(),
                 multi_select: false,
                 custom: true,
+                group: None,
             },
             "answer".to_string(),
         ));
@@ -320,6 +330,7 @@ pub fn parse_codex_user_inputs(session: &str, params: &Value) -> Vec<(UserQuesti
         return Vec::new();
     };
 
+    let group = (questions.len() > 1).then(|| new_id("qgrp"));
     let mut out = Vec::new();
     for (i, item) in questions.iter().enumerate() {
         let q_key = item
@@ -357,6 +368,7 @@ pub fn parse_codex_user_inputs(session: &str, params: &Value) -> Vec<(UserQuesti
                 options,
                 multi_select,
                 custom: true,
+                group: group.clone(),
             },
             q_key,
         ));
@@ -390,6 +402,20 @@ mod tests {
         assert!(!is_question_tool("Bash"));
         assert!(!is_question_tool("Edit"));
         assert!(!is_question_tool("read_file"));
+    }
+
+    #[test]
+    fn multi_question_requests_share_a_group() {
+        let json = r#"{
+            "questions": [
+                {"question": "Database?", "options": [{"label": "Postgres"}]},
+                {"question": "Framework?", "options": [{"label": "React"}]}
+            ]
+        }"#;
+        let list = parse_tool_call_questions("ses_1", "question", json);
+        assert_eq!(list.len(), 2);
+        let group = list[0].group.clone().expect("group");
+        assert_eq!(list[1].group.as_deref(), Some(group.as_str()));
     }
 
     #[test]

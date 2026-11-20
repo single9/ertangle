@@ -1607,9 +1607,45 @@ pub(crate) fn handle_mcp_question(
         options: q_options,
         multi_select,
         custom: true,
+        group: None,
     };
     let answers = ask_user_question(shared, &sid, q);
     let _ = reply.send(Frame::QuestionAnswer { answers });
+}
+
+/// Returns other pending questions submitted in the same request as `id`.
+pub(crate) fn grouped_question_siblings(
+    shared: &Arc<Shared>,
+    session: &str,
+    id: &str,
+) -> Vec<String> {
+    let inner = lock(&shared.inner);
+    let Some(group) = inner
+        .state
+        .pending_questions
+        .get(id)
+        .and_then(|q| q.group.clone())
+    else {
+        return Vec::new();
+    };
+    inner
+        .state
+        .pending_questions
+        .values()
+        .filter(|q| q.session == session && q.id != id && q.group.as_deref() == Some(&group))
+        .map(|q| q.id.clone())
+        .collect()
+}
+
+/// Clears sibling questions from the same request after one of them is answered.
+fn clear_grouped_questions(shared: &Arc<Shared>, session: &str, id: &str) {
+    for sibling in grouped_question_siblings(shared, session, id) {
+        shared.emit(Event::QuestionResolved {
+            session: session.to_string(),
+            id: sibling,
+            answers: Vec::new(),
+        });
+    }
 }
 
 /// Answer an interactive question from a human.
@@ -1624,6 +1660,7 @@ pub(crate) fn handle_answer_question(
     let waiter = lock(&shared.inner).question_waiters.remove(&id);
     if let Some(tx) = waiter {
         let _ = tx.send(answers.clone());
+        clear_grouped_questions(shared, &sid, &id);
         shared.emit(Event::QuestionResolved {
             session: sid,
             id,
@@ -1635,6 +1672,7 @@ pub(crate) fn handle_answer_question(
     match shared.control(&session) {
         Some((real_sid, ctl)) => match ctl.resolve_question(&id, &answers) {
             Ok(()) => {
+                clear_grouped_questions(shared, &real_sid, &id);
                 shared.emit(Event::QuestionResolved {
                     session: real_sid,
                     id,

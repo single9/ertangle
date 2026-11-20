@@ -4252,6 +4252,7 @@ fn test_question_picker_single_and_multi_select() {
         ],
         multi_select: true,
         custom: true,
+        group: None,
     };
     app.state
         .pending_questions
@@ -4297,6 +4298,7 @@ fn test_q_key_quits_even_when_question_is_pending() {
         options: Vec::new(),
         multi_select: false,
         custom: true,
+        group: None,
     };
     app.state.pending_questions.insert("qst_pending".into(), q);
 
@@ -4324,6 +4326,7 @@ fn test_ctrl_c_quits_in_question_picker() {
         options: vec![ertangle_core::QuestionOption::plain("Opt 1")],
         multi_select: false,
         custom: true,
+        group: None,
     };
     crate::menu::start_question_picker(&mut app, &q);
     assert_eq!(app.mode, Mode::Pick);
@@ -4351,6 +4354,7 @@ fn test_multiple_questions_per_session_answered_sequentially() {
         options: vec![ertangle_core::QuestionOption::plain("Choice A")],
         multi_select: false,
         custom: true,
+        group: None,
     };
     let q2 = ertangle_core::UserQuestion {
         id: "qst_seq_2".into(),
@@ -4360,6 +4364,7 @@ fn test_multiple_questions_per_session_answered_sequentially() {
         options: vec![ertangle_core::QuestionOption::plain("Choice B")],
         multi_select: false,
         custom: true,
+        group: None,
     };
 
     app.state

@@ -1929,6 +1929,39 @@ fn mcp_question_waits_for_human_answer() {
 }
 
 #[test]
+fn grouped_question_siblings_are_scoped_to_one_request() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: ask_sess("ses-group", PermissionPolicy::Ask),
+    });
+    let question = |id: &str, group: Option<&str>| ertangle_core::UserQuestion {
+        id: id.into(),
+        session: "ses-group".into(),
+        header: None,
+        question: id.into(),
+        options: Vec::new(),
+        multi_select: false,
+        custom: true,
+        group: group.map(str::to_string),
+    };
+    for q in [
+        question("qst_g1", Some("group-a")),
+        question("qst_g2", Some("group-a")),
+        question("qst_g3", None),
+    ] {
+        shared.emit(Event::QuestionRequested { question: q });
+    }
+
+    let siblings =
+        crate::handlers::session::grouped_question_siblings(&shared, "ses-group", "qst_g1");
+    assert_eq!(siblings, vec!["qst_g2".to_string()]);
+    assert!(
+        crate::handlers::session::grouped_question_siblings(&shared, "ses-group", "qst_g3")
+            .is_empty()
+    );
+}
+
+#[test]
 fn cancellable_question_timeout_cleans_up_timer() {
     let shared = test_shared();
     shared.emit(Event::SessionStarted {
@@ -1942,6 +1975,7 @@ fn cancellable_question_timeout_cleans_up_timer() {
         options: Vec::new(),
         multi_select: false,
         custom: true,
+        group: None,
     };
     shared.ingest(
         &"ses-timer".to_string(),

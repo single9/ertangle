@@ -749,6 +749,9 @@ pub struct UserQuestion {
     pub multi_select: bool,
     #[serde(default)]
     pub custom: bool,
+    /// Groups questions that must be answered or dismissed together.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 /// Answer payload for an interactive user question.
@@ -2412,6 +2415,7 @@ pub(crate) mod tests {
                     ],
                     multi_select: false,
                     custom: true,
+                    group: None,
                 },
             },
         ));
