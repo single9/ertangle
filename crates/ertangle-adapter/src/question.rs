@@ -233,6 +233,24 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
                         options.push(QuestionOption::plain(s));
                     }
                 }
+            } else if let Some(variants) = v
+                .get("oneOf")
+                .or_else(|| v.get("anyOf"))
+                .and_then(|value| value.as_array())
+            {
+                for variant in variants {
+                    let label = variant
+                        .get("title")
+                        .or_else(|| variant.get("const"))
+                        .and_then(|value| value.as_str());
+                    if let Some(label) = label {
+                        let description = variant
+                            .get("description")
+                            .and_then(|value| value.as_str())
+                            .map(str::to_string);
+                        options.push(QuestionOption::new(label, description.as_deref()));
+                    }
+                }
             } else if let Some(opts) = v.get("options") {
                 options.extend(parse_options(opts));
             }
@@ -390,6 +408,7 @@ pub fn parse_codex_user_input(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn question_tool_name_recognition() {
@@ -416,6 +435,33 @@ mod tests {
         assert_eq!(list.len(), 2);
         let group = list[0].group.clone().expect("group");
         assert_eq!(list[1].group.as_deref(), Some(group.as_str()));
+    }
+
+    #[test]
+    fn parses_acp_one_of_options() {
+        let params = json!({
+            "message": "Questions",
+            "requestedSchema": {
+                "type": "object",
+                "properties": {
+                    "q0": {
+                        "type": "string",
+                        "title": "UI framework",
+                        "description": "Which UI framework?",
+                        "oneOf": [
+                            {"const": "React", "title": "React", "description": "Mature"},
+                            {"const": "Vue", "title": "Vue", "description": "Simple"}
+                        ]
+                    }
+                }
+            }
+        });
+        let list = parse_acp_elicitations("ses_1", &params);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].0.question, "Which UI framework?");
+        let labels: Vec<_> = list[0].0.options.iter().map(|o| o.label.as_str()).collect();
+        assert_eq!(labels, vec!["React", "Vue"]);
+        assert_eq!(list[0].0.options[0].description.as_deref(), Some("Mature"));
     }
 
     #[test]

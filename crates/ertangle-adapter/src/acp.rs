@@ -253,8 +253,13 @@ impl Conn {
             "tool_call" => {
                 self.flush_stream();
                 let name = tool_name(update);
-                let input = update["rawInput"].to_string();
-                if crate::question::is_question_tool(&name) {
+                let raw_input = &update["rawInput"];
+                let input = raw_input.to_string();
+                // ACP emits an empty rawInput placeholder before the real elicitation request.
+                // Creating a question here would show "{}" instead of the actual prompt.
+                let empty_placeholder = raw_input.as_object().is_some_and(|obj| obj.is_empty())
+                    || raw_input.as_str().is_some_and(str::is_empty);
+                if !empty_placeholder && crate::question::is_question_tool(&name) {
                     let questions =
                         crate::question::parse_tool_call_questions(&self.session_id, &name, &input);
                     if !questions.is_empty() {
