@@ -228,6 +228,8 @@ pub(crate) struct App {
     /// Space 選單目前走到的路徑。
     pub(crate) menu_path: Vec<char>,
     pub(crate) picker: Option<crate::menu::Picker>,
+    /// 使用者已略過 (Esc) 或已送出答案的問題 id；不會再自動開啟選擇器。
+    pub(crate) dismissed_questions: std::collections::HashSet<String>,
     /// M3：目前顯示的 worktree diff 內容與游標行。
     pub(crate) diff_session: Option<SessionId>,
     pub(crate) diff_raw_lines: Vec<String>,
@@ -396,6 +398,7 @@ impl App {
             spawn_variants: Vec::new(),
             menu_path: Vec::new(),
             picker: None,
+            dismissed_questions: Default::default(),
             diff_session: None,
             diff_raw_lines: Vec::new(),
             diff_files: Vec::new(),
@@ -867,6 +870,25 @@ impl App {
             .filter(|q| q.session == id)
             .min_by(|a, b| a.id.cmp(&b.id))
             .cloned()
+    }
+
+    /// 一般模式下，選取的 session 有尚未略過的問題就自動開啟選擇器。
+    pub(crate) fn auto_open_question(&mut self) {
+        let pending = &self.state.pending_questions;
+        self.dismissed_questions
+            .retain(|id| pending.contains_key(id));
+        if self.mode != Mode::Normal || self.picker.is_some() {
+            return;
+        }
+        let Some(id) = self.selected_id() else { return };
+        let next = pending
+            .values()
+            .filter(|q| q.session == id && !self.dismissed_questions.contains(&q.id))
+            .min_by(|a, b| a.id.cmp(&b.id))
+            .cloned();
+        if let Some(q) = next {
+            crate::menu::start_question_picker(self, &q);
+        }
     }
 
     pub(crate) fn unread_bus(&self) -> usize {

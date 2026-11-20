@@ -78,7 +78,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
 
     // When the bus is hidden, pending approvals and questions must still be visible.
     let has_pending =
-        !app.state.pending_permissions.is_empty() || !app.state.pending_questions.is_empty();
+        !app.state.pending_permissions.is_empty() || !banner_questions(app).is_empty();
     let center = if !right_bus && has_pending {
         let rows = Layout::default()
             .direction(Direction::Vertical)
@@ -115,6 +115,14 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         Mode::Menu => draw_menu(f, chunks[2], app),
         Mode::Command => draw_command_hints(f, chunks[2], app),
         Mode::Prompt | Mode::Spawn | Mode::Message => draw_file_suggestions(f, chunks[2], app),
+        Mode::Pick
+            if matches!(
+                app.picker.as_ref().map(|p| &p.stage),
+                Some(crate::menu::PickStage::Question { .. })
+            ) =>
+        {
+            draw_question_picker(f, chunks[2], app)
+        }
         Mode::Pick => draw_picker(f, app),
         Mode::Help => draw_help(f, app),
         Mode::Settings => draw_settings(f, app),
@@ -525,13 +533,6 @@ pub(crate) fn draw_qr_modal(f: &mut TuiFrame, app: &App) {
 
 /// 置中的清單選擇器 (agent／model)，第一列是過濾輸入。
 pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
-    if matches!(
-        app.picker.as_ref().map(|p| &p.stage),
-        Some(crate::menu::PickStage::Question { .. })
-    ) {
-        draw_question_picker(f, app);
-        return;
-    }
     let Some(p) = app.picker.as_mut() else { return };
     p.poll_pending();
     let loading = p.loading;
@@ -672,7 +673,7 @@ fn wrap_display(text: &str, width: usize) -> Vec<String> {
 }
 
 /// 問題選擇器：多行標題 (header + 完整問題 + 提示)、選項下方灰字說明、自訂答案列。
-fn draw_question_picker(f: &mut TuiFrame, app: &App) {
+fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
     use crate::menu::PickStage;
     let Some(p) = app.picker.as_ref() else { return };
     let PickStage::Question {
@@ -690,7 +691,7 @@ fn draw_question_picker(f: &mut TuiFrame, app: &App) {
     let Some(q) = questions.get(*index) else {
         return;
     };
-    let w = 76u16.min(f.area().width.saturating_sub(2));
+    let w = input_area.width;
     let inner_w = w.saturating_sub(4) as usize;
     let dim = Style::default().fg(Color::DarkGray);
     let mut lines: Vec<Line> = Vec::new();
@@ -791,13 +792,10 @@ fn draw_question_picker(f: &mut TuiFrame, app: &App) {
     for l in wrap_display(&hint, inner_w) {
         lines.push(Line::from(Span::styled(l, dim)));
     }
-    let h = (lines.len() as u16 + 2).min(f.area().height);
-    let area = Rect::new(
-        f.area().x + (f.area().width.saturating_sub(w)) / 2,
-        f.area().y + (f.area().height.saturating_sub(h)) / 3,
-        w,
-        h,
-    );
+    // 貼在輸入框正上方，往上長高。
+    let max_h = input_area.y.saturating_sub(f.area().y);
+    let h = (lines.len() as u16 + 2).min(max_h);
+    let area = Rect::new(input_area.x, input_area.y - h, w, h);
     let room = h.saturating_sub(2) as usize;
     let scroll = (cursor_line + 1).saturating_sub(room) as u16;
     f.render_widget(ratatui::widgets::Clear, area);
@@ -813,6 +811,19 @@ fn draw_question_picker(f: &mut TuiFrame, app: &App) {
 }
 
 /// One-line approval or question banner (used when the bus is hidden): prefer the selected session.
+/// 頂端橫幅要顯示的問題：選取 session 的問題在選擇器開啟時由選擇器本身呈現，不重複顯示。
+fn banner_questions(app: &App) -> Vec<&ertangle_core::UserQuestion> {
+    let open_for = match app.picker.as_ref().map(|p| &p.stage) {
+        Some(crate::menu::PickStage::Question { session, .. }) => Some(session),
+        _ => None,
+    };
+    app.state
+        .pending_questions
+        .values()
+        .filter(|q| Some(&q.session) != open_for)
+        .collect()
+}
+
 pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
     let selected = app.selected_id();
     let perm_mine = app
@@ -820,15 +831,15 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
         .pending_permissions
         .values()
         .find(|p| Some(&p.session) == selected.as_ref());
-    let qst_mine = app
-        .state
-        .pending_questions
-        .values()
+    let questions = banner_questions(app);
+    let qst_mine = questions
+        .iter()
+        .copied()
         .find(|q| Some(&q.session) == selected.as_ref());
 
     if let Some(q) = qst_mine.or_else(|| {
         if perm_mine.is_none() {
-            app.state.pending_questions.values().next()
+            questions.first().copied()
         } else {
             None
         }
@@ -839,11 +850,9 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
             .get(&q.session)
             .map_or_else(|| short(&q.session), |s| s.label.clone());
         let mine = Some(&q.session) == selected.as_ref();
-        let total = app.state.pending_questions.len() + app.state.pending_permissions.len();
-        let qst_for_session = app
-            .state
-            .pending_questions
-            .values()
+        let total = questions.len() + app.state.pending_permissions.len();
+        let qst_for_session = questions
+            .iter()
             .filter(|item| Some(&item.session) == selected.as_ref())
             .count();
         let more = if qst_for_session > 1 {

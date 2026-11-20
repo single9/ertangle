@@ -4667,3 +4667,90 @@ fn question_picker_group_all_empty_is_not_sent() {
         "{sent}"
     );
 }
+
+fn auto_open_app() -> (App, ertangle_core::UserQuestion) {
+    let mut app = test_app();
+    app.state
+        .sessions
+        .insert("ses_q".into(), make_test_session("ses_q"));
+    app.selected = 0;
+    let q = qpick_q("qst_auto", false, true, None);
+    app.state.pending_questions.insert(q.id.clone(), q.clone());
+    (app, q)
+}
+
+#[test]
+fn question_auto_opens_in_normal_mode() {
+    let (mut app, _q) = auto_open_app();
+    app.auto_open_question();
+    assert_eq!(app.mode, Mode::Pick);
+    assert!(matches!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(crate::menu::PickStage::Question { .. })
+    ));
+}
+
+#[test]
+fn question_does_not_auto_open_while_typing() {
+    let (mut app, _q) = auto_open_app();
+    app.mode = Mode::Prompt;
+    app.auto_open_question();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert!(app.picker.is_none());
+}
+
+#[test]
+fn question_esc_dismisses_and_enter_reopens() {
+    let (mut app, _q) = auto_open_app();
+    let (mut w, _peer) = pair_writer();
+    app.auto_open_question();
+    qpick_key(&mut app, &mut w, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal);
+    app.auto_open_question();
+    assert!(app.picker.is_none(), "dismissed question must not re-open");
+    // Manual Enter in normal mode re-opens it.
+    crate::input::handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+    // Once the daemon resolves it, the dismissed id is forgotten.
+    app.picker = None;
+    app.mode = Mode::Normal;
+    app.state.pending_questions.clear();
+    app.auto_open_question();
+    assert!(app.dismissed_questions.is_empty());
+}
+
+#[test]
+fn question_answered_does_not_reopen_before_daemon_clears_it() {
+    let (mut app, _q) = auto_open_app();
+    let (mut w, _peer) = pair_writer();
+    app.auto_open_question();
+    qpick_key(&mut app, &mut w, KeyCode::Char('1'));
+    app.auto_open_question();
+    assert!(app.picker.is_none());
+}
+
+#[test]
+fn question_docked_above_input_hides_selected_banner() {
+    use ratatui::{backend::TestBackend, Terminal};
+    let (mut app, _q) = auto_open_app();
+    app.auto_open_question();
+    let mut term = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    term.draw(|f| crate::draw::draw(f, &mut app)).unwrap();
+    let buf = term.backend().buffer().clone();
+    let row = |y: u16| -> String { (0..100).map(|x| buf[(x, y)].symbol()).collect() };
+    let all: Vec<String> = (0..30).map(row).collect();
+    let top = all
+        .iter()
+        .position(|r| r.contains("question qst_auto"))
+        .unwrap();
+    assert!(top > 15, "picker should sit near the bottom, got row {top}");
+    assert!(
+        !all.iter().any(|r| r.contains("⏸")),
+        "banner for the open question must be hidden"
+    );
+}

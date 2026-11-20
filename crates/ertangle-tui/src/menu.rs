@@ -532,6 +532,18 @@ pub(crate) fn start_question_picker(app: &mut App, q: &ertangle_core::UserQuesti
     app.picker = Some(picker);
 }
 
+/// 把目前選擇器內的所有問題標為「已略過」，避免自動重新開啟 (手動 Enter 仍可開)。
+fn dismiss_open_questions(app: &mut App) {
+    if let Some(Picker {
+        stage: PickStage::Question { questions, .. },
+        ..
+    }) = app.picker.as_ref()
+    {
+        app.dismissed_questions
+            .extend(questions.iter().map(|q| q.id.clone()));
+    }
+}
+
 /// 把 `questions[index]` 載入選擇器 (重設游標、勾選與自訂輸入)。
 fn load_question(p: &mut Picker, index: usize) {
     let PickStage::Question {
@@ -612,6 +624,9 @@ fn finish_question(app: &mut App, writer: &mut HostRouter, answers: Vec<String>)
         PickStage::Question { collected, .. } => collected,
         _ => Vec::new(),
     };
+    // daemon 清掉問題前不要再自動開啟。
+    app.dismissed_questions
+        .extend(collected.iter().map(|(_, id, _)| id.clone()));
     app.picker = None;
     app.mode = Mode::Normal;
     for (session, id, answers) in collected {
@@ -666,6 +681,7 @@ fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
     match key.code {
         KeyCode::Esc => {
             // 不回答：問題仍留在 pending。
+            dismiss_open_questions(app);
             app.picker = None;
             app.mode = Mode::Normal;
         }
@@ -801,6 +817,7 @@ fn handle_custom_input(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
                 custom_text.clear();
             } else {
                 // 沒有選項可退回：直接離開，問題仍 pending。
+                dismiss_open_questions(app);
                 app.picker = None;
                 app.mode = Mode::Normal;
             }

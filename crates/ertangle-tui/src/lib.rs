@@ -335,6 +335,9 @@ fn event_loop(
             last_title = title;
         }
 
+        let was_picking = app.picker.is_some();
+        app.auto_open_question();
+        dirty |= app.picker.is_some() != was_picking;
         dirty |= app.rebuild_pending;
         // 只在有狀態或輸入變動時重繪，閒置時不佔 CPU。
         // 每秒至少重繪一次，讓時間／狀態類顯示保持更新。
