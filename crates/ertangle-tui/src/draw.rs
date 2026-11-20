@@ -869,6 +869,8 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
         .values()
         .find(|p| Some(&p.session) == selected.as_ref());
     let questions = banner_questions(app);
+    // 沒有選取的 session 在等時，橫幅顯示 w 會跳到的那一個，標題與按鍵才一致。
+    let target = app.next_pending_session();
     let qst_mine = questions
         .iter()
         .copied()
@@ -876,7 +878,11 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
 
     if let Some(q) = qst_mine.or_else(|| {
         if perm_mine.is_none() {
-            questions.first().copied()
+            questions
+                .iter()
+                .copied()
+                .find(|q| Some(&q.session) == target.as_ref())
+                .or_else(|| questions.first().copied())
         } else {
             None
         }
@@ -902,7 +908,7 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
         let keys = if mine {
             tr!("[Enter 回答]")
         } else {
-            tr!("(選取該 session 後 Enter 回答)")
+            tr!("(按 w 跳到該 session 回答)")
         };
         let default_header = tr!("提問");
         let header_str = q.header.as_deref().unwrap_or(&default_header);
@@ -927,7 +933,14 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
         return;
     }
 
-    let p = perm_mine.or_else(|| app.state.pending_permissions.values().next());
+    let p = perm_mine
+        .or_else(|| {
+            app.state
+                .pending_permissions
+                .values()
+                .find(|p| Some(&p.session) == target.as_ref())
+        })
+        .or_else(|| app.state.pending_permissions.values().next());
     let Some(p) = p else { return };
     let label = app
         .state
@@ -944,7 +957,7 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
     let keys = if mine {
         tr!("[a]llow [A]lways [d]eny")
     } else {
-        tr!("(j/k 選取該 session 後 a/d)")
+        tr!("(按 w 跳到該 session 後 a/d)")
     };
     let text = tr!(
         "⏸ {label} 要求 {title}：{detail}{more} {keys}",
@@ -2209,7 +2222,7 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     }
     if !app.state.pending_questions.is_empty() {
         lines.push(Line::styled(
-            tr!("  [Enter] 回答問題"),
+            tr!("  [Enter] 回答問題  [w] 跳到下一個待處理"),
             Style::default().fg(Color::DarkGray),
         ));
     }

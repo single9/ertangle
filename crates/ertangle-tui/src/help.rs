@@ -50,6 +50,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("x", tr_noop!("中斷目前回合")),
             ("K", tr_noop!("結束 session")),
             ("z", tr_noop!("休眠／喚醒")),
+            ("w", tr_noop!("跳到下一個有提問或核准待處理的 session")),
             ("a / A / d", tr_noop!("核准：允許／一律允許／拒絕")),
             ("Space s h", tr_noop!("交接給其他 agent (額度用完時)")),
             ("Space s r", tr_noop!("接續已結束的 session：同一個 agent 接回原對話")),

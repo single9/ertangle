@@ -2138,6 +2138,14 @@ msgid "錯誤：{message}"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
+msgid "目前沒有待處理的提問或核准"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已跳到 {label}"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
 msgid "Bus：顯示 (b 或 Esc 關閉)"
 msgstr ""
 
@@ -3034,7 +3042,7 @@ msgid "[Enter 回答]"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "(選取該 session 後 Enter 回答)"
+msgid "(按 w 跳到該 session 回答)"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs crates/ertangle-tui/src/draw.rs
@@ -3050,7 +3058,7 @@ msgid "[a]llow [A]lways [d]eny"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "(j/k 選取該 session 後 a/d)"
+msgid "(按 w 跳到該 session 後 a/d)"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3138,7 +3146,7 @@ msgid "{header}：{question}"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  [Enter] 回答問題"
+msgid "  [Enter] 回答問題  [w] 跳到下一個待處理"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3407,6 +3415,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
 msgid "休眠／喚醒"
+msgstr ""
+
+#: crates/ertangle-tui/src/help.rs
+msgid "跳到下一個有提問或核准待處理的 session"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs

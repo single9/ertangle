@@ -2151,6 +2151,14 @@ msgid "錯誤：{message}"
 msgstr "Error: {message}"
 
 #: crates/ertangle-tui/src/app.rs
+msgid "目前沒有待處理的提問或核准"
+msgstr "No pending questions or approvals"
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已跳到 {label}"
+msgstr "Jumped to {label}"
+
+#: crates/ertangle-tui/src/app.rs
 msgid "Bus：顯示 (b 或 Esc 關閉)"
 msgstr "Bus: shown (b or Esc to close)"
 
@@ -3048,8 +3056,8 @@ msgid "[Enter 回答]"
 msgstr "[Enter to answer]"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "(選取該 session 後 Enter 回答)"
-msgstr "(select this session then press Enter to answer)"
+msgid "(按 w 跳到該 session 回答)"
+msgstr "(press w to jump to that session and answer)"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "提問"
@@ -3064,8 +3072,8 @@ msgid "[a]llow [A]lways [d]eny"
 msgstr "[a]llow [A]lways [d]eny"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "(j/k 選取該 session 後 a/d)"
-msgstr "(select that session with j/k, then a/d)"
+msgid "(按 w 跳到該 session 後 a/d)"
+msgstr "(press w to jump to that session, then a/d)"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "⏸ {label} 要求 {title}：{detail}{more} {keys}"
@@ -3152,8 +3160,8 @@ msgid "{header}：{question}"
 msgstr "{header}: {question}"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  [Enter] 回答問題"
-msgstr "  [Enter] Answer question"
+msgid "  [Enter] 回答問題  [w] 跳到下一個待處理"
+msgstr "  [Enter] answer  [w] jump to next pending"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "⏸ 核准 "
@@ -3422,6 +3430,10 @@ msgstr "Kill session"
 #: crates/ertangle-tui/src/help.rs
 msgid "休眠／喚醒"
 msgstr "Sleep / wake"
+
+#: crates/ertangle-tui/src/help.rs
+msgid "跳到下一個有提問或核准待處理的 session"
+msgstr "Jump to the next session with a pending question or approval"
 
 #: crates/ertangle-tui/src/help.rs
 msgid "核准：允許／一律允許／拒絕"
@@ -4479,6 +4491,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "(選取該 session 後 Enter 回答)"
+#~ msgstr "(select this session then press Enter to answer)"
+
+#~ msgid "(j/k 選取該 session 後 a/d)"
+#~ msgstr "(select that session with j/k, then a/d)"
+
+#~ msgid "  [Enter] 回答問題"
+#~ msgstr "  [Enter] Answer question"
 
 #~ msgid "  j/k 選 session  Enter 開逐字稿  Esc/F 返回  E 顯示已結束  ? 說明"
 #~ msgstr "  j/k select session  Enter open transcript  Esc/F back  E show ended  ? help"

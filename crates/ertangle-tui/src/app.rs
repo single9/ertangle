@@ -917,6 +917,50 @@ impl App {
         self.session_ids().get(self.selected).cloned()
     }
 
+    /// 下一個有待處理提問或核准的 session (依分頁順序，從目前選取處往後循環；
+    /// 只有目前這個 session 有待處理時回傳它自己，都沒有則 `None`)。
+    pub(crate) fn next_pending_session(&self) -> Option<SessionId> {
+        let waiting: std::collections::HashSet<&SessionId> = self
+            .state
+            .pending_permissions
+            .values()
+            .map(|p| &p.session)
+            .chain(self.state.pending_questions.values().map(|q| &q.session))
+            .collect();
+        let ids = self.session_ids();
+        let n = ids.len();
+        (1..=n)
+            .map(|step| &ids[(self.selected + step) % n.max(1)])
+            .find(|id| waiting.contains(id))
+            .cloned()
+    }
+
+    /// 跳到下一個有待處理提問或核准的 session；提問會直接開啟選擇器。回傳是否有跳轉。
+    pub(crate) fn jump_to_pending(&mut self) -> bool {
+        let Some(target) = self.next_pending_session() else {
+            self.status = tr!("目前沒有待處理的提問或核准");
+            return false;
+        };
+        let Some(idx) = self.session_ids().iter().position(|s| *s == target) else {
+            return false;
+        };
+        self.selected = idx;
+        self.view = CenterView::Transcript;
+        self.selection = None;
+        self.md_cache = None;
+        self.transcript_scroll = None;
+        // 使用者主動跳過來，之前按 Esc 略過的問題要重新出現。
+        self.dismissed_questions.clear();
+        let label = self
+            .state
+            .sessions
+            .get(&target)
+            .map_or_else(|| short(&target), |s| s.label.clone());
+        self.status = tr!("已跳到 {label}", label = label);
+        self.auto_open_question();
+        true
+    }
+
     /// 回傳目前選取 session 尚未回覆的核准請求 id。
     pub(crate) fn selected_permission(&self) -> Option<String> {
         let id = self.selected_id()?;

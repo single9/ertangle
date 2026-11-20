@@ -1546,7 +1546,7 @@ fn input_box_selection_extracts_text_and_spans_rows() {
 fn normal_mode_typing_nudges_instead_of_silently_ignoring() {
     let mut app = sample_app(&["hi"]);
     let (mut w, _peer) = pair_writer();
-    let key = KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE);
+    let key = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
     handle_key(&mut app, &mut w, key).unwrap();
     assert_eq!(app.mode, Mode::Normal, "不該自動進入輸入模式");
     assert!(app.input.is_empty());
@@ -1564,10 +1564,10 @@ fn normal_mode_typing_nudges_instead_of_silently_ignoring() {
     handle_key(
         &mut app,
         &mut w,
-        KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE),
     )
     .unwrap();
-    assert_eq!(app.input, "w");
+    assert_eq!(app.input, "y");
 }
 
 #[test]
@@ -5405,4 +5405,68 @@ fn flow_l_toggles_graph_and_list() {
     assert!(list.contains("worker"));
     key(&mut app, &mut w, KeyCode::Char('l'));
     assert!(!app.flow_list);
+}
+
+fn question_for(session: &str, id: &str) -> ertangle_core::UserQuestion {
+    ertangle_core::UserQuestion {
+        id: id.into(),
+        session: session.into(),
+        question: "Allow?".into(),
+        header: None,
+        options: Vec::new(),
+        multi_select: false,
+        custom: true,
+        group: None,
+    }
+}
+
+#[test]
+fn w_jumps_to_next_pending_session_and_cycles() {
+    let mut app = sample_app(&["hi"]);
+    add_session(&mut app, "ses_a", "a", 1);
+    add_session(&mut app, "ses_b", "b", 2);
+    add_session(&mut app, "ses_c", "c", 3);
+    let ids = app.session_ids();
+    let pos = |id: &str| ids.iter().position(|s| s == id).unwrap();
+    app.selected = pos("ses_a");
+
+    assert!(!app.jump_to_pending(), "沒有待處理時不跳轉");
+    assert_eq!(app.selected, pos("ses_a"));
+
+    app.state
+        .pending_questions
+        .insert("q1".into(), question_for("ses_c", "q1"));
+    app.state.pending_permissions.insert(
+        "r1".into(),
+        ertangle_core::PermissionRequest {
+            req: "r1".into(),
+            session: "ses_b".into(),
+            title: "Bash".into(),
+            detail: "x".into(),
+        },
+    );
+    app.mode = Mode::Command; // 避免自動開啟選擇器干擾順序判斷
+    assert!(app.jump_to_pending());
+    let first = app.selected_id().unwrap();
+    assert!(app.jump_to_pending());
+    let second = app.selected_id().unwrap();
+    assert!(app.jump_to_pending());
+    let third = app.selected_id().unwrap();
+    assert_ne!(first, second);
+    assert_eq!(first, third, "只有兩個待處理，第三次要循環回第一個");
+    assert!(["ses_b", "ses_c"].contains(&first.as_str()));
+    assert!(["ses_b", "ses_c"].contains(&second.as_str()));
+}
+
+#[test]
+fn jump_to_pending_reopens_dismissed_question_picker() {
+    let mut app = sample_app(&["hi"]);
+    add_session(&mut app, "ses_q", "q", 5);
+    app.state
+        .pending_questions
+        .insert("q1".into(), question_for("ses_q", "q1"));
+    app.dismissed_questions.insert("q1".into());
+    app.mode = Mode::Normal;
+    assert!(app.jump_to_pending());
+    assert!(app.picker.is_some(), "跳過去應直接開啟提問選擇器");
 }

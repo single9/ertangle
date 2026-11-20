@@ -297,6 +297,9 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
                 app.start_prompt();
             }
         }
+        KeyCode::Char('w') => {
+            app.jump_to_pending();
+        }
         KeyCode::Char('n') => crate::menu::start_spawn_picker(app),
         KeyCode::Char('f') => crate::search::open(app, None),
         KeyCode::Char('m') => {
