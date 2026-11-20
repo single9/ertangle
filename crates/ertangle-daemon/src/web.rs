@@ -905,6 +905,16 @@ mod tests {
         assert!(!INDEX_HTML.contains("attachments: [],\n        queue: queueMode"));
     }
 
+    /// T71: `updateAllViews` throws a swallowed ReferenceError when an identifier it uses is
+    /// undefined, leaving the Review slot stale. Every `pendingKeys` use needs a declaration.
+    #[test]
+    fn index_html_declares_pending_keys_before_use() {
+        let decl = INDEX_HTML.find("const pendingKeys = ");
+        let first_use = INDEX_HTML.find("pendingKeys.length");
+        assert!(decl.is_some(), "pendingKeys must be declared");
+        assert!(decl < first_use, "pendingKeys must be declared before use");
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()

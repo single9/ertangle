@@ -3229,6 +3229,7 @@
         const my = state.pending_questions[y].session === activeSession ? 0 : 1;
         return mx - my;
       });
+      const pendingKeys = inScopeFirst(state.pending_permissions);
       const activeQuestion = questionKeys.length ? state.pending_questions[questionKeys[0]] : null;
       pendingQuestionId = activeQuestion ? activeQuestion.id : null;
       const questionGroup = activeQuestion ? questionGroupOf(activeQuestion) : [];
