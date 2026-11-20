@@ -2,17 +2,17 @@
 
 Priority: P1　Scope: `ertangle-adapter`, `ertangle-tui`, `ertangle-daemon`　Depends on: T62
 
-Status: ready-for-agent
+Status: doing
 
 ## Problem
 
 T62 landed the shared question model, protocol requests, daemon waiter, MCP fallback, adapter normalization, and a TUI picker. Several acceptance criteria remain unmet:
 
-1. **Web UI cannot answer (fixed in `389a602`).** The web client now renders pending questions in the chat banner and review panel with option, multi-select, and custom answers, and submits `Request::AnswerQuestion`. Live browser verification is still pending.
+1. **Web UI cannot answer (fixed in `389a602`).** The web client now renders pending questions in the chat banner and review panel with option, multi-select, and custom answers, and submits `Request::AnswerQuestion`. The wire path passed a live probe; a real browser click is still outstanding. See `T63-live-probe-notes.md`.
 2. **Claude native `AskUserQuestion` has no answer path.** `crates/ertangle-adapter/src/claude.rs` emits `AgentEvent::Question` for the tool call, but `ClaudeControl` does not override `resolve_question`. The question times out unless the agent uses the `ertangle_question` MCP tool.
 3. **Only the first question is handled.** `parse_tool_call_question`, `parse_acp_elicitation`, and `parse_codex_user_input` normalize a single question; agents can send up to three.
 4. **ACP tool-call fallback cannot be answered.** `acp.rs` emits `AgentEvent::Question` for a recognized `tool_call`, but no pending entry is stored for that id, so `resolve_question` fails.
-5. **Real-agent verification is missing.** The wire formats were checked against the ACP and Codex specifications, but no live session has confirmed the question picker actually unblocks each agent.
+5. **Real-agent verification is incomplete.** OpenCode MCP questions and the web wire path now have passing live probes in `T63-live-probe-notes.md`. Claude, Codex, and Antigravity still need live confirmation.
 
 ## Analysis / decisions
 
