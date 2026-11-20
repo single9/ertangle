@@ -8,9 +8,9 @@
 
 ---
 
-## 為什麼選擇 ertangle？ (終端機原生 vs. GUI IDE)
+## 為什麼選擇 ertangle？ (終端機原生 vs. 桌面 GUI IDE)
 
-[Orca](https://github.com/stablyai/orca) 等 GUI IDE 將 Worktree、瀏覽器、Diff 視圖與終端機整合在同一個桌面應用程式中。`ertangle` 的哲學是**只聚焦協作與排程核心，其餘交還給終端機與各家 Agent 的原生 CLI**：
+相較於肥重的桌面 GUI 或 Electron 應用程式，`ertangle` 採用終端機原生與 Daemon 分離架構：將多 Agent 排程、Worktree 隔離與即時審查帶入你最熟悉的命令列，不僅常駐極輕量 (`< 20 MB`)，更能無縫支援 SSH 遠端開發與行動端隨身查閱：
 
 | 特性 | 本專案的做法 |
 | --- | --- |

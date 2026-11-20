@@ -8,9 +8,9 @@
 
 ---
 
-## Why ertangle? (Terminal-Native vs. Heavy GUI IDEs)
+## Why ertangle? (Terminal-Native vs. Heavy Desktop GUI IDEs)
 
-GUI-based AI IDEs such as [Orca](https://github.com/stablyai/orca) integrate worktrees, embedded browsers, diff views, and terminals into a single desktop app. `ertangle` focuses solely on the **collaboration, scheduling, and review core**, leaving editing and execution to the terminal and each agent's native CLI:
+Instead of heavy desktop GUI or Electron-based IDEs, `ertangle` embraces a terminal-native, daemon-separated architecture: bringing multi-agent orchestration, worktree isolation, and real-time code review directly into your terminal workflow—ultra-lightweight (`< 20 MB`), frictionless over SSH, and instantly accessible via mobile web:
 
 | Differentiator | How ertangle does it |
 | --- | --- |
