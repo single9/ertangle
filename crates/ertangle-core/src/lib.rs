@@ -1035,6 +1035,19 @@ impl State {
         Self::default()
     }
 
+    /// Drops pending questions owned by a session that exited or was removed.
+    fn remove_session_questions(&mut self, session: &str) {
+        let ids: Vec<String> = self
+            .pending_questions
+            .values()
+            .filter(|q| q.session == session)
+            .map(|q| q.id.clone())
+            .collect();
+        for id in ids {
+            self.pending_questions.remove(&id);
+        }
+    }
+
     fn push_transcript_line(&mut self, session: &str, line: String) {
         let buf = self.transcripts.entry(session.to_string()).or_default();
         buf.push_back(line);
@@ -1045,6 +1058,7 @@ impl State {
 
     /// Moves terminated session from active list; archives to `archived_sessions` if possessing `native_id` for future resumption.
     pub fn archive_session(&mut self, session: &str) {
+        self.remove_session_questions(session);
         if let Some(mut s) = self.sessions.remove(session) {
             if s.native_id.is_some() {
                 s.status = SessionStatus::Exited;
@@ -1342,6 +1356,7 @@ impl State {
                 }
             }
             Event::SessionExited { session, .. } => {
+                self.remove_session_questions(session);
                 if let Some(s) = self.sessions.get_mut(session) {
                     if s.status.is_live() {
                         s.status = SessionStatus::Exited;
@@ -2429,6 +2444,42 @@ pub(crate) mod tests {
                 session: "s1".into(),
                 id: "q1".into(),
                 answers: vec!["PostgreSQL".into()],
+            },
+        ));
+        assert!(st.pending_questions.is_empty());
+    }
+
+    #[test]
+    fn session_exit_clears_pending_questions() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::SessionStarted {
+                session: crate::tests::sample_session("s1"),
+            },
+        ));
+        st.apply(&rec(
+            2,
+            Event::QuestionRequested {
+                question: UserQuestion {
+                    id: "q1".into(),
+                    session: "s1".into(),
+                    header: None,
+                    question: "Pick one".into(),
+                    options: Vec::new(),
+                    multi_select: false,
+                    custom: true,
+                    group: None,
+                },
+            },
+        ));
+        assert_eq!(st.pending_questions.len(), 1);
+
+        st.apply(&rec(
+            3,
+            Event::SessionExited {
+                session: "s1".into(),
+                code: Some(0),
             },
         ));
         assert!(st.pending_questions.is_empty());
