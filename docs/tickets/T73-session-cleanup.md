@@ -1,6 +1,6 @@
 # T73 — Session cleanup: auto-archive, retention, prune
 
-Status: in-progress (daemon part done; TUI and Web parts pending)
+Status: in-progress (daemon and TUI parts done; Web part pending)
 
 ## Problem
 
@@ -20,9 +20,12 @@ Finished worker sessions pile up in the session list and archived sessions grow 
 5. **`Request::Prune { project }`** / `ertangle prune [--project <root>]`: archives every ended session that is merged or has no worktree, removing merged worktrees safely. Live sessions and unmerged work are never touched. Reply note: archived count plus the skipped list with reasons.
 6. Clients learn about archiving through `SessionRemoved` (archived list is part of the state snapshot) and `ArchivePruned`.
 
-### TUI (pending)
+### TUI (done)
 
-Ended sessions go into a collapsed "ended (N)" group at the bottom of the sidebar; `:prune` command and menu entry.
+- Ended (non-live) sessions form a separate tree at the bottom of the sidebar, collapsed by default behind a non-selectable `▸ ended (N)` header row (`▾` when expanded). The live tree is unchanged. `App.show_ended` holds the state; `visible_sessions()` hides ended sessions while collapsed, `visible_sessions_with(true)` always includes them (used by `:clean`).
+- Toggle: `E`, `:ended [show|hide]`, or a mouse click on the header row. Toggling keeps the selected session when it is still visible, otherwise selects the first row.
+- `:prune` (menu `SPC g p`) sends `Request::Prune` scoped to the home project when the project scope is on (all projects otherwise); the daemon's summary shows in the status line.
+- `:resume` still lists archived and ended sessions (unchanged).
 
 ### Web (pending)
 

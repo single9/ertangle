@@ -5,7 +5,9 @@ use ertangle_core::{AgentKind, Decision, MsgKind, PermissionPolicy, Role, Target
 use ertangle_protocol::{MergeStrategy, Request, SpawnRequest, Transport};
 use tr::tr;
 
-use crate::app::{toggle_scope, toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode};
+use crate::app::{
+    toggle_ended, toggle_scope, toggle_thoughts, toggle_tools, App, CenterView, LayoutMode, Mode,
+};
 use crate::clipboard::copy_main_pane;
 use crate::hosts::HostRouter;
 use crate::{request_selected_diff, send};
@@ -260,6 +262,11 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         ertangle_core::tr_noop!("(Diff 視圖) 退回游標所在的 hunk 或整個檔案；:discard! 直接執行"),
     ),
     ("gc", ertangle_core::tr_noop!("[session]  清理已合併的 worktree")),
+    (
+        "prune",
+        ertangle_core::tr_noop!("封存已結束且已合併 (或沒有 worktree) 的 session；未合併的保留"),
+    ),
+    ("ended", ertangle_core::tr_noop!("[show|hide]  展開／摺疊側欄的已結束群組")),
     ("worktrees", ertangle_core::tr_noop!("顯示 worktree 清單")),
     ("overview", ertangle_core::tr_noop!("回到 transcript 視圖")),
     (
@@ -337,7 +344,8 @@ pub(crate) fn command_hints(input: &str) -> Vec<(&'static str, &'static str)> {
 
 /// `:clean` 的候選 session：目前檢視範圍 (專案與主機篩選) 內所有已結束的 session。
 pub(crate) fn clean_candidates(app: &App) -> Vec<String> {
-    app.visible_sessions()
+    // Ended sessions count even while the sidebar group is collapsed.
+    app.visible_sessions_with(true)
         .into_iter()
         .filter_map(|(host, id)| {
             let state = app.hosts.get(&host).map_or(&app.state, |h| &h.state);
@@ -755,6 +763,16 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                 app.status = tr!("用法：/layout three|two|tabs");
             }
         }
+        "prune" => {
+            let project = app.scope_here.then(|| app.home_project.clone());
+            send(writer, &Request::Prune { project })?;
+        }
+        "ended" => match rest {
+            "show" => toggle_ended(app, Some(true)),
+            "hide" => toggle_ended(app, Some(false)),
+            "" => toggle_ended(app, None),
+            _ => app.status = tr!("用法：:ended [show|hide]"),
+        },
         "gc" => {
             let session = if rest.is_empty() {
                 None

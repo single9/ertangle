@@ -265,6 +265,8 @@ pub(crate) struct App {
     pub(crate) home_project: String,
     /// 只列出屬於 `home_project` 的 session。
     pub(crate) scope_here: bool,
+    /// Whether the bottom "ended" group of the session sidebar is expanded (collapsed by default).
+    pub(crate) show_ended: bool,
     /// 輸入框內寬 (由繪製更新)，供上下移動游標換算顯示列。
     pub(crate) input_inner_w: usize,
     pub(crate) prompt_history: crate::history::History,
@@ -421,6 +423,7 @@ impl App {
             active_project,
             home_project: home_proj,
             scope_here: true,
+            show_ended: false,
             input_inner_w: 80,
             prompt_history: crate::history::History::default(),
             command_history: crate::history::History::default(),
@@ -482,10 +485,16 @@ impl App {
         &self.active_host
     }
 
+    /// Sessions shown in the sidebar (ended ones only when the ended group is expanded).
     pub(crate) fn visible_sessions(&self) -> Vec<(String, SessionId)> {
+        self.visible_sessions_with(self.show_ended)
+    }
+
+    /// Like `visible_sessions`, with explicit control over whether ended sessions are included.
+    pub(crate) fn visible_sessions_with(&self, show_ended: bool) -> Vec<(String, SessionId)> {
         if !self.has_multiple_hosts() {
             return self
-                .session_ids_single()
+                .session_ids_single(show_ended)
                 .into_iter()
                 .map(|id| (self.active_host.clone(), id))
                 .collect();
@@ -497,7 +506,12 @@ impl App {
                     continue;
                 }
             }
-            let ids = Self::tree_order_sessions(&host.state, self.scope_here, &self.home_project);
+            let ids = Self::tree_order_sessions(
+                &host.state,
+                self.scope_here,
+                &self.home_project,
+                show_ended,
+            );
             for id in ids {
                 out.push((host_name.clone(), id));
             }
@@ -505,14 +519,38 @@ impl App {
         out
     }
 
-    fn session_ids_single(&self) -> Vec<SessionId> {
-        Self::tree_order_sessions(&self.state, self.scope_here, &self.home_project)
+    fn session_ids_single(&self, show_ended: bool) -> Vec<SessionId> {
+        Self::tree_order_sessions(&self.state, self.scope_here, &self.home_project, show_ended)
+    }
+
+    /// Number of ended (non-live) sessions in scope, across all hosts when connected to several.
+    pub(crate) fn ended_count(&self) -> usize {
+        let count = |state: &State| {
+            state
+                .sessions
+                .values()
+                .filter(|s| !s.status.is_live())
+                .filter(|s| !self.scope_here || s.project_root() == self.home_project)
+                .count()
+        };
+        if !self.has_multiple_hosts() {
+            return count(&self.state);
+        }
+        self.hosts
+            .iter()
+            .filter(|(name, _)| self.host_filter.as_ref().is_none_or(|f| f == *name))
+            .map(|(_, h)| count(&h.state))
+            .sum()
     }
 
     /// 依專案/建立順序做樹狀排序：子 session 緊跟在父 session 後，方便顯示階層。
-    fn tree_order_sessions(state: &State, scope_here: bool, home_project: &str) -> Vec<SessionId> {
-        use std::collections::{HashMap, HashSet};
-
+    /// Ended sessions form a separate tree at the bottom, and are left out unless `show_ended`.
+    fn tree_order_sessions(
+        state: &State,
+        scope_here: bool,
+        home_project: &str,
+        show_ended: bool,
+    ) -> Vec<SessionId> {
         let mut v: Vec<&ertangle_core::Session> = state
             .sessions_sorted()
             .into_iter()
@@ -521,11 +559,22 @@ impl App {
         if !scope_here {
             v.sort_by_key(|s| (s.project_root() != home_project, s.project_root()));
         }
+        let (live, ended): (Vec<_>, Vec<_>) = v.into_iter().partition(|s| s.status.is_live());
+        let mut out = Self::tree_order(&live);
+        if show_ended {
+            out.extend(Self::tree_order(&ended));
+        }
+        out
+    }
+
+    /// Depth-first order of `v`: children follow their parent when the parent is also in `v`.
+    fn tree_order(v: &[&ertangle_core::Session]) -> Vec<SessionId> {
+        use std::collections::{HashMap, HashSet};
 
         let present: HashSet<&str> = v.iter().map(|s| s.id.as_str()).collect();
         let mut children: HashMap<String, Vec<SessionId>> = HashMap::new();
         let mut roots: Vec<SessionId> = Vec::new();
-        for s in &v {
+        for s in v {
             if let Some(parent) = s.parent.as_deref() {
                 if present.contains(parent) {
                     children
@@ -1390,6 +1439,24 @@ pub(crate) fn project_color(root: &str) -> ratatui::style::Color {
 }
 
 /// 切換「只看本專案／全部專案」。
+/// Expands or collapses the "ended" group of the session sidebar (`None` toggles).
+pub(crate) fn toggle_ended(app: &mut App, show: Option<bool>) {
+    // Keep the selection on the same session when rows appear/disappear.
+    let keep = app.selected_id();
+    app.show_ended = show.unwrap_or(!app.show_ended);
+    app.selected = keep
+        .and_then(|id| app.session_ids().iter().position(|s| *s == id))
+        .unwrap_or(0);
+    app.status = if app.show_ended {
+        tr!("已展開已結束的 session，E 摺疊")
+    } else {
+        tr!(
+            "已摺疊已結束的 session ({n})，E 展開",
+            n = app.ended_count()
+        )
+    };
+}
+
 pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
     app.scope_here = here.unwrap_or(!app.scope_here);
     app.selected = 0;

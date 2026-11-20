@@ -80,7 +80,8 @@ pub(crate) fn handle_mouse(
                 // 每一筆 session 佔一行；`ListState.offset` 是筆數 (此處等於列數)。
                 let rel_row = mouse.row.saturating_sub(area.y + 1);
                 let idx = app.sessions_offset + (rel_row / crate::SESSION_ITEM_ROWS) as usize;
-                if idx < app.session_ids().len() {
+                let visible = app.session_ids().len();
+                if idx < visible {
                     app.selected = idx;
                     app.sync_active_host_from_selection();
                     writer.set_active(&app.active_host);
@@ -88,6 +89,8 @@ pub(crate) fn handle_mouse(
                     if app.view == CenterView::Diff {
                         request_selected_diff(app, writer)?;
                     }
+                } else if idx == visible && app.ended_count() > 0 {
+                    crate::app::toggle_ended(app, None);
                 }
                 return Ok(());
             }

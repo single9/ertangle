@@ -1296,7 +1296,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
 
     // 每筆 session 只用一行：狀態 + 標籤 + 少數警示標記。
     // 模型、branch、context、成本等細節都在逐字稿下方 (footer) 顯示，側欄不再重複。
-    let items: Vec<ListItem> = sessions
+    let mut items: Vec<ListItem> = sessions
         .iter()
         .map(|(host_name, s)| {
             let color = match s.status {
@@ -1395,6 +1395,16 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             ListItem::new(Line::from(spans))
         })
         .collect();
+
+    // Fold header for ended sessions: never selectable (index past the last session).
+    let ended = app.ended_count();
+    if ended > 0 {
+        let arrow = if app.show_ended { "▾" } else { "▸" };
+        items.push(ListItem::new(Line::from(Span::styled(
+            format!("{arrow} {}", tr!("已結束 ({n})", n = ended)),
+            Style::default().fg(Color::DarkGray),
+        ))));
+    }
 
     let mut list_state = ListState::default();
     if !sessions.is_empty() {

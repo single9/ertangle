@@ -2186,6 +2186,14 @@ msgid "逐字稿：第 {next} 行 (End 回到最新)"
 msgstr "Transcript: line {next} (End to jump to latest)"
 
 #: crates/ertangle-tui/src/app.rs
+msgid "已展開已結束的 session，E 摺疊"
+msgstr "Ended sessions expanded, E to collapse"
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已摺疊已結束的 session ({n})，E 展開"
+msgstr "Ended sessions collapsed ({n}), E to expand"
+
+#: crates/ertangle-tui/src/app.rs
 msgid "只顯示本專案的 session、Bus 訊息與任務 ({project})，P 顯示全部"
 msgstr "Showing sessions, Bus messages, and tasks of this project only ({project}), P to show all"
 
@@ -2373,6 +2381,14 @@ msgstr "(Diff view) Revert the hunk or entire file at the cursor; :discard! exec
 #: crates/ertangle-tui/src/commands.rs
 msgid "[session]  清理已合併的 worktree"
 msgstr "[session]  Clean up merged worktrees"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "封存已結束且已合併 (或沒有 worktree) 的 session；未合併的保留"
+msgstr "Archive ended sessions that are merged (or have no worktree); unmerged ones are kept"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "[show|hide]  展開／摺疊側欄的已結束群組"
+msgstr "[show|hide]  expand/collapse the ended group in the sidebar"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "顯示 worktree 清單"
@@ -2581,6 +2597,10 @@ msgstr "Unknown host: {target}, available hosts: {avail}"
 #: crates/ertangle-tui/src/commands.rs
 msgid "用法：/layout three|two|tabs"
 msgstr "Usage: /layout three|two|tabs"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "用法：:ended [show|hide]"
+msgstr "Usage: :ended [show|hide]"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "用法：copy [訊息編號]"
@@ -3031,6 +3051,10 @@ msgid "⏸暫停跟隨"
 msgstr "⏸not following"
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "已結束 ({n})"
+msgstr "Ended ({n})"
+
+#: crates/ertangle-tui/src/draw.rs
 msgid " Sessions "
 msgstr " Sessions "
 
@@ -3363,6 +3387,10 @@ msgid "只看本專案／顯示全部專案 (session、Bus、任務)"
 msgstr "Show this project only / all projects (sessions, Bus, tasks)"
 
 #: crates/ertangle-tui/src/help.rs
+msgid "展開／摺疊側欄底部「已結束」群組"
+msgstr "Expand/collapse the \"Ended\" group at the bottom of the sidebar"
+
+#: crates/ertangle-tui/src/help.rs
 msgid "(輸入 prompt 時)換行；輸入框隨行數長高，貼上保留換行"
 msgstr "(while typing a prompt) new line; the input box grows, pasted newlines are kept"
 
@@ -3685,6 +3713,10 @@ msgstr "Merge and delegate conflicts"
 #: crates/ertangle-tui/src/menu.rs
 msgid "gc 已合併的 worktree"
 msgstr "gc merged worktrees"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "封存已結束且已合併的 session"
+msgstr "Archive ended, merged sessions"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "任務視圖"

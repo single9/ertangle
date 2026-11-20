@@ -309,6 +309,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         }
         KeyCode::Char('T') => toggle_thoughts(app),
         KeyCode::Char('P') => crate::app::toggle_scope(app, None),
+        KeyCode::Char('E') => crate::app::toggle_ended(app, None),
         KeyCode::Char('O') => toggle_tools(app),
         KeyCode::Char('L') => app.cycle_layout(),
         KeyCode::Char('b') => app.toggle_bus(),

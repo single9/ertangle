@@ -179,6 +179,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     ertangle_core::tr_noop!("gc 已合併的 worktree"),
                     Act::Cmd("gc"),
                 ),
+                it(
+                    'p',
+                    ertangle_core::tr_noop!("封存已結束且已合併的 session"),
+                    Act::Cmd("prune"),
+                ),
             ],
         ),
         ['v'] => (

@@ -2174,6 +2174,14 @@ msgid "逐字稿：第 {next} 行 (End 回到最新)"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
+msgid "已展開已結束的 session，E 摺疊"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已摺疊已結束的 session ({n})，E 展開"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
 msgid "只顯示本專案的 session、Bus 訊息與任務 ({project})，P 顯示全部"
 msgstr ""
 
@@ -2359,6 +2367,14 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "[session]  清理已合併的 worktree"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "封存已結束且已合併 (或沒有 worktree) 的 session；未合併的保留"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "[show|hide]  展開／摺疊側欄的已結束群組"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2567,6 +2583,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "用法：/layout three|two|tabs"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "用法：:ended [show|hide]"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -3018,6 +3038,10 @@ msgid "⏸暫停跟隨"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "已結束 ({n})"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
 msgid " Sessions "
 msgstr ""
 
@@ -3350,6 +3374,10 @@ msgid "只看本專案／顯示全部專案 (session、Bus、任務)"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
+msgid "展開／摺疊側欄底部「已結束」群組"
+msgstr ""
+
+#: crates/ertangle-tui/src/help.rs
 msgid "(輸入 prompt 時)換行；輸入框隨行數長高，貼上保留換行"
 msgstr ""
 
@@ -3671,6 +3699,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "gc 已合併的 worktree"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "封存已結束且已合併的 session"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

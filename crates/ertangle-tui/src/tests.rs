@@ -2289,6 +2289,7 @@ fn resume_picker_lists_ended_filters_and_resumes() {
         .starts_with("✓ worker/alpha  claude:sonnet  "));
 
     // 若左側已選中某個可接續的 session，開啟 popup 時游標應預設停在該項。
+    app.show_ended = true;
     let old_idx = app
         .session_ids()
         .iter()
@@ -4894,4 +4895,86 @@ fn question_group_remote_resolution_advances_without_sending() {
     qpick_key(&mut app, &mut w, KeyCode::Char('2'));
     let sent = qpick_sent(&mut peer);
     assert!(sent.contains("qst_g3") && !sent.contains("qst_g1") && !sent.contains("qst_g2"));
+}
+
+fn app_with_ended() -> App {
+    let mut app = sample_app(&[]);
+    app.hosts.clear();
+    add_session(&mut app, "ses_done1", "done1", 10);
+    add_session(&mut app, "ses_done2", "done2", 11);
+    for id in ["ses_done1", "ses_done2"] {
+        app.state.sessions.get_mut(id).unwrap().status = SessionStatus::Exited;
+    }
+    app
+}
+
+#[test]
+fn ended_sessions_are_folded_by_default_and_counted() {
+    let app = app_with_ended();
+    assert_eq!(app.ended_count(), 2);
+    let ids = app.session_ids();
+    assert!(ids.contains(&"ses_test".to_string()));
+    assert!(!ids.iter().any(|id| id.starts_with("ses_done")), "{ids:?}");
+}
+
+#[test]
+fn ended_group_expands_at_the_bottom_and_toggle_keeps_selection() {
+    let mut app = app_with_ended();
+    toggle_ended(&mut app, None);
+    let ids = app.session_ids();
+    assert_eq!(ids.len(), 3);
+    assert_eq!(ids[0], "ses_test", "live sessions stay first");
+    assert!(ids[1..].iter().all(|id| id.starts_with("ses_done")));
+
+    app.selected = 2;
+    let kept = app.selected_id();
+    toggle_ended(&mut app, Some(false));
+    assert!(!app.show_ended);
+    // The selected ended session disappeared: selection falls back to the first row.
+    assert_eq!(app.selected, 0);
+    assert_ne!(app.selected_id(), kept);
+}
+
+#[test]
+fn ended_group_header_is_rendered_with_count() {
+    let mut app = app_with_ended();
+    let (_, collapsed) = render_size(&mut app, 120, 30);
+    assert!(
+        collapsed.contains("▸ ") && collapsed.contains("(2)"),
+        "{collapsed}"
+    );
+    app.show_ended = true;
+    let (_, expanded) = render_size(&mut app, 120, 30);
+    assert!(expanded.contains('▾') && expanded.contains("done1"));
+}
+
+#[test]
+fn prune_command_sends_scoped_request_and_ended_command_toggles() {
+    let mut app = app_with_ended();
+    let (mut w, peer) = pair_writer();
+    app.scope_here = false;
+    crate::commands::execute_command(&mut app, &mut w, "prune").unwrap();
+    let mut buf = String::new();
+    std::io::Read::read_to_string(&mut &peer, &mut buf).ok();
+    assert!(
+        buf.contains("\"op\":\"prune\"") && buf.contains("null"),
+        "{buf}"
+    );
+
+    app.scope_here = true;
+    crate::commands::execute_command(&mut app, &mut w, "prune").unwrap();
+    let mut buf = String::new();
+    std::io::Read::read_to_string(&mut &peer, &mut buf).ok();
+    assert!(
+        buf.contains(&app.home_project),
+        "scope_here limits to project: {buf}"
+    );
+
+    crate::commands::execute_command(&mut app, &mut w, "ended show").unwrap();
+    assert!(app.show_ended);
+    crate::commands::execute_command(&mut app, &mut w, "ended hide").unwrap();
+    assert!(!app.show_ended);
+    assert!(crate::commands::command_hints("prune")
+        .iter()
+        .any(|(n, _)| *n == "prune"));
 }
