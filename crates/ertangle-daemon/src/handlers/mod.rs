@@ -78,6 +78,15 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             });
         }
 
+        Request::Restart => {
+            let _ = reply.send(Frame::ok_note(tr!("daemon 重啟中")));
+            let shared = shared.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(150));
+                shared.restart();
+            });
+        }
+
         // Session
         Request::Spawn(spawn) => session::handle_spawn(shared, reply, spawn),
         Request::Prompt {

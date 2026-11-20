@@ -73,6 +73,7 @@
 | [T66](T66-tui-question-picker-usability.md) | Make the TUI question picker usable | P1 | T63 |
 | [T67](T67-tui-question-auto-open.md) | Auto-open the TUI question picker, docked above the input | P1 | T66 |
 | [T68](T68-web-image-attachments.md) | Send images with prompts from the web UI | P2 | T65 |
+| [T69](T69-daemon-restart.md) | Daemon restart that keeps sessions resumable | P2 | — |
 
 ## Language convention
 

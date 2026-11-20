@@ -4466,3 +4466,20 @@ fn t50_auto_handoff_keeps_identity() {
     assert_eq!(successor.parent.as_deref(), Some("p1"));
     kill_all_sessions(&shared);
 }
+
+#[test]
+fn strip_deleted_suffix_removes_marker_only_at_end() {
+    use std::path::Path;
+    assert_eq!(
+        strip_deleted_suffix(Path::new("/opt/bin/ertangle (deleted)")),
+        Path::new("/opt/bin/ertangle")
+    );
+    assert_eq!(
+        strip_deleted_suffix(Path::new("/opt/bin/ertangle")),
+        Path::new("/opt/bin/ertangle")
+    );
+    assert_eq!(
+        strip_deleted_suffix(Path::new("/opt/(deleted) x/ertangle")),
+        Path::new("/opt/(deleted) x/ertangle")
+    );
+}

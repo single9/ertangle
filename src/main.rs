@@ -441,6 +441,8 @@ enum Cmd {
     },
     /// 關閉常駐的 daemon 與所有受管 agent 子處理程序
     Shutdown,
+    /// 重啟常駐的 daemon (換上新執行檔)，執行中的 session 自動接續
+    Restart,
     /// 產生 shell 自動完成腳本並印到 stdout (bash / zsh / fish)
     Completions { shell: clap_complete::Shell },
     /// 印出所有說明文字 (供翻譯抽取用，不會啟動 daemon)
@@ -682,6 +684,7 @@ fn main() -> Result<()> {
         } => cmd_export(session, tree, diff, output),
         Cmd::Skill { cmd } => cmd_skill(cmd),
         Cmd::Shutdown => cmd_shutdown(),
+        Cmd::Restart => cmd_restart(),
         Cmd::Completions { shell } => cmd_completions(shell),
         Cmd::Complete { .. } => cmd_complete_sessions(),
         Cmd::HelpStrings => {

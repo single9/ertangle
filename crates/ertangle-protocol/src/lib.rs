@@ -391,6 +391,8 @@ pub enum Request {
     },
     /// 要 daemon 關閉。
     Shutdown,
+    /// 要 daemon 以同一個執行檔重新啟動 (re-exec)；執行中的 session 會自動接續。
+    Restart,
 }
 
 /// daemon → client。

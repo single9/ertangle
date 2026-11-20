@@ -51,6 +51,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -407,6 +408,7 @@ impl Shared {
         let orphans: Vec<(SessionId, bool, bool)> = {
             // 先讀設定再上鎖：default_cwd() 本身也會鎖 inner。
             let cfg = config::Config::load(&config_dir(), &shared.default_cwd());
+            let restarted = std::env::var_os(RESTARTED_ENV).is_some();
             let inner = lock(&shared.inner);
             inner
                 .state
@@ -414,7 +416,7 @@ impl Shared {
                 .values()
                 .filter(|s| s.status.is_live())
                 .map(|s| {
-                    let auto = cfg.agent_spawn.auto_resume()
+                    let auto = (restarted || cfg.agent_spawn.auto_resume())
                         && auto_resume_eligible(s, &inner.state.quotas);
                     (s.id.clone(), s.native_id.is_some(), auto)
                 })
@@ -936,6 +938,31 @@ impl Shared {
 
     /// 關閉：先結束所有 agent 子處理程序，再移除 socket，最後離開。
     pub(crate) fn shutdown(self: &Arc<Self>) {
+        self.teardown();
+        std::process::exit(0);
+    }
+
+    /// 重啟：同 `shutdown` 的收尾，但改用 exec 換成新的 daemon 映像 (保留 PID)。
+    /// 新 daemon 帶 `ERTANGLE_RESTARTED=1`，啟動時會自動接續執行中的 session。
+    pub(crate) fn restart(self: &Arc<Self>) {
+        self.teardown();
+        let exe = match std::env::current_exe() {
+            Ok(p) => strip_deleted_suffix(&p),
+            Err(e) => {
+                tracing::error!("重啟失敗：找不到執行檔 ({e})");
+                std::process::exit(1);
+            }
+        };
+        let err = std::process::Command::new(&exe)
+            .args(std::env::args_os().skip(1))
+            .env(RESTARTED_ENV, "1")
+            .exec();
+        tracing::error!("重啟失敗：exec {} 錯誤 ({err})", exe.display());
+        std::process::exit(1);
+    }
+
+    /// 結束所有 agent 子處理程序、刷出 log、移除 socket。
+    fn teardown(self: &Arc<Self>) {
         self.stop_web();
         let ctls: Vec<Arc<dyn AgentControl>> = {
             let mut inner = lock(&self.inner);
@@ -946,7 +973,6 @@ impl Shared {
         }
         self.flush_log();
         let _ = fs::remove_file(socket_path());
-        std::process::exit(0);
     }
 
     pub(crate) fn resolve_session(&self, id_or_label: &str) -> SessionId {
@@ -1048,6 +1074,20 @@ pub(crate) fn auto_resumed_note() -> String {
 
 /// 重啟當下這個 session 是否該自動接續：正在跑回合、有原生對話 id、該 agent 額度沒滿，
 /// 且上次自動接續後有過進展 (避免 daemon 一再崩潰時無限接續)。
+/// 重啟時由舊 daemon 設給新 daemon 的環境變數。
+const RESTARTED_ENV: &str = "ERTANGLE_RESTARTED";
+
+/// Linux 上執行檔被換掉後，`current_exe()` 會帶 ` (deleted)` 後綴；去掉才找得到新檔。
+fn strip_deleted_suffix(p: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    const SUFFIX: &[u8] = b" (deleted)";
+    let bytes = p.as_os_str().as_bytes();
+    match bytes.strip_suffix(SUFFIX) {
+        Some(rest) => std::path::PathBuf::from(std::ffi::OsString::from_vec(rest.to_vec())),
+        None => p.to_path_buf(),
+    }
+}
+
 pub(crate) fn auto_resume_eligible(
     s: &Session,
     quotas: &std::collections::BTreeMap<String, ertangle_core::Quota>,

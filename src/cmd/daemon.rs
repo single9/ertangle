@@ -33,6 +33,29 @@ pub(crate) fn cmd_shutdown() -> Result<()> {
     Ok(())
 }
 
+/// 要求 daemon 重啟，並等待新 daemon 就緒 (最多約 15 秒)。
+pub(crate) fn cmd_restart() -> Result<()> {
+    use std::time::{Duration, Instant};
+    roundtrip(&Request::Restart)?;
+    // 先等舊 daemon 讓出 socket，再等新 daemon 起來；避免誤把舊 daemon 當成新的。
+    let down_deadline = Instant::now() + Duration::from_secs(5);
+    while ertangle_daemon::is_running() && Instant::now() < down_deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let up_deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < up_deadline {
+        if ertangle_daemon::is_running() {
+            println!("{}", tr!("daemon 已重啟"));
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    anyhow::bail!(
+        "{}",
+        tr!("等不到新的 daemon 就緒 (逾時 10 秒)；請用 `ertangle daemon` 手動啟動")
+    )
+}
+
 pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
     let sock = ertangle_daemon::socket_path();
     let running = ertangle_daemon::is_running();

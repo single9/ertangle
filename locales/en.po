@@ -83,6 +83,14 @@ msgid "已要求 daemon 關閉"
 msgstr "Asked daemon to shut down"
 
 #: src/cmd/daemon.rs
+msgid "daemon 已重啟"
+msgstr "daemon restarted"
+
+#: src/cmd/daemon.rs
+msgid "等不到新的 daemon 就緒 (逾時 10 秒)；請用 `ertangle daemon` 手動啟動"
+msgstr "The new daemon did not come up (timed out after 10 s); start it manually with `ertangle daemon`"
+
+#: src/cmd/daemon.rs
 msgid "ertangle 遠端連線資訊："
 msgstr "ertangle remote connection info:"
 
@@ -634,6 +642,10 @@ msgstr "Remote authentication token (can also be set with the ERTANGLE_TOKEN env
 #: src/cmd/helptext/help_strings.rs
 msgid "遠端連線認證用的 token (未指定則讀環境變數 ERTANGLE_TOKEN；為安全建議搭配 SSH 轉發)"
 msgstr "Token for remote authentication (falls back to the ERTANGLE_TOKEN environment variable; use together with SSH forwarding for safety)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "重啟常駐的 daemon (換上新執行檔)，執行中的 session 自動接續"
+msgstr "Restart the resident daemon (swap in the new binary); running sessions auto-resume"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "重播 event log 並印出歷史事件"
@@ -1850,6 +1862,10 @@ msgid "daemon 關閉中"
 msgstr "daemon shutting down"
 
 #: crates/ertangle-daemon/src/handlers/mod.rs
+msgid "daemon 重啟中"
+msgstr "daemon restarting"
+
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "Web 版已啟動：{url}"
 msgstr "Web version started: {url}"
 
@@ -2427,6 +2443,10 @@ msgid "關閉共用 daemon (結束所有專案的 session)並離開；有 sessio
 msgstr "Shut down the shared daemon (ending sessions of all projects) and quit; requires :shutdown! while sessions are running"
 
 #: crates/ertangle-tui/src/commands.rs
+msgid "重啟共用 daemon (換上新執行檔)；執行中的 session 自動接續，TUI 會自動重連；有 session 在跑時需 :restart! 確認"
+msgstr "Restart the shared daemon (new binary); running sessions auto-resume and the TUI reconnects; needs :restart! while sessions are live"
+
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：:budget <金額> (或 :budget <session> <金額>)"
 msgstr "Usage: :budget <amount> (or :budget <session> <amount>)"
 
@@ -2541,6 +2561,14 @@ msgstr "Usage: copy [message number]"
 #: crates/ertangle-tui/src/commands.rs
 msgid "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session (其他專案 {others} 個)。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit"
 msgstr "shutdown stops the shared daemon and ends {n} running sessions ({others} in other projects). Type :shutdown! to confirm; use :stop to end only this project, or :quit to just leave the TUI"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "restart 會重啟共用的 daemon，中斷 {n} 個執行中的 session 並自動接續。確定請輸入 :restart!"
+msgstr "restart will restart the shared daemon, interrupting {n} running session(s) and auto-resuming them. Type :restart! to confirm"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "已要求 daemon 重啟，等待重連…"
+msgstr "Daemon restart requested, waiting to reconnect…"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "已要求結束本專案 {n} 個執行中的 session"
@@ -3569,6 +3597,10 @@ msgstr "Stop all sessions of this project"
 #: crates/ertangle-tui/src/menu.rs
 msgid "關閉共用 daemon 並離開"
 msgstr "Shut down the shared daemon and quit"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "重啟共用 daemon (自動重連)"
+msgstr "Restart shared daemon (auto-reconnect)"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "新增 agent… (選 agent 與 model)"

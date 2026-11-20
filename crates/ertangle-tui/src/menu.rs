@@ -80,6 +80,11 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     ertangle_core::tr_noop!("關閉共用 daemon 並離開"),
                     Act::Cmd("shutdown"),
                 ),
+                it(
+                    'R',
+                    ertangle_core::tr_noop!("重啟共用 daemon (自動重連)"),
+                    Act::Cmd("restart"),
+                ),
             ],
         ),
         ['s'] => (

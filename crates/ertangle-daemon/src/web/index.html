@@ -1880,6 +1880,7 @@
           <button class="btn-pill btn-danger-outline" style="flex:1;" onclick="killCurrentSession()">強制結束 (Kill)</button>
         </div>
         <button class="btn-pill btn-danger-outline" style="padding:8px 0;" onclick="removeCurrentSession()">從清單中移除此 Session</button>
+        <button class="btn-pill btn-secondary" style="padding:8px 0;" onclick="restartDaemon()">重啟 Daemon (執行中的 Session 自動接續)</button>
       </div>
     </div>
 
@@ -4342,6 +4343,15 @@
         ws.send(JSON.stringify({ op: "kill", session: targetManageSessionId }));
         closeSheet("sheet-session-manage");
         showToast("已發送強制結束訊號");
+      }
+    }
+
+    function restartDaemon() {
+      if (!ws) return;
+      if (window.confirm("確定重啟共用的 daemon？執行中的回合會被中斷並自動接續，頁面會自動重連。")) {
+        ws.send(JSON.stringify({ op: "restart" }));
+        closeSheet("sheet-session-manage");
+        showToast("已要求 daemon 重啟，等待重連…");
       }
     }
 

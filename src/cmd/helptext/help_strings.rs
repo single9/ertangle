@@ -122,6 +122,7 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     ertangle_core::tr_noop!("逾時毫秒數 (預設 60000 = 60 秒)"),
     ertangle_core::tr_noop!("遠端認證 token (亦可透過環境變數 ERTANGLE_TOKEN 設定)"),
     ertangle_core::tr_noop!("遠端連線認證用的 token (未指定則讀環境變數 ERTANGLE_TOKEN；為安全建議搭配 SSH 轉發)"),
+    ertangle_core::tr_noop!("重啟常駐的 daemon (換上新執行檔)，執行中的 session 自動接續"),
     ertangle_core::tr_noop!("重播 event log 並印出歷史事件"),
     ertangle_core::tr_noop!("關閉常駐的 daemon 與所有受管 agent 子處理程序"),
     ertangle_core::tr_noop!("阻塞等待下一則發給自己的訊息"),

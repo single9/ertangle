@@ -311,6 +311,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "shutdown",
         ertangle_core::tr_noop!("關閉共用 daemon (結束所有專案的 session)並離開；有 session 在跑時需 :shutdown! 確認"),
     ),
+    (
+        "restart",
+        ertangle_core::tr_noop!("重啟共用 daemon (換上新執行檔)；執行中的 session 自動接續，TUI 會自動重連；有 session 在跑時需 :restart! 確認"),
+    ),
 ];
 
 /// 依目前輸入給出提示：還在打命令名稱時列出符合的命令；已打完命令名稱則顯示該命令的用法。
@@ -829,6 +833,19 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
             } else {
                 send(writer, &Request::Shutdown)?;
                 app.should_quit = true;
+            }
+        }
+        "restart" | "restart!" => {
+            // 重啟會中斷每個專案正在跑的回合 (新 daemon 再自動接續)，有人在跑就先確認。
+            let live = app.state.live_sessions().count();
+            if verb == "restart" && live > 0 {
+                app.status = tr!(
+                    "restart 會重啟共用的 daemon，中斷 {n} 個執行中的 session 並自動接續。確定請輸入 :restart!",
+                    n = live
+                );
+            } else {
+                send(writer, &Request::Restart)?;
+                app.status = tr!("已要求 daemon 重啟，等待重連…");
             }
         }
         "stop" => {

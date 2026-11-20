@@ -4754,3 +4754,22 @@ fn question_docked_above_input_hides_selected_banner() {
         "banner for the open question must be hidden"
     );
 }
+
+#[test]
+fn restart_needs_confirmation_while_sessions_are_live() {
+    let mut app = sample_app(&["hi"]);
+    let (mut w, mut peer) = pair_writer();
+    peer.set_nonblocking(true).unwrap();
+    crate::commands::execute_command(&mut app, &mut w, "restart").unwrap();
+    assert!(app.status.contains(":restart!"), "{}", app.status);
+    let mut buf = [0u8; 16];
+    assert!(
+        std::io::Read::read(&mut peer, &mut buf).is_err(),
+        "nothing sent yet"
+    );
+    crate::commands::execute_command(&mut app, &mut w, "restart!").unwrap();
+    assert!(!app.should_quit, "restart keeps the TUI alive to reconnect");
+    peer.set_nonblocking(false).unwrap();
+    let n = std::io::Read::read(&mut peer, &mut buf).unwrap();
+    assert!(String::from_utf8_lossy(&buf[..n]).contains("restart"));
+}
