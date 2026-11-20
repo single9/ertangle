@@ -69,8 +69,8 @@
 | [T62](T62-question-tool-support-for-all-agents.md) | Render interactive question tool calls for every agent | P1 | — |
 | [T63](T63-complete-question-tool-coverage.md) | Complete question tool coverage (web, Claude native, multi-question) | P1 | T62 |
 | [T64](T64-web-question-banner-visibility.md) | Show the web question banner outside tab views | P1 | T63 |
-| [T65](T65-web-question-card-usability.md) | 改善網頁待回答問題卡片的可用性 | P1 | T64 |
-| [T66](T66-tui-question-picker-usability.md) | TUI 問題選擇器易用性修正 | P1 | T63 |
+| [T65](T65-web-question-card-usability.md) | Make the web pending-question card usable | P1 | T64 |
+| [T66](T66-tui-question-picker-usability.md) | Make the TUI question picker usable | P1 | T63 |
 
 ## Language convention
 

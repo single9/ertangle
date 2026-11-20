@@ -1,31 +1,31 @@
-# T66 — TUI 問題選擇器易用性修正
+# T66 — Make the TUI question picker usable
 
 Priority: P1　Scope: `ertangle-tui`　Depends on: T63
 
 Status: done
 
-## 問題
+## Problem
 
-回答 agent 互動式問題的 TUI 選擇器行為不正確且難以使用：
+The TUI picker for answering an agent's interactive question was wrong and hard to use:
 
-- 標題、問題全文與按鍵提示全部擠在單一標題列，長問題會被截斷；選項說明以 `label (desc)` 內嵌。
-- 輸入的文字同時是「過濾條件」與「自訂答案」：自訂答案若部分符合某個選項就會被吞掉；多選時 Space 用來勾選，自訂文字無法含空白。
-- Enter 在單選時優先選游標選項而非輸入文字；多選有勾選時忽略自訂文字；`custom == false` 時仍接受自由文字。
-- `App::selected_question` 依 HashMap 順序挑題，同一個 group 的問題 (必須一起回答) 只能處理其中一題。
+- Header, full question and key hints were crammed into one title line, truncating long questions; option descriptions were inlined as `label (desc)`.
+- Typed text was both the filter and the custom answer: a custom answer partially matching an option was swallowed; in multi-select Space toggled, so custom text could not contain spaces.
+- Enter in single-select preferred the cursor option over typed text; multi-select ignored custom text once anything was checked; free text was accepted even when `custom == false`.
+- `App::selected_question` picked a question in HashMap order, and only one question of a `group` (which must be answered together) could be handled.
 
-## 決策與實作
+## Decisions / implementation
 
-- 問題改為多行版面：header (粗體) + 完整問題 (依顯示寬度折行) + 提示列；選項說明顯示為選項下方的灰字，選取列反白，多選顯示 `[x]` / `[ ]`，並加上 1-9 編號。
-- 移除問題的 type-to-filter。僅 `q.custom` 為真時，最後一列才是「✎ 自訂答案…」，進入後所有輸入 (含空白) 都屬於答案；Esc 回到選項。
-- 數字鍵 1-9：單選直接送出該選項，多選切換勾選，超出範圍則忽略。
-- Enter：單選送出游標選項；多選送出已勾選 (依選項順序) 加上自訂答案；多選未勾選任何項目時送出游標選項。
-- Esc 不回答，問題仍留在 pending。
-- group 問題可按 `s` 跳過 (送出空答案)；至少要有一題有答案，全部跳過時最後一題會被拒絕。daemon 不再於首次回答時自動清除同組問題，因此每題各送一個 `AnswerQuestion`。
-- `selected_question` 依 id 排序，結果固定。同一 group 的問題依 id 逐題回答，標題顯示 `(1/N)`，最後一題答完才一次送出所有 `AnswerQuestion`。
+- Multi-line layout: bold header + full question wrapped to width + hint line; descriptions shown dim under each option; selected row highlighted; `[x]` / `[ ]` for multi-select; options numbered 1-9.
+- No type-to-filter for questions. Only when `q.custom` is true, a final "✎ custom answer…" row enters a text mode where all input (including spaces) is the answer; Esc returns to the options.
+- Digits 1-9: single-select submits that option, multi-select toggles it; out-of-range is ignored.
+- Enter: single-select submits the cursor option; multi-select submits the checked set (option order) plus custom text; with nothing checked it submits the cursor option.
+- Esc does not answer; the question stays pending.
+- Grouped questions are walked in id order with a `(1/N)` title, then one `AnswerQuestion` is sent per question. `s` (or empty Enter on a free-form-only question) skips with `answers: []`; if every question was skipped, the last one is refused and the picker stays open.
+- `selected_question` sorts by id, so the choice is deterministic.
 
-## 驗收標準
+## Acceptance criteria
 
-- 含空白的自訂答案可送出，且不會被選項過濾吞掉。
-- `custom == false` 時不出現自訂列，也不接受自由文字。
-- group 問題逐題走完後才送出。
-- `make pre-commit` 與 `cargo test -p ertangle-tui` 通過。
+- Custom answers with spaces can be sent and are not swallowed by option filtering.
+- With `custom == false` there is no custom row and no free text.
+- Grouped questions are sent only after walking the whole group; optional free-form fields can be skipped.
+- `make pre-commit` and `cargo test -p ertangle-tui` pass.
