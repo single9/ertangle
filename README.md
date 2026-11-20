@@ -1,25 +1,27 @@
-# termade — 終端機原生的多 Agent 開發協作環境
+# ertangle (ER=EPR) — 終端機原生的多 Agent 開發協作環境
 
 [English](README_EN.md) | [繁體中文](README.md)
 
+專案名稱 `ertangle` (念作 er-tangle) 由 ER (愛因斯坦-羅森橋) 與 entangle (糾纏) 組成，源自 Maldacena 與 Susskind 提出的 ER=EPR 猜想 (量子糾纏等於愛因斯坦-羅森橋)。在 `ertangle` 中，每個 Agent 各自生活在獨立的宇宙 (Git Worktree)，並透過量子糾纏 (MCP 訊息匯流排) 相互連通與協同工作。本專案為 [erbridge](https://github.com/single9/erbridge) (Einstein-Rosen bridge) 的姊妹專案。
+
 > **讓多個 Coding Agent 在同一個 Repo 內平行工作、自主溝通、互相協同開發的終端機環境**。
 
-`termade` 是一個以終端機為核心的多 Agent 協同開發平台。支援 **OpenCode**、**Claude Code**、**Codex** 與 **Antigravity** 等現代 Coding Agent，讓它們各自在獨立的 Git Worktree 內平行寫程式，透過 MCP 訊息匯流排與任務看板互相溝通，並由開發者透過鍵盤驅動的 TUI 介面進行即時審查與安全合併。
+`ertangle` 是一個以終端機為核心的多 Agent 協同開發平台。支援 **OpenCode**、**Claude Code**、**Codex** 與 **Antigravity** 等現代 Coding Agent，讓它們各自在獨立的 Git Worktree 內平行寫程式，透過 MCP 訊息匯流排與任務看板互相溝通，並由開發者透過鍵盤驅動的 TUI 介面進行即時審查與安全合併。
 
 ---
 
-## 為什麼選擇 termade？ (終端機原生 vs. GUI IDE)
+## 為什麼選擇 ertangle？ (終端機原生 vs. GUI IDE)
 
-[Orca](https://github.com/stablyai/orca) 等 GUI IDE 將 Worktree、瀏覽器、Diff 視圖與終端機整合在同一個桌面應用程式中。`termade` 的哲學是**只聚焦協作與排程核心，其餘交還給終端機與各家 Agent 的原生 CLI**：
+[Orca](https://github.com/stablyai/orca) 等 GUI IDE 將 Worktree、瀏覽器、Diff 視圖與終端機整合在同一個桌面應用程式中。`ertangle` 的哲學是**只聚焦協作與排程核心，其餘交還給終端機與各家 Agent 的原生 CLI**：
 
 | 特性 | 本專案的做法 |
 | --- | --- |
 | **超輕量與極速** | Rust + Ratatui 開發，常駐記憶體成本 `< 20 MB`，瞬間啟動，SSH 遠端連線零卡頓 |
 | **Daemon 常駐架構** | Daemon 負責真正持有 Agent 子處理程序、訊息匯流排與狀態；TUI 只是隨時可重開、重新連線的顯示端 |
-| **平行作業不衝突** | 每個 Agent Session 自動配置獨立的 `git worktree` 與分支 (`termade/<session>`) |
+| **平行作業不衝突** | 每個 Agent Session 自動配置獨立的 `git worktree` 與分支 (`ertangle/<session>`) |
 | **零相依原生通訊** | 優先採用各 Agent 的結構化協定 (ACP / stream-json / app-server)，無需額外 Wrapper；未安裝時自動退回 PTY 直通 |
 | **結構化協同機制** | 透過 Daemon 注入 MCP 伺服器，讓 Agent 能彼此通訊、委派任務、發布進度、排隊等待 |
-| **全鍵盤與腳本驅動** | 完整 TUI 快速鍵、Helix 風格選單 (which-key)、命令列，以及功能對等的 `termade` CLI |
+| **全鍵盤與腳本驅動** | 完整 TUI 快速鍵、Helix 風格選單 (which-key)、命令列，以及功能對等的 `ertangle` CLI |
 
 ---
 
@@ -42,41 +44,56 @@
 
 ---
 
+---
+
+## 從 termade 遷移
+
+本專案已由 `termade` 正式更名為 `ertangle`。升級時請留意以下相容層與遷移事項：
+
+- **停止舊 Daemon**：首次執行 `ertangle` 前，請先停止舊的 `termade` daemon (`termade shutdown` 或關閉對應處理程序)。
+- **設定與狀態目錄**：首次啟動時，若新目錄尚不存在，系統會自動將 `~/.config/termade` 與 `~/.local/state/termade` 搬移至 `~/.config/ertangle` 與 `~/.local/state/ertangle`。
+- **專案設定檔**：Repo 內的 `.termade/config.toml` 在 v1.0 前仍會作為相容退路被讀取，但建議將目錄重新命名為 `.ertangle/`。
+- **環境變數**：`TERMADE_*` 系列環境變數仍會作為退路支援至 v1.0，建議改用 `ERTANGLE_*`。
+- **重新安裝 Skill**：請執行 `ertangle skill install` 重新安裝 agent skill (`ertangle skill uninstall` 也會一併清理舊的 `termade-ade`)。
+- **Git 分支**：既有的 `termade/*` 分支維持原樣，不受影響。
+
 ## 快速開始
 
 ### 1. 安裝
 
-**方式一：下載預編譯執行檔** (從 [Releases](https://github.com/single9/termade/releases/latest) 取得，支援 Linux x86_64 / arm64 與 macOS arm64 / x86_64 / universal)
+**方式一：下載預編譯執行檔** (從 [Releases](https://github.com/single9/ertangle/releases/latest) 取得，支援 Linux x86_64 / arm64 與 macOS arm64 / x86_64 / universal)
 
 ```bash
-# 以 Linux x86_64 為例，其他平台請替換檔名 (termade-linux-arm64、termade-macos-arm64 等)
-curl -fsSL https://github.com/single9/termade/releases/latest/download/termade-linux-x86_64.tar.gz | tar -xz
-install -m 755 termade-linux-x86_64 ~/.local/bin/termade
+# 以 Linux x86_64 為例，其他平台請替換檔名 (ertangle-linux-arm64、ertangle-macos-arm64 等)
+curl -fsSL https://github.com/single9/ertangle/releases/latest/download/ertangle-linux-x86_64.tar.gz | tar -xz
+install -m 755 ertangle-linux-x86_64 ~/.local/bin/ertangle
 ```
 
 **方式二：直接從 git 安裝** (需要 Rust 工具鏈)
 
 ```bash
-cargo install --git https://github.com/single9/termade
+cargo install --git https://github.com/single9/ertangle
 
 # 指定版本
-cargo install --git https://github.com/single9/termade --tag v0.3.0
+cargo install --git https://github.com/single9/ertangle --tag v0.3.0
 ```
 
 **方式三：從原始碼建置**
 
 ```bash
-git clone https://github.com/single9/termade && cd termade
+git clone https://github.com/single9/ertangle && cd ertangle
 cargo install --path .        # 安裝至 ~/.cargo/bin
-# 或使用 Makefile 安裝至 ~/.local/bin/termade
+# 或使用 Makefile 安裝至 ~/.local/bin/ertangle
 make install
 ```
+
+`make install` 會一併建立短別名 `ert` (指向 `ertangle` 的符號連結)。用 `cargo install` 安裝時，可自行設定：`ln -s ~/.cargo/bin/ertangle ~/.cargo/bin/ert` 或在 shell 加上 `alias ert=ertangle`。
 
 **Shell 自動補齊** (支援 bash / zsh / fish，並能動態補齊 session label)
 
 ```bash
 make install-completions      # 於原始碼目錄執行，依目前 SHELL 自動安裝
-# 或手動輸出：termade completions <bash|zsh|fish>
+# 或手動輸出：ertangle completions <bash|zsh|fish>
 ```
 
 ### 2. 啟動與第一個任務
@@ -84,21 +101,21 @@ make install-completions      # 於原始碼目錄執行，依目前 SHELL 自�
 在任何 Git 專案目錄下執行：
 
 ```bash
-termade
+ertangle
 ```
 
-- 若 Daemon 尚未執行，`termade` 會**自動在背景啟動 Daemon** 並進入 TUI。
+- 若 Daemon 尚未執行，`ertangle` 會**自動在背景啟動 Daemon** 並進入 TUI。
 - 在 TUI 中按下 **`n`**，依序選擇 Agent (如 `opencode`)、Model (如預設或建議模型)，並輸入提示：
   ```
   幫我把測試修好，並修正任何編譯錯誤
   ```
-- Agent 會在專屬 Worktree (`termade/session-xxx`) 開始工作。你可以在中央視圖即時觀察 Markdown 串流逐字稿、切換到 Diff 視圖審查程式碼變更，並一鍵完成合併。
+- Agent 會在專屬 Worktree (`ertangle/session-xxx`) 開始工作。你可以在中央視圖即時觀察 Markdown 串流逐字稿、切換到 Diff 視圖審查程式碼變更，並一鍵完成合併。
 
 ---
 
 ## 實戰案例：Coordinator + Worker 多 Agent 協同開發
 
-當遇到跨模組的中大型需求時，你不需要自己手動開好幾個終端機視窗分別複製貼上。在 `termade` 中，你可以啟動一位 **Coordinator (協調者)**，讓它自動拆解任務、建立相依性看板、派生多個各自擁有獨立 Git Worktree 的 **Worker (實作者)** 平行開發，最後由你在 TUI 統一審查與合併。
+當遇到跨模組的中大型需求時，你不需要自己手動開好幾個終端機視窗分別複製貼上。在 `ertangle` 中，你可以啟動一位 **Coordinator (協調者)**，讓它自動拆解任務、建立相依性看板、派生多個各自擁有獨立 Git Worktree 的 **Worker (實作者)** 平行開發，最後由你在 TUI 統一審查與合併。
 
 ### 情境範例：同時開發後端 API 認證、前端登入表單與整合測試
 
@@ -110,12 +127,12 @@ termade
 3. 輸入需求提示詞：
    ```text
    請擔任 Coordinator 完成「JWT 登入認證功能」：
-   1. 先用 termade_task_create 建立三個任務：
+   1. 先用 ertangle_task_create 建立三個任務：
       - T1：後端實作 /api/login 與 JWT middleware
       - T2：前端實作登入表單與錯誤提示
       - T3：撰寫端到端整合測試 (設定 depends_on 等待 T1 與 T2 完成)
-   2. 用 termade_spawn 派生兩個開啟 worktree 的 worker (worker-backend 與 worker-frontend) 平行執行 T1 與 T2。
-   3. 用 termade_wait 等待它們回報 TASK_DONE，檢查無誤後再派或喚醒 worker 執行 T3。
+   2. 用 ertangle_spawn 派生兩個開啟 worktree 的 worker (worker-backend 與 worker-frontend) 平行執行 T1 與 T2。
+   3. 用 ertangle_wait 等待它們回報 TASK_DONE，檢查無誤後再派或喚醒 worker 執行 T3。
    ```
 
 **方式 B：使用 TUI 命令列單行啟動**
@@ -133,24 +150,24 @@ termade
 
 #### 第二步：觀察 Coordinator 與 Worker 的自動協作過程
 
-一旦送出提示詞，`termade` 會在幕後自動完成以下協同流程，你只需在 TUI 旁觀或隨時介入：
+一旦送出提示詞，`ertangle` 會在幕後自動完成以下協同流程，你只需在 TUI 旁觀或隨時介入：
 
 ```
 [Coordinator: coord] (主分支，負責規劃與調度)
-   ├── 1. 呼叫 termade_task_create 建立任務看板 (T1, T2 為 todo；T3 因 depends_on 自動設為 blocked)
-   ├── 2. 呼叫 termade_spawn 派生子 Agent
+   ├── 1. 呼叫 ertangle_task_create 建立任務看板 (T1, T2 為 todo；T3 因 depends_on 自動設為 blocked)
+   ├── 2. 呼叫 ertangle_spawn 派生子 Agent
    │
-   ├─► ↳ [worker-backend]  (獨立分支 @termade/ses_a1 · .termade/wt/ses_a1)
-   │      ├── 呼叫 termade_task_update(T1, status="doing")
+   ├─► ↳ [worker-backend]  (獨立分支 @ertangle/ses_a1 · .ertangle/wt/ses_a1)
+   │      ├── 呼叫 ertangle_task_update(T1, status="doing")
    │      ├── 修改 src/auth.rs、執行單元測試
-   │      ├── 呼叫 termade_task_update(T1, status="done")
-   │      └── 呼叫 termade_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") 後立即結束回合
+   │      ├── 呼叫 ertangle_task_update(T1, status="done")
+   │      └── 呼叫 ertangle_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") 後立即結束回合
    │
-   └─► ↳ [worker-frontend] (獨立分支 @termade/ses_b2 · .termade/wt/ses_b2)
-          ├── 呼叫 termade_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
+   └─► ↳ [worker-frontend] (獨立分支 @ertangle/ses_b2 · .ertangle/wt/ses_b2)
+          ├── 呼叫 ertangle_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
           ├── 修改 web/login.ts、完成表單驗證
-          ├── 呼叫 termade_task_update(T2, status="done")
-          └── 呼叫 termade_send(to="coord", "TASK_DONE task_2 Added login form and error handling") 後立即結束回合
+          ├── 呼叫 ertangle_task_update(T2, status="done")
+          └── 呼叫 ertangle_send(to="coord", "TASK_DONE task_2 Added login form and error handling") 後立即結束回合
 ```
 
 在 TUI 畫面上你會看到：
@@ -181,11 +198,11 @@ termade
 
 ### 1. 工作區隔離與審查迴圈 (Review Loop)
 
-- **Worktree 獨立分支**：每個 session 使用專屬 `git worktree` 與 `termade/<session>` 分支，互不干擾。
+- **Worktree 獨立分支**：每個 session 使用專屬 `git worktree` 與 `ertangle/<session>` 分支，互不干擾。
 - **即時彩色 Diff**：在 TUI 按 `Tab` 切換至 Diff 視圖，按 `{` / `}` 跳轉 hunk，`(` / `)` 跳轉上／下一個檔案，`Enter` (或 `v`) 摺疊／展開單一檔案，按 `X` (或 `:discard`) 安全退回選取的 hunk 或整個檔案變更。
 - **行內註解審查 (Review Comment)**：在 Diff 視圖按 `c`，直接對該行留下修改建議 (例如：「請補上邊界條件檢查」)，系統會自動將註解送回該 Agent 要求修正。
-- **安全合併與衝突解決 (Merge & Conflict Resolution)**：按 `M` 或執行 `termade merge` 合併回主分支，策略可選 `merge` / `squash` / `rebase`。衝突時可用 `:merge --resolve` 委派 Agent 處理。
-- **清理 (GC)**：按 `G` 或執行 `termade gc`，自動清除已結束且已合併的 Worktree，絕不誤刪未合併成果。
+- **安全合併與衝突解決 (Merge & Conflict Resolution)**：按 `M` 或執行 `ertangle merge` 合併回主分支，策略可選 `merge` / `squash` / `rebase`。衝突時可用 `:merge --resolve` 委派 Agent 處理。
+- **清理 (GC)**：按 `G` 或執行 `ertangle gc`，自動清除已結束且已合併的 Worktree，絕不誤刪未合併成果。
 
 ### 2. 跨 Agent 協作匯流排與任務看板 (MCP & Bus)
 
@@ -193,20 +210,20 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 | 類別 | 工具名稱 | 功能 |
 | --- | --- | --- |
-| **自我與環境** | `termade_whoami`, `termade_peers` | 查詢自己的 session ID、工作區分支，以及其他同伴資訊 |
-| **訊息傳遞** | `termade_send`, `termade_inbox`, `termade_wait`, `termade_ask` | 發送訊息、非同步讀取收件匣、阻塞等待新訊息、同步問答 |
-| **任務看板** | `termade_task_list`, `termade_task_create`, `termade_task_update` | 建立協作任務、指定負責人、支援 `depends_on` 前置相依性 |
-| **衍生與產出** | `termade_spawn`, `termade_artifact_share`, `termade_status` | 派生子 Agent、分享產出物、廣播進度狀態 |
-| **Git 整合** | `termade_diff`, `termade_merge` | 查詢自身分支與主分支 diff、請求合併 |
+| **自我與環境** | `ertangle_whoami`, `ertangle_peers` | 查詢自己的 session ID、工作區分支，以及其他同伴資訊 |
+| **訊息傳遞** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | 發送訊息、非同步讀取收件匣、阻塞等待新訊息、同步問答 |
+| **任務看板** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | 建立協作任務、指定負責人、支援 `depends_on` 前置相依性 |
+| **衍生與產出** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | 派生子 Agent、分享產出物、廣播進度狀態 |
+| **Git 整合** | `ertangle_diff`, `ertangle_merge` | 查詢自身分支與主分支 diff、請求合併 |
 
 - **空閒提醒 (Unread Nudge on Idle)**：
   - 當 Agent 正忙於執行回合時，發來的直接訊息 (或廣播) 只會暫存在收件匣，**不打斷運算**。
   - 當 Agent 結束回合回到 `idle` 且佇列中的指令處理完畢後，系統會將未讀訊息合併為一則提醒，每則訊息**僅提醒一次**。
-  - 已透過 `termade_wait` / `termade_ask` 取走或超過成本預算的 session 則不予打擾。
+  - 已透過 `ertangle_wait` / `ertangle_ask` 取走或超過成本預算的 session 則不予打擾。
 - **任務相依性 (Task Dependencies)**：
   - 建立任務時可帶 `--depends-on <id>`，在前置任務全數 `done` 之前，任務維持 `blocked` 且不打擾負責人。
   - 前置任務完成後自動轉為 `todo`，並主動發信喚醒指派的負責人。
-- **信箱後備**：所有訊息同步寫入專案目錄下的 `.termade/mailbox/<session>.jsonl`。
+- **信箱後備**：所有訊息同步寫入專案目錄下的 `.ertangle/mailbox/<session>.jsonl`。
 
 ### 3. 額度監控、智慧交接 (Handoff) 與接續 (Resume)
 
@@ -220,7 +237,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - 新 Agent **直接沿用同一個工作目錄與分支**接手；
   - 之後發往舊 session 的直接訊息會**自動改投給新接手者**。
 - **對話接續 (Resume)**：
-  - 若 Agent 處理程序異常中斷或 Daemon 重啟，按下 `Space s r` 或執行 `termade resume <session> [prompt]`，即可喚回**原本的對話**。
+  - 若 Agent 處理程序異常中斷或 Daemon 重啟，按下 `Space s r` 或執行 `ertangle resume <session> [prompt]`，即可喚回**原本的對話**。
   - 利用各家原生的對話回復機制 (Claude `--resume`、Codex `thread/resume`、ACP `session/load`)，保持同一個 session ID、逐字稿與分支。
 
 ### 4. 資源控管與休眠 (Budget & Limits)
@@ -229,7 +246,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - 支援單一 session 預算 (`session_usd`)、子樹總額上限 (`tree_usd`)、Token 上限 (`session_tokens`)，以及最大子 Agent 數量與層級深度。
   - 達到警戒線 (預設 80%) 黃色警告，超過上限立即阻斷執行並暫停排隊的 prompt，使用 `:budget <金額>` 調高後自動恢復。
 - **閒置休眠**：
-  - 按 `z` 或執行 `termade sleep <session>`，發送 `SIGSTOP` 暫停 Agent 處理程序節省系統資源；按 `z` 或收到訊息時發送 `SIGCONT` 自動喚醒。
+  - 按 `z` 或執行 `ertangle sleep <session>`，發送 `SIGSTOP` 暫停 Agent 處理程序節省系統資源；按 `z` 或收到訊息時發送 `SIGCONT` 自動喚醒。
 
 ### 5. 權限政策與安全防護 (Policy Engine)
 
@@ -237,17 +254,17 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
   - `ask`：所有工具呼叫轉交由使用者在 TUI 逐一按 `a` (允許) / `A` (一律允許) / `d` (拒絕) 核准。
   - `auto` (預設)：安全工具自動核准。
   - `bypass`：跳過權限確認。
-- **規則引擎**：支援全域 `~/.config/termade/policy.toml` 與專案 `.termade/policy.toml`，以 `deny` (黑名單) → `allow` (白名單) → session 政策順序過濾指令。
-- **Claude 逐項核准轉發 (T33)**：非 `bypass` 模式下為 Claude 掛載 `--permission-prompt-tool mcp__termade__termade_approve --permission-prompts host`，使 Claude 的單一工具呼叫能受到 `policy.toml` 攔截並在 `ask` 模式下由 TUI 互動核准。
-- **全面秘密遮罩 (Secret Redaction, T33)**：所有 MCP 工具輸出 (包含 `termade_inbox`、`termade_wait`、`termade_ask`、`termade_diff` 等) 與事件紀錄在送出前均自動過濾常見 API Key 與 Token (`sk-...`、`ghp_...`、`AKIA...` 等)，遮罩為 `<REDACTED>`。
+- **規則引擎**：支援全域 `~/.config/ertangle/policy.toml` 與專案 `.ertangle/policy.toml`，以 `deny` (黑名單) → `allow` (白名單) → session 政策順序過濾指令。
+- **Claude 逐項核准轉發 (T33)**：非 `bypass` 模式下為 Claude 掛載 `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host`，使 Claude 的單一工具呼叫能受到 `policy.toml` 攔截並在 `ask` 模式下由 TUI 互動核准。
+- **全面秘密遮罩 (Secret Redaction, T33)**：所有 MCP 工具輸出 (包含 `ertangle_inbox`、`ertangle_wait`、`ertangle_ask`、`ertangle_diff` 等) 與事件紀錄在送出前均自動過濾常見 API Key 與 Token (`sk-...`、`ghp_...`、`AKIA...` 等)，遮罩為 `<REDACTED>`。
 
 ### 6. 遠端連線、Tailscale 整合與斷線自動重連 (T28)
 
 - **自動偵測 Tailscale 位址**：
-  - 支援 `termade daemon --listen tailscale`，自動呼叫本機 `tailscale ip -4` 解析點對點安全通道 IP，無需手動查詢輸入。
-  - 自動生成並持久化安全認證 Token 於 `~/.local/state/termade/remote.token` (檔案權限嚴格限制為 `0600`)。
+  - 支援 `ertangle daemon --listen tailscale`，自動呼叫本機 `tailscale ip -4` 解析點對點安全通道 IP，無需手動查詢輸入。
+  - 自動生成並持久化安全認證 Token 於 `~/.local/state/ertangle/remote.token` (檔案權限嚴格限制為 `0600`)。
 - **終端機連線資訊速查**：
-  - 執行 `termade daemon info` 即可一鍵印出目前本機與 Tailscale 遠端連線位址、Token 與連線指令。
+  - 執行 `ertangle daemon info` 即可一鍵印出目前本機與 Tailscale 遠端連線位址、Token 與連線指令。
 - **無縫斷線重連 (Auto-Reconnect)**：
   - 當筆電休眠喚醒、跨 Wi-Fi 切換網路或短暫斷線時，TUI 會在背景以指數退避演算法自動重試。
   - 連線恢復時自動發送帶有最後已知序列號的 `Request::Hello { since, epoch, token }`，無縫還原狀態並補齊離線期間遺漏的事件記錄。
@@ -255,7 +272,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 ### 7. TUI 多主機聚合視圖 (Multi-Host Aggregation, T29)
 
 - **跨機統一儀表板**：
-  - 在 `config.toml` 中配置 `[remotes]` 或使用命令列參數 `termade --remote workstation:7420 --remote gpu-box:7420`。
+  - 在 `config.toml` 中配置 `[remotes]` 或使用命令列參數 `ertangle --remote workstation:7420 --remote gpu-box:7420`。
   - 單一 TUI 畫面即可聚合呈現本機與所有遠端伺服器上的 Agent Sessions。
 - **智慧路由與篩選**：
   - Sessions 清單依主機顯示彩色來源標記 (`[workstation]`、`[gpu-box]`)。
@@ -265,7 +282,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 ### 8. Web 版支援與行動介面 (Web Interface & Mobile PWA, T30)
 
 - **隨身攜帶、買咖啡不中斷**：
-  - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。可在 TUI 設定面板 (`:settings` 或 `Space ,`) 中直接切換啟用，或輸入 `:web on [位址]` (亦可從 CLI 啟動 `termade daemon --web tailscale`)。
+  - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。可在 TUI 設定面板 (`:settings` 或 `Space ,`) 中直接切換啟用，或輸入 `:web on [位址]` (亦可從 CLI 啟動 `ertangle daemon --web tailscale`)。
   - 終端機內建 **Unicode QR Code**，在 TUI 輸入 `:web qr` 或按 `Space w`，手機打開相機一掃即可在瀏覽器開啟專屬 PWA 介面。
 - **零相依原生 HTTP / WebSocket**：
   - Daemon 內部以純 Rust 同步網路實作，不引入 Node.js 或額外 async 框架，維持單一執行檔與極低記憶體開銷。
@@ -286,7 +303,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 - **中央視圖**：按 `Tab` 依序切換四大視圖：
   1. **Overview**：即時串流逐字稿，支援 Markdown 渲染 (標題、清單、表格、程式碼區塊等)。
   2. **Diff**：即時彩色 Git Diff 視圖，支援行級審查註解。
-  3. **Worktrees**：檢視目前所有由 termade 建立的 Git Worktree 狀態與磁碟路徑。
+  3. **Worktrees**：檢視目前所有由 ertangle 建立的 Git Worktree 狀態與磁碟路徑。
   4. **Tasks**：協作看板視圖，任務依狀態 (doing、review、todo、blocked、done) 分組，顯示前置任務相依性 (`⧗`)。按 `Enter` 直達負責人 Session。
 
 ### 2. 快速鍵速查表
@@ -363,7 +380,7 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 - `:spawn [--role <角色>] <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn --role coordinator claude:opus "規劃架構"`)
 - `:playbook [<名稱> <目標需求>]` — 啟動多 Agent 團隊範本 (如 `:playbook tdd-pair 完成登入功能`)；不帶參數開選擇器 (也可按 `Space s b`)
-- `:export [路徑]` — 匯出目前 Session (含子 Session 樹)為 Markdown 至 `.termade/exports/<label>-<timestamp>.md`，並透過 OSC 52 複製到剪貼簿
+- `:export [路徑]` — 匯出目前 Session (含子 Session 樹)為 Markdown 至 `.ertangle/exports/<label>-<timestamp>.md`，並透過 OSC 52 複製到剪貼簿
 - `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
 - `:resume [prompt]` — 接續已結束或中斷的 Session 對話
 - `:merge [--dry-run] [--resolve] [--strategy merge|squash|rebase]` — 合併選取 Session 的 Worktree 回主分支 (亦可用 `--squash` / `--rebase` 簡寫，支援自動委派解衝突)
@@ -383,93 +400,93 @@ Daemon 會在啟動 session 時自動注入包含 **14 個協作工具**的 stdi
 
 ## CLI 命令參考
 
-`termade` 提供與 TUI 對等的完整 CLI 工具：
+`ertangle` 提供與 TUI 對等的完整 CLI 工具：
 
 ```bash
 # Session 管理
-termade sessions [--json]                         # 列出所有 session (別名 termade peers)
-termade whoami [--session <id>] [--json]          # 查看當前 session 資訊
-termade spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
-termade resume <session-or-label> ["接續 prompt"] # 接續已中斷的 session
-termade handoff <session-or-label> --to <agent> [--note "交接補充"]
-termade sleep <session> ; termade wake <session>  # 暫停 / 喚醒 Agent 處理程序
-termade cancel <session> ; termade kill <session> # 中斷回合 / 強制中止處理程序
-termade rm <session> [--force]                    # 移除已結束的 session 紀錄
+ertangle sessions [--json]                         # 列出所有 session (別名 ertangle peers)
+ertangle whoami [--session <id>] [--json]          # 查看當前 session 資訊
+ertangle spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
+ertangle resume <session-or-label> ["接續 prompt"] # 接續已中斷的 session
+ertangle handoff <session-or-label> --to <agent> [--note "交接補充"]
+ertangle sleep <session> ; ertangle wake <session>  # 暫停 / 喚醒 Agent 處理程序
+ertangle cancel <session> ; ertangle kill <session> # 中斷回合 / 強制中止處理程序
+ertangle rm <session> [--force]                    # 移除已結束的 session 紀錄
 
 # 多 Agent 團隊範本與協作報告
-termade playbook <name> "<goal>"                  # 展開內建或自訂 playbook，一次啟動整個團隊
-termade export <session> [--tree] [--diff] [-o <path>] # 匯出 Markdown 報告 (-o 省略則印到 stdout)
+ertangle playbook <name> "<goal>"                  # 展開內建或自訂 playbook，一次啟動整個團隊
+ertangle export <session> [--tree] [--diff] [-o <path>] # 匯出 Markdown 報告 (-o 省略則印到 stdout)
 
 # 提示詞與佇列
-termade prompt [--queue] <session-or-label> "提示詞"
-termade queue <session-or-label> [--clear]        # 查看或清空待送佇列
+ertangle prompt [--queue] <session-or-label> "提示詞"
+ertangle queue <session-or-label> [--clear]        # 查看或清空待送佇列
 
 # Worktree 與程式碼審查
-termade worktrees                                 # 列出所有由 termade 管理的 worktree
-termade diff <session-or-label>                   # 檢視指定 session 的 git diff
-termade review <session-or-label> --location <file>:<line> "審查意見"
-termade merge <session-or-label> [--dry-run] [--resolve] [--strategy merge|squash|rebase] # 合併分支回主工作區
-termade pr <session-or-label> --title "PR 標題"   # 透過 gh 建立 Pull Request
-termade gc [--session <id>]                       # 清理已結束且已合併的 worktrees
+ertangle worktrees                                 # 列出所有由 ertangle 管理的 worktree
+ertangle diff <session-or-label>                   # 檢視指定 session 的 git diff
+ertangle review <session-or-label> --location <file>:<line> "審查意見"
+ertangle merge <session-or-label> [--dry-run] [--resolve] [--strategy merge|squash|rebase] # 合併分支回主工作區
+ertangle pr <session-or-label> --title "PR 標題"   # 透過 gh 建立 Pull Request
+ertangle gc [--session <id>]                       # 清理已結束且已合併的 worktrees
 
 # 跨 Agent 訊息與任務看板
-termade send <session-or-label> "訊息內容"         # 發送訊息給指定 agent
-termade inbox [--session <id>]                    # 檢視收件匣
-termade tasks                                     # 列出所有任務與相依性狀態
-termade task "任務標題" [--assignee <label>] [--depends-on <id>]
-termade task-update <id> --status <status>        # 更新任務狀態 (todo/doing/blocked/review/done)
+ertangle send <session-or-label> "訊息內容"         # 發送訊息給指定 agent
+ertangle inbox [--session <id>]                    # 檢視收件匣
+ertangle tasks                                     # 列出所有任務與相依性狀態
+ertangle task "任務標題" [--assignee <label>] [--depends-on <id>]
+ertangle task-update <id> --status <status>        # 更新任務狀態 (todo/doing/blocked/review/done)
 
 # 成本、額度與審核記錄
-termade quota [--json]                            # 查詢帳號額度視窗與重置倒數
-termade cost [--json]                             # 統計各 session 與整體 token / 美元花費
-termade budget <session-or-label> <金額>          # 設定或調高預算上限
-termade replay [--since <seq>] [--json]           # 重播與審核 events.jsonl 事件記錄
+ertangle quota [--json]                            # 查詢帳號額度視窗與重置倒數
+ertangle cost [--json]                             # 統計各 session 與整體 token / 美元花費
+ertangle budget <session-or-label> <金額>          # 設定或調高預算上限
+ertangle replay [--since <seq>] [--json]           # 重播與審核 events.jsonl 事件記錄
 
 # 遠端 Daemon、多主機與 Web 版支援
-termade daemon --listen tailscale                 # 啟動 Daemon 並自動綁定 Tailscale 安全通道
-termade daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽 TCP (自動產生 token)
-termade daemon --web tailscale                    # 啟動 Web 版並印出終端機 QR Code (預設 port 7421)
-termade daemon --web tailscale --web-port 8080    # 啟動 Web 版並指定自訂 port (8080)
-termade daemon info                               # 查詢目前主機的 Tailscale 位址、Token 與連線指令
-termade --remote tailscale                        # 連線至本機 Tailscale Daemon
-termade --remote workstation:7420 --remote gpu:7420 # 同時連線多台主機並於單一 TUI 聚合呈現
-termade completions <bash|zsh|fish>               # 產生 Shell 自動補齊腳本
+ertangle daemon --listen tailscale                 # 啟動 Daemon 並自動綁定 Tailscale 安全通道
+ertangle daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽 TCP (自動產生 token)
+ertangle daemon --web tailscale                    # 啟動 Web 版並印出終端機 QR Code (預設 port 7421)
+ertangle daemon --web tailscale --web-port 8080    # 啟動 Web 版並指定自訂 port (8080)
+ertangle daemon info                               # 查詢目前主機的 Tailscale 位址、Token 與連線指令
+ertangle --remote tailscale                        # 連線至本機 Tailscale Daemon
+ertangle --remote workstation:7420 --remote gpu:7420 # 同時連線多台主機並於單一 TUI 聚合呈現
+ertangle completions <bash|zsh|fish>               # 產生 Shell 自動補齊腳本
 ```
 
 ---
 
-### 安裝 termade-ade skill
+### 安裝 ertangle-ade skill
 
-內嵌的 `termade-ade` skill 說明通訊協定、省 token 規則與工作流程：
+內嵌的 `ertangle-ade` skill 說明通訊協定、省 token 規則與工作流程：
 
 ```bash
-termade skill install [--target claude|agents|codex] [--global|--project]
-termade skill uninstall [--target ...] [--global|--project]
-termade skill show
+ertangle skill install [--target claude|agents|codex] [--global|--project]
+ertangle skill uninstall [--target ...] [--global|--project]
+ertangle skill show
 ```
 
 在 TUI 裡也可以用 `:skill install [claude|agents|codex] [global]` 安裝 (`:skill show` 查看狀態)。
 
-不想安裝時，可在 `:settings` 開啟「把 termade-ade skill 注入協作說明」，或在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。同樣地，`:settings` 的「把省 token 提示注入協作說明」(`[collab] token_hints = true`，預設關閉) 會附加幾條節省 token 的工具使用建議 (獨立呼叫放在同一回合、合併唯讀探查、限制輸出長度)；session 次要資訊列的 `N calls` 可用來比較開關前後的工具呼叫數。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。Claude 回報 `allowed_warning` (例如 7 天視窗超過 75%) 時，coordinator 會先收到較溫和的 `QUOTA_NOTICE`，標題列與 `:quota` 也會標示「⚠ 接近上限」。
+不想安裝時，可在 `:settings` 開啟「把 ertangle-ade skill 注入協作說明」，或在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。同樣地，`:settings` 的「把省 token 提示注入協作說明」(`[collab] token_hints = true`，預設關閉) 會附加幾條節省 token 的工具使用建議 (獨立呼叫放在同一回合、合併唯讀探查、限制輸出長度)；session 次要資訊列的 `N calls` 可用來比較開關前後的工具呼叫數。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。Claude 回報 `allowed_warning` (例如 7 天視窗超過 75%) 時，coordinator 會先收到較溫和的 `QUOTA_NOTICE`，標題列與 `:quota` 也會標示「⚠ 接近上限」。
 
 ### 中斷復原與編譯資源
 
 - `[agent_spawn] auto_resume` (預設 `true`)：daemon 重啟時，自動接續當下正在執行回合的 session，並提示 agent 先用 `git status`／`git diff` 找回進度，不要重新探索整個專案。額度已滿、或上次自動接續後沒有任何進展的 session 不會再自動接續。
-- `[agent_spawn] shared_cargo_target` (預設 `true`)：Cargo 專案裡，所有 worktree 的 agent 共用 `<repo>/.termade/target` 當 `CARGO_TARGET_DIR`。不用每個 worktree 各編一份，cargo 的目錄鎖也讓多個 worker 的編譯與測試自動排隊。已自行設定 `CARGO_TARGET_DIR` 時不覆寫。
+- `[agent_spawn] shared_cargo_target` (預設 `true`)：Cargo 專案裡，所有 worktree 的 agent 共用 `<repo>/.ertangle/target` 當 `CARGO_TARGET_DIR`。不用每個 worktree 各編一份，cargo 的目錄鎖也讓多個 worker 的編譯與測試自動排隊。已自行設定 `CARGO_TARGET_DIR` 時不覆寫。
 - 兩者都可在 `:settings` 切換。
 
 ## 設定檔與環境變數
 
 ### 設定檔：`config.toml`
 
-`termade` 依序讀取全域設定 (`~/.config/termade/config.toml`) 並由專案設定 (`<repo>/.termade/config.toml`) 覆寫：
+`ertangle` 依序讀取全域設定 (`~/.config/ertangle/config.toml`) 並由專案設定 (`<repo>/.ertangle/config.toml`) 覆寫：
 
 ```toml
 [tui]
 language = "auto"                 # 介面語言："auto" (依 LANG) | "zh-TW" | "en"；只認全域設定
 layout = "two"                    # 預設版面："two" | "three" | "tabs"
 notify = ["bell", "command"]      # 通知方式："bell" | "osc9" | "command" (可複選)
-notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
+notify_command = "notify-send ertangle \"$ERTANGLE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # 短於此秒數的回合完成不觸發通知
 
 [web]
@@ -480,7 +497,7 @@ addr = "tailscale"                # 監聽位址："tailscale" (自動偵測 IP)
 
 [remotes]
 # 跨主機聚合設定 (T29)
-workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/termade/workstation.token" }
+workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/ertangle/workstation.token" }
 gpu-box = { addr = "100.64.0.8:7420" }
 
 [limits]
@@ -496,7 +513,7 @@ auto = false                      # 額度用盡時是否自動交接 (預設 fa
 fallback = ["codex", "claude:sonnet"]
 
 [collab]
-instructions = true               # 是否自動向 Agent 注入 termade 協作工具使用規範
+instructions = true               # 是否自動向 Agent 注入 ertangle 協作工具使用規範
 extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
 
 [playbooks.tdd]
@@ -526,17 +543,17 @@ merge_strategy = "squash"              # 合併策略：merge / squash / rebase
 > 介面語言也可以在設定面板 (`:settings`) 切換，立即生效。daemon 回傳的訊息跟 daemon 啟動時的語言走，切換後要重啟 daemon 才會一致。想協助翻譯請見 [翻譯指南](docs/TRANSLATING.md)。
 
 > [!TIP]
-> 專案內可建立 `.termade/instructions.md` (上限 8 KB)，內容會在啟動時自動附加至 Agent 的 System Prompt 底部。
+> 專案內可建立 `.ertangle/instructions.md` (上限 8 KB)，內容會在啟動時自動附加至 Agent 的 System Prompt 底部。
 
 ### 支援的環境變數
 
 | 環境變數 | 預設值 | 說明 |
 | --- | --- | --- |
-| `XDG_RUNTIME_DIR` | `/tmp/termade-$USER/` | Daemon Unix domain socket 存放目錄 |
-| `XDG_STATE_HOME` | `~/.local/state/` | 事件持久化日誌路徑 (`$XDG_STATE_HOME/termade/events.jsonl`) |
-| `TERMADE_LOG` | `warn` | Tracing 日誌過濾等級 (例如 `TERMADE_LOG=debug`) |
-| `TERMADE_TOKEN` | — | 遠端連線認證 Token (建議搭配 SSH 轉發避免明文傳輸) |
-| `TERMADE_REMOTE` | — | 預設遠端 Daemon 位址 (等同 `--remote` 參數) |
+| `XDG_RUNTIME_DIR` | `/tmp/ertangle-$USER/` | Daemon Unix domain socket 存放目錄 |
+| `XDG_STATE_HOME` | `~/.local/state/` | 事件持久化日誌路徑 (`$XDG_STATE_HOME/ertangle/events.jsonl`) |
+| `ERTANGLE_LOG` | `warn` | Tracing 日誌過濾等級 (例如 `ERTANGLE_LOG=debug`) |
+| `ERTANGLE_TOKEN` | — | 遠端連線認證 Token (建議搭配 SSH 轉發避免明文傳輸) |
+| `ERTANGLE_REMOTE` | — | 預設遠端 Daemon 位址 (等同 `--remote` 參數) |
 
 ---
 
@@ -568,4 +585,4 @@ make pre-commit    # 一鍵自動排版 (fmt)、跑 clippy 與檢查多國語系
 
 ## 致謝
 
-`termade` 的發想來自 [Orca](https://github.com/stablyai/orca) (MIT 授權)，其 full handoff 與 review 迴圈的概念啟發了本專案的設計。本專案為獨立實作，未複製其程式碼。
+`ertangle` 的發想來自 [Orca](https://github.com/stablyai/orca) (MIT 授權)，其 full handoff 與 review 迴圈的概念啟發了本專案的設計。本專案為獨立實作，未複製其程式碼。

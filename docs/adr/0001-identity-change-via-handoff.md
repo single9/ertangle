@@ -13,7 +13,7 @@ Two designs were considered:
 
 ## Decision
 
-Identity changes go through a handoff (`termade handoff --role ... --parent ...`). There is no in-place role change.
+Identity changes go through a handoff (`ertangle handoff --role ... --parent ...`). There is no in-place role change.
 
 ## Reasons
 

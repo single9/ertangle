@@ -20,7 +20,7 @@
 - 【已確認】`opencode acp` 子命令存在，flag 只有 `--login`(`opencode acp --help`)。ACP 文件未描述 model 選擇：https://opencode.ai/docs/acp/
 - 【已確認】設定檔 `model` 鍵，格式 `provider/model`，且設定值可用 `{env:VAR}` 引用環境變數 (未設定則為空字串)。來源：https://opencode.ai/docs/config/ 。本機 `~/.config/opencode/opencode.json` 為 `"model": "ollama/gemma4:26b-code"`。`opencode models` 可列出可用 model id (本機輸出為 `ollama/gemma4:*`)。
 - 【未確認】`OPENCODE_CONFIG`、`OPENCODE_CONFIG_CONTENT` 是否存在 (config 文件頁未提及)；`opencode acp` 是否回傳 model 的 configOptions 或支援 `session/set_model`。
-- 可行做法：termade 啟動 `opencode acp` 時，於子行程 cwd 放專案層 `opencode.json` (含 `"model": "provider/model"`)，或用 `{env:TERMADE_MODEL}` 搭配環境變數；並先以 ACP 實測 `session/new` 回應有無 model configOptions。
+- 可行做法：ertangle 啟動 `opencode acp` 時，於子行程 cwd 放專案層 `opencode.json` (含 `"model": "provider/model"`)，或用 `{env:ERTANGLE_MODEL}` 搭配環境變數；並先以 ACP 實測 `session/new` 回應有無 model configOptions。
 
 ### Antigravity (本機指令 `agy`)
 - 【已確認】`agy acp`(Start the Agent Client Protocol stdio server)旗標中**沒有 `--model`**；有 `--agent`、`--add-dir`、`--dangerously-skip-permissions`、`--sandbox`、`--gemini-dir`、`--app-data-dir`、`--process-per-session`(`agy acp --help`)。
@@ -35,9 +35,9 @@
 - 【已確認】本機 help 輸出只在 `--permission-prompts` 說明中提到 `--permission-prompt-tool`，**沒有獨立的旗標說明列** (grep 無獨立條目)，因此該旗標的確切參數格式無本機一手來源。
 - 【未確認】輸入輸出格式。官方頁面 https://code.claude.com/docs/en/agent-sdk/permissions 因額度用盡未能抓取 (已追蹤轉址至此)。憑記憶，MCP 工具名稱格式為 `mcp__<server>__<tool>`，工具收到 `{tool_name, input, tool_use_id?}`，回傳 JSON 字串：允許 `{"behavior":"allow","updatedInput":{...}}`、拒絕 `{"behavior":"deny","message":"..."}`。以上為【未確認】，實作前必須對照官方頁面或實測。
 
-### 轉發給 `termade mcp` 的可行做法 (設計建議，待實測)
-1. termade 啟動 `claude -p --input-format stream-json --output-format stream-json --mcp-config '<json 指向 termade mcp>' --strict-mcp-config --permission-prompt-tool mcp__termade__approve --permission-prompts host`。
-2. `termade mcp` 暴露一個 `approve` 工具：收到工具名稱與輸入後，透過 daemon 轉成 TUI 核准事件，阻塞等待使用者決定，再回傳 allow／deny JSON。
+### 轉發給 `ertangle mcp` 的可行做法 (設計建議，待實測)
+1. ertangle 啟動 `claude -p --input-format stream-json --output-format stream-json --mcp-config '<json 指向 ertangle mcp>' --strict-mcp-config --permission-prompt-tool mcp__ertangle__approve --permission-prompts host`。
+2. `ertangle mcp` 暴露一個 `approve` 工具：收到工具名稱與輸入後，透過 daemon 轉成 TUI 核准事件，阻塞等待使用者決定，再回傳 allow／deny JSON。
 3. 需實測項目：逾時行為、`updatedInput` 是否必填、`--permission-mode` 為 manual／dontAsk 時是否仍呼叫該工具、`--permission-prompts none` 時確實全部自動拒絕。
 
 ## 待補清單

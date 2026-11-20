@@ -1,4 +1,4 @@
-# Agent Guidelines for ade-rust / termade
+# Agent Guidelines for ertangle
 
 ## Git Commit Convention
 
@@ -15,7 +15,7 @@ All Rust code in this repo **MUST** follow [docs/agents/rust-conventions.md](doc
 
 ## Inter-Agent Communication Protocol
 
-All inter-agent messages sent via `termade send` / `termade_send` or `termade ask` / `termade_ask` **MUST** use a concise, structured **English** protocol to minimize token consumption and prevent unproductive turn wakeups:
+All inter-agent messages sent via `ertangle send` / `ertangle_send` or `ertangle ask` / `ertangle_ask` **MUST** use a concise, structured **English** protocol to minimize token consumption and prevent unproductive turn wakeups:
 
 1. **Structured Message Formats**:
    - Task completion: `TASK_DONE <task_id> <commit_or_short_summary>`
@@ -37,7 +37,7 @@ Before committing changes or pushing to git, all agents and contributors **MUST*
 2. **Clippy linter**: Run `cargo clippy --all-targets -- -D warnings` and fix all warnings.
 3. **i18n catalog synchronization**:
    - If any user-facing strings or `tr!("...")` are added, modified, or removed:
-     - Run `make i18n-extract` to update `locales/termade.pot` and `locales/en.po`.
+     - Run `make i18n-extract` to update `locales/ertangle.pot` and `locales/en.po`.
      - Fill in the English translations in `locales/en.po` (no empty `msgstr` or fuzzy tags).
      - Verify with `make i18n-check`.
 4. **Automated pre-commit hook**:

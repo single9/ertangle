@@ -1,6 +1,6 @@
-# termade — 設計文件
+# ertangle — 設計文件
 
-> 目標：用 **Rust + Ratatui** 做一個終端機原生的 termade。
+> 目標：用 **Rust + Ratatui** 做一個終端機原生的 ertangle。
 > 核心價值是「**多個 agent 互相溝通、協作、平行工作**」，而不是複製 GUI IDE 的圖形功能。
 
 > **已定案的前提 (v1)**
@@ -22,7 +22,7 @@
 
 ## 0. 一句話定義
 
-`termade` 是一個**常駐 daemon + 可拋棄式 TUI 前端**的系統：
+`ertangle` 是一個**常駐 daemon + 可拋棄式 TUI 前端**的系統：
 
 - daemon 負責「跑 agent、管 worktree、轉譯各家 agent 協定、當訊息交換中心」。
 - TUI 只負責「顯示狀態、收鍵盤輸入、把指令送回 daemon」，因此啟動快、記憶體小、可隨時關掉重開。
@@ -50,10 +50,10 @@
 ## 2. 為什麼是這個架構
 
 ### 2.1 前端與狀態分離 (daemon + client)
-GUI termade 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態放在 daemon：
+GUI ADE 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態放在 daemon：
 
 - agent 處理程序的生命週期與 TUI 解耦 → 可以關 TUI、之後再 attach。
-- 多個 client (TUI、`termade` CLI、未來的 web)可同時看同一份狀態。
+- 多個 client (TUI、`ertangle` CLI、未來的 web)可同時看同一份狀態。
 - 事件流是 append-only log → 天然可重播、可審計、可 diff。
 
 ### 2.2 為什麼選 ACP 當主要整合面
@@ -85,7 +85,7 @@ GUI termade 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態�
 
 ```
                           ┌───────────────────────────────────────────────┐
-                          │              termade (TUI client)                 │
+                          │              ertangle (TUI client)                 │
                           │   ratatui · 只渲染 + 收鍵盤 · 可隨時重啟       │
                           └───────────────┬───────────────────────────────┘
                                           │ control socket (Unix, NDJSON / JSON-RPC)
@@ -112,28 +112,28 @@ GUI termade 常見問題是「關掉視窗 = 殺掉 agent」。我們把狀態�
         │ opencode  │        │ claude code │        │   codex     │        │ antigravity │
         │ acp       │        │ acp / stream│        │ app-server  │        │ agy / acp   │
         └───────────┘        └─────────────┘        └─────────────┘        └─────────────┘
-              ▲  每個 agent 都可透過 termade MCP tools 或 `termade` CLI 呼叫 daemon
+              ▲  每個 agent 都可透過 ertangle MCP tools 或 `ertangle` CLI 呼叫 daemon
 ```
 
 **單一執行檔、多種模式** (啟動快、部署簡單)：
 
 ```
-termade                 # 等同 termade tui：確保 daemon 在跑 → attach
-termade daemon          # 前景執行 daemon (--detach 可背景化)
-termade tui             # 純前端
-termade mcp             # 以 stdio 跑 MCP server (供 agent 子處理程序當 MCP server 用)
-termade send/recv/tasks # CLI，給 shell / agent 用
-termade spawn ...       # 建立 session (可指定 agent、worktree、prompt)
+ertangle                 # 等同 ertangle tui：確保 daemon 在跑 → attach
+ertangle daemon          # 前景執行 daemon (--detach 可背景化)
+ertangle tui             # 純前端
+ertangle mcp             # 以 stdio 跑 MCP server (供 agent 子處理程序當 MCP server 用)
+ertangle send/recv/tasks # CLI，給 shell / agent 用
+ertangle spawn ...       # 建立 session (可指定 agent、worktree、prompt)
 ```
 
-daemon 的 socket 放 `$XDG_RUNTIME_DIR/termade/daemon.sock` (或 `~/.local/state/termade/`)，
-`termade tui` 找不到就自動 spawn 一個 daemon (類似 `opencode` 的行為)。
+daemon 的 socket 放 `$XDG_RUNTIME_DIR/ertangle/daemon.sock` (或 `~/.local/state/ertangle/`)，
+`ertangle tui` 找不到就自動 spawn 一個 daemon (類似 `opencode` 的行為)。
 
 ---
 
 ## 4. 核心抽象
 
-以 `termade-core` 定義，所有 adapter 與前端共用。
+以 `ertangle-core` 定義，所有 adapter 與前端共用。
 
 ### 4.1 `AgentKind`
 ```rust
@@ -158,7 +158,7 @@ struct Session {
 ```
 
 ### 4.3 `Event`(append-only log 的元素)
-定義於 `crates/termade-core/src/lib.rs`，序列化為 `{"kind": "snake_case", ...}`，外層 `Record { seq, ts, event }`：
+定義於 `crates/ertangle-core/src/lib.rs`，序列化為 `{"kind": "snake_case", ...}`，外層 `Record { seq, ts, event }`：
 ```rust
 enum Event {
     SessionStarted { session },
@@ -181,7 +181,7 @@ enum Event {
 所有狀態都是 fold(Event) 的結果 (`State`)→ TUI 重連時能重建畫面。
 
 ### 4.4 Adapter 與 `AgentControl` (現況：同步、std thread)
-`crates/termade-adapter/src/lib.rs` 以**同步 trait** 實作，沒有 async runtime：
+`crates/ertangle-adapter/src/lib.rs` 以**同步 trait** 實作，沒有 async runtime：
 
 ```rust
 trait AgentControl: Send + Sync {
@@ -228,10 +228,10 @@ struct Task {
 提供**三種互補機制**，由強到弱，確保任何 agent 都能參與。
 
 ### 機制 A (主要)：把 bus 做成 MCP server，注入每個 agent
-daemon 開一個 MCP server (`termade mcp`)。spawn agent 時，透過該 agent 自己的 MCP 設定把它接上去：
+daemon 開一個 MCP server (`ertangle mcp`)。spawn agent 時，透過該 agent 自己的 MCP 設定把它接上去：
 
-- Claude Code：`--mcp-config <termade.json>`
-- Codex：`~/.codex/config.toml` 的 `[mcp_servers.termade]` (或在 session 建立時帶入)
+- Claude Code：`--mcp-config <ertangle.json>`
+- Codex：`~/.codex/config.toml` 的 `[mcp_servers.ertangle]` (或在 session 建立時帶入)
 - OpenCode：`opencode.json` 的 `mcp` 欄位 (ACP `session/new` 也接受 MCP servers)
 - Antigravity：`~/.gemini/antigravity-cli/settings.json` 的 MCP 設定
 
@@ -239,29 +239,29 @@ daemon 開一個 MCP server (`termade mcp`)。spawn agent 時，透過該 agent 
 
 | MCP tool | 用途 |
 | --- | --- |
-| `termade_whoami()` | 回傳自己的 session id、role、worktree、branch |
-| `termade_peers()` | 列出其他 session (id、role、status、正在做什麼) |
-| `termade_send(to, body, kind?)` | 傳訊息給某個 session / channel / broadcast |
-| `termade_inbox()` | 讀取尚未處理的訊息 |
-| `termade_wait(timeout_ms)` | 阻塞等待下一則訊息 (協作交握用) |
-| `termade_ask(peer, question, timeout_ms)` | 送出問題並等回覆 (request/response) |
-| `termade_task_list()` / `termade_task_create()` / `termade_task_update()` | 共用任務看板。`depends_on` 未完成的任務建立為 `blocked` 且不通知負責人，前置任務全部 `done` 後由 daemon 改回 `todo` 並送指派訊息；`task_list` 的 `waiting_on` 列出還沒完成的前置任務 |
-| `termade_spawn(kind?, prompt, worktree?, role?)` | **agent 產生子 agent** (協調者 → 工作者) |
-| `termade_artifact_share(path\|branch\|diff)` | 分享產出 (檔案、分支、diff)給他人或看板 |
-| `termade_status(text)` | 更新自己在 TUI 上的狀態字串 (輕量進度回報) |
+| `ertangle_whoami()` | 回傳自己的 session id、role、worktree、branch |
+| `ertangle_peers()` | 列出其他 session (id、role、status、正在做什麼) |
+| `ertangle_send(to, body, kind?)` | 傳訊息給某個 session / channel / broadcast |
+| `ertangle_inbox()` | 讀取尚未處理的訊息 |
+| `ertangle_wait(timeout_ms)` | 阻塞等待下一則訊息 (協作交握用) |
+| `ertangle_ask(peer, question, timeout_ms)` | 送出問題並等回覆 (request/response) |
+| `ertangle_task_list()` / `ertangle_task_create()` / `ertangle_task_update()` | 共用任務看板。`depends_on` 未完成的任務建立為 `blocked` 且不通知負責人，前置任務全部 `done` 後由 daemon 改回 `todo` 並送指派訊息；`task_list` 的 `waiting_on` 列出還沒完成的前置任務 |
+| `ertangle_spawn(kind?, prompt, worktree?, role?)` | **agent 產生子 agent** (協調者 → 工作者) |
+| `ertangle_artifact_share(path\|branch\|diff)` | 分享產出 (檔案、分支、diff)給他人或看板 |
+| `ertangle_status(text)` | 更新自己在 TUI 上的狀態字串 (輕量進度回報) |
 
-> 這是「agent 驅動 orchestration」的關鍵：**協調者 agent 可以直接 `termade_spawn` 出 worker**，
+> 這是「agent 驅動 orchestration」的關鍵：**協調者 agent 可以直接 `ertangle_spawn` 出 worker**，
 > 而 worker 的核准、狀態、訊息全部回到 TUI，人類可隨時介入。
 
-### 機制 B：`termade` CLI (給 shell / 不支援 MCP 的 agent)
+### 機制 B：`ertangle` CLI (給 shell / 不支援 MCP 的 agent)
 同一批能力也有 CLI 形式，agent 只要會跑 shell 就能用：
 
 ```bash
-termade whoami
-termade send --to worker/checkout "請先跑測試再交棒"
-termade inbox --json
-termade task create "修正 EU 郵遞區號驗證"
-termade spawn --kind codex --worktree --role worker "實作 X，完成後 termade send --to coordinator done"
+ertangle whoami
+ertangle send --to worker/checkout "請先跑測試再交棒"
+ertangle inbox --json
+ertangle task create "修正 EU 郵遞區號驗證"
+ertangle spawn --kind codex --worktree --role worker "實作 X，完成後 ertangle send --to coordinator done"
 ```
 
 CLI 內部直接打 daemon 的 control socket，零額外成本。
@@ -270,15 +270,15 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 對於不支援 MCP 又不方便跑 CLI 的 agent，daemon 會把收到的訊息同步寫到：
 
 ```
-<cwd>/.termade/mailbox/<session>.jsonl   # 收到的訊息 (daemon 單向寫入，append_mailbox)
+<cwd>/.ertangle/mailbox/<session>.jsonl   # 收到的訊息 (daemon 單向寫入，append_mailbox)
 ```
 
 **未實作**：原設計的 `outbox/<session>.jsonl`(agent 寫入、daemon 以 `notify` 監看後轉發到 bus)、
-`tasks.json` 快照與 `AGENTS.md` 片段注入。目前 agent 若要回覆，仍須透過 MCP 或 `termade` CLI。
+`tasks.json` 快照與 `AGENTS.md` 片段注入。目前 agent 若要回覆，仍須透過 MCP 或 `ertangle` CLI。
 
 ### 協作模式 (由 config 定義 role)
-- **Hub-and-spoke**：Coordinator 收需求 → 拆任務 → `termade_spawn` 多個 worker (各自 worktree)→ worker 回報 → Coordinator 整合。
-- **Peer-to-peer**：實作者 ↔ 審查者直接對話 (`termade_ask` / `termade_send`)，人類只旁觀。
+- **Hub-and-spoke**：Coordinator 收需求 → 拆任務 → `ertangle_spawn` 多個 worker (各自 worktree)→ worker 回報 → Coordinator 整合。
+- **Peer-to-peer**：實作者 ↔ 審查者直接對話 (`ertangle_ask` / `ertangle_send`)，人類只旁觀。
 - **Channels**：`#build`、`#review`、`#alerts` 廣播。
 - **Handoff** (僅有 `kind=handoff` 訊息類型，會喚醒對方；**未實作**連同 worktree 轉交 session)：一個 agent 把 session 連同 worktree 交給另一個 (換模型/換工具續做)。
 
@@ -287,7 +287,7 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 `Session.native_id` 記下 agent 原生的對話 id (adapter 送 `AgentEvent::NativeId` → `Event::SessionNativeId`)。
 `Request::Resume` 讓已結束的 session 以 `SessionSpec.resume` 重新啟動 adapter：Claude 加 `--resume`、Codex 改呼叫 `thread/resume`、ACP 改呼叫 `session/load` (回應前的 `session/update` 是歷史重播，一律丟掉)。
 
-- 沿用同一個 termade session id，不送 `SessionStarted`；label、worktree、task、收件匣游標都綁在這個 id 上。
+- 沿用同一個 ertangle session id，不送 `SessionStarted`；label、worktree、task、收件匣游標都綁在這個 id 上。
 - spawn 與 resume 共用 `handlers/session.rs` 的 `launch_session`。每次啟動有一個 run id (`SessionEntry.run`)，ingest 執行緒發現自己不是目前的 run 就停手，舊處理程序遲到的 `Exited` 才不會把剛接回來的 session 標成結束。
 - 沒有 `native_id` 等於不能接續：PTY 不送；ACP 只有 agent 宣告 `loadSession` 時才送。
 - Claude 的成本是處理程序內累計，接續時以舊的 `Session.cost` 為基底相加 (在 `launch_session` 的 ingest 執行緒裡加，`Event::Cost` 仍是「目前累計值」)。
@@ -296,7 +296,7 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 ### 防呆 (避免 agent 無限互傳)
 - 每對 session 的訊息速率限制 + 迴圈偵測 (相同 body 連續出現 N 次即斷路)。
 - 每個 task 的訊息預算 (token/回合上限)：**未實作**。
-- `termade_wait` 有 timeout，預設不會永久阻塞。
+- `ertangle_wait` 有 timeout，預設不會永久阻塞。
 
 ---
 
@@ -316,7 +316,7 @@ CLI 內部直接打 daemon 的 control socket，零額外成本。
 ```
 
 TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重建。
-事件以 `seq` 單調遞增，log 落地為 `.termade/log/events.jsonl` (可選 rotate / 上限)。
+事件以 `seq` 單調遞增，log 落地為 `.ertangle/log/events.jsonl` (可選 rotate / 上限)。
 
 ---
 
@@ -341,7 +341,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 - **左**：repo → worktree → session 樹；狀態以顏色/符號表示 (●忙 ○閒 ⏸待核准 ✗失敗)。
 - **中**：選定 session 的對話/工具呼叫/diff (結構化渲染；無法結構化時 fallback 成 PTY 原始輸出)。
   - 逐字稿會即時渲染 **Markdown**：標題、粗體／斜體／刪除線、行內程式碼、連結、無序／有序／工作清單、引言、分隔線、圍籬程式碼區塊 (含語言標籤與底色)、GFM 表格 (含對齊)。
-  - termade 的語意前綴分色：`❯` (使用者 prompt，綠色)、`💭` (思考，暗色斜體)、`▸` (工具呼叫，琥珀色)、`💬` (審查註解，洋紅)。
+  - ertangle 的語意前綴分色：`❯` (使用者 prompt，綠色)、`💭` (思考，暗色斜體)、`▸` (工具呼叫，琥珀色)、`💬` (審查註解，洋紅)。
   - 支援翻頁捲動與「跟隨最新」(follow-tail)，右側顯示捲軸；滾輪可捲動，滑鼠拖曳可直接選取逐字稿 (只含中央區塊)並以 OSC 52 複製；`F2` 可關閉滑鼠擷取改用終端機原生選取；`t` 可在渲染後與原始文字間切換。
   - `💭` 思考行預設隱藏 (`T` 或 `/thoughts` 切換)，避免長篇思考拖慢渲染。
   - `Y` 或 `/copy` 以 OSC 52 複製中央主要區塊 (不含側欄與邊框)，在 SSH / tmux 下也不需終端機原生選取。
@@ -393,7 +393,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 
 ## 8. 工作區與 Git worktree
 
-- 每個「要寫檔的」session 預設配一個 worktree：`git worktree add .termade/wt/<session> -b termade/<label>`。
+- 每個「要寫檔的」session 預設配一個 worktree：`git worktree add .ertangle/wt/<session> -b ertangle/<label>`。
 - 唯讀 session (reviewer)可共用主 checkout (唯讀)。
 - daemon 提供：列出 worktree、取 diff、合併回主分支、開 PR (呼叫 `gh` 或 `git`)。
 - 衝突處理：以「一個 worktree 一個 branch」為原則，避免同時改同一檔；需要整合時由 coordinator/人類決定。
@@ -413,7 +413,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
   | `Ask` | 轉發 `session/request_permission` | `--permission-mode manual` | `approvalPolicy: untrusted` |
   | `Auto` (預設) | adapter 代核准 (`allow_once`) | `--permission-mode acceptEdits` | `approvalPolicy: on-request` |
   | `Bypass` | adapter 代核准 (`allow_always`) | `--dangerously-skip-permissions` | `approvalPolicy: never` |
-- **Policy engine** (`.termade/policy.toml` 或 `~/.config/termade/policy.toml`；生效範圍與缺口見 T04)：
+- **Policy engine** (`.ertangle/policy.toml` 或 `~/.config/ertangle/policy.toml`；生效範圍與缺口見 T04)：
   - 允許：`Read`、`Grep`、`Glob`、`git status`
   - 詢問：檔案寫入、`Bash`、網路
   - 拒絕：`rm -rf`、`git push --force`、讀取 `~/.ssh`、外洩風險樣式
@@ -428,7 +428,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 
 | 項目 | 目標 |
 | --- | --- |
-| `termade` TUI 冷啟動 | < 150 ms |
+| `ertangle` TUI 冷啟動 | < 150 ms |
 | TUI 常駐 RSS | < 20 MB |
 | daemon 閒置 RSS (不含 agent) | < 25 MB |
 | 事件延遲 (agent→TUI) | < 50 ms |
@@ -467,23 +467,23 @@ daemon 可選擇性讓閒置 session 進入休眠 (保留狀態、暫停子處�
 ## 12. Repo 結構 (Cargo workspace)
 
 ```
-termade-rust/
+ertangle/
 ├─ Cargo.toml                # workspace
 ├─ crates/
-│  ├─ termade-core/              # 領域型別、Event、fold/state、bus、task
-│  ├─ termade-protocol/          # control API 與 bus 的 wire 型別
-│  ├─ termade-adapter/           # AgentControl trait + 各 agent 實作
+│  ├─ ertangle-core/              # 領域型別、Event、fold/state、bus、task
+│  ├─ ertangle-protocol/          # control API 與 bus 的 wire 型別
+│  ├─ ertangle-adapter/           # AgentControl trait + 各 agent 實作
 │  │   ├─ acp.rs             #   ACP client (opencode / agy)
 │  │   ├─ claude.rs          #   Claude stream-json
 │  │   ├─ codex.rs           #   Codex app-server
 │  │   ├─ stream.rs          #   共用 token→行 串流緩衝 (StreamBuf)
 │  │   ├─ pty.rs             #   PTY 直通萬用後備
 │  │   └─ ansi.rs            #   ANSI 控制碼剝除
-│  ├─ termade-daemon/            # supervisor、socket server、worktree (lib.rs)、MCP server (mcp.rs)
-│  └─ termade-tui/               # ratatui 前端
+│  ├─ ertangle-daemon/            # supervisor、socket server、worktree (lib.rs)、MCP server (mcp.rs)
+│  └─ ertangle-tui/               # ratatui 前端
 │      ├─ lib.rs             #   版面、事件迴圈、視圖切換
 │      └─ markdown.rs        #   零相依性 Markdown → Ratatui 行渲染器
-├─ src/                      # `termade` binary (tui/daemon/mcp/send/spawn/...)
+├─ src/                      # `ertangle` binary (tui/daemon/mcp/send/spawn/...)
 │  └─ main.rs                #   根目錄 package 入口，支援 `cargo install --path .`
 └─ docs/
    ├─ DESIGN.md              # 本文件
@@ -491,22 +491,22 @@ termade-rust/
    └─ tickets/               # 改善計畫票
 ```
 
-單一 binary `termade`，子命令分派到各 crate；`termade mcp` 也可獨立當 MCP server 執行檔。
+單一 binary `ertangle`，子命令分派到各 crate；`ertangle mcp` 也可獨立當 MCP server 執行檔。
 
 ---
 
 ## 13. 里程碑
 
 **M0 — 骨架可跑 (已完成，見 `crates/`)**
-Cargo workspace + `termade-core` 型別 + `termade-protocol` 控制 API + daemon (Unix socket、event log、訊息匯流排)
-+ `termade-tui`(attach、即時事件、輸入)+ `termade` CLI；
+Cargo workspace + `ertangle-core` 型別 + `ertangle-protocol` 控制 API + daemon (Unix socket、event log、訊息匯流排)
++ `ertangle-tui`(attach、即時事件、輸入)+ `ertangle` CLI；
 adapter 實作 **PTY 直通** (對任何 agent 都有效)與 **OpenCode ACP** (原生結構化)。
 
 M0 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
 **M1 — 四家 agent 都能跑 (原生，零 Node) (已完成，見 `crates/`)**
 Claude (`claude -p` stream-json 雙向)、Codex (`codex app-server`)、Antigravity (`agy acp`)。
-統一核准通道與權限政策 (`PermissionPolicy`)。共用的串流行緩衝抽到 `termade-adapter::stream`。
+統一核准通道與權限政策 (`PermissionPolicy`)。共用的串流行緩衝抽到 `ertangle-adapter::stream`。
 
 M1 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
@@ -516,25 +516,25 @@ M1 未完成項 (受環境限制，程式路徑已就緒)：
   `session/request_permission`；轉發程式路徑已完成但少有机会實測。
 - **Claude 逐項核准**：`-p` 模式不會穩定發出可轉發的核准請求，留待 M2 以 MCP 權限工具處理。
 
-**M2 — 協作核心 (已完成，見 `crates/termade-daemon/src/mcp.rs`)**
-Message bus + task board + **`termade mcp` server** + `termade` CLI；agent 可 `send/inbox/wait/ask/task/spawn/artifact/status`。
-端到端 demo：coordinator 用 `termade_spawn` 產生兩個 worker，各自 worktree，完成後回報並整合。
+**M2 — 協作核心 (已完成，見 `crates/ertangle-daemon/src/mcp.rs`)**
+Message bus + task board + **`ertangle mcp` server** + `ertangle` CLI；agent 可 `send/inbox/wait/ask/task/spawn/artifact/status`。
+端到端 demo：coordinator 用 `ertangle_spawn` 產生兩個 worker，各自 worktree，完成後回報並整合。
 
 M2 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
-**M3 — 工作區與 review (已完成，見 `crates/termade-daemon` 與 `crates/termade-tui`)**
-worktree 管理 (`termade worktrees` / `termade gc`)、彩色 diff 視圖 (含未追蹤新檔預覽，`termade diff` / TUI `g` 鍵)、行內註解送回 agent (`termade review` / TUI `c` 鍵)、自動 commit 並 merge 回主工作區 (`termade merge` / TUI `M` 鍵)/ 開 PR (`termade pr`)。
+**M3 — 工作區與 review (已完成，見 `crates/ertangle-daemon` 與 `crates/ertangle-tui`)**
+worktree 管理 (`ertangle worktrees` / `ertangle gc`)、彩色 diff 視圖 (含未追蹤新檔預覽，`ertangle diff` / TUI `g` 鍵)、行內註解送回 agent (`ertangle review` / TUI `c` 鍵)、自動 commit 並 merge 回主工作區 (`ertangle merge` / TUI `M` 鍵)/ 開 PR (`ertangle pr`)。
 
-**M4 — 打磨 (已完成，見 `crates/termade-core`、`crates/termade-daemon`、`crates/termade-tui`)**
-命令面板 (`/` 或 `Ctrl-P`)、Jump-Anywhere (`Ctrl-K`)、成本/用量追蹤 (`termade cost` 與 TUI 標題列)、閒置休眠與自動喚醒 (`SIGSTOP`/`SIGCONT`，`termade sleep`/`termade wake`/TUI `z` 鍵)、事件重播与增量同步 (`termade replay`、`Hello.since`)、Policy 規則引擎 (`policy.toml`)與秘密自動遮罩 (`redact_secrets`)。
+**M4 — 打磨 (已完成，見 `crates/ertangle-core`、`crates/ertangle-daemon`、`crates/ertangle-tui`)**
+命令面板 (`/` 或 `Ctrl-P`)、Jump-Anywhere (`Ctrl-K`)、成本/用量追蹤 (`ertangle cost` 與 TUI 標題列)、閒置休眠與自動喚醒 (`SIGSTOP`/`SIGCONT`，`ertangle sleep`/`ertangle wake`/TUI `z` 鍵)、事件重播与增量同步 (`ertangle replay`、`Hello.since`)、Policy 規則引擎 (`policy.toml`)與秘密自動遮罩 (`redact_secrets`)。
 
-**TUI 檢視區與 Markdown 渲染 (已完成，見 `crates/termade-tui/src/markdown.rs`)**
+**TUI 檢視區與 Markdown 渲染 (已完成，見 `crates/ertangle-tui/src/markdown.rs`)**
 零相依性 Markdown 渲染器 (標題／粗體／斜體／刪除線／行內程式碼／連結／清單／引言／分隔線／圍籬程式碼／GFM 表格)、
 語意前綴分色 (`💭`／`▸`／`💬`)、逐字稿翻頁捲動 + 跟隨最新 + 捲軸 + `t` 原始／渲染切換、
 Diff 視圖舊新行號邊欄與 `+N -M` 統計與 `{`/`}` hunk 跳轉、響應式三欄寬度與兩行標題列。
 
-**M5 — 遠端 (已完成，見 `crates/termade-daemon` 與 `src/main.rs`)**
-daemon 支援 `--listen <host:port> --token <secret>`(TCP + token 驗證)，client 支援 `--remote <host:port> --token <secret>` (或 `TERMADE_REMOTE` / `TERMADE_TOKEN` 環境變數)與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
+**M5 — 遠端 (已完成，見 `crates/ertangle-daemon` 與 `src/main.rs`)**
+daemon 支援 `--listen <host:port> --token <secret>`(TCP + token 驗證)，client 支援 `--remote <host:port> --token <secret>` (或 `ERTANGLE_REMOTE` / `ERTANGLE_TOKEN` 環境變數)與 SSH attach，讓遠端機器上的 agent 也能被本地 TUI 或 CLI 管理。
 
 M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 
@@ -547,7 +547,7 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | ACP adapter 品質不一 | 以 `probe()` 偵測能力；ACP 不穩就退回原生 headless；adapter 可個別關閉 |
 | Antigravity 的程式化介面較新 | 先以 `agy -p` headless 起步，ACP 支援成熟後切換 |
 | 各 agent 對 MCP 設定方式不同 | adapter 負責「注入 MCP 設定」；同時保留 CLI 與檔案信箱作為退路 |
-| agent 互傳訊息造成無限迴圈 / 成本爆炸 | 速率限制、迴圈偵測、每任務預算、`termade_wait` timeout |
+| agent 互傳訊息造成無限迴圈 / 成本爆炸 | 速率限制、迴圈偵測、每任務預算、`ertangle_wait` timeout |
 | 多 agent 同時改同檔 | 一 worktree 一 branch；整合交給 coordinator/人 |
 | 授權與合規 | 各 agent 用自己的訂閱/金鑰 (BYO)；我們不代理也不儲存憑證 |
 | TUI 對超長輸出的效能 | 虛擬捲動 + ring buffer + delta 合併 |
@@ -557,8 +557,8 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 1. **主要平台**：先 Linux/macOS (Unix socket、PTY)，Windows 之後再補。
 2. **daemon 形態**：單一常駐 daemon 管所有 repo。
 3. **ACP adapter 是否可接受 Node 相依性**：盡量零 Node，四家都走原生介面。
-4. **MCP 還是 CLI 優先**：M2 先做 MCP (`termade mcp`)，CLI 與檔案信箱作為退路。
-5. **是否要 agent 自主 `termade_spawn`**：M2 開啟，但加上速率限制與迴圈偵測 (見風險表)。
+4. **MCP 還是 CLI 優先**：M2 先做 MCP (`ertangle mcp`)，CLI 與檔案信箱作為退路。
+5. **是否要 agent 自主 `ertangle_spawn`**：M2 開啟，但加上速率限制與迴圈偵測 (見風險表)。
 6. **預設權限政策**：`Auto` (不中斷流程)；需要逐項核准時用 `Ask`，全開用 `Bypass`。
    M2 再以 MCP 權限工具補上 Claude / Codex 的逐項轉發 (**Claude 仍未實作**，Codex 有轉發路徑但未實機驗證)。
 
@@ -569,15 +569,15 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 > 使用者在 TUI 對 coordinator 說：「修正 EU 結帳的郵遞區號驗證，加測試，開 PR。」
 
 1. TUI `spawn` coordinator (Claude Code，role=coordinator，共用主 checkout)。
-2. Coordinator 透過 MCP `termade_task_create` 建 2 個任務，`termade_spawn` 出：
-   - worker/impl (Codex，`--worktree`，branch `termade/eu-zip`)
-   - worker/test (OpenCode，`--worktree`，branch `termade/eu-zip-tests`)
+2. Coordinator 透過 MCP `ertangle_task_create` 建 2 個任務，`ertangle_spawn` 出：
+   - worker/impl (Codex，`--worktree`，branch `ertangle/eu-zip`)
+   - worker/test (OpenCode，`--worktree`，branch `ertangle/eu-zip-tests`)
 3. 兩個 worker 各自改檔、跑測試；TUI 左側即時顯示狀態，右側顯示 bus 訊息。
-4. worker/test 用 `termade_ask(peer="worker/impl", ...)` 問介面細節；impl 用 `termade_send` 回覆。
+4. worker/test 用 `ertangle_ask(peer="worker/impl", ...)` 問介面細節；impl 用 `ertangle_send` 回覆。
 5. worker/impl 觸發 `Bash` 寫入 → daemon 送 `PermissionRequested` → TUI 跳提示 → 使用者按 `a` 允許。
-6. 兩個 worker `termade_task_update(status=done)` 並 `termade_send(to=coordinator, kind=handoff)`。
-7. Coordinator 用 `termade_wait` 收到、跑整合測試、`termade_artifact_share(diff)`。
-8. 使用者在 TUI 的 Diff 視圖審查、留一行註解 → 送回 coordinator → coordinator 修掉 → `termade merge` / 開 PR。
+6. 兩個 worker `ertangle_task_update(status=done)` 並 `ertangle_send(to=coordinator, kind=handoff)`。
+7. Coordinator 用 `ertangle_wait` 收到、跑整合測試、`ertangle_artifact_share(diff)`。
+8. 使用者在 TUI 的 Diff 視圖審查、留一行註解 → 送回 coordinator → coordinator 修掉 → `ertangle merge` / 開 PR。
 
 整個過程：人只按了幾個鍵；agent 之間的溝通、分工、交接全走 bus；所有事件可回溯。
 
@@ -590,9 +590,9 @@ M3–M5 已驗證：見 [`VERIFICATION.md`](VERIFICATION.md)。
 | async runtime | `tokio`、`async_trait Adapter` | 未採用；同步 `AgentControl` + std thread (4.4、11) |
 | `outbox/` 監看 | daemon 以 `notify` 監看 agent 寫入並轉發 | 未實作；只有 `mailbox/` 單向寫入 |
 | MCP 回傳過濾 | 所有 MCP 工具回傳做敏感樣式過濾 | 已在所有 MCP 工具回傳與事件 log 全面套用 `redact_secrets` (見 T33) |
-| 每任務訊息預算 | token／回合上限 | 已實作 session 美元／token 上限、父子樹總額上限與子 agent 數量／深度上限 (`[limits]`、`:budget`、`termade budget`)；訊息匯流排另有速率限制與重複迴圈斷路 |
+| 每任務訊息預算 | token／回合上限 | 已實作 session 美元／token 上限、父子樹總額上限與子 agent 數量／深度上限 (`[limits]`、`:budget`、`ertangle budget`)；訊息匯流排另有速率限制與重複迴圈斷路 |
 | Handoff | 連同 worktree 交給另一個 agent | 只有 `handoff` 訊息類型 |
 | `tasks.json`、`AGENTS.md` 注入 | 檔案信箱的一部分 | `tasks.json` 未實作；協作說明改由 MCP `initialize.instructions` 與 adapter 系統提示／首則 prompt 注入 (見 `collab.rs`)，不寫入 worktree 的 `AGENTS.md`，避免自動 commit 把它一起提交進使用者分支或覆蓋 repo 自己的 `AGENTS.md` |
-| Claude 逐項核准 | 轉成 `PermissionRequested` | 已實作，透過 `--permission-prompt-tool mcp__termade__termade_approve --permission-prompts host` 轉發至 MCP 工具並由 daemon 決策 (見 T33) |
+| Claude 逐項核准 | 轉成 `PermissionRequested` | 已實作，透過 `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host` 轉發至 MCP 工具並由 daemon 決策 (見 T33) |
 | Codex 回合、ACP 逐項核准 | 實機驗證 | 程式路徑就緒，未實機驗證 |
-| `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `termade-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |
+| `docs/PROTOCOL.md` | control API + MCP 工具規格 | 未撰寫；以 `ertangle-protocol` 的 `Request`／`Frame` 與 `mcp.rs` 為準 |

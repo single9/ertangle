@@ -1,25 +1,27 @@
-# termade — Terminal-Native Multi-Agent Development Environment
+# ertangle (ER=EPR) — Terminal-Native Multi-Agent Development Environment
 
 [English](README_EN.md) | [繁體中文](README.md)
 
+The name `ertangle` (pronounced "er-tangle") combines ER (Einstein-Rosen bridge) and entangle, and originates from the Maldacena–Susskind ER=EPR conjecture (entanglement = Einstein-Rosen bridges). In `ertangle`, each agent lives in its own universe (a git worktree) and connects through entanglement (the MCP message bus). It is a sibling project of [erbridge](https://github.com/single9/erbridge) (Einstein-Rosen bridge).
+
 > **Run multiple coding agents concurrently on the same git repository, communicating autonomously and collaborating safely inside your terminal.**
 
-`termade` is a terminal-native orchestrator and development environment for modern coding agents (such as **OpenCode**, **Claude Code**, **Codex**, and **Antigravity**). Each agent operates in an isolated Git Worktree, communicates with peers across an MCP message bus and task board, and allows developers to inspect changes, conduct line-by-line code reviews, and merge branches safely through a keyboard-driven TUI.
+`ertangle` is a terminal-native orchestrator and development environment for modern coding agents (such as **OpenCode**, **Claude Code**, **Codex**, and **Antigravity**). Each agent operates in an isolated Git Worktree, communicates with peers across an MCP message bus and task board, and allows developers to inspect changes, conduct line-by-line code reviews, and merge branches safely through a keyboard-driven TUI.
 
 ---
 
-## Why termade? (Terminal-Native vs. Heavy GUI IDEs)
+## Why ertangle? (Terminal-Native vs. Heavy GUI IDEs)
 
-GUI-based AI IDEs such as [Orca](https://github.com/stablyai/orca) integrate worktrees, embedded browsers, diff views, and terminals into a single desktop app. `termade` focuses solely on the **collaboration, scheduling, and review core**, leaving editing and execution to the terminal and each agent's native CLI:
+GUI-based AI IDEs such as [Orca](https://github.com/stablyai/orca) integrate worktrees, embedded browsers, diff views, and terminals into a single desktop app. `ertangle` focuses solely on the **collaboration, scheduling, and review core**, leaving editing and execution to the terminal and each agent's native CLI:
 
-| Differentiator | How termade does it |
+| Differentiator | How ertangle does it |
 | --- | --- |
 | **Ultra-Lightweight & Fast** | Written in Rust + Ratatui; resident daemon memory footprint `< 20 MB`; instant launch; flawless performance over remote SSH |
 | **Resident Daemon Architecture** | The daemon manages agent child processes, message bus, task boards, and worktree states; the TUI is a detachable, re-attachable interface |
-| **Zero Conflicts via Isolation** | Each agent session automatically operates in its own `git worktree` and isolated branch (`termade/<session>`) |
+| **Zero Conflicts via Isolation** | Each agent session automatically operates in its own `git worktree` and isolated branch (`ertangle/<session>`) |
 | **Native Protocols with Zero Wrapper Overhead** | Prioritizes official structured protocols (ACP / stream-json / app-server); gracefully falls back to PTY pass-through if unavailable |
 | **Structured Agent Collaboration** | Automatically injects an MCP server into agents, enabling them to message peers, delegate tasks, broadcast status, and wait for events |
-| **Keyboard & Script Driven** | Full TUI keybindings, Helix-style which-key menu, `:` command-line, and a comprehensive, feature-complete `termade` CLI |
+| **Keyboard & Script Driven** | Full TUI keybindings, Helix-style which-key menu, `:` command-line, and a comprehensive, feature-complete `ertangle` CLI |
 
 ---
 
@@ -42,41 +44,56 @@ Each agent communicates via its **official, native structured interface without 
 
 ---
 
+---
+
+## Migrating from termade
+
+This project has been renamed from `termade` to `ertangle`. When upgrading, note the following compatibility and migration details:
+
+- **Stop the old daemon**: Stop the running `termade` daemon before launching `ertangle` for the first time (`termade shutdown` or terminate the process).
+- **Config and state directories**: On first run, `~/.config/termade` and `~/.local/state/termade` are moved automatically to `~/.config/ertangle` and `~/.local/state/ertangle` if the new directories do not exist yet.
+- **Project config**: Repo-local `.termade/config.toml` is still read as a fallback until v1.0, but should be renamed to `.ertangle/`.
+- **Environment variables**: `TERMADE_*` environment variables remain accepted as fallbacks until v1.0. Please migrate to `ERTANGLE_*`.
+- **Reinstall skills**: Run `ertangle skill install` to reinstall the agent skill (`ertangle skill uninstall` also removes the legacy `termade-ade` skill).
+- **Git branches**: Existing `termade/*` branches are untouched.
+
 ## Quick Start
 
 ### 1. Installation
 
-**Option 1: Download a prebuilt binary** (from [Releases](https://github.com/single9/termade/releases/latest); Linux x86_64 / arm64 and macOS arm64 / x86_64 / universal)
+**Option 1: Download a prebuilt binary** (from [Releases](https://github.com/single9/ertangle/releases/latest); Linux x86_64 / arm64 and macOS arm64 / x86_64 / universal)
 
 ```bash
-# Linux x86_64 shown; swap the asset name for other platforms (termade-linux-arm64, termade-macos-arm64, ...)
-curl -fsSL https://github.com/single9/termade/releases/latest/download/termade-linux-x86_64.tar.gz | tar -xz
-install -m 755 termade-linux-x86_64 ~/.local/bin/termade
+# Linux x86_64 shown; swap the asset name for other platforms (ertangle-linux-arm64, ertangle-macos-arm64, ...)
+curl -fsSL https://github.com/single9/ertangle/releases/latest/download/ertangle-linux-x86_64.tar.gz | tar -xz
+install -m 755 ertangle-linux-x86_64 ~/.local/bin/ertangle
 ```
 
 **Option 2: Install directly from git** (requires a Rust toolchain)
 
 ```bash
-cargo install --git https://github.com/single9/termade
+cargo install --git https://github.com/single9/ertangle
 
 # Pin a specific version
-cargo install --git https://github.com/single9/termade --tag v0.3.0
+cargo install --git https://github.com/single9/ertangle --tag v0.3.0
 ```
 
 **Option 3: Build from source**
 
 ```bash
-git clone https://github.com/single9/termade && cd termade
+git clone https://github.com/single9/ertangle && cd ertangle
 cargo install --path .        # installs to ~/.cargo/bin
-# or use the Makefile to install to ~/.local/bin/termade
+# or use the Makefile to install to ~/.local/bin/ertangle
 make install
 ```
+
+`make install` also creates the short alias `ert` (a symlink to `ertangle`). With `cargo install`, add it yourself: `ln -s ~/.cargo/bin/ertangle ~/.cargo/bin/ert` or `alias ert=ertangle` in your shell.
 
 **Shell completions** (bash / zsh / fish, with dynamic session label completion)
 
 ```bash
 make install-completions      # run from the source checkout; detects your SHELL
-# or generate manually: termade completions <bash|zsh|fish>
+# or generate manually: ertangle completions <bash|zsh|fish>
 ```
 
 ### 2. Launching Your First Agent Session
@@ -84,21 +101,21 @@ make install-completions      # run from the source checkout; detects your SHELL
 Inside any Git repository directory:
 
 ```bash
-termade
+ertangle
 ```
 
-- If the daemon is not already running, `termade` **automatically launches the daemon in the background** and starts the TUI.
+- If the daemon is not already running, `ertangle` **automatically launches the daemon in the background** and starts the TUI.
 - In the TUI, press **`n`** to spawn a new agent. Select the agent (e.g., `opencode`), choose a model, and type your prompt:
   ```
   Fix all failing unit tests and resolve any compiler errors
   ```
-- The agent starts working inside its dedicated worktree (`termade/session-xxx`). Watch live Markdown streaming in the Overview tab, switch to the Diff view to inspect modifications, and merge safely with one keypress.
+- The agent starts working inside its dedicated worktree (`ertangle/session-xxx`). Watch live Markdown streaming in the Overview tab, switch to the Diff view to inspect modifications, and merge safely with one keypress.
 
 ---
 
 ## Walkthrough: Coordinator + Worker Multi-Agent Collaboration
 
-For medium-to-large features spanning multiple modules, you do not need to manually juggle multiple terminal windows. In `termade`, you can spawn a **Coordinator** session that decomposes requirements, schedules tasks with dependencies on the shared board, and spawns multiple isolated **Worker** sessions in dedicated Git Worktrees—while you review and merge everything from a single TUI.
+For medium-to-large features spanning multiple modules, you do not need to manually juggle multiple terminal windows. In `ertangle`, you can spawn a **Coordinator** session that decomposes requirements, schedules tasks with dependencies on the shared board, and spawns multiple isolated **Worker** sessions in dedicated Git Worktrees—while you review and merge everything from a single TUI.
 
 ### Scenario: Building JWT Authentication (Backend API + Frontend UI + Integration Tests)
 
@@ -110,12 +127,12 @@ For medium-to-large features spanning multiple modules, you do not need to manua
 3. Enter the goal prompt:
    ```text
    Act as Coordinator to deliver the "JWT Login Authentication" feature:
-   1. Use termade_task_create to create three tasks:
+   1. Use ertangle_task_create to create three tasks:
       - T1: Implement /api/login endpoint and JWT middleware in backend
       - T2: Build login form and error handling in frontend
       - T3: Write end-to-end integration tests (set depends_on to wait for T1 and T2)
-   2. Use termade_spawn to launch two worktree-isolated workers (worker-backend and worker-frontend) in parallel for T1 and T2.
-   3. Call termade_wait to await their TASK_DONE reports, then assign or wake a worker to complete T3.
+   2. Use ertangle_spawn to launch two worktree-isolated workers (worker-backend and worker-frontend) in parallel for T1 and T2.
+   3. Call ertangle_wait to await their TASK_DONE reports, then assign or wake a worker to complete T3.
    ```
 
 **Method B: One-Line TUI Command**
@@ -137,20 +154,20 @@ Once submitted, the agents coordinate over the MCP bus automatically:
 
 ```
 [Coordinator: coord] (main checkout, planning & orchestration)
-   ├── 1. Calls termade_task_create (T1, T2 = todo; T3 = blocked via depends_on)
-   ├── 2. Calls termade_spawn to launch isolated workers
+   ├── 1. Calls ertangle_task_create (T1, T2 = todo; T3 = blocked via depends_on)
+   ├── 2. Calls ertangle_spawn to launch isolated workers
    │
-   ├─► ↳ [worker-backend]  (branch @termade/ses_a1 · .termade/wt/ses_a1)
-   │      ├── Calls termade_task_update(T1, status="doing")
+   ├─► ↳ [worker-backend]  (branch @ertangle/ses_a1 · .ertangle/wt/ses_a1)
+   │      ├── Calls ertangle_task_update(T1, status="doing")
    │      ├── Edits src/auth.rs and runs unit tests
-   │      ├── Calls termade_task_update(T1, status="done")
-   │      └── Calls termade_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") and stops immediately
+   │      ├── Calls ertangle_task_update(T1, status="done")
+   │      └── Calls ertangle_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") and stops immediately
    │
-   └─► ↳ [worker-frontend] (branch @termade/ses_b2 · .termade/wt/ses_b2)
-          ├── Calls termade_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
+   └─► ↳ [worker-frontend] (branch @ertangle/ses_b2 · .ertangle/wt/ses_b2)
+          ├── Calls ertangle_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
           ├── Edits web/login.ts and form validation
-          ├── Calls termade_task_update(T2, status="done")
-          └── Calls termade_send(to="coord", "TASK_DONE task_2 Added login form and error handling") and stops immediately
+          ├── Calls ertangle_task_update(T2, status="done")
+          └── Calls ertangle_send(to="coord", "TASK_DONE task_2 Added login form and error handling") and stops immediately
 ```
 
 What you see in the TUI:
@@ -171,7 +188,7 @@ What you see in the TUI:
    - Select `worker-frontend` and press **`M`**. If both workers touched a shared config file causing a conflict, run **`:merge --resolve`** (or press `Space g r`): `main` stays clean while conflict markers are placed inside `worker-frontend`'s isolated worktree, prompting the worker to resolve the conflict and re-verify tests.
 3. **Clean Up & Export Report**:
    - Press **`G`** (`:gc`) to clean up completed and merged worktrees.
-   - Run **`:export`** on the coordinator session to export a full Markdown report (hierarchy, task summary, costs, and transcripts) to `.termade/exports/` and copy it to your system clipboard via OSC 52, ready to paste into a GitHub PR.
+   - Run **`:export`** on the coordinator session to export a full Markdown report (hierarchy, task summary, costs, and transcripts) to `.ertangle/exports/` and copy it to your system clipboard via OSC 52, ready to paste into a GitHub PR.
 
 ---
 
@@ -179,11 +196,11 @@ What you see in the TUI:
 
 ### 1. Worktree Isolation & Review Loop
 
-- **Dedicated Worktree & Branch**: Each session operates inside an independent `git worktree` and `termade/<session>` branch, eliminating file conflicts.
+- **Dedicated Worktree & Branch**: Each session operates inside an independent `git worktree` and `ertangle/<session>` branch, eliminating file conflicts.
 - **Real-Time Color Diff**: Press `Tab` in the TUI to switch to the Diff view; navigate hunks with `{` / `}`, jump between files with `(` / `)`, fold/unfold individual files with `Enter` (or `v`), and revert a single hunk or entire file with `X` (or `:discard`).
 - **Inline Review Comments**: Press `c` on any diff line to submit inline feedback (e.g., "Add boundary checks here"). The comment is routed back to the agent for automated revision.
-- **Safe Merge & Conflict Resolution**: Press `M` or run `termade merge`. The system runs pre-flight safety checks (supports global `pre_merge_command` gate verification), commits uncommitted worktree changes automatically, and merges into the main branch. On conflicts, use `:merge --resolve` (or Which-key `Space g r`) to keep conflict markers isolated in the worktree while keeping `main` clean, delegating conflict resolution to the agent.
-- **Garbage Collection (GC)**: Press `G` or run `termade gc` to clean up merged and completed worktrees safely without deleting unmerged work.
+- **Safe Merge & Conflict Resolution**: Press `M` or run `ertangle merge`. The system runs pre-flight safety checks (supports global `pre_merge_command` gate verification), commits uncommitted worktree changes automatically, and merges into the main branch. On conflicts, use `:merge --resolve` (or Which-key `Space g r`) to keep conflict markers isolated in the worktree while keeping `main` clean, delegating conflict resolution to the agent.
+- **Garbage Collection (GC)**: Press `G` or run `ertangle gc` to clean up merged and completed worktrees safely without deleting unmerged work.
 
 ### 2. Multi-Agent Bus & Task Board (MCP)
 
@@ -191,20 +208,20 @@ Every structured agent session is automatically injected with a stdio MCP server
 
 | Category | Tool Name | Description |
 | --- | --- | --- |
-| **Self & Peers** | `termade_whoami`, `termade_peers` | Inspect own session ID, branch, worktree path, and peer agent details |
-| **Messaging** | `termade_send`, `termade_inbox`, `termade_wait`, `termade_ask` | Send direct/broadcast messages, non-blocking inbox reads, blocking wait, synchronous Q&A |
-| **Task Board** | `termade_task_list`, `termade_task_create`, `termade_task_update` | Create tasks, assign owners, specify `depends_on` prerequisite dependencies |
-| **Spawning & Output** | `termade_spawn`, `termade_artifact_share`, `termade_status` | Spawn sub-agents, share artifacts (files, PR links), broadcast status summaries |
-| **Git Operations** | `termade_diff`, `termade_merge` | Query branch diff vs. main branch, request worktree merge |
+| **Self & Peers** | `ertangle_whoami`, `ertangle_peers` | Inspect own session ID, branch, worktree path, and peer agent details |
+| **Messaging** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | Send direct/broadcast messages, non-blocking inbox reads, blocking wait, synchronous Q&A |
+| **Task Board** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | Create tasks, assign owners, specify `depends_on` prerequisite dependencies |
+| **Spawning & Output** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | Spawn sub-agents, share artifacts (files, PR links), broadcast status summaries |
+| **Git Operations** | `ertangle_diff`, `ertangle_merge` | Query branch diff vs. main branch, request worktree merge |
 
 - **Unread Nudge on Idle**:
   - Direct messages and broadcasts sent to busy agents are buffered in their mailbox **without interrupting active turns**.
   - Once the recipient finishes its turn and returns to `idle` (and pending prompt queues are drained), buffered unread messages are consolidated into a single gentle reminder. Each message is nudged **only once**.
-  - Messages already retrieved via `termade_wait` / `termade_ask` or sessions exceeding budget limits are not nudged.
+  - Messages already retrieved via `ertangle_wait` / `ertangle_ask` or sessions exceeding budget limits are not nudged.
 - **Task Dependencies**:
   - Tasks created with `--depends-on <id>` remain `blocked` until all prerequisites are marked `done`.
   - Once unlocked, the task transitions to `todo` and notifies the assigned agent automatically.
-- **Mailbox Fallback**: All messages are simultaneously written to `<repo>/.termade/mailbox/<session>.jsonl`.
+- **Mailbox Fallback**: All messages are simultaneously written to `<repo>/.ertangle/mailbox/<session>.jsonl`.
 
 ### 3. Quota Tracking, Intelligent Handoff & Session Resume
 
@@ -218,7 +235,7 @@ Every structured agent session is automatically injected with a stdio MCP server
   - The successor agent **takes over the exact same worktree and branch**;
   - Messages sent to the old session ID/label are **automatically forwarded to the successor**.
 - **Session Resume**:
-  - If an agent process crashes or the daemon restarts, press `Space s r` or run `termade resume <session> [prompt]` to resume the **exact same conversation**.
+  - If an agent process crashes or the daemon restarts, press `Space s r` or run `ertangle resume <session> [prompt]` to resume the **exact same conversation**.
   - Leverages native resume mechanisms (Claude `--resume`, Codex `thread/resume`, ACP `session/load`), preserving session ID, transcript, and branch.
 
 ### 4. Resource Control, Budgeting & Idle Sleep
@@ -227,7 +244,7 @@ Every structured agent session is automatically injected with a stdio MCP server
   - Configure per-session USD limits (`session_usd`), parent-child tree budget (`tree_usd`), and token caps (`session_tokens`), as well as maximum sub-agent depth.
   - When reaching threshold (default 80%), visual warnings trigger. Exceeding limits halts execution and holds pending prompts until budget is increased via `:budget <amount>`.
 - **Idle Process Suspension (Sleep/Wake)**:
-  - Press `z` or run `termade sleep <session>` to send `SIGSTOP`, freezing idle agent processes and freeing CPU. Press `z` or send a message to dispatch `SIGCONT` and wake them up.
+  - Press `z` or run `ertangle sleep <session>` to send `SIGSTOP`, freezing idle agent processes and freeing CPU. Press `z` or send a message to dispatch `SIGCONT` and wake them up.
 
 ### 5. Permission Policy & Rule Engine
 
@@ -235,17 +252,17 @@ Every structured agent session is automatically injected with a stdio MCP server
   - `ask`: Tool calls require manual approval in the TUI (`a` allow once / `A` always allow / `d` deny).
   - `auto` (default): Safe operations are approved automatically.
   - `bypass`: Skips permission confirmation.
-- **Policy Engine**: Configured via `~/.config/termade/policy.toml` and `.termade/policy.toml` using `deny` (blacklist) → `allow` (whitelist) → session policy order.
-- **Claude Granular Approval Forwarding (T33)**: Mounts `--permission-prompt-tool mcp__termade__termade_approve --permission-prompts host` in non-`bypass` mode, enabling Claude's tool invocations to be filtered by `policy.toml` and approved interactively in TUI `ask` mode.
-- **Comprehensive Secret Redaction (T33)**: All MCP tool outputs (including `termade_inbox`, `termade_wait`, `termade_ask`, `termade_diff`, etc.) and event logs automatically sanitize sensitive credentials (`sk-...`, `ghp_...`, `AKIA...`, etc.) into `<REDACTED>` before delivery.
+- **Policy Engine**: Configured via `~/.config/ertangle/policy.toml` and `.ertangle/policy.toml` using `deny` (blacklist) → `allow` (whitelist) → session policy order.
+- **Claude Granular Approval Forwarding (T33)**: Mounts `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host` in non-`bypass` mode, enabling Claude's tool invocations to be filtered by `policy.toml` and approved interactively in TUI `ask` mode.
+- **Comprehensive Secret Redaction (T33)**: All MCP tool outputs (including `ertangle_inbox`, `ertangle_wait`, `ertangle_ask`, `ertangle_diff`, etc.) and event logs automatically sanitize sensitive credentials (`sk-...`, `ghp_...`, `AKIA...`, etc.) into `<REDACTED>` before delivery.
 
 ### 6. Remote Connections, Tailscale Integration & Auto-Reconnect (T28)
 
 - **Automatic Tailscale Detection**:
-  - Start daemon with `termade daemon --listen tailscale` to auto-resolve your machine's peer-to-peer Tailscale IPv4 address via `tailscale ip -4`.
-  - Automatically generates and securely stores auth tokens at `~/.local/state/termade/remote.token` (file permission `0600`).
+  - Start daemon with `ertangle daemon --listen tailscale` to auto-resolve your machine's peer-to-peer Tailscale IPv4 address via `tailscale ip -4`.
+  - Automatically generates and securely stores auth tokens at `~/.local/state/ertangle/remote.token` (file permission `0600`).
 - **Connection Info Quick Look**:
-  - Run `termade daemon info` to print local and Tailscale addresses, token path, and copy-paste connection commands.
+  - Run `ertangle daemon info` to print local and Tailscale addresses, token path, and copy-paste connection commands.
 - **Resilient Auto-Reconnect**:
   - When laptops wake from sleep, networks switch, or brief disconnects happen, the TUI automatically reconnects in the background with exponential backoff.
   - Reconnects using `Request::Hello { since, epoch, token }` to seamlessly resume state and backfill missed events without interruption.
@@ -253,7 +270,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 ### 7. Multi-Host Aggregation in TUI (T29)
 
 - **Unified Multi-Machine Dashboard**:
-  - Configure `[remotes]` in `config.toml` or launch with `termade --remote workstation:7420 --remote gpu-box:7420`.
+  - Configure `[remotes]` in `config.toml` or launch with `ertangle --remote workstation:7420 --remote gpu-box:7420`.
   - View, monitor, and interact with agent sessions running across multiple machines from a single unified TUI dashboard.
 - **Transparent Routing & Filtering**:
   - Sessions are tagged with colored host badges (`[workstation]`, `[gpu-box]`).
@@ -263,7 +280,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 ### 8. Web Interface & Mobile PWA (T30)
 
 - **Mobile Review On The Go**:
-  - Step away from your desk without losing review flow. Enable it directly from the TUI settings panel (`:settings` or `Space ,`) or by typing `:web on [addr]` (or via CLI `termade daemon --web tailscale`).
+  - Step away from your desk without losing review flow. Enable it directly from the TUI settings panel (`:settings` or `Space ,`) or by typing `:web on [addr]` (or via CLI `ertangle daemon --web tailscale`).
   - A clean **Unicode QR Code** can be displayed in your terminal with `:web qr` or `Space w` for instant camera scanning on mobile phones.
 - **Zero-Dependency Native HTTP / WebSocket**:
   - Built directly into the single binary with pure Rust standard networking—no Node.js, npm, or heavy async dependencies required.
@@ -361,7 +378,7 @@ Press `:` to open the command line with `Tab` completion:
 
 - `:spawn [--role <role>] <agent>[:model] <prompt>` — Spawn a new agent session (e.g., `:spawn --role coordinator claude:opus "plan architecture"`)
 - `:playbook [<name> <goal>]` — Launch a multi-agent team playbook (e.g., `:playbook tdd-pair implement login`); no args opens the picker (also `Space s b`)
-- `:export [path]` — Export the selected session (and its sub-session tree) as Markdown to `.termade/exports/<label>-<timestamp>.md` and copy it via OSC 52
+- `:export [path]` — Export the selected session (and its sub-session tree) as Markdown to `.ertangle/exports/<label>-<timestamp>.md` and copy it via OSC 52
 - `:handoff <agent> [note]` — Hand over current session to another agent
 - `:resume [prompt]` — Reconnect to an exited session and continue dialogue
 - `:discard` / `:discard!` — (Diff view) Revert the hunk or entire file at cursor
@@ -380,57 +397,57 @@ Press `:` to open the command line with `Tab` completion:
 
 ## CLI Reference
 
-`termade` provides a comprehensive CLI mirroring TUI capabilities:
+`ertangle` provides a comprehensive CLI mirroring TUI capabilities:
 
 ```bash
 # Session Management
-termade sessions [--json]                         # List all sessions (alias: termade peers)
-termade whoami [--session <id>] [--json]          # Show current session metadata
-termade spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
-termade resume <session-or-label> ["prompt"]      # Resume an exited session
-termade handoff <session-or-label> --to <agent> [--note "Handoff notes"]
-termade sleep <session> ; termade wake <session>  # Suspend / wake agent processes
-termade cancel <session> ; termade kill <session> # Interrupt turn / kill process
-termade rm <session> [--force]                    # Remove exited session record
+ertangle sessions [--json]                         # List all sessions (alias: ertangle peers)
+ertangle whoami [--session <id>] [--json]          # Show current session metadata
+ertangle spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
+ertangle resume <session-or-label> ["prompt"]      # Resume an exited session
+ertangle handoff <session-or-label> --to <agent> [--note "Handoff notes"]
+ertangle sleep <session> ; ertangle wake <session>  # Suspend / wake agent processes
+ertangle cancel <session> ; ertangle kill <session> # Interrupt turn / kill process
+ertangle rm <session> [--force]                    # Remove exited session record
 
 # Multi-Agent Playbooks & Collaboration Reports
-termade playbook <name> "<goal>"                  # Launch a whole team from a built-in or custom playbook
-termade export <session> [--tree] [--diff] [-o <path>] # Export a Markdown report (-o omitted prints to stdout)
+ertangle playbook <name> "<goal>"                  # Launch a whole team from a built-in or custom playbook
+ertangle export <session> [--tree] [--diff] [-o <path>] # Export a Markdown report (-o omitted prints to stdout)
 
 # Prompts & Queue
-termade prompt [--queue] <session-or-label> "prompt text"
-termade queue <session-or-label> [--clear]        # View or clear prompt queue
+ertangle prompt [--queue] <session-or-label> "prompt text"
+ertangle queue <session-or-label> [--clear]        # View or clear prompt queue
 
 # Worktree & Code Review
-termade worktrees                                 # List all managed git worktrees
-termade diff <session-or-label>                   # View git diff for a session
-termade review <session-or-label> --location <file>:<line> "Review comment"
-termade merge <session-or-label> [--dry-run] [--resolve] # Merge session branch back to main
-termade pr <session-or-label> --title "PR title"  # Create GitHub Pull Request via gh
-termade gc [--session <id>]                       # Clean up merged worktrees safely
+ertangle worktrees                                 # List all managed git worktrees
+ertangle diff <session-or-label>                   # View git diff for a session
+ertangle review <session-or-label> --location <file>:<line> "Review comment"
+ertangle merge <session-or-label> [--dry-run] [--resolve] # Merge session branch back to main
+ertangle pr <session-or-label> --title "PR title"  # Create GitHub Pull Request via gh
+ertangle gc [--session <id>]                       # Clean up merged worktrees safely
 
 # Cross-Agent Messaging & Tasks
-termade send <session-or-label> "message content" # Send message to target agent
-termade inbox [--session <id>]                    # Read session inbox
-termade tasks                                     # List tasks and dependency states
-termade task "Task title" [--assignee <label>] [--depends-on <id>]
-termade task-update <id> --status <status>        # Update task status (todo/doing/blocked/review/done)
+ertangle send <session-or-label> "message content" # Send message to target agent
+ertangle inbox [--session <id>]                    # Read session inbox
+ertangle tasks                                     # List tasks and dependency states
+ertangle task "Task title" [--assignee <label>] [--depends-on <id>]
+ertangle task-update <id> --status <status>        # Update task status (todo/doing/blocked/review/done)
 
 # Cost, Quota & Event Replay
-termade quota [--json]                            # Query account quotas and reset times
-termade cost [--json]                             # Breakdown token and USD spend
-termade budget <session-or-label> <amount>        # Set or raise budget cap
-termade replay [--since <seq>] [--json]           # Audit and replay events.jsonl
+ertangle quota [--json]                            # Query account quotas and reset times
+ertangle cost [--json]                             # Breakdown token and USD spend
+ertangle budget <session-or-label> <amount>        # Set or raise budget cap
+ertangle replay [--since <seq>] [--json]           # Audit and replay events.jsonl
 
 # Remote Daemon, Multi-Host & Web Version Support
-termade daemon --listen tailscale                 # Start daemon bound to Tailscale WireGuard IP
-termade daemon --listen 127.0.0.1:7420            # Start daemon listening on TCP (auto-generates token)
-termade daemon --web tailscale                    # Start Web version and print terminal QR code (default port 7421)
-termade daemon --web tailscale --web-port 8080    # Start Web version with custom port (8080)
-termade daemon info                               # Print current Tailscale IP, token, and connection examples
-termade --remote tailscale                        # Connect to local Tailscale daemon
-termade --remote workstation:7420 --remote gpu:7420 # Aggregate multiple remote hosts into a single TUI
-termade completions <bash|zsh|fish>               # Generate shell completion script
+ertangle daemon --listen tailscale                 # Start daemon bound to Tailscale WireGuard IP
+ertangle daemon --listen 127.0.0.1:7420            # Start daemon listening on TCP (auto-generates token)
+ertangle daemon --web tailscale                    # Start Web version and print terminal QR code (default port 7421)
+ertangle daemon --web tailscale --web-port 8080    # Start Web version with custom port (8080)
+ertangle daemon info                               # Print current Tailscale IP, token, and connection examples
+ertangle --remote tailscale                        # Connect to local Tailscale daemon
+ertangle --remote workstation:7420 --remote gpu:7420 # Aggregate multiple remote hosts into a single TUI
+ertangle completions <bash|zsh|fish>               # Generate shell completion script
 ```
 
 ---
@@ -439,13 +456,13 @@ termade completions <bash|zsh|fish>               # Generate shell completion sc
 
 ### Configuration File: `config.toml`
 
-`termade` merges global settings (`~/.config/termade/config.toml`) with project-level overrides (`<repo>/.termade/config.toml`):
+`ertangle` merges global settings (`~/.config/ertangle/config.toml`) with project-level overrides (`<repo>/.ertangle/config.toml`):
 
 ```toml
 [tui]
 layout = "two"                    # Default layout: "two" | "three" | "tabs"
 notify = ["bell", "command"]      # Notification methods: "bell" | "osc9" | "command"
-notify_command = "notify-send termade \"$TERMADE_NOTIFY_TEXT\""
+notify_command = "notify-send ertangle \"$ERTANGLE_NOTIFY_TEXT\""
 notify_min_turn_secs = 10         # Turns shorter than this threshold do not notify
 
 [web]
@@ -456,7 +473,7 @@ addr = "tailscale"                # Listen address: "tailscale" (auto-detect IP)
 
 [remotes]
 # Multi-host aggregation (T29)
-workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/termade/workstation.token" }
+workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/ertangle/workstation.token" }
 gpu-box = { addr = "100.64.0.8:7420" }
 
 [limits]
@@ -472,7 +489,7 @@ auto = false                      # Automatically hand off on quota exhaustion (
 fallback = ["codex", "claude:sonnet"]
 
 [collab]
-instructions = true               # Inject termade collaboration rules into agent system prompt
+instructions = true               # Inject ertangle collaboration rules into agent system prompt
 extra = "Follow guidelines in CONTRIBUTING.md closely"
 
 [playbooks.tdd]
@@ -497,17 +514,17 @@ pre_merge_command = "cargo test"       # Pre-merge validation command; non-zero 
 ```
 
 > [!TIP]
-> If `<repo>/.termade/instructions.md` exists (up to 8 KB), its content is appended to the agent's system prompt during initialization.
+> If `<repo>/.ertangle/instructions.md` exists (up to 8 KB), its content is appended to the agent's system prompt during initialization.
 
 ### Environment Variables
 
 | Variable | Default Value | Description |
 | --- | --- | --- |
-| `XDG_RUNTIME_DIR` | `/tmp/termade-$USER/` | Directory storing daemon Unix domain socket |
-| `XDG_STATE_HOME` | `~/.local/state/` | Path for persistent events log (`$XDG_STATE_HOME/termade/events.jsonl`) |
-| `TERMADE_LOG` | `warn` | Tracing filter level (e.g., `TERMADE_LOG=debug`) |
-| `TERMADE_TOKEN` | — | Authentication token for remote daemon connections (use SSH tunneling for security) |
-| `TERMADE_REMOTE` | — | Default remote daemon address (equivalent to `--remote`) |
+| `XDG_RUNTIME_DIR` | `/tmp/ertangle-$USER/` | Directory storing daemon Unix domain socket |
+| `XDG_STATE_HOME` | `~/.local/state/` | Path for persistent events log (`$XDG_STATE_HOME/ertangle/events.jsonl`) |
+| `ERTANGLE_LOG` | `warn` | Tracing filter level (e.g., `ERTANGLE_LOG=debug`) |
+| `ERTANGLE_TOKEN` | — | Authentication token for remote daemon connections (use SSH tunneling for security) |
+| `ERTANGLE_REMOTE` | — | Default remote daemon address (equivalent to `--remote`) |
 
 ---
 
@@ -539,4 +556,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgements
 
-`termade` was inspired by [Orca](https://github.com/stablyai/orca) (MIT licensed); its full-handoff and review-loop concepts informed this design. This is an independent implementation and does not copy its code.
+`ertangle` was inspired by [Orca](https://github.com/stablyai/orca) (MIT licensed); its full-handoff and review-loop concepts informed this design. This is an independent implementation and does not copy its code.

@@ -1,4 +1,4 @@
-# termade
+# ertangle
 
 A terminal-native multi-agent environment: a human and several AI agents share one daemon to split work, exchange messages, and hand work over to each other.
 
