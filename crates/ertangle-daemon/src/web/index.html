@@ -806,6 +806,17 @@
       cursor: pointer;
       flex-shrink: 0;
     }
+
+    /* 圖片附件 (image attachments) */
+    #attach-chips { display:none; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+    .attach-chip { display:flex; align-items:center; gap:6px; max-width:100%; padding:4px 6px; border:1px solid var(--border); border-radius:10px; background:var(--card-bg); }
+    .attach-chip img { width:36px; height:36px; object-fit:cover; border-radius:6px; flex:none; }
+    .attach-chip .attach-meta { display:flex; flex-direction:column; min-width:0; font-size:11px; }
+    .attach-chip .attach-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:140px; }
+    .attach-chip .attach-size { color:var(--text-dim); font-family:var(--font-mono); }
+    .attach-chip .attach-remove { background:none; border:none; color:var(--text-dim); font-size:18px; width:32px; height:32px; cursor:pointer; flex:none; }
+    .btn-attach { background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
+    #view-chat.drag-over { outline:2px dashed var(--cyan); outline-offset:-4px; }
     .btn-send { background: var(--cyan); color: #000; }
     .btn-cancel-round { background: #2a1b1e; color: var(--red); border: 1px solid #4a2128; }
 
@@ -1570,7 +1581,12 @@
             </div>
             <span id="composer-status" style="color:var(--text-dim); font-size:11px; font-family:var(--font-mono);"></span>
           </div>
+          <div id="attach-chips"></div>
+          <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple style="display:none;" onchange="addImageFiles(this.files); this.value='';">
           <div class="composer-row">
+            <button id="btn-attach" class="btn-circle btn-attach" onclick="document.getElementById('attach-input').click()" title="附加圖片">
+              <svg class="nav-svg" style="width:18px; height:18px;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            </button>
             <textarea id="prompt-textarea" rows="1" placeholder="輸入 prompt 給 Agent…"></textarea>
             <button id="btn-cancel" class="btn-circle btn-cancel-round" style="display:none;" onclick="cancelTurn()" title="中斷回合">
               <svg class="nav-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"></rect></svg>
@@ -3783,18 +3799,96 @@
       updateAllViews();
     }
 
+    const MAX_ATTACH_BYTES = 5 * 1024 * 1024;
+    const MAX_ATTACH_SIDE = 2000;
+    const ATTACH_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+    let pendingImages = [];
+
+    function formatBytes(n) {
+      return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+    }
+
+    function readBlobBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).replace(/^data:[^;]*;base64,/, ""));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(blob);
+      });
+    }
+
+    /** Re-encode via canvas when the image is too large (side > 2000px or > 5MB). */
+    async function downscaleImage(file) {
+      let bmp;
+      try { bmp = await createImageBitmap(file); } catch (_) { return file; }
+      const longest = Math.max(bmp.width, bmp.height);
+      if (longest <= MAX_ATTACH_SIDE && file.size <= MAX_ATTACH_BYTES) return file;
+      const scale = Math.min(1, MAX_ATTACH_SIDE / longest);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bmp.width * scale));
+      canvas.height = Math.max(1, Math.round(bmp.height * scale));
+      canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.85));
+      return blob || file;
+    }
+
+    async function addImageFiles(files) {
+      for (const file of Array.from(files || [])) {
+        if (!ATTACH_TYPES.includes(file.type)) {
+          showToast(`不支援的圖片格式：${file.name || file.type}`, true);
+          continue;
+        }
+        try {
+          const blob = await downscaleImage(file);
+          if (blob.size > MAX_ATTACH_BYTES) {
+            showToast(`圖片超過 5MB：${file.name}`, true);
+            continue;
+          }
+          const ext = blob.type === "image/jpeg" && file.type !== "image/jpeg" ? ".jpg" : "";
+          const name = (file.name && file.name !== "image.png" ? file.name : `pasted-${Date.now()}.png`) + ext;
+          pendingImages.push({
+            name, mime: blob.type || file.type, size: blob.size,
+            data: await readBlobBase64(blob), thumb: URL.createObjectURL(blob)
+          });
+        } catch (_) {
+          showToast(`讀取圖片失敗：${file.name}`, true);
+        }
+      }
+      renderAttachChips();
+    }
+
+    function removeAttachment(i) {
+      const [gone] = pendingImages.splice(i, 1);
+      if (gone) URL.revokeObjectURL(gone.thumb);
+      renderAttachChips();
+    }
+
+    function renderAttachChips() {
+      const el = document.getElementById("attach-chips");
+      el.style.display = pendingImages.length ? "flex" : "none";
+      el.innerHTML = pendingImages.map((a, i) => `
+        <div class="attach-chip">
+          <img src="${escapeHtml(a.thumb)}" alt="">
+          <span class="attach-meta"><span class="attach-name">${escapeHtml(a.name)}</span><span class="attach-size">${formatBytes(a.size)}</span></span>
+          <button class="attach-remove" onclick="removeAttachment(${i})" title="移除">×</button>
+        </div>`).join("");
+    }
+
     function sendPrompt() {
       const textarea = document.getElementById("prompt-textarea");
       const text = textarea.value.trim();
-      if (!text || !activeSession || !ws) return;
+      if ((!text && !pendingImages.length) || !activeSession || !ws) return;
 
       ws.send(JSON.stringify({
         op: "prompt",
         session: activeSession,
         text: text,
-        attachments: [],
+        attachments: pendingImages.map(a => ({ name: a.name, mime: a.mime, path: null, data: a.data, text: null, size: a.size })),
         queue: queueMode
       }));
+      pendingImages.forEach(a => URL.revokeObjectURL(a.thumb));
+      pendingImages = [];
+      renderAttachChips();
       textarea.value = "";
       textarea.style.height = "auto";
     }
@@ -4334,6 +4428,21 @@
     promptTextarea.addEventListener("input", function() {
       this.style.height = "auto";
       this.style.height = (this.scrollHeight) + "px";
+    });
+
+    promptTextarea.addEventListener("paste", function(e) {
+      const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(f => f.type.startsWith("image/"));
+      if (!files.length) return;
+      e.preventDefault();
+      addImageFiles(files);
+    });
+    const chatView = document.getElementById("view-chat");
+    chatView.addEventListener("dragover", e => { e.preventDefault(); chatView.classList.add("drag-over"); });
+    chatView.addEventListener("dragleave", () => chatView.classList.remove("drag-over"));
+    chatView.addEventListener("drop", e => {
+      e.preventDefault();
+      chatView.classList.remove("drag-over");
+      addImageFiles((e.dataTransfer && e.dataTransfer.files) || []);
     });
 
     connect();

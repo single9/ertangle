@@ -72,6 +72,7 @@
 | [T65](T65-web-question-card-usability.md) | Make the web pending-question card usable | P1 | T64 |
 | [T66](T66-tui-question-picker-usability.md) | Make the TUI question picker usable | P1 | T63 |
 | [T67](T67-tui-question-auto-open.md) | Auto-open the TUI question picker, docked above the input | P1 | T66 |
+| [T68](T68-web-image-attachments.md) | Send images with prompts from the web UI | P2 | T65 |
 
 ## Language convention
 

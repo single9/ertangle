@@ -889,6 +889,22 @@ mod tests {
         assert!(INDEX_HTML.contains("function answerQuestionInChat("));
     }
 
+    #[test]
+    fn composer_supports_image_attachments() {
+        assert!(INDEX_HTML.contains("id=\"attach-input\" type=\"file\" accept=\"image/png,image/jpeg,image/gif,image/webp\" multiple"));
+        assert!(INDEX_HTML.contains("function addImageFiles("));
+        assert!(INDEX_HTML.contains("promptTextarea.addEventListener(\"paste\""));
+        assert!(INDEX_HTML.contains("chatView.addEventListener(\"drop\""));
+        assert!(INDEX_HTML.contains("MAX_ATTACH_BYTES = 5 * 1024 * 1024"));
+        assert!(INDEX_HTML.contains("MAX_ATTACH_SIDE = 2000"));
+        assert!(INDEX_HTML.contains("canvas.toBlob("));
+        // base64 payload has the data: prefix stripped and images may be sent without text.
+        assert!(INDEX_HTML.contains(".replace(/^data:[^;]*;base64,/, \"\")"));
+        assert!(INDEX_HTML.contains("(!text && !pendingImages.length)"));
+        assert!(INDEX_HTML.contains("attachments: pendingImages.map("));
+        assert!(!INDEX_HTML.contains("attachments: [],\n        queue: queueMode"));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()
