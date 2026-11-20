@@ -2022,44 +2022,6 @@ fn mcp_permission_auto_policy_answers_immediately_and_deny_wins() {
 }
 
 #[test]
-fn mcp_permission_for_question_tool_skips_duplicate_prompt() {
-    let shared = test_shared();
-    shared.emit(Event::SessionStarted {
-        session: ask_sess("ses-ask-question", PermissionPolicy::Ask),
-    });
-    let (tx, rx) = client_channel(None);
-    shared.handle(
-        &tx,
-        Request::McpPermission {
-            session: "ses-ask-question".into(),
-            title: "AskUserQuestion".into(),
-            detail: r#"{"questions":[]}"#.into(),
-        },
-    );
-    let frames: Vec<Frame> = rx.try_iter().collect();
-    assert!(
-        matches!(
-            &frames[0],
-            Frame::PermissionDecision {
-                decision: Decision::Allow
-            }
-        ),
-        "question tool permission should be auto-approved: {frames:?}"
-    );
-    assert!(lock(&shared.inner).state.pending_permissions.is_empty());
-
-    let history: Vec<_> = lock(&shared.inner).backlog.iter().cloned().collect();
-    assert!(history.iter().any(|r| matches!(
-        r.event,
-        Event::PermissionResolved {
-            ref session,
-            decision: Decision::Allow,
-            ..
-        } if session == "ses-ask-question"
-    )));
-}
-
-#[test]
 fn mcp_permission_ask_waits_for_human_decision_allow_and_deny() {
     let shared = test_shared();
     shared.emit(Event::SessionStarted {

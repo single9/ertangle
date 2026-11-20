@@ -520,6 +520,52 @@ fn approval_response(allowed: bool, input: &Value) -> Value {
     Value::String(v.to_string())
 }
 
+/// Collects answers for Claude's native question tool and returns an allowed tool response
+/// whose `updatedInput` carries the `answers` map expected by Claude.
+fn question_permission_response(session: &str, tool: &str, input: &Value) -> Result<Value> {
+    let questions =
+        ertangle_adapter::question::parse_tool_call_questions(session, tool, &input.to_string());
+    let mut answers = serde_json::Map::new();
+    for question in questions {
+        let frame = roundtrip(&Request::McpQuestion {
+            session: session.to_string(),
+            question: question.question.clone(),
+            header: question.header.clone(),
+            options: question.options.iter().map(|o| o.label.clone()).collect(),
+            multi_select: question.multi_select,
+        })?;
+        let Frame::QuestionAnswer { answers: selected } = frame else {
+            bail!("failed to collect answer for {}", question.question);
+        };
+        if selected.is_empty() {
+            return Ok(approval_response(false, input));
+        }
+        let value = if question.multi_select {
+            json!(selected)
+        } else {
+            json!(selected.first().cloned().unwrap_or_default())
+        };
+        answers.insert(question.question, value);
+    }
+
+    Ok(approval_response(
+        true,
+        &apply_question_answers(input, answers),
+    ))
+}
+
+/// Merges collected answers into the original tool input for Claude's `updatedInput`.
+fn apply_question_answers(input: &Value, answers: serde_json::Map<String, Value>) -> Value {
+    let mut updated = input.clone();
+    if !updated.is_object() {
+        updated = json!({});
+    }
+    if let Some(obj) = updated.as_object_mut() {
+        obj.insert("answers".to_string(), Value::Object(answers));
+    }
+    updated
+}
+
 /// 執行單一 MCP 工具呼叫。
 pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
@@ -828,6 +874,9 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .unwrap_or("tool")
                 .to_string();
             let input = args["input"].clone();
+            if ertangle_adapter::question::is_question_tool(&tool) {
+                return question_permission_response(session, &tool, &input);
+            }
             let frame = roundtrip(&Request::McpPermission {
                 session: session.to_string(),
                 title: tool,
@@ -1168,6 +1217,16 @@ mod task_list_tests {
 #[cfg(test)]
 mod approval_tests {
     use super::*;
+
+    #[test]
+    fn question_answers_are_merged_into_updated_input() {
+        let input = json!({"questions": [{"question": "Which database?"}]});
+        let answers =
+            serde_json::Map::from_iter([("Which database?".to_string(), json!("Postgres"))]);
+        let updated = apply_question_answers(&input, answers);
+        assert_eq!(updated["answers"]["Which database?"], json!("Postgres"));
+        assert_eq!(updated["questions"], input["questions"]);
+    }
 
     #[test]
     fn approval_response_matches_claude_format() {

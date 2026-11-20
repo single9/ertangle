@@ -865,7 +865,7 @@ msgstr ""
 msgid "未知的核准請求：{req}"
 msgstr ""
 
-#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/claude.rs crates/ertangle-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
 msgid "未知的問題請求：{id}"
 msgstr ""
 

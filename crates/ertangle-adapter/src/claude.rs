@@ -19,7 +19,6 @@ use crate::{AgentControl, AgentEvent, SessionSpec};
 use anyhow::{bail, Context, Result};
 use ertangle_core::{Cost, Decision, SessionStatus};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,26 +27,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tr::tr;
 
-/// Pending question state for Claude native tool calls (`AskUserQuestion`).
-struct PendingClaudeQuestion {
-    tool_use_id: String,
-    /// Raw question objects from the tool input; Claude uses them to render the tool result.
-    raw_questions: Vec<Value>,
-    /// Normalized question texts in the same order as `raw_questions`.
-    question_texts: Vec<String>,
-    total: usize,
-    answers: Arc<Mutex<HashMap<String, Vec<String>>>>,
-}
-
 /// Reads the running Claude event stream.
 struct Conn {
-    session_id: String,
     stdin: Mutex<ChildStdin>,
     stream: Mutex<StreamBuf>,
     /// Whether this message has already streamed via deltas (avoids duplicate output with the full assistant message).
     saw_delta: AtomicBool,
     tx: Sender<AgentEvent>,
-    questions: Mutex<HashMap<String, PendingClaudeQuestion>>,
 }
 
 impl Conn {
@@ -184,43 +170,6 @@ impl Conn {
                     self.flush_stream();
                     let name = block["name"].as_str().unwrap_or("tool").to_string();
                     let input = block["input"].to_string();
-                    if crate::question::is_question_tool(&name) {
-                        let tool_use_id = block["id"].as_str().unwrap_or("").to_string();
-                        let questions = crate::question::parse_tool_call_questions(
-                            &self.session_id,
-                            &name,
-                            &input,
-                        );
-                        if !questions.is_empty() {
-                            let total = questions.len();
-                            let raw_questions = serde_json::from_str::<Value>(&input)
-                                .ok()
-                                .and_then(|v| {
-                                    v.get("questions").and_then(|q| q.as_array()).cloned()
-                                })
-                                .unwrap_or_default();
-                            let question_texts = questions
-                                .iter()
-                                .map(|q| q.question.clone())
-                                .collect::<Vec<_>>();
-                            let shared_answers = Arc::new(Mutex::new(HashMap::new()));
-                            let mut q_map =
-                                self.questions.lock().unwrap_or_else(|e| e.into_inner());
-                            for q in questions {
-                                q_map.insert(
-                                    q.id.clone(),
-                                    PendingClaudeQuestion {
-                                        tool_use_id: tool_use_id.clone(),
-                                        raw_questions: raw_questions.clone(),
-                                        question_texts: question_texts.clone(),
-                                        total,
-                                        answers: Arc::clone(&shared_answers),
-                                    },
-                                );
-                                let _ = self.tx.send(AgentEvent::Question(q));
-                            }
-                        }
-                    }
                     let _ = self.tx.send(AgentEvent::ToolCall {
                         name,
                         input,
@@ -382,63 +331,6 @@ fn set_model_request(model: &str) -> Value {
     })
 }
 
-/// Tool result message sent back to Claude in stream-json mode.
-fn tool_result_message(tool_use_id: &str, content: &str, is_error: bool) -> Value {
-    json!({
-        "type": "user",
-        "message": {
-            "role": "user",
-            "content": [{
-                "type": "tool_result",
-                "tool_use_id": tool_use_id,
-                "content": content,
-                "is_error": is_error
-            }]
-        }
-    })
-}
-
-/// Builds the structured tool result expected by Claude's native `AskUserQuestion`.
-fn question_tool_result_message(
-    tool_use_id: &str,
-    raw_questions: &[Value],
-    question_texts: &[String],
-    answers: &HashMap<String, Vec<String>>,
-) -> Value {
-    let mut answer_map = serde_json::Map::new();
-    let mut summary = Vec::new();
-    for (index, question) in question_texts.iter().enumerate() {
-        let selected = answers.get(question).cloned().unwrap_or_default();
-        let multi_select = raw_questions
-            .get(index)
-            .and_then(|q| {
-                q.get("multiSelect")
-                    .or_else(|| q.get("multi_select"))
-                    .or_else(|| q.get("multiple"))
-            })
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let value = if multi_select {
-            json!(selected)
-        } else {
-            json!(selected.first().cloned().unwrap_or_default())
-        };
-        answer_map.insert(question.clone(), value);
-        summary.push(format!("\"{question}\"=\"{}\"", selected.join(", ")));
-    }
-    let questions: Vec<Value> = if raw_questions.is_empty() {
-        question_texts
-            .iter()
-            .map(|text| json!({ "question": text }))
-            .collect()
-    } else {
-        raw_questions.to_vec()
-    };
-    let mut msg = tool_result_message(tool_use_id, &summary.join(", "), false);
-    msg["tool_use_result"] = json!({ "questions": questions, "answers": answer_map });
-    msg
-}
-
 struct ClaudeControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
@@ -498,61 +390,6 @@ impl AgentControl for ClaudeControl {
             "{}",
             tr!("claude 逐項核准已由 MCP (ertangle_approve) 轉發，此請求無效或已逾時")
         )
-    }
-
-    /// Resolves an interactive user question by sending a `tool_result` message to Claude.
-    fn resolve_question(&self, id: &str, answers: &[String]) -> Result<()> {
-        let entry = self
-            .conn
-            .questions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(id);
-        let Some(pending) = entry else {
-            bail!("{}", tr!("未知的問題請求：{id}", id = id));
-        };
-
-        if answers.is_empty() {
-            let mut q_map = self
-                .conn
-                .questions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            q_map.retain(|_, v| v.tool_use_id != pending.tool_use_id);
-            drop(q_map);
-
-            let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
-            return self.conn.send_raw(&tool_result_message(
-                &pending.tool_use_id,
-                "Cancelled by user",
-                true,
-            ));
-        }
-
-        let mut map = pending.answers.lock().unwrap_or_else(|e| e.into_inner());
-        map.insert(id.to_string(), answers.to_vec());
-        if map.len() == pending.total {
-            let mut q_map = self
-                .conn
-                .questions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            q_map.retain(|_, v| v.tool_use_id != pending.tool_use_id);
-            drop(q_map);
-
-            let result = question_tool_result_message(
-                &pending.tool_use_id,
-                &pending.raw_questions,
-                &pending.question_texts,
-                &map,
-            );
-            drop(map);
-
-            let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
-            self.conn.send_raw(&result)
-        } else {
-            Ok(())
-        }
     }
 
     fn transport(&self) -> &'static str {
@@ -711,12 +548,10 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| tr!("取得 claude stdout 失敗"))?;
 
     let conn = Arc::new(Conn {
-        session_id: spec.id.clone(),
         stdin: Mutex::new(stdin),
         stream: Mutex::new(StreamBuf::default()),
         saw_delta: AtomicBool::new(false),
         tx: tx.clone(),
-        questions: Mutex::new(HashMap::new()),
     });
 
     {
@@ -931,60 +766,5 @@ mod tests {
         assert_eq!(v["type"], "control_request");
         assert_eq!(v["request"]["subtype"], "set_model");
         assert_eq!(v["request"]["model"], "opus");
-    }
-
-    #[test]
-    fn question_tool_result_has_structured_answers() {
-        let raw = vec![json!({
-            "question": "Which database?",
-            "multiSelect": false,
-            "options": [{"label": "Postgres"}, {"label": "Redis"}]
-        })];
-        let texts = vec!["Which database?".to_string()];
-        let mut answers = HashMap::new();
-        answers.insert("Which database?".to_string(), vec!["Postgres".to_string()]);
-        let msg = question_tool_result_message("toolu_123", &raw, &texts, &answers);
-        assert_eq!(
-            msg["tool_use_result"]["answers"]["Which database?"],
-            json!("Postgres")
-        );
-        assert_eq!(
-            msg["tool_use_result"]["questions"][0]["question"],
-            json!("Which database?")
-        );
-        assert_eq!(
-            msg["message"]["content"][0]["content"],
-            json!("\"Which database?\"=\"Postgres\"")
-        );
-
-        let multi_raw = vec![json!({"question": "Pick features", "multiSelect": true})];
-        answers.insert(
-            "Pick features".to_string(),
-            vec!["Auth".into(), "Search".into()],
-        );
-        let msg = question_tool_result_message(
-            "toolu_456",
-            &multi_raw,
-            &["Pick features".to_string()],
-            &answers,
-        );
-        assert_eq!(
-            msg["tool_use_result"]["answers"]["Pick features"],
-            json!(["Auth", "Search"])
-        );
-    }
-
-    #[test]
-    fn tool_result_message_shape() {
-        let msg = tool_result_message("toolu_123", "Rust", false);
-        assert_eq!(msg["type"], "user");
-        let content = &msg["message"]["content"][0];
-        assert_eq!(content["type"], "tool_result");
-        assert_eq!(content["tool_use_id"], "toolu_123");
-        assert_eq!(content["content"], "Rust");
-        assert_eq!(content["is_error"], false);
-
-        let cancel_msg = tool_result_message("toolu_456", "Cancelled by user", true);
-        assert_eq!(cancel_msg["message"]["content"][0]["is_error"], true);
     }
 }
