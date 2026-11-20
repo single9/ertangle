@@ -772,22 +772,16 @@ fn complete_arg(app: &mut App) {
     let Some(first) = names.first().copied() else {
         return;
     };
-    let common = names.iter().fold(first.len(), |n, c| {
-        n.min(
-            first
-                .bytes()
-                .zip(c.bytes())
-                .take_while(|(a, b)| a == b)
-                .count(),
-        )
-    });
+    // 用會檢查字元邊界的 common_prefix，避免中文路徑被從 UTF-8 位元組中間截斷。
+    let owned: Vec<String> = names.iter().map(|v| (*v).to_string()).collect();
+    let common = crate::attach::common_prefix(&owned);
     let head_len = app.input.len() - cur.len();
     let mut next = app.input[..head_len].to_string();
     if names.len() == 1 {
         next.push_str(first);
         next.push(' ');
     } else {
-        next.push_str(&first[..common]);
+        next.push_str(&common);
         app.status = format!("候選：{}", names.join(" "));
     }
     app.input = next;

@@ -1622,8 +1622,150 @@ fn set_default_command(app: &mut App, rest: &str) {
     };
 }
 
+/// 命令的子命令／旗標候選。提示浮層與 Tab 自動完成共用同一份資料，
+/// 說明用 `tr_noop!` 標記，讓 `make i18n-extract` 能收集到翻譯。
+const SUBCOMMANDS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "project",
+        &[
+            ("here", ertangle_core::tr_noop!("只看本專案")),
+            ("all", ertangle_core::tr_noop!("顯示所有專案")),
+            (
+                "open",
+                ertangle_core::tr_noop!("開啟或切換專案；省略路徑開資料夾選擇器"),
+            ),
+            ("set", ertangle_core::tr_noop!("同 open")),
+            ("pick", ertangle_core::tr_noop!("開啟專案選擇器")),
+        ],
+    ),
+    (
+        "scope",
+        &[
+            ("here", ertangle_core::tr_noop!("只看本專案")),
+            ("all", ertangle_core::tr_noop!("顯示所有專案")),
+        ],
+    ),
+    (
+        "layout",
+        &[
+            (
+                "three",
+                ertangle_core::tr_noop!("三欄：Sessions／中央／Project"),
+            ),
+            ("two", ertangle_core::tr_noop!("兩欄")),
+            ("tabs", ertangle_core::tr_noop!("分頁")),
+        ],
+    ),
+    (
+        "notify",
+        &[
+            ("on", ertangle_core::tr_noop!("開啟通知")),
+            ("off", ertangle_core::tr_noop!("關閉通知")),
+            ("test", ertangle_core::tr_noop!("送出測試通知")),
+        ],
+    ),
+    (
+        "web",
+        &[
+            ("on", ertangle_core::tr_noop!("啟動 Web 版")),
+            ("off", ertangle_core::tr_noop!("關閉 Web 版")),
+            ("status", ertangle_core::tr_noop!("顯示 Web 版狀態")),
+            ("qr", ertangle_core::tr_noop!("顯示網址與 QR Code")),
+        ],
+    ),
+    (
+        "ended",
+        &[
+            ("show", ertangle_core::tr_noop!("展開已結束的 session 群組")),
+            ("hide", ertangle_core::tr_noop!("摺疊已結束的 session 群組")),
+        ],
+    ),
+    (
+        "queue",
+        &[("clear", ertangle_core::tr_noop!("清空待送的 prompt 佇列"))],
+    ),
+    (
+        "task-status",
+        &[
+            ("todo", ertangle_core::tr_noop!("待處理")),
+            ("doing", ertangle_core::tr_noop!("進行中")),
+            ("blocked", ertangle_core::tr_noop!("阻塞中")),
+            ("review", ertangle_core::tr_noop!("審查中")),
+            ("done", ertangle_core::tr_noop!("已完成")),
+        ],
+    ),
+    (
+        "spawn",
+        &[
+            ("opencode", ertangle_core::tr_noop!("OpenCode agent")),
+            ("claude", ertangle_core::tr_noop!("Claude Code agent")),
+            ("codex", ertangle_core::tr_noop!("Codex agent")),
+            ("antigravity", ertangle_core::tr_noop!("Antigravity agent")),
+        ],
+    ),
+    (
+        "handoff",
+        &[
+            ("opencode", ertangle_core::tr_noop!("OpenCode agent")),
+            ("claude", ertangle_core::tr_noop!("Claude Code agent")),
+            ("codex", ertangle_core::tr_noop!("Codex agent")),
+            ("antigravity", ertangle_core::tr_noop!("Antigravity agent")),
+        ],
+    ),
+    (
+        "rm",
+        &[(
+            "--force",
+            ertangle_core::tr_noop!("強制移除，不檢查 worktree"),
+        )],
+    ),
+    (
+        "clean",
+        &[(
+            "--force",
+            ertangle_core::tr_noop!("連未合併或有變更的 worktree 一起清除"),
+        )],
+    ),
+    (
+        "merge",
+        &[
+            (
+                "--dry-run",
+                ertangle_core::tr_noop!("只看會合併什麼，不真的合併"),
+            ),
+            (
+                "--resolve",
+                ertangle_core::tr_noop!("合併並委派 agent 解衝突"),
+            ),
+            ("--squash", ertangle_core::tr_noop!("使用 squash 策略")),
+        ],
+    ),
+];
+
+fn subcommand_candidates(verb: &str) -> Vec<(String, String)> {
+    SUBCOMMANDS
+        .iter()
+        .find(|(name, _)| *name == verb)
+        .map(|(_, items)| {
+            items
+                .iter()
+                .map(|(v, d)| (v.to_string(), ertangle_core::tr_dyn!(d)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 路徑參數的候選 (例如 `:project open <路徑>`)：沿用 `@` 附件完成所用的檔案系統讀取。
+fn path_candidates(prefix: &str) -> Vec<(String, String)> {
+    crate::attach::complete_path(prefix)
+        .into_iter()
+        .take(20)
+        .map(|p| (p, String::new()))
+        .collect()
+}
+
 /// 命令第二個字以後的候選：` (目前正在打的字, [(值, 說明)])`。只列出以該字開頭的。
-/// 支援 `:set`(key 與各 key 的值)、`:model`、`:effort`。
+/// 支援 `:set`(key 與各 key 的值)、`:model`、`:effort`，以及各命令的子命令／旗標與路徑。
 pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(String, String)>)> {
     let input = input.trim_start().trim_start_matches(['/', ':']);
     if !input.contains(char::is_whitespace) {
@@ -1672,6 +1814,7 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
             ("codex".into(), ".codex/skills".into()),
             ("global".into(), tr!("安裝到家目錄 (所有專案共用)")),
         ],
+        "skill" if words.len() == 2 => vec![("global".into(), tr!("安裝到家目錄 (所有專案共用)"))],
         "effort" if words.is_empty() => efforts(),
         "set" => {
             words.retain(|w| *w != "--repo");
@@ -1725,7 +1868,10 @@ pub(crate) fn arg_candidates(app: &App, input: &str) -> Option<(String, Vec<(Str
                 _ => Vec::new(),
             }
         }
-        _ => return None,
+        "project" if words.len() == 1 => path_candidates(cur),
+        "export" => path_candidates(cur),
+        _ if words.is_empty() => subcommand_candidates(verb),
+        _ => Vec::new(),
     };
     let out: Vec<(String, String)> = list
         .into_iter()

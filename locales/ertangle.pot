@@ -337,7 +337,7 @@ msgstr ""
 msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生效)"
 msgstr ""
 
-#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs crates/ertangle-tui/src/commands.rs
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
 msgid "安裝到家目錄 (所有專案共用)"
 msgstr ""
 
@@ -2821,6 +2821,134 @@ msgstr ""
 msgid "寫入設定失敗：{e}"
 msgstr ""
 
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
+msgid "只看本專案"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
+msgid "顯示所有專案"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "開啟或切換專案；省略路徑開資料夾選擇器"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "同 open"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "開啟專案選擇器"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "三欄：Sessions／中央／Project"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "兩欄"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "分頁"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "開啟通知"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "關閉通知"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "送出測試通知"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "啟動 Web 版"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "關閉 Web 版"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "顯示 Web 版狀態"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "顯示網址與 QR Code"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "展開已結束的 session 群組"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "摺疊已結束的 session 群組"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "清空待送的 prompt 佇列"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "待處理"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "進行中"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "阻塞中"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "審查中"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "已完成"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
+msgid "OpenCode agent"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
+msgid "Claude Code agent"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
+msgid "Codex agent"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
+msgid "Antigravity agent"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "強制移除，不檢查 worktree"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "連未合併或有變更的 worktree 一起清除"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "只看會合併什麼，不真的合併"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "合併並委派 agent 解衝突"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "使用 squash 策略"
+msgstr ""
+
 #: crates/ertangle-tui/src/commands.rs
 msgid "推理強度"
 msgstr ""
@@ -3314,11 +3442,11 @@ msgid "常用"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
-msgid "選單 (s session、g git、v 檢視、m 訊息)"
+msgid "選單 (s session、g git、v 檢視、m 訊息、P 專案)"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
-msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
+msgid "命令列 (輸入時會提示，Tab 自動完成子命令)；也可用 /"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs crates/ertangle-tui/src/input.rs
@@ -3351,6 +3479,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
 msgid "顯示 Web 版網址與 QR Code"
+msgstr ""
+
+#: crates/ertangle-tui/src/help.rs
+msgid "開啟／切換專案；可瀏覽本機資料夾 (:project open)"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
@@ -3762,6 +3894,14 @@ msgid "重啟共用 daemon (自動重連)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "開啟／切換專案 (資料夾選擇器)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "開啟／切換專案 (同 P)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "新增 agent… (選 agent 與 model)"
 msgstr ""
 
@@ -3870,6 +4010,18 @@ msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "../  上層資料夾"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "✓ 使用目前資料夾：{path}"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 返回)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "交接給哪個 agent"
 msgstr ""
 
@@ -3922,6 +4074,10 @@ msgid "沒有可用的專案清單"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "[瀏覽資料夾]  從本機選擇資料夾"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "選擇專案 (Enter 確認 · Esc 取消)"
 msgstr ""
 
@@ -3963,6 +4119,14 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已切換專案：{path}"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "找不到資料夾：{path}"
 msgstr ""
 
 #: crates/ertangle-tui/src/mouse.rs

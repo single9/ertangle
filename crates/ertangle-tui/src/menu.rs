@@ -3,6 +3,7 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ertangle_core::{AgentKind, Role};
+use std::path::{Path, PathBuf};
 use tr::tr;
 
 use crate::app::{App, Mode};
@@ -84,6 +85,16 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                     'R',
                     ertangle_core::tr_noop!("重啟共用 daemon (自動重連)"),
                     Act::Cmd("restart"),
+                ),
+                it(
+                    'P',
+                    ertangle_core::tr_noop!("開啟／切換專案 (資料夾選擇器)"),
+                    Act::Cmd("project open"),
+                ),
+                it(
+                    'p',
+                    ertangle_core::tr_noop!("開啟／切換專案 (同 P)"),
+                    Act::Cmd("project open"),
                 ),
             ],
         ),
@@ -355,6 +366,56 @@ pub(crate) enum PickStage {
     Resume,
     /// Pick the project to switch to.
     Project,
+    /// Browse the local filesystem to pick a project folder.
+    Directory {
+        current: PathBuf,
+    },
+}
+
+/// 專案選擇器裡「瀏覽本機資料夾」項目的值。用控制字元避免與真實路徑撞名。
+pub(crate) const BROWSE_VALUE: &str = "\u{0}browse";
+/// 資料夾選擇器裡「使用目前資料夾」項目的值。
+pub(crate) const SELECT_VALUE: &str = "\u{0}select";
+/// 資料夾選擇器裡「上層資料夾」項目的值。
+pub(crate) const PARENT_VALUE: &str = "..";
+
+/// 列出 `current` 底下的資料夾，加上上層與「使用目前資料夾」兩列。
+fn directory_items(current: &Path) -> Vec<(String, String)> {
+    let mut items = vec![(tr!("../  上層資料夾"), PARENT_VALUE.to_string())];
+    if let Ok(rd) = std::fs::read_dir(current) {
+        let mut dirs: Vec<String> = rd
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_dir())
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .collect();
+        dirs.sort();
+        for dir in dirs {
+            items.push((format!("  {dir}/"), dir));
+        }
+    }
+    items.push((
+        tr!("✓ 使用目前資料夾：{path}", path = current.display()),
+        SELECT_VALUE.to_string(),
+    ));
+    items
+}
+
+/// 進入 (或重新整理) 資料夾選擇器。
+fn start_directory_picker(app: &mut App, current: PathBuf) {
+    let items = directory_items(&current);
+    app.picker = Some(Picker {
+        stage: PickStage::Directory { current },
+        resume_scope: ResumeScope::default(),
+        title: tr!("選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 返回)"),
+        items,
+        filter: String::new(),
+        cursor: 0,
+        pending: None,
+        loading: false,
+        group_effort: false,
+        variants: Default::default(),
+    });
+    app.mode = Mode::Pick;
 }
 
 pub(crate) struct Picker {
@@ -1310,7 +1371,7 @@ pub(crate) fn start_project_picker(app: &mut App) {
     }
 
     let all_roots_refs: Vec<&str> = roots.iter().map(|s| s.as_str()).collect();
-    let items: Vec<(String, String)> = roots
+    let mut items: Vec<(String, String)> = roots
         .iter()
         .map(|r| {
             let pname = crate::app::project_name(r, &all_roots_refs);
@@ -1320,6 +1381,10 @@ pub(crate) fn start_project_picker(app: &mut App) {
             (label, r.clone())
         })
         .collect();
+    items.push((
+        tr!("[瀏覽資料夾]  從本機選擇資料夾"),
+        BROWSE_VALUE.to_string(),
+    ));
 
     let cursor = items
         .iter()
@@ -1421,6 +1486,29 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
     }
     if matches!(p.stage, PickStage::Question { .. }) {
         return handle_question_key(app, writer, key);
+    }
+    // 資料夾選擇器：Esc 回到專案清單，Backspace 往上層資料夾 (而不是刪過濾字)。
+    if matches!(p.stage, PickStage::Directory { .. })
+        && matches!(key.code, KeyCode::Esc | KeyCode::Backspace)
+    {
+        let (current, parent) = match &p.stage {
+            PickStage::Directory { current } => (
+                current.clone(),
+                current
+                    .parent()
+                    .filter(|parent| *parent != current.as_path())
+                    .map(Path::to_path_buf),
+            ),
+            _ => (PathBuf::from("/"), None),
+        };
+        let code = key.code;
+        app.picker = None;
+        if code == KeyCode::Esc {
+            start_project_picker(app);
+        } else {
+            start_directory_picker(app, parent.unwrap_or(current));
+        }
+        return Ok(());
     }
     let n = p.visible().len();
     match key.code {
@@ -1706,10 +1794,59 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         None
                     };
                     app.picker = None;
+                    if chosen_path.as_deref() == Some(BROWSE_VALUE) {
+                        start_directory_picker(app, PathBuf::from(&app.active_project));
+                        return Ok(());
+                    }
                     app.mode = Mode::Normal;
                     if let Some(target) = chosen_path {
                         if let Err(err) = app.set_active_project(std::path::Path::new(&target)) {
                             app.status = err;
+                        }
+                    }
+                }
+                PickStage::Directory { current } => {
+                    let value = chosen.unwrap_or_default();
+                    // 直接輸入絕對路徑時優先採用輸入值，避免與「使用目前資料夾」的說明文字意外相符。
+                    let typed = if let Some(rest) = custom.strip_prefix("~/") {
+                        std::env::var_os("HOME")
+                            .map(|home| PathBuf::from(home).join(rest))
+                            .unwrap_or_else(|| PathBuf::from(&custom))
+                    } else {
+                        PathBuf::from(&custom)
+                    };
+                    let typed_dir = if (custom.starts_with('/') || custom.starts_with("~/"))
+                        && typed.is_dir()
+                    {
+                        Some(typed)
+                    } else {
+                        None
+                    };
+                    if let Some(target) = typed_dir {
+                        start_directory_picker(app, target);
+                    } else if value == SELECT_VALUE {
+                        app.picker = None;
+                        app.mode = Mode::Normal;
+                        if let Err(err) = app.set_active_project(&current) {
+                            app.status = err;
+                        } else {
+                            app.status = tr!("已切換專案：{path}", path = current.display());
+                        }
+                    } else if value == PARENT_VALUE {
+                        let parent = current
+                            .parent()
+                            .filter(|parent| *parent != current.as_path())
+                            .map(Path::to_path_buf)
+                            .unwrap_or(current);
+                        start_directory_picker(app, parent);
+                    } else if !value.is_empty() {
+                        start_directory_picker(app, current.join(value));
+                    } else if !custom.is_empty() {
+                        let candidate = current.join(&custom);
+                        if candidate.is_dir() {
+                            start_directory_picker(app, candidate);
+                        } else {
+                            app.status = tr!("找不到資料夾：{path}", path = custom);
                         }
                     }
                 }

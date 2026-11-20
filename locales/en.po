@@ -2836,6 +2836,134 @@ msgid "寫入設定失敗：{e}"
 msgstr "Failed to write settings: {e}"
 
 #: crates/ertangle-tui/src/commands.rs
+msgid "只看本專案"
+msgstr "This project only"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "顯示所有專案"
+msgstr "All projects"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "開啟或切換專案；省略路徑開資料夾選擇器"
+msgstr "Open or switch project; omit the path to open the folder picker"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "同 open"
+msgstr "Same as open"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "開啟專案選擇器"
+msgstr "Open the project picker"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "三欄：Sessions／中央／Project"
+msgstr "Three panes: Sessions / center / Project"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "兩欄"
+msgstr "Two panes"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "分頁"
+msgstr "Tabs"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "開啟通知"
+msgstr "Enable notifications"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "關閉通知"
+msgstr "Disable notifications"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "送出測試通知"
+msgstr "Send a test notification"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "啟動 Web 版"
+msgstr "Start the web UI"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "關閉 Web 版"
+msgstr "Stop the web UI"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "顯示 Web 版狀態"
+msgstr "Show web UI status"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "顯示網址與 QR Code"
+msgstr "Show the URL and QR code"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "展開已結束的 session 群組"
+msgstr "Expand the ended sessions group"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "摺疊已結束的 session 群組"
+msgstr "Collapse the ended sessions group"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "清空待送的 prompt 佇列"
+msgstr "Clear the pending prompt queue"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "待處理"
+msgstr "Todo"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "進行中"
+msgstr "Doing"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "阻塞中"
+msgstr "Blocked"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "審查中"
+msgstr "In review"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "已完成"
+msgstr "Done"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "OpenCode agent"
+msgstr "OpenCode agent"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "Claude Code agent"
+msgstr "Claude Code agent"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "Codex agent"
+msgstr "Codex agent"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "Antigravity agent"
+msgstr "Antigravity agent"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "強制移除，不檢查 worktree"
+msgstr "Force removal without checking the worktree"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "連未合併或有變更的 worktree 一起清除"
+msgstr "Also clear unmerged or dirty worktrees"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "只看會合併什麼，不真的合併"
+msgstr "Show what would be merged without actually merging"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "合併並委派 agent 解衝突"
+msgstr "Merge and delegate conflict resolution to an agent"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "使用 squash 策略"
+msgstr "Use the squash strategy"
+
+#: crates/ertangle-tui/src/commands.rs
 msgid "推理強度"
 msgstr "Reasoning effort"
 
@@ -3328,12 +3456,12 @@ msgid "常用"
 msgstr "Common"
 
 #: crates/ertangle-tui/src/help.rs
-msgid "選單 (s session、g git、v 檢視、m 訊息)"
-msgstr "Menu (s session, g git, v view, m message)"
+msgid "選單 (s session、g git、v 檢視、m 訊息、P 專案)"
+msgstr "Menu (s session, g git, v view, m message, P project)"
 
 #: crates/ertangle-tui/src/help.rs
-msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
-msgstr "Command line (hints while typing, Tab to complete); / also works"
+msgid "命令列 (輸入時會提示，Tab 自動完成子命令)；也可用 /"
+msgstr "Command line (hints and Tab subcommand completion); / works too"
 
 #: crates/ertangle-tui/src/help.rs crates/ertangle-tui/src/input.rs
 msgid "在選取 session 的工作目錄執行 shell 命令 (!<命令>)"
@@ -3366,6 +3494,10 @@ msgstr "Open settings panel (including Web version support)"
 #: crates/ertangle-tui/src/help.rs
 msgid "顯示 Web 版網址與 QR Code"
 msgstr "Display Web version URL and QR Code"
+
+#: crates/ertangle-tui/src/help.rs
+msgid "開啟／切換專案；可瀏覽本機資料夾 (:project open)"
+msgstr "Open or switch project; browse a local folder (:project open)"
 
 #: crates/ertangle-tui/src/help.rs
 msgid "離開 (保留 daemon)／關閉 daemon 並離開"
@@ -3776,6 +3908,14 @@ msgid "重啟共用 daemon (自動重連)"
 msgstr "Restart shared daemon (auto-reconnect)"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "開啟／切換專案 (資料夾選擇器)"
+msgstr "Open or switch project (folder picker)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "開啟／切換專案 (同 P)"
+msgstr "Open or switch project (same as P)"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "新增 agent… (選 agent 與 model)"
 msgstr "New agent… (pick agent and model)"
 
@@ -3884,6 +4024,18 @@ msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr "No `{c}` in this menu (Backspace back, Esc close)"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "../  上層資料夾"
+msgstr "../  Parent folder"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "✓ 使用目前資料夾：{path}"
+msgstr "✓ Use current folder: {path}"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 返回)"
+msgstr "Select project folder (Enter to open/select, Backspace for parent, Esc to go back)"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "交接給哪個 agent"
 msgstr "Hand off to which agent"
 
@@ -3936,6 +4088,10 @@ msgid "沒有可用的專案清單"
 msgstr "No projects available"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "[瀏覽資料夾]  從本機選擇資料夾"
+msgstr "[Browse]  Choose a folder on this computer"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "選擇專案 (Enter 確認 · Esc 取消)"
 msgstr "Select project (Enter confirms · Esc cancels)"
 
@@ -3978,6 +4134,14 @@ msgstr "Resume requested for {label}"
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
 msgstr "{label} has no resumable conversation id (PTY, older log, or agent exited without reporting)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已切換專案：{path}"
+msgstr "Switched project: {path}"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "找不到資料夾：{path}"
+msgstr "Folder not found: {path}"
 
 #: crates/ertangle-tui/src/mouse.rs
 msgid "輸入模式：Enter 送出 · Esc 取消 · 可拖曳選取複製"
@@ -4491,6 +4655,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "選單 (s session、g git、v 檢視、m 訊息)"
+#~ msgstr "Menu (s session, g git, v view, m message)"
+
+#~ msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
+#~ msgstr "Command line (hints while typing, Tab to complete); / also works"
 
 #~ msgid "(選取該 session 後 Enter 回答)"
 #~ msgstr "(select this session then press Enter to answer)"

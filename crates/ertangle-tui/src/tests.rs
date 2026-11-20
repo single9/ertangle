@@ -5470,3 +5470,161 @@ fn jump_to_pending_reopens_dismissed_question_picker() {
     assert!(app.jump_to_pending());
     assert!(app.picker.is_some(), "跳過去應直接開啟提問選擇器");
 }
+
+#[test]
+fn subcommand_candidates_complete_via_tab_and_hints() {
+    let mut app = test_app();
+    for (input, expected) in [
+        (":project op", "open"),
+        (":scope a", "all"),
+        (":layout t", "tabs"),
+        (":notify o", "on"),
+        (":web st", "status"),
+        (":ended sh", "show"),
+        (":queue c", "clear"),
+        (":task-status bl", "blocked"),
+        (":merge --dr", "--dry-run"),
+    ] {
+        let (_, cands) = crate::commands::arg_candidates(&app, input).unwrap();
+        assert!(
+            cands.iter().any(|(v, _)| v == expected),
+            "input {input} should offer {expected}, got {cands:?}"
+        );
+        app.input = input.to_string();
+        app.input_cursor = app.input.chars().count();
+        let hints = crate::commands::hints_with_native(&app);
+        assert!(
+            hints.iter().any(|(v, _)| v == expected),
+            "hints for {input} should contain {expected}"
+        );
+    }
+
+    for (input, expected) in [
+        (":project op", ":project open "),
+        (":scope a", ":scope all "),
+    ] {
+        app.input = input.to_string();
+        app.input_cursor = app.input.chars().count();
+        crate::input::complete_command_for_test(&mut app);
+        assert_eq!(app.input, expected);
+    }
+}
+
+#[test]
+fn project_open_path_candidates_complete_directories() {
+    let app = test_app();
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("path_cands"));
+    let alpha = tmp.join("alpha");
+    let beta = tmp.join("beta");
+    std::fs::create_dir_all(&alpha).unwrap();
+    std::fs::create_dir_all(&beta).unwrap();
+
+    let prefix = format!(":project open {}/a", tmp.display());
+    let (_, cands) = crate::commands::arg_candidates(&app, &prefix).unwrap();
+    assert!(
+        cands
+            .iter()
+            .any(|(v, _)| v.as_str() == format!("{}/alpha/", tmp.display())),
+        "expected alpha directory candidate, got {cands:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn space_p_opens_project_picker() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let root = crate::menu::menu_items(&[]).unwrap().1;
+    assert!(
+        root.iter().any(|item| item.key == 'P'),
+        "SPC P must be listed in the root which-key menu"
+    );
+    key(&mut app, &mut w, KeyCode::Char(' '));
+    assert_eq!(app.mode, Mode::Menu);
+    key(&mut app, &mut w, KeyCode::Char('P'));
+    assert!(matches!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(crate::menu::PickStage::Project)
+    ));
+}
+
+#[test]
+fn project_folder_picker_browses_and_selects_directory() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("folder_pick"));
+    let child = tmp.join("child_dir");
+    std::fs::create_dir_all(&child).unwrap();
+    app.active_project = tmp.clone();
+
+    crate::commands::execute_command(&mut app, &mut w, "project open").unwrap();
+    let browse = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .position(|(_, v)| v == crate::menu::BROWSE_VALUE)
+        .unwrap();
+    app.picker.as_mut().unwrap().cursor = browse;
+    key(&mut app, &mut w, KeyCode::Enter);
+    assert!(matches!(
+        &app.picker.as_ref().unwrap().stage,
+        crate::menu::PickStage::Directory { .. }
+    ));
+
+    let target = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .position(|(_, v)| v == "child_dir")
+        .unwrap();
+    app.picker.as_mut().unwrap().cursor = target;
+    key(&mut app, &mut w, KeyCode::Enter);
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Directory { current } => assert_eq!(current, &child),
+        _other => panic!("expected directory stage"),
+    }
+
+    // Backspace goes one level up; Esc returns to the project list.
+    key(&mut app, &mut w, KeyCode::Backspace);
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Directory { current } => assert_eq!(current, &tmp),
+        _other => panic!("expected directory stage"),
+    }
+    key(&mut app, &mut w, KeyCode::Esc);
+    assert!(matches!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(crate::menu::PickStage::Project)
+    ));
+
+    // Re-enter the browser and select the current folder as the active project.
+    let browse = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .position(|(_, v)| v == crate::menu::BROWSE_VALUE)
+        .unwrap();
+    app.picker.as_mut().unwrap().cursor = browse;
+    key(&mut app, &mut w, KeyCode::Enter);
+    let select = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .position(|(_, v)| v == crate::menu::SELECT_VALUE)
+        .unwrap();
+    app.picker.as_mut().unwrap().cursor = select;
+    key(&mut app, &mut w, KeyCode::Enter);
+    assert!(app.picker.is_none());
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.active_project, tmp.canonicalize().unwrap());
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

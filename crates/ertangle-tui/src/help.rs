@@ -9,8 +9,11 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
     (
         tr_noop!("常用"),
         &[
-            ("Space", tr_noop!("選單 (s session、g git、v 檢視、m 訊息)")),
-            (":", tr_noop!("命令列 (輸入時會提示，Tab 自動完成)；也可用 /")),
+            (
+                "Space",
+                tr_noop!("選單 (s session、g git、v 檢視、m 訊息、P 專案)"),
+            ),
+            (":", tr_noop!("命令列 (輸入時會提示，Tab 自動完成子命令)；也可用 /")),
             ("!", tr_noop!("在選取 session 的工作目錄執行 shell 命令 (!<命令>)")),
             ("n", tr_noop!("新增 agent：選 agent → model → 輸入 prompt")),
             (
@@ -22,6 +25,10 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("?", tr_noop!("這個說明面板")),
             ("Space ,", tr_noop!("開啟設定面板 (含 Web 版支援)")),
             ("Space w", tr_noop!("顯示 Web 版網址與 QR Code")),
+            (
+                "Space P",
+                tr_noop!("開啟／切換專案；可瀏覽本機資料夾 (:project open)"),
+            ),
             ("q / Q", tr_noop!("離開 (保留 daemon)／關閉 daemon 並離開")),
         ],
     ),
