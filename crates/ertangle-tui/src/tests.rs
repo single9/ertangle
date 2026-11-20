@@ -4428,3 +4428,170 @@ fn make_test_session(id: &str) -> Session {
         tool_calls: 0,
     }
 }
+
+// ---- question picker usability ----
+
+fn qpick_q(
+    id: &str,
+    multi: bool,
+    custom: bool,
+    group: Option<&str>,
+) -> ertangle_core::UserQuestion {
+    ertangle_core::UserQuestion {
+        id: id.into(),
+        session: "ses_q".into(),
+        question: format!("question {id}"),
+        header: None,
+        options: vec![
+            ertangle_core::QuestionOption::plain("Vanilla"),
+            ertangle_core::QuestionOption::plain("Chocolate"),
+            ertangle_core::QuestionOption::plain("Mango"),
+        ],
+        multi_select: multi,
+        custom,
+        group: group.map(str::to_string),
+    }
+}
+
+fn qpick_key(app: &mut App, w: &mut HostRouter, code: KeyCode) {
+    crate::menu::handle_pick_key(app, w, KeyEvent::new(code, KeyModifiers::NONE)).unwrap();
+}
+
+fn qpick_type(app: &mut App, w: &mut HostRouter, text: &str) {
+    for c in text.chars() {
+        qpick_key(app, w, KeyCode::Char(c));
+    }
+}
+
+fn qpick_sent(peer: &mut std::os::unix::net::UnixStream) -> String {
+    use std::io::Read;
+    let mut buf = String::new();
+    let _ = peer.read_to_string(&mut buf);
+    buf
+}
+
+#[test]
+fn question_picker_custom_answer_keeps_spaces_and_is_not_filtered() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let q = qpick_q("qst_c", false, true, None);
+    crate::menu::start_question_picker(&mut app, &q);
+    // Jump to the custom row (4th) and type text that partially matches "Vanilla".
+    qpick_key(&mut app, &mut w, KeyCode::Char('4'));
+    qpick_type(&mut app, &mut w, "van with spaces");
+    // Typing never filters the option list.
+    assert_eq!(app.picker.as_ref().unwrap().visible().len(), 3);
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    assert!(app.picker.is_none());
+    let sent = qpick_sent(&mut peer);
+    assert!(sent.contains("van with spaces"), "{sent}");
+    assert!(!sent.contains("\"Vanilla\""), "{sent}");
+}
+
+#[test]
+fn question_picker_no_custom_row_when_custom_disabled() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    crate::menu::start_question_picker(&mut app, &qpick_q("qst_n", false, false, None));
+    // '4' is out of range; typed text is ignored; Enter sends the highlighted option.
+    qpick_type(&mut app, &mut w, "4xyz");
+    assert!(app.picker.is_some());
+    qpick_key(&mut app, &mut w, KeyCode::Down);
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    assert!(qpick_sent(&mut peer).contains("Chocolate"));
+}
+
+#[test]
+fn question_picker_digit_selects_single_option() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    crate::menu::start_question_picker(&mut app, &qpick_q("qst_d", false, true, None));
+    qpick_key(&mut app, &mut w, KeyCode::Char('3'));
+    assert!(app.picker.is_none());
+    assert!(qpick_sent(&mut peer).contains("Mango"));
+}
+
+#[test]
+fn question_picker_multi_select_with_custom_and_fallback() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    crate::menu::start_question_picker(&mut app, &qpick_q("qst_m", true, true, None));
+    qpick_key(&mut app, &mut w, KeyCode::Char('3')); // toggles Mango
+    qpick_key(&mut app, &mut w, KeyCode::Char('1')); // toggles Vanilla
+    qpick_key(&mut app, &mut w, KeyCode::Char('4')); // custom mode
+    qpick_type(&mut app, &mut w, "plus me");
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    let sent = qpick_sent(&mut peer);
+    let (v, m, c) = (
+        sent.find("Vanilla").unwrap(),
+        sent.find("Mango").unwrap(),
+        sent.find("plus me").unwrap(),
+    );
+    assert!(v < m && m < c, "options in order, custom last: {sent}");
+
+    // Nothing checked: Enter sends the highlighted option.
+    crate::menu::start_question_picker(&mut app, &qpick_q("qst_m2", true, true, None));
+    qpick_key(&mut app, &mut w, KeyCode::Down);
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    let sent = qpick_sent(&mut peer);
+    assert!(
+        sent.contains("Chocolate") && !sent.contains("Vanilla"),
+        "{sent}"
+    );
+}
+
+#[test]
+fn question_picker_esc_keeps_question_pending() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let q = qpick_q("qst_e", false, true, None);
+    app.state.pending_questions.insert(q.id.clone(), q.clone());
+    crate::menu::start_question_picker(&mut app, &q);
+    qpick_key(&mut app, &mut w, KeyCode::Esc);
+    assert!(app.picker.is_none());
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.state.pending_questions.contains_key("qst_e"));
+    assert!(qpick_sent(&mut peer).is_empty());
+}
+
+#[test]
+fn question_picker_custom_mode_esc_returns_to_options() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    crate::menu::start_question_picker(&mut app, &qpick_q("qst_x", false, true, None));
+    qpick_key(&mut app, &mut w, KeyCode::Char('4'));
+    qpick_type(&mut app, &mut w, "abc");
+    qpick_key(&mut app, &mut w, KeyCode::Esc);
+    assert!(app.picker.is_some());
+    qpick_key(&mut app, &mut w, KeyCode::Char('2'));
+    assert!(qpick_sent(&mut peer).contains("Chocolate"));
+}
+
+#[test]
+fn question_picker_group_walks_sequentially_and_sends_together() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    app.state
+        .sessions
+        .insert("ses_q".into(), make_test_session("ses_q"));
+    app.selected = 0;
+    let q2 = qpick_q("qst_g2", false, true, Some("g"));
+    let q1 = qpick_q("qst_g1", false, true, Some("g"));
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    app.state.pending_questions.insert(q1.id.clone(), q1);
+    // Deterministic order: lowest id first.
+    let first = app.selected_question().unwrap();
+    assert_eq!(first.id, "qst_g1");
+    crate::menu::start_question_picker(&mut app, &first);
+    assert!(app.picker.as_ref().unwrap().title.contains("1/2"));
+    qpick_key(&mut app, &mut w, KeyCode::Char('1'));
+    // Not sent yet: still walking through the group.
+    assert!(qpick_sent(&mut peer).is_empty());
+    assert!(app.picker.as_ref().unwrap().title.contains("2/2"));
+    qpick_key(&mut app, &mut w, KeyCode::Char('3'));
+    assert!(app.picker.is_none());
+    let sent = qpick_sent(&mut peer);
+    let (a, b) = (sent.find("qst_g1").unwrap(), sent.find("qst_g2").unwrap());
+    assert!(a < b);
+    assert!(sent.contains("Vanilla") && sent.contains("Mango"), "{sent}");
+}

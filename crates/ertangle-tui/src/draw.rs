@@ -525,6 +525,13 @@ pub(crate) fn draw_qr_modal(f: &mut TuiFrame, app: &App) {
 
 /// 置中的清單選擇器 (agent／model)，第一列是過濾輸入。
 pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
+    if matches!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(crate::menu::PickStage::Question { .. })
+    ) {
+        draw_question_picker(f, app);
+        return;
+    }
     let Some(p) = app.picker.as_mut() else { return };
     p.poll_pending();
     let loading = p.loading;
@@ -630,6 +637,165 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     f.render_widget(ratatui::widgets::Clear, area);
     f.render_widget(
         Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(format!(" {} ", p.title)),
+        ),
+        area,
+    );
+}
+
+/// 依顯示寬度折行 (CJK 佔兩欄)；保留原有換行。
+fn wrap_display(text: &str, width: usize) -> Vec<String> {
+    use unicode_width::UnicodeWidthChar;
+    let width = width.max(2);
+    let mut out = Vec::new();
+    for raw in text.lines() {
+        let mut cur = String::new();
+        let mut w = 0;
+        for ch in raw.chars() {
+            let cw = ch.width().unwrap_or(0);
+            if w + cw > width {
+                out.push(std::mem::take(&mut cur));
+                w = 0;
+            }
+            cur.push(ch);
+            w += cw;
+        }
+        out.push(cur);
+    }
+    if out.is_empty() {
+        out.push(String::new());
+    }
+    out
+}
+
+/// 問題選擇器：多行標題 (header + 完整問題 + 提示)、選項下方灰字說明、自訂答案列。
+fn draw_question_picker(f: &mut TuiFrame, app: &App) {
+    use crate::menu::PickStage;
+    let Some(p) = app.picker.as_ref() else { return };
+    let PickStage::Question {
+        multi_select,
+        selected,
+        questions,
+        index,
+        custom_mode,
+        custom_text,
+        ..
+    } = &p.stage
+    else {
+        return;
+    };
+    let Some(q) = questions.get(*index) else {
+        return;
+    };
+    let w = 76u16.min(f.area().width.saturating_sub(2));
+    let inner_w = w.saturating_sub(4) as usize;
+    let dim = Style::default().fg(Color::DarkGray);
+    let mut lines: Vec<Line> = Vec::new();
+    if let Some(h) = q.header.as_deref().filter(|h| !h.is_empty()) {
+        for l in wrap_display(h, inner_w) {
+            lines.push(Line::from(Span::styled(
+                l,
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )));
+        }
+    }
+    for l in wrap_display(&q.question, inner_w) {
+        lines.push(Line::from(l));
+    }
+    lines.push(Line::from(""));
+    let mut cursor_line = lines.len();
+    let n_opts = p.items.len();
+    for (i, opt) in q.options.iter().enumerate() {
+        let sel = i == p.cursor && !*custom_mode;
+        if sel {
+            cursor_line = lines.len();
+        }
+        let mark = if *multi_select {
+            if selected.contains(&opt.label) {
+                "[x] "
+            } else {
+                "[ ] "
+            }
+        } else {
+            ""
+        };
+        let text = format!(
+            "{} {}. {mark}{}",
+            if sel { "▸" } else { " " },
+            i + 1,
+            opt.label
+        );
+        let style = if sel {
+            Style::default().fg(Color::Black).bg(Color::Cyan)
+        } else {
+            Style::default()
+        };
+        lines.push(Line::from(Span::styled(text, style)));
+        if let Some(d) = opt.description.as_deref().filter(|d| !d.is_empty()) {
+            for l in wrap_display(d, inner_w.saturating_sub(5)) {
+                lines.push(Line::from(Span::styled(format!("     {l}"), dim)));
+            }
+        }
+    }
+    if q.custom {
+        let sel = p.cursor == n_opts || *custom_mode;
+        if sel {
+            cursor_line = lines.len();
+        }
+        let style = if sel && !*custom_mode {
+            Style::default().fg(Color::Black).bg(Color::Cyan)
+        } else {
+            Style::default()
+        };
+        let num = if n_opts < 9 {
+            format!("{}. ", n_opts + 1)
+        } else {
+            String::new()
+        };
+        lines.push(Line::from(Span::styled(
+            format!(
+                "{} {num}{}",
+                if sel { "▸" } else { " " },
+                tr!("✎ 自訂答案…")
+            ),
+            style,
+        )));
+        if *custom_mode {
+            lines.push(Line::from(vec![
+                Span::styled("     > ", Style::default().fg(Color::Cyan)),
+                Span::raw(custom_text.clone()),
+                Span::styled("▏", Style::default().fg(Color::Cyan)),
+            ]));
+        }
+    }
+    lines.push(Line::from(""));
+    let hint = if *custom_mode {
+        tr!("輸入自訂答案 · Enter 送出 · Esc 返回選項")
+    } else if *multi_select {
+        tr!("↑↓ 移動 · 1-9 或 Space 勾選 · Enter 送出 · Esc 稍後回答")
+    } else {
+        tr!("↑↓ 移動 · 1-9 直接選擇 · Enter 選擇 · Esc 稍後回答")
+    };
+    for l in wrap_display(&hint, inner_w) {
+        lines.push(Line::from(Span::styled(l, dim)));
+    }
+    let h = (lines.len() as u16 + 2).min(f.area().height);
+    let area = Rect::new(
+        f.area().x + (f.area().width.saturating_sub(w)) / 2,
+        f.area().y + (f.area().height.saturating_sub(h)) / 3,
+        w,
+        h,
+    );
+    let room = h.saturating_sub(2) as usize;
+    let scroll = (cursor_line + 1).saturating_sub(room) as u16;
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Paragraph::new(lines).scroll((scroll, 0)).block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))

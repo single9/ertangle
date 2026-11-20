@@ -2895,6 +2895,22 @@ msgid "Enter 使用自訂值：{value}"
 msgstr "Enter to use custom value: {value}"
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "✎ 自訂答案…"
+msgstr "✎ Custom answer…"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "輸入自訂答案 · Enter 送出 · Esc 返回選項"
+msgstr "Type a custom answer · Enter submit · Esc back to options"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "↑↓ 移動 · 1-9 或 Space 勾選 · Enter 送出 · Esc 稍後回答"
+msgstr "↑↓ move · 1-9 or Space toggle · Enter submit · Esc answer later"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "↑↓ 移動 · 1-9 直接選擇 · Enter 選擇 · Esc 稍後回答"
+msgstr "↑↓ move · 1-9 pick · Enter select · Esc answer later"
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "[Enter 回答]"
 msgstr "[Enter to answer]"
 
@@ -3651,12 +3667,16 @@ msgid "交接給哪個 agent"
 msgstr "Hand off to which agent"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid " (Space 勾選 · Enter 送出 · Esc 取消)"
-msgstr " (Space toggle · Enter submit · Esc cancel)"
+msgid "問題 ({n}/{total})"
+msgstr "Question ({n}/{total})"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid " (Enter 選擇 · 可輸入自訂答案 · Esc 取消)"
-msgstr " (Enter select · custom answer allowed · Esc cancel)"
+msgid "問題"
+msgstr "Question"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已送出問題回覆"
+msgstr "Question answer submitted"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "選擇 agent"
@@ -3729,10 +3749,6 @@ msgstr "Resume requested for {label}"
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
 msgstr "{label} has no resumable conversation id (PTY, older log, or agent exited without reporting)"
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "已送出問題回覆"
-msgstr "Question answer submitted"
 
 #: crates/ertangle-tui/src/mouse.rs
 msgid "輸入模式：Enter 送出 · Esc 取消 · 可拖曳選取複製"
@@ -4246,6 +4262,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid " (Space 勾選 · Enter 送出 · Esc 取消)"
+#~ msgstr " (Space toggle · Enter submit · Esc cancel)"
+
+#~ msgid " (Enter 選擇 · 可輸入自訂答案 · Esc 取消)"
+#~ msgstr " (Enter select · custom answer allowed · Esc cancel)"
 
 #~ msgid "[q/Enter 回答]"
 #~ msgstr "[q/Enter to answer]"

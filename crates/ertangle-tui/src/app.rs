@@ -864,7 +864,8 @@ impl App {
         self.state
             .pending_questions
             .values()
-            .find(|q| q.session == id)
+            .filter(|q| q.session == id)
+            .min_by(|a, b| a.id.cmp(&b.id))
             .cloned()
     }
 
