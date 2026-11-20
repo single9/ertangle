@@ -3693,11 +3693,11 @@ msgstr ""
 msgid "交接給哪個 agent"
 msgstr ""
 
-#: crates/ertangle-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/menu.rs
 msgid "問題 ({n}/{total})"
 msgstr ""
 
-#: crates/ertangle-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/menu.rs
 msgid "問題"
 msgstr ""
 
@@ -3707,6 +3707,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "至少要回答群組中的一題"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/menu.rs
+msgid "問題已在其他地方回答"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

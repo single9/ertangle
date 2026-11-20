@@ -791,6 +791,9 @@ pub(crate) fn delete_input(app: &mut App) {
 
 /// 貼上 (bracketed paste)：只插入目前輸入框；換行轉成空白以維持單行輸入。
 pub(crate) fn handle_paste(app: &mut App, text: &str) {
+    if app.mode == Mode::Pick && crate::menu::paste_custom(app, text) {
+        return;
+    }
     // `Normal` 模式貼上文字時直接切進輸入模式，否則內容會插進看不見的輸入框，
     // 使用者會以為貼上沒反應 (而且下次按 i 會清空)。
     if app.mode == Mode::Normal && !text.trim().is_empty() {

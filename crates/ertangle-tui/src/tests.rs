@@ -4773,3 +4773,116 @@ fn restart_needs_confirmation_while_sessions_are_live() {
     let n = std::io::Read::read(&mut peer, &mut buf).unwrap();
     assert!(String::from_utf8_lossy(&buf[..n]).contains("restart"));
 }
+
+fn custom_state(app: &App) -> (String, usize) {
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Question {
+            custom_text,
+            custom_cursor,
+            ..
+        } => (custom_text.clone(), *custom_cursor),
+        _ => panic!("not a question picker"),
+    }
+}
+
+fn open_custom(app: &mut App, w: &mut HostRouter) {
+    crate::menu::start_question_picker(app, &qpick_q("qst_ed", false, true, None));
+    qpick_key(app, w, KeyCode::Char('4'));
+}
+
+#[test]
+fn question_custom_edits_in_middle_with_cjk() {
+    let mut app = test_app();
+    let (mut w, _peer) = pair_writer();
+    open_custom(&mut app, &mut w);
+    qpick_type(&mut app, &mut w, "你好世界");
+    qpick_key(&mut app, &mut w, KeyCode::Left);
+    qpick_key(&mut app, &mut w, KeyCode::Left);
+    qpick_type(&mut app, &mut w, "X");
+    assert_eq!(custom_state(&app), ("你好X世界".to_string(), 3));
+    qpick_key(&mut app, &mut w, KeyCode::Backspace);
+    qpick_key(&mut app, &mut w, KeyCode::Delete);
+    assert_eq!(custom_state(&app), ("你好界".to_string(), 2));
+}
+
+#[test]
+fn question_custom_home_end_and_ctrl_keys() {
+    let mut app = test_app();
+    let (mut w, _peer) = pair_writer();
+    open_custom(&mut app, &mut w);
+    qpick_type(&mut app, &mut w, "foo bar baz");
+    qpick_key(&mut app, &mut w, KeyCode::Home);
+    assert_eq!(custom_state(&app).1, 0);
+    qpick_key(&mut app, &mut w, KeyCode::End);
+    assert_eq!(custom_state(&app).1, 11);
+    // Ctrl+W deletes the previous word.
+    crate::menu::handle_pick_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(custom_state(&app), ("foo bar ".to_string(), 8));
+    // Ctrl+A then Ctrl+U is a no-op at start; Ctrl+E + Ctrl+U clears.
+    crate::menu::handle_pick_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(custom_state(&app), (String::new(), 0));
+}
+
+#[test]
+fn question_custom_paste_inserts_at_cursor() {
+    let mut app = test_app();
+    let (mut w, _peer) = pair_writer();
+    open_custom(&mut app, &mut w);
+    qpick_type(&mut app, &mut w, "ad");
+    qpick_key(&mut app, &mut w, KeyCode::Left);
+    crate::input::handle_paste(&mut app, "b\nc");
+    assert_eq!(custom_state(&app), ("ab cd".to_string(), 4));
+}
+
+#[test]
+fn question_resolved_remotely_closes_picker() {
+    let (mut app, q) = auto_open_app();
+    app.auto_open_question();
+    assert!(app.picker.is_some());
+    app.state.pending_questions.remove(&q.id);
+    assert!(crate::menu::reconcile_question_picker(&mut app));
+    assert!(app.picker.is_none());
+    assert_eq!(app.mode, Mode::Normal);
+    // Resolved question must not auto-reopen.
+    app.auto_open_question();
+    assert!(app.picker.is_none());
+}
+
+#[test]
+fn question_group_remote_resolution_advances_without_sending() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    app.state
+        .sessions
+        .insert("ses_q".into(), make_test_session("ses_q"));
+    app.selected = 0;
+    for id in ["qst_g1", "qst_g2", "qst_g3"] {
+        let q = qpick_q(id, false, true, Some("g"));
+        app.state.pending_questions.insert(q.id.clone(), q);
+    }
+    let first = app.selected_question().unwrap();
+    crate::menu::start_question_picker(&mut app, &first);
+    qpick_key(&mut app, &mut w, KeyCode::Char('1'));
+    // Now on g2; web resolves g2 and g1.
+    app.state.pending_questions.remove("qst_g2");
+    app.state.pending_questions.remove("qst_g1");
+    assert!(crate::menu::reconcile_question_picker(&mut app));
+    let p = app.picker.as_ref().unwrap();
+    assert!(
+        matches!(&p.stage, crate::menu::PickStage::Question { id, questions, collected, .. }
+        if id == "qst_g3" && questions.len() == 1 && collected.is_empty())
+    );
+    qpick_key(&mut app, &mut w, KeyCode::Char('2'));
+    let sent = qpick_sent(&mut peer);
+    assert!(sent.contains("qst_g3") && !sent.contains("qst_g1") && !sent.contains("qst_g2"));
+}

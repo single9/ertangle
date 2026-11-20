@@ -336,6 +336,7 @@ fn event_loop(
         }
 
         let was_picking = app.picker.is_some();
+        dirty |= crate::menu::reconcile_question_picker(&mut app);
         app.auto_open_question();
         dirty |= app.picker.is_some() != was_picking;
         dirty |= app.rebuild_pending;

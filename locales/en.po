@@ -3723,6 +3723,10 @@ msgid "至少要回答群組中的一題"
 msgstr "Answer at least one question in the group"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "問題已在其他地方回答"
+msgstr "Question was answered elsewhere"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "選擇 agent"
 msgstr "Choose agent"
 

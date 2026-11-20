@@ -683,6 +683,7 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
         index,
         custom_mode,
         custom_text,
+        custom_cursor,
         ..
     } = &p.stage
     else {
@@ -710,6 +711,7 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
     }
     lines.push(Line::from(""));
     let mut cursor_line = lines.len();
+    let mut custom_cursor_at: Option<(usize, (usize, usize))> = None;
     let n_opts = p.items.len();
     for (i, opt) in q.options.iter().enumerate() {
         let sel = i == p.cursor && !*custom_mode;
@@ -767,11 +769,19 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
             style,
         )));
         if *custom_mode {
-            lines.push(Line::from(vec![
-                Span::styled("     > ", Style::default().fg(Color::Cyan)),
-                Span::raw(custom_text.clone()),
-                Span::styled("▏", Style::default().fg(Color::Cyan)),
-            ]));
+            // Wrap the answer into rows so a long text keeps the cursor visible.
+            let rows = crate::inputbox::rows(custom_text, inner_w.saturating_sub(7).max(2));
+            custom_cursor_at = Some((
+                lines.len(),
+                crate::inputbox::cursor_pos(custom_text, &rows, *custom_cursor),
+            ));
+            for (i, row) in rows.iter().enumerate() {
+                let prefix = if i == 0 { "     > " } else { "       " };
+                lines.push(Line::from(vec![
+                    Span::styled(prefix, Style::default().fg(Color::Cyan)),
+                    Span::raw(crate::inputbox::row_text(custom_text, *row)),
+                ]));
+            }
         }
     }
     lines.push(Line::from(""));
@@ -797,6 +807,9 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
     let h = (lines.len() as u16 + 2).min(max_h);
     let area = Rect::new(input_area.x, input_area.y - h, w, h);
     let room = h.saturating_sub(2) as usize;
+    if let Some((start, (r, _))) = custom_cursor_at {
+        cursor_line = start + r;
+    }
     let scroll = (cursor_line + 1).saturating_sub(room) as u16;
     f.render_widget(ratatui::widgets::Clear, area);
     f.render_widget(
@@ -808,6 +821,14 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
         ),
         area,
     );
+    // Put the terminal cursor at the edit point so the IME preedit anchors there.
+    if let Some((start, (r, col))) = custom_cursor_at {
+        let row_y = (start + r).saturating_sub(scroll as usize);
+        if row_y < room && area.width > 2 {
+            let x = (area.x + 1 + 7 + col as u16).min(area.x + area.width.saturating_sub(2));
+            f.set_cursor_position((x, area.y + 1 + row_y as u16));
+        }
+    }
 }
 
 /// One-line approval or question banner (used when the bus is hidden): prefer the selected session.

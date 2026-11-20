@@ -336,6 +336,8 @@ pub(crate) enum PickStage {
         /// 是否正在輸入自訂答案 (文字不會過濾選項)。
         custom_mode: bool,
         custom_text: String,
+        /// Cursor inside `custom_text`, as a char index.
+        custom_cursor: usize,
     },
     /// 選擇多 Agent 團隊範本。
     Playbook,
@@ -521,6 +523,7 @@ pub(crate) fn start_question_picker(app: &mut App, q: &ertangle_core::UserQuesti
             collected: Vec::new(),
             custom_mode: false,
             custom_text: String::new(),
+            custom_cursor: 0,
         },
         resume_scope: ResumeScope::default(),
         title: String::new(),
@@ -560,6 +563,7 @@ fn load_question(p: &mut Picker, index: usize) {
         index: cur,
         custom_mode,
         custom_text,
+        custom_cursor,
         ..
     } = &mut p.stage
     else {
@@ -574,6 +578,7 @@ fn load_question(p: &mut Picker, index: usize) {
     *multi_select = q.multi_select;
     selected.clear();
     custom_text.clear();
+    *custom_cursor = 0;
     *custom_mode = q.options.is_empty() && q.custom;
     p.items = q
         .options
@@ -679,8 +684,15 @@ fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
         }
     };
     let enter_custom = |p: &mut Picker| {
-        if let PickStage::Question { custom_mode, .. } = &mut p.stage {
+        if let PickStage::Question {
+            custom_mode,
+            custom_text,
+            custom_cursor,
+            ..
+        } = &mut p.stage
+        {
             *custom_mode = true;
+            *custom_cursor = custom_text.chars().count();
         }
     };
     match key.code {
@@ -792,12 +804,177 @@ fn ordered_selection(p: &Picker) -> Vec<String> {
         .collect()
 }
 
+/// Previous word boundary (char index) before `cur`: skip spaces, then the word.
+fn word_start(chars: &[char], cur: usize) -> usize {
+    let mut i = cur.min(chars.len());
+    while i > 0 && chars[i - 1].is_whitespace() {
+        i -= 1;
+    }
+    while i > 0 && !chars[i - 1].is_whitespace() {
+        i -= 1;
+    }
+    i
+}
+
+/// Next word boundary (char index) after `cur`: skip the word, then spaces.
+fn word_end(chars: &[char], cur: usize) -> usize {
+    let mut i = cur.min(chars.len());
+    while i < chars.len() && !chars[i].is_whitespace() {
+        i += 1;
+    }
+    while i < chars.len() && chars[i].is_whitespace() {
+        i += 1;
+    }
+    i
+}
+
+/// Remove chars in `[from, to)` (char indices).
+fn remove_chars(text: &mut String, from: usize, to: usize) {
+    let b0 = crate::input::byte_index(text, from);
+    let b1 = crate::input::byte_index(text, to);
+    text.replace_range(b0..b1, "");
+}
+
+/// Insert `s` at char cursor `cur` and advance the cursor.
+pub(crate) fn insert_at(text: &mut String, cur: &mut usize, s: &str) {
+    let b = crate::input::byte_index(text, *cur);
+    text.insert_str(b, s);
+    *cur += s.chars().count();
+}
+
+/// Single-line editor shared by the custom-answer row. Returns true when the
+/// key was an editing/movement key (and was consumed).
+pub(crate) fn edit_line(text: &mut String, cur: &mut usize, key: &KeyEvent) -> bool {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    *cur = (*cur).min(n);
+    match key.code {
+        KeyCode::Left if ctrl || alt => *cur = word_start(&chars, *cur),
+        KeyCode::Right if ctrl || alt => *cur = word_end(&chars, *cur),
+        KeyCode::Left => *cur = cur.saturating_sub(1),
+        KeyCode::Right => *cur = (*cur + 1).min(n),
+        KeyCode::Home => *cur = 0,
+        KeyCode::End => *cur = n,
+        KeyCode::Char('a') if ctrl => *cur = 0,
+        KeyCode::Char('e') if ctrl => *cur = n,
+        KeyCode::Backspace if alt => {
+            let s = word_start(&chars, *cur);
+            remove_chars(text, s, *cur);
+            *cur = s;
+        }
+        KeyCode::Backspace => {
+            if *cur > 0 {
+                remove_chars(text, *cur - 1, *cur);
+                *cur -= 1;
+            }
+        }
+        KeyCode::Delete => {
+            if *cur < n {
+                remove_chars(text, *cur, *cur + 1);
+            }
+        }
+        KeyCode::Char('w') if ctrl => {
+            let s = word_start(&chars, *cur);
+            remove_chars(text, s, *cur);
+            *cur = s;
+        }
+        KeyCode::Char('u') if ctrl => {
+            remove_chars(text, 0, *cur);
+            *cur = 0;
+        }
+        KeyCode::Char('k') if ctrl => remove_chars(text, *cur, n),
+        KeyCode::Char(c) if !ctrl && !alt => {
+            let mut buf = [0u8; 4];
+            insert_at(text, cur, c.encode_utf8(&mut buf));
+        }
+        _ => return false,
+    }
+    true
+}
+
+/// Paste into the custom-answer row when it is active. Returns false if not.
+pub(crate) fn paste_custom(app: &mut App, text: &str) -> bool {
+    let Some(Picker {
+        stage:
+            PickStage::Question {
+                custom_mode: true,
+                custom_text,
+                custom_cursor,
+                ..
+            },
+        ..
+    }) = app.picker.as_mut()
+    else {
+        return false;
+    };
+    let flat = text.replace("\r\n", " ").replace(['\r', '\n'], " ");
+    insert_at(custom_text, custom_cursor, &flat);
+    true
+}
+
+/// Reconcile the open question picker with `app.state.pending_questions`:
+/// drop questions resolved elsewhere (web, another client), advance to the
+/// next remaining one, and close the picker when none remain. Returns true if
+/// the picker changed.
+pub(crate) fn reconcile_question_picker(app: &mut App) -> bool {
+    let Some(p) = app.picker.as_mut() else {
+        return false;
+    };
+    let PickStage::Question {
+        id,
+        questions,
+        index,
+        collected,
+        ..
+    } = &mut p.stage
+    else {
+        return false;
+    };
+    let pending = &app.state.pending_questions;
+    if questions.iter().all(|q| pending.contains_key(&q.id)) {
+        return false;
+    }
+    let old_index = *index;
+    let current_alive = pending.contains_key(id.as_str());
+    let kept_before = questions
+        .iter()
+        .take(old_index)
+        .filter(|q| pending.contains_key(&q.id))
+        .count();
+    questions.retain(|q| pending.contains_key(&q.id));
+    collected.retain(|(_, cid, _)| pending.contains_key(cid));
+    if questions.is_empty() {
+        app.picker = None;
+        app.mode = Mode::Normal;
+        app.status = tr!("問題已在其他地方回答");
+        return true;
+    }
+    if current_alive {
+        // Same question stays open; only its position/total changed.
+        let cur = id.clone();
+        let pos = questions.iter().position(|q| q.id == cur).unwrap_or(0);
+        *index = pos;
+        let total = questions.len();
+        p.title = if total > 1 {
+            tr!("問題 ({n}/{total})", n = pos + 1, total = total)
+        } else {
+            tr!("問題")
+        };
+    } else {
+        let next = kept_before.min(questions.len() - 1);
+        load_question(p, next);
+        app.status = tr!("問題已在其他地方回答");
+    }
+    true
+}
+
 /// 自訂答案輸入模式：所有字元 (含空白) 都是答案的一部分。
 fn handle_custom_input(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     let Some(p) = app.picker.as_mut() else {
         return Ok(());
     };
-    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let has_options = !p.items.is_empty();
     let in_group = matches!(&p.stage, PickStage::Question { questions, .. } if questions.len() > 1);
     let multi = matches!(
@@ -810,16 +987,21 @@ fn handle_custom_input(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
     let PickStage::Question {
         custom_mode,
         custom_text,
+        custom_cursor,
         ..
     } = &mut p.stage
     else {
         return Ok(());
     };
+    if edit_line(custom_text, custom_cursor, &key) {
+        return Ok(());
+    }
     match key.code {
         KeyCode::Esc => {
             if has_options {
                 *custom_mode = false;
                 custom_text.clear();
+                *custom_cursor = 0;
             } else {
                 // 沒有選項可退回：直接離開，問題仍 pending。
                 dismiss_open_questions(app);
@@ -827,10 +1009,6 @@ fn handle_custom_input(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
                 app.mode = Mode::Normal;
             }
         }
-        KeyCode::Backspace => {
-            custom_text.pop();
-        }
-        KeyCode::Char(c) if !ctrl => custom_text.push(c),
         KeyCode::Enter => {
             let text = custom_text.trim().to_string();
             if text.is_empty() {
