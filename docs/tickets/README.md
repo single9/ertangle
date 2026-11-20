@@ -62,6 +62,15 @@
 | [T55](T55-rust-clean-code-conventions.md) | 建立 Rust 程式寫作慣例並減少 production unwrap 與 unsafe | P2 | — |
 | [T56](T56-selectable-merge-strategy.md) | 讓使用者選擇 worktree 合併策略 (merge / squash / rebase) | P2 | — |
 | [T57](T57-rename-to-ertangle.md) | 專案改名：termade → ertangle (ER=EPR) | P1 | — |
+| [T58](T58-resume-picker-scope-and-parent.md) | Scope tabs and parent context in the session resume picker | P2 | — |
+| [T59](T59-open-project-from-any-directory.md) | Open a project from any directory instead of starting ertangle inside it | P2 | — |
+| [T60](T60-english-first-convention.md) | Adopt English-first tickets and code comments | P3 | — |
+| [T61](T61-gemma-comment-translation.md) | Translate legacy code comments to English with gemma4:std | P3 | T60 |
+| [T62](T62-question-tool-support-for-all-agents.md) | Render interactive question tool calls for every agent | P1 | — |
+
+## Language convention
+
+From T58 onward, new tickets and inline code comments are written in English. Older Chinese tickets stay as historical records. See `docs/agents/issue-tracker.md`.
 
 T01–T10 是修正既有行為；T11–T13 是缺少的功能，於 2026-11-13 追加。
 
