@@ -835,6 +835,22 @@ mod tests {
         assert!(!is_path_allowed(&tmp, &allowed_roots));
     }
 
+    #[test]
+    fn question_banner_is_outside_tab_views() {
+        let main_start = INDEX_HTML.find("<main>").expect("main element");
+        let banner = INDEX_HTML
+            .find("id=\"urgent-approval-banner\"")
+            .expect("question banner");
+        let first_tab = INDEX_HTML.find("class=\"tab-view").expect("tab view");
+        assert!(main_start < banner && banner < first_tab);
+
+        let css_start = INDEX_HTML.find(".urgent-banner {").expect("banner CSS");
+        let css_end = INDEX_HTML[css_start..].find('}').expect("banner CSS end") + css_start;
+        let css = &INDEX_HTML[css_start..css_end];
+        assert!(css.contains("position: sticky;"));
+        assert!(css.contains("top: 0;"));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()

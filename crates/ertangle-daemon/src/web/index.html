@@ -279,6 +279,9 @@
       border-bottom: 2px solid var(--yellow);
       padding: 12px 14px;
       flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 10;
       animation: fadeIn 0.3s ease;
     }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1495,7 +1498,20 @@
 
     <!-- 主要內容區 -->
     <main>
-      <!-- TAB 1: 對話 (Chat) -->
+      <!-- 待核准／待回答問題置頂橫幅 (visible in every tab) -->
+      <div id="urgent-approval-banner" class="urgent-banner" style="display:none;">
+        <div class="urgent-title">
+          <span id="urgent-title-label">待核准操作 (Waiting Approval)</span>
+          <span id="urgent-session-id" style="font-family:var(--font-mono); font-size:11px;"></span>
+        </div>
+        <div id="urgent-detail" class="urgent-desc"></div>
+        <div id="urgent-action-row" class="btn-row">
+          <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
+          <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
+          <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
+        </div>
+      </div>
+
       <!-- TAB 0: 總覽 (Overview) -->
       <div id="view-overview" class="tab-view active">
         <div class="ov-wrap">
@@ -1507,20 +1523,6 @@
 
       <!-- TAB 1: 對話 (Chat) -->
       <div id="view-chat" class="tab-view">
-        <!-- 待核准置頂橫幅 -->
-        <div id="urgent-approval-banner" class="urgent-banner" style="display:none;">
-          <div class="urgent-title">
-            <span id="urgent-title-label">待核准操作 (Waiting Approval)</span>
-            <span id="urgent-session-id" style="font-family:var(--font-mono); font-size:11px;"></span>
-          </div>
-          <div id="urgent-detail" class="urgent-desc"></div>
-          <div id="urgent-action-row" class="btn-row">
-            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
-            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
-            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
-          </div>
-        </div>
-
         <!-- 歷史 Session 接續提示條 -->
         <div id="resume-strip" class="resume-strip">
           <span>此對話目前已結束或中斷</span>

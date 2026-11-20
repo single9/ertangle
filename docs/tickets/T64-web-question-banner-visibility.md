@@ -2,7 +2,7 @@
 
 Priority: P1　Scope: `ertangle-daemon`　Depends on: T63
 
-Status: open
+Status: done
 
 ## Problem
 
