@@ -757,6 +757,53 @@
       flex-direction: column;
       gap: 6px;
       flex-shrink: 0;
+      position: relative;
+    }
+    .cmd-palette {
+      position: absolute;
+      bottom: 100%;
+      left: 12px;
+      right: 12px;
+      max-height: 260px;
+      overflow-y: auto;
+      background: #12151f;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+      z-index: 40;
+      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.55);
+    }
+    .cmd-palette-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      min-height: 40px;
+    }
+    .cmd-palette-item.selected { background: #1a2738; }
+    .cmd-palette-name {
+      font-family: var(--font-mono);
+      color: var(--cyan);
+      white-space: nowrap;
+    }
+    .cmd-palette-desc {
+      color: var(--text-dim);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cmd-palette-badge {
+      margin-left: auto;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1px 6px;
+      font-size: 10px;
+      white-space: nowrap;
     }
     .composer-toolbar {
       display: flex;
@@ -1597,16 +1644,23 @@
               <div id="queue-count-pill" class="queue-info-pill" onclick="openQueueManageSheet()">
                 0 則排隊中
               </div>
+              <button id="btn-cmd-palette" class="toggle-pill" onclick="toggleCmdPalette()" title="命令面板">
+                <span>/ 命令</span>
+              </button>
+              <button id="btn-shell-prefix" class="toggle-pill" onclick="prefillShellCmd()" title="Shell 命令">
+                <span>! Shell</span>
+              </button>
             </div>
             <span id="composer-status" style="color:var(--text-dim); font-size:11px; font-family:var(--font-mono);"></span>
           </div>
           <div id="attach-chips"></div>
           <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple style="display:none;" onchange="addImageFiles(this.files); this.value='';">
+          <div id="cmd-palette" class="cmd-palette" style="display:none;"></div>
           <div class="composer-row">
             <button id="btn-attach" class="btn-circle btn-attach" onclick="document.getElementById('attach-input').click()" title="附加圖片">
               <svg class="nav-svg" style="width:18px; height:18px;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
             </button>
-            <textarea id="prompt-textarea" rows="1" placeholder="輸入 prompt 給 Agent…"></textarea>
+            <textarea id="prompt-textarea" rows="1" placeholder="輸入 Prompt、/命令 或 !Shell 指令…" onkeydown="handlePromptKey(event)"></textarea>
             <button id="btn-cancel" class="btn-circle btn-cancel-round" style="display:none;" onclick="cancelTurn()" title="中斷回合">
               <svg class="nav-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"></rect></svg>
             </button>
@@ -2530,6 +2584,10 @@
       } else if (kind === "session_native_id") {
         if (state.sessions[event.session]) {
           state.sessions[event.session].native_id = event.native_id;
+        }
+      } else if (kind === "session_commands") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].slash_commands = event.commands || [];
         }
       } else if (kind === "session_note") {
         if (state.sessions[event.session]) {
@@ -4097,10 +4155,227 @@
         </div>`).join("");
     }
 
+    // T74: built-in web commands, merged with the active session's native slash commands.
+    const WEB_COMMANDS = [
+      { name: "/exec", desc: "在 session 工作目錄執行 shell 命令 <cmd>", action: "exec", needsArg: true },
+      { name: "/merge", desc: "合併 worktree 回主工作區", action: "merge" },
+      { name: "/diff", desc: "切到審查分頁查看 diff", action: "diff" },
+      { name: "/cancel", desc: "中斷目前回合", action: "cancel" },
+      { name: "/resume", desc: "接續目前 session 的對話", action: "resume" },
+      { name: "/sleep", desc: "休眠目前 session", action: "sleep" },
+      { name: "/wake", desc: "喚醒目前 session", action: "wake" },
+      { name: "/handoff", desc: "開啟交接控制面板", action: "handoff" },
+      { name: "/model", desc: "開啟 model / effort 控制面板", action: "model" },
+      { name: "/prune", desc: "清理已結束的 session", action: "prune" },
+      { name: "/clear-queue", desc: "清空待送佇列", action: "clear-queue" },
+      { name: "/restart", desc: "重啟 daemon", action: "restart" }
+    ];
+
+    let cmdPaletteItems = [];
+    let cmdPaletteIndex = 0;
+    let cmdPalettePinned = false;
+
+    function activeSlashCommands() {
+      const s = state.sessions[activeSession];
+      const list = (s && s.slash_commands) || [];
+      return Array.isArray(list) ? list : [];
+    }
+
+    function combinedWebCommands(prefix) {
+      const p = (prefix || "").toLowerCase();
+      const builtins = WEB_COMMANDS
+        .filter(c => c.name.toLowerCase().startsWith("/" + p))
+        .map(c => ({ name: c.name, desc: c.desc, badge: "ertangle", action: c.action, needsArg: !!c.needsArg }));
+      const natives = activeSlashCommands()
+        .map(c => String(c))
+        .filter(c => c && (c.startsWith("/") ? c : "/" + c).toLowerCase().startsWith("/" + p))
+        .map(c => {
+          const name = c.startsWith("/") ? c : "/" + c;
+          return { name, desc: "Agent 原生指令", badge: "Agent 原生指令", action: "native", needsArg: true };
+        });
+      return builtins.concat(natives);
+    }
+
+    function openCmdPalette(prefix) {
+      cmdPaletteItems = combinedWebCommands(prefix || "");
+      cmdPaletteIndex = 0;
+      renderCmdPalette();
+    }
+
+    function closeCmdPalette() {
+      cmdPalettePinned = false;
+      cmdPaletteItems = [];
+      const el = document.getElementById("cmd-palette");
+      if (el) el.style.display = "none";
+    }
+
+    function renderCmdPalette() {
+      const el = document.getElementById("cmd-palette");
+      if (!el) return;
+      if (!cmdPaletteItems.length) { el.style.display = "none"; return; }
+      el.innerHTML = cmdPaletteItems.map((c, i) => `
+        <div class="cmd-palette-item ${i === cmdPaletteIndex ? "selected" : ""}" onclick="selectCmdPaletteItem(${i})">
+          <span class="cmd-palette-name">${escapeHtml(c.name)}</span>
+          <span class="cmd-palette-desc">${escapeHtml(c.desc)}</span>
+          <span class="cmd-palette-badge">${escapeHtml(c.badge)}</span>
+        </div>`).join("");
+      el.style.display = "block";
+    }
+
+    function syncCmdPalette(value) {
+      if (cmdPalettePinned) return;
+      const text = value || "";
+      if (/^\/[^\s]*$/.test(text)) openCmdPalette(text.slice(1));
+      else closeCmdPalette();
+    }
+
+    function toggleCmdPalette() {
+      const el = document.getElementById("cmd-palette");
+      if (el && el.style.display === "block") { closeCmdPalette(); return; }
+      const textarea = document.getElementById("prompt-textarea");
+      const value = textarea ? textarea.value.trim() : "";
+      const prefix = value.startsWith("/") && !/\s/.test(value) ? value.slice(1) : "";
+      cmdPalettePinned = true;
+      openCmdPalette(prefix);
+      if (textarea) textarea.focus();
+    }
+
+    function prefillShellCmd() {
+      const textarea = document.getElementById("prompt-textarea");
+      if (!textarea) return;
+      closeCmdPalette();
+      if (!textarea.value.trim().startsWith("!")) textarea.value = "! ";
+      textarea.focus();
+      textarea.style.height = "auto";
+      textarea.style.height = (textarea.scrollHeight) + "px";
+    }
+
+    function moveCmdPalette(delta) {
+      if (!cmdPaletteItems.length) return;
+      cmdPaletteIndex = (cmdPaletteIndex + delta + cmdPaletteItems.length) % cmdPaletteItems.length;
+      renderCmdPalette();
+    }
+
+    function selectCmdPaletteItem(i) {
+      const cmd = cmdPaletteItems[i];
+      if (!cmd) return;
+      const textarea = document.getElementById("prompt-textarea");
+      closeCmdPalette();
+      if (!textarea) return;
+      if (cmd.needsArg || cmd.action === "native") {
+        textarea.value = cmd.name + " ";
+        textarea.focus();
+        textarea.dispatchEvent(new Event("input"));
+      } else {
+        runWebCommand(cmd.name.slice(1), "");
+      }
+    }
+
+    function handlePromptKey(event) {
+      const el = document.getElementById("cmd-palette");
+      if (!el || el.style.display !== "block" || !cmdPaletteItems.length) return;
+      if (event.key === "ArrowDown") { event.preventDefault(); moveCmdPalette(1); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); moveCmdPalette(-1); }
+      else if (event.key === "Tab" || event.key === "Enter") {
+        if (event.key === "Enter" && event.shiftKey) return;
+        event.preventDefault();
+        selectCmdPaletteItem(cmdPaletteIndex);
+      } else if (event.key === "Escape") { event.preventDefault(); closeCmdPalette(); }
+    }
+
+    function webCommandByVerb(verb) {
+      return WEB_COMMANDS.find(c => c.name === "/" + verb) || null;
+    }
+
+    function runWebCommand(verb, rest) {
+      const cmd = webCommandByVerb(verb);
+      if (!cmd) return false;
+      switch (cmd.action) {
+        case "exec":
+          if (!rest) { showToast("命令不可為空", true); return true; }
+          if (!activeSession || !ws) { showToast("沒有選取的 session", true); return true; }
+          ws.send(JSON.stringify({ op: "exec", session: activeSession, command: rest }));
+          showToast("已送出 Shell 命令");
+          return true;
+        case "merge": confirmMerge(); return true;
+        case "diff": switchNavTab("review"); return true;
+        case "cancel": cancelTurn(); return true;
+        case "resume": resumeCurrentSession(); return true;
+        case "sleep":
+        case "wake":
+          if (!activeSession || !ws) { showToast("沒有選取的 session", true); return true; }
+          ws.send(JSON.stringify({ op: cmd.action, session: activeSession }));
+          showToast(cmd.action === "sleep" ? "已發送休眠請求" : "已發送喚醒請求");
+          return true;
+        case "handoff":
+        case "model":
+          if (activeSession) openSessionSettings(activeSession);
+          return true;
+        case "prune": pruneSessions(); return true;
+        case "clear-queue": submitClearQueue(); return true;
+        case "restart": restartDaemon(); return true;
+        default: return false;
+      }
+    }
+
+    function clearPromptComposer() {
+      const textarea = document.getElementById("prompt-textarea");
+      if (textarea) {
+        textarea.value = "";
+        textarea.style.height = "auto";
+      }
+      pendingImages.forEach(a => URL.revokeObjectURL(a.thumb));
+      pendingImages = [];
+      renderAttachChips();
+      closeCmdPalette();
+    }
+
     function sendPrompt() {
       const textarea = document.getElementById("prompt-textarea");
       const text = textarea.value.trim();
       if ((!text && !pendingImages.length) || !activeSession || !ws) return;
+
+      if (text.startsWith("!")) {
+        const command = text.slice(1).trim();
+        if (!command) { showToast("命令不可為空", true); return; }
+        ws.send(JSON.stringify({ op: "exec", session: activeSession, command }));
+        clearPromptComposer();
+        showToast("已送出 Shell 命令");
+        return;
+      }
+
+      if (text.startsWith("/")) {
+        if (text.startsWith("//")) {
+          ws.send(JSON.stringify({
+            op: "prompt",
+            session: activeSession,
+            text: text.slice(1),
+            attachments: pendingImages.map(a => ({ name: a.name, mime: a.mime, path: null, data: a.data, text: null, size: a.size })),
+            queue: queueMode
+          }));
+          clearPromptComposer();
+          return;
+        }
+        const parsed = /^\/([^\s]+)\s*([\s\S]*)$/.exec(text);
+        const verb = parsed ? parsed[1].toLowerCase() : "";
+        const rest = parsed ? parsed[2].trim() : "";
+        if (verb === "exec" || verb === "sh") {
+          if (!rest) { showToast("命令不可為空", true); return; }
+          ws.send(JSON.stringify({ op: "exec", session: activeSession, command: rest }));
+          clearPromptComposer();
+          showToast("已送出 Shell 命令");
+          return;
+        }
+        if (webCommandByVerb(verb)) {
+          runWebCommand(verb, rest);
+          clearPromptComposer();
+          return;
+        }
+        // Unknown slash command: forward verbatim to the agent as a native command.
+        ws.send(JSON.stringify({ op: "prompt", session: activeSession, text, attachments: [], queue: queueMode }));
+        clearPromptComposer();
+        return;
+      }
 
       ws.send(JSON.stringify({
         op: "prompt",
@@ -4109,11 +4384,7 @@
         attachments: pendingImages.map(a => ({ name: a.name, mime: a.mime, path: null, data: a.data, text: null, size: a.size })),
         queue: queueMode
       }));
-      pendingImages.forEach(a => URL.revokeObjectURL(a.thumb));
-      pendingImages = [];
-      renderAttachChips();
-      textarea.value = "";
-      textarea.style.height = "auto";
+      clearPromptComposer();
     }
 
     function toggleQueue() {
@@ -4695,6 +4966,7 @@
     promptTextarea.addEventListener("input", function() {
       this.style.height = "auto";
       this.style.height = (this.scrollHeight) + "px";
+      syncCmdPalette(this.value);
     });
 
     promptTextarea.addEventListener("paste", function(e) {

@@ -1,6 +1,6 @@
 # T74 — Shell command execution and web command palette
 
-Status: in progress (T74a done; T74b pending)
+Status: done
 
 ## Problem
 
@@ -20,12 +20,12 @@ There is no way to run a quick shell command in a session's working directory wi
 3. **CLI**: `ertangle exec <session> <command...>` (alias `sh`, `trailing_var_arg`) sends `Request::Exec` and prints the returned note.
 4. **TUI**: `!<command>` in the prompt input, `:exec <command>` / `:sh <command>` / `:!<command>`, and the `!` key in Normal mode (prefills `!` in Prompt mode). `:exec` is listed in `COMMANDS`, the `Space m` menu and `?` help. Unit tests cover each entry point.
 
-### Part B — Web UI (T74b, pending)
+### Part B — Web UI (T74b, done)
 
 1. `applyRecord` tracks `Event::SessionCommands` into `state.sessions[session].slash_commands`.
 2. The composer gets a `/` command palette combining built-in web commands (`/exec`, `/merge`, `/diff`, `/cancel`, `/resume`, `/sleep`, `/wake`, `/handoff`, `/model`, `/prune`, `/clear-queue`, `/restart`) with the active session's native slash commands. Keyboard navigation (arrows, Tab/Enter, Escape) and click selection are supported, plus `/ 命令` and `! Shell` toolbar buttons.
 3. `sendPrompt()` routes `!<cmd>` and `/exec <cmd>` to `{ op: "exec", session, command }`; `//cmd` is escaped as a literal `/cmd` prompt; built-in web actions run their action; unknown `/cmd` is forwarded to the agent as a native slash command. The placeholder mentions `/命令` and `!Shell`.
-4. String-level regression tests in `web.rs`.
+4. String-level regression tests in `web.rs` (`web_supports_command_palette_and_shell_exec`), including the palette markup, built-in command table, native command badge, `session_commands` event handling, and both shell-exec routes..
 
 ## Verification
 

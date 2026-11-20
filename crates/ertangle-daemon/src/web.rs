@@ -956,6 +956,34 @@ mod tests {
         assert!(INDEX_HTML.contains("archive_pruned"));
     }
 
+    /// T74b: composer command palette combines built-in web commands with native agent slash
+    /// commands, and `!cmd` / `/exec cmd` are sent as `{op: "exec"}` requests.
+    #[test]
+    fn web_supports_command_palette_and_shell_exec() {
+        assert!(INDEX_HTML.contains("id=\"cmd-palette\""));
+        assert!(INDEX_HTML.contains("id=\"btn-cmd-palette\""));
+        assert!(INDEX_HTML.contains("id=\"btn-shell-prefix\""));
+        assert!(INDEX_HTML.contains("const WEB_COMMANDS = ["));
+        assert!(INDEX_HTML.contains("function toggleCmdPalette()"));
+        assert!(INDEX_HTML.contains("function prefillShellCmd()"));
+        assert!(INDEX_HTML.contains("function syncCmdPalette("));
+        assert!(INDEX_HTML.contains("function selectCmdPaletteItem("));
+        assert!(INDEX_HTML.contains("function handlePromptKey("));
+        assert!(INDEX_HTML.contains("function combinedWebCommands("));
+        assert!(INDEX_HTML.contains("ArrowDown"));
+        assert!(INDEX_HTML.contains("ArrowUp"));
+        assert!(INDEX_HTML.contains("Agent 原生指令"));
+        assert!(INDEX_HTML.contains("kind === \"session_commands\""));
+        assert!(INDEX_HTML.contains("slash_commands = event.commands || []"));
+        assert!(INDEX_HTML.contains("placeholder=\"輸入 Prompt、/命令 或 !Shell 指令…\""));
+        assert!(INDEX_HTML.contains("const command = text.slice(1).trim()"));
+        assert!(INDEX_HTML.contains("op: \"exec\", session: activeSession, command"));
+        assert!(INDEX_HTML.contains("verb === \"exec\" || verb === \"sh\""));
+        assert!(INDEX_HTML.contains("已送出 Shell 命令"));
+        assert!(INDEX_HTML.contains("text.startsWith(\"//\")"));
+        assert!(INDEX_HTML.contains("webCommandByVerb(verb)"));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()
