@@ -14,7 +14,7 @@ env \
   ./target/debug/ertangle daemon --web 127.0.0.1 --web-port 7421
 ```
 
-Binary: `./target/debug/ertangle` built from `389a602` (T62 core, protocol-shape fixes, and web question UI).
+Binary: `./target/debug/ertangle`. Probes 1-4 used the build from `389a602`; final probes 5-9 used the rebuilt binary from `784a755` (grouped question cleanup, ACP `oneOf` parsing, and session-exit cleanup).
 
 ## Probe 1 — OpenCode MCP question answered over the daemon socket
 
@@ -111,20 +111,101 @@ Both pending questions were unanswerable: no options, no meaningful question tex
 
 **Result: FAIL.** This is direct evidence for the ACP tool-call fallback and elicitation parsing items. The worker received these details during implementation.
 
+## Final verification (rebuilt binary `784a755`)
+
+The daemon was restarted with a fresh socket and web token, and headless Chrome was relaunched against the current token, because ACP capabilities are negotiated at startup. Each probe ran in a new session after cleaning old ones.
+
+### Probe 5 — OpenCode MCP question answered (final)
+
+Session `ses_e83f096c05a6` answered `qst_05c394ab0f85` with `Postgres`.
+
+```text
+STATUS idle TOOLS 1
+PENDING {}
+Postgres.
+```
+
+**Result: PASS.**
+
+### Probe 6 — OpenCode native `question` tool (final)
+
+Session `ses_d8d08a3c9013` used the built-in tool. Two grouped questions appeared:
+
+```json
+{"id":"qst_82ae93630c87","header":"UI Framework","question":"Which UI framework should we use?",
+ "options":[{"label":"React","description":"The more common option, large ecosystem and community"},
+            {"label":"Vue","description":"Simpler learning curve, well-integrated tooling"}],
+ "group":"qgrp_4b0eba80a4ed"}
+{"id":"qst_471db683cf87","header":"UI Framework (other)","question":"Type your own answer",
+ "options":[],"group":"qgrp_4b0eba80a4ed"}
+```
+
+Answering the first with `Vue` also cleared the sibling. Tool output: `User has answered your questions: "Which UI framework should we use?"="Vue".`
+
+```text
+STATUS idle TOOLS 2
+PENDING {}
+```
+
+**Result: PASS.** Raw ACP `session/update` frames confirmed the empty `rawInput` placeholder is now ignored, and `elicitation/create` schemas expose `oneOf` variants that become labeled options.
+
+### Probe 7 — Claude native `AskUserQuestion` (final)
+
+Single question, session `ses_372a285dd66a`:
+
+```text
+✓ Your questions have been answered: "Which database should we use?"="Postgres".
+```
+
+Two questions in one call, session `ses_7736cf339c1e`:
+
+```text
+QUESTION qst_ee35593dd830 -> Postgres
+QUESTION qst_d9e4557a3f2a -> React
+✓ Your questions have been answered: "Which database should we use?"="Postgres", "Which UI framework s…
+PENDING {}
+```
+
+**Result: PASS.** The answer path is `ertangle_approve` returning `behavior: "allow"` plus `updatedInput.answers`; injected tool results were abandoned after live probes still produced "The user did not answer the questions."
+
+### Probe 8 — Web DOM submit and banner clearing (final)
+
+Session `ses_c398b794f052`, pending `qst_fdef8277e8af`, answered from headless Chrome through the DevTools Protocol:
+
+```text
+BANNER {"display":"block","detail":"Cache selection：Which cache should we use?",
+        "actions":"...radio Redis...radio Memcached...送出答案按钮"}
+INPUT {"kind":"option","value":"Redis"}
+AFTER {"display":"none"}
+BANNER_AFTER {"display":"none"}
+PENDING_COUNT 0
+TRANSCRIPT_TAIL ... Redis
+```
+
+**Result: PASS.** The banner renders real options, the click submits the answer, the banner hides, and the agent continues with `Redis`. Earlier stale-banner observations were traced to pending questions surviving session exit and grouped siblings; both are now fixed.
+
+### Probe 9 — Codex and Antigravity
+
+Codex `item/tool/requestUserInput` answer shape and multi-input parsing are covered by unit tests (`user_input_answer_result_has_codex_shape` and the parser tests). A live native probe is not possible here: the tool is absent from the default-mode tool set; the binary reports `request_user_input requires an interactive stdin terminal` while the adapter uses piped stdin; the `experimental_request_user_input` toggle does not remove that requirement; and a fallback probe hit an unrelated token-mismatch error. Antigravity is not installed in this environment.
+
+**Result: protocol/unit PASS; live probes BLOCKED (environment).**
+
 ## Coverage summary
 
 | Path | Probe | Status |
 | --- | --- | --- |
-| OpenCode ACP + `ertangle_question` MCP | Probe 1 | PASS |
+| OpenCode ACP + `ertangle_question` MCP | Probe 1, 5 | PASS |
 | Web WebSocket `answer_question` | Probe 2 | PASS (wire path) |
-| Web DOM rendering and submit handler | Probe 3 | PARTIAL (blocked by ACP fallback) |
-| OpenCode native `question` tool | Probe 4 | FAIL (pending worker fix) |
-| Claude native `AskUserQuestion` | — | Pending worker implementation |
-| Codex `item/tool/requestUserInput` | — | Pending worker implementation |
-| ACP raw `tool_call` fallback | — | Pending worker implementation |
-| Multiple questions per request | — | Pending worker implementation |
-| Cancellable daemon timeout | — | Pending worker implementation |
-| Antigravity agent | — | Binary not installed in this environment |
+| Web DOM rendering and submit handler | Probe 3, 8 | PASS |
+| OpenCode native `question` tool | Probe 4, 6 | PASS |
+| ACP raw `tool_call` fallback | Probe 6 | PASS |
+| ACP elicitation `oneOf` options | Probe 6 | PASS |
+| Claude native `AskUserQuestion` | Probe 7 | PASS (single and multi) |
+| Codex `item/tool/requestUserInput` | Probe 9 | PASS (protocol/unit); live blocked |
+| Multiple questions per request | Probe 6, 7 | PASS |
+| Cancellable daemon timeout | unit test | PASS |
+| Grouped / session-exit cleanup | unit tests, Probe 8 | PASS |
+| Antigravity agent | Probe 9 | BLOCKED (binary not installed) |
 
 ## Notes
 
