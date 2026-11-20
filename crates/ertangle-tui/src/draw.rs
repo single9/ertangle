@@ -667,15 +667,23 @@ pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
             .map_or_else(|| short(&q.session), |s| s.label.clone());
         let mine = Some(&q.session) == selected.as_ref();
         let total = app.state.pending_questions.len() + app.state.pending_permissions.len();
-        let more = if total > 1 {
+        let qst_for_session = app
+            .state
+            .pending_questions
+            .values()
+            .filter(|item| Some(&item.session) == selected.as_ref())
+            .count();
+        let more = if qst_for_session > 1 {
+            format!(" (+{} 問題)", qst_for_session - 1)
+        } else if total > 1 {
             format!(" (+{})", total - 1)
         } else {
             String::new()
         };
         let keys = if mine {
-            tr!("[q/Enter 回答]")
+            tr!("[Enter 回答]")
         } else {
-            tr!("(選取該 session 後 q 回答)")
+            tr!("(選取該 session 後 Enter 回答)")
         };
         let default_header = tr!("提問");
         let header_str = q.header.as_deref().unwrap_or(&default_header);
@@ -1924,7 +1932,7 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     }
     if !app.state.pending_questions.is_empty() {
         lines.push(Line::styled(
-            tr!("  [q/Enter] 回答問題"),
+            tr!("  [Enter] 回答問題"),
             Style::default().fg(Color::DarkGray),
         ));
     }

@@ -287,6 +287,8 @@ pub(crate) struct Inner {
     pub(crate) approval_waiters: HashMap<String, Sender<Decision>>,
     /// Pending interactive questions awaiting human answers: question id -> answer channel.
     pub(crate) question_waiters: HashMap<String, Sender<Vec<String>>>,
+    /// Cancellable timeouts for pending questions: question id -> cancellation sender.
+    pub(crate) question_timers: HashMap<String, Sender<()>>,
     pub(crate) bus_guard: BusGuard,
     pub(crate) policy: PolicyEngine,
     pub(crate) default_cwd: PathBuf,
@@ -365,6 +367,7 @@ impl Shared {
                 waiters: Vec::new(),
                 approval_waiters: HashMap::new(),
                 question_waiters: HashMap::new(),
+                question_timers: HashMap::new(),
                 bus_guard: BusGuard::default(),
                 policy,
                 default_cwd,
@@ -536,6 +539,25 @@ impl Shared {
         };
         inner.state.apply(&rec);
 
+        match &rec.event {
+            Event::QuestionResolved { id, .. } => {
+                inner.question_timers.remove(id);
+            }
+            Event::SessionExited { session, .. } | Event::SessionRemoved { session } => {
+                let q_ids: Vec<String> = inner
+                    .state
+                    .pending_questions
+                    .values()
+                    .filter(|q| &q.session == session)
+                    .map(|q| q.id.clone())
+                    .collect();
+                for q_id in q_ids {
+                    inner.question_timers.remove(&q_id);
+                }
+            }
+            _ => {}
+        }
+
         // 序列化、遮罩與寫檔都在 log 寫入執行緒；這裡持鎖送出，順序與 seq 一致。
         let _ = lock(&self.log_tx).send(LogMsg::Rec(Box::new(rec.clone())));
 
@@ -631,21 +653,32 @@ impl Shared {
                 let sh = self.clone();
                 let q_id = q.id.clone();
                 let sid_c = sid.clone();
+                let (cancel_tx, cancel_rx) = std::sync::mpsc::channel();
+                lock(&self.inner)
+                    .question_timers
+                    .insert(q_id.clone(), cancel_tx);
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(300));
-                    let is_pending = {
-                        let inner = lock(&sh.inner);
-                        inner.state.pending_questions.contains_key(&q_id)
-                    };
-                    if is_pending {
-                        if let Some((_sid, ctl)) = sh.control(&sid_c) {
-                            let _ = ctl.resolve_question(&q_id, &[]);
+                    match cancel_rx.recv_timeout(std::time::Duration::from_secs(300)) {
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                            let is_pending = {
+                                let mut inner = lock(&sh.inner);
+                                inner.question_timers.remove(&q_id);
+                                inner.state.pending_questions.contains_key(&q_id)
+                            };
+                            if is_pending {
+                                if let Some((_sid, ctl)) = sh.control(&sid_c) {
+                                    let _ = ctl.resolve_question(&q_id, &[]);
+                                }
+                                sh.emit(Event::QuestionResolved {
+                                    session: sid_c,
+                                    id: q_id,
+                                    answers: Vec::new(),
+                                });
+                            }
                         }
-                        sh.emit(Event::QuestionResolved {
-                            session: sid_c,
-                            id: q_id,
-                            answers: Vec::new(),
-                        });
+                        _ => {
+                            // Cancelled by question resolution or session exit - thread terminates immediately.
+                        }
                     }
                 });
                 Event::QuestionRequested { question: q }

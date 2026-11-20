@@ -4279,3 +4279,147 @@ fn test_question_picker_single_and_multi_select() {
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.picker.is_none());
 }
+
+#[test]
+fn test_q_key_quits_even_when_question_is_pending() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    app.state
+        .sessions
+        .insert("ses_q".into(), make_test_session("ses_q"));
+    app.selected = 0;
+
+    let q = ertangle_core::UserQuestion {
+        id: "qst_pending".into(),
+        session: "ses_q".into(),
+        question: "Pending question".into(),
+        header: None,
+        options: Vec::new(),
+        multi_select: false,
+        custom: true,
+    };
+    app.state.pending_questions.insert("qst_pending".into(), q);
+
+    assert!(app.selected_question().is_some());
+
+    // Press 'q' in normal mode: must quit, not open picker!
+    let q_key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+    crate::input::handle_key(&mut app, &mut w, q_key).unwrap();
+    assert!(
+        app.should_quit,
+        "q key must set should_quit even when a question is pending"
+    );
+    assert_eq!(app.mode, Mode::Normal);
+}
+
+#[test]
+fn test_ctrl_c_quits_in_question_picker() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let q = ertangle_core::UserQuestion {
+        id: "qst_pick_quit".into(),
+        session: "ses_q".into(),
+        question: "Question".into(),
+        header: None,
+        options: vec![ertangle_core::QuestionOption::plain("Opt 1")],
+        multi_select: false,
+        custom: true,
+    };
+    crate::menu::start_question_picker(&mut app, &q);
+    assert_eq!(app.mode, Mode::Pick);
+
+    // Press Ctrl+C in picker
+    let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+    crate::menu::handle_pick_key(&mut app, &mut w, ctrl_c).unwrap();
+    assert!(app.should_quit, "Ctrl+C in picker must set should_quit");
+}
+
+#[test]
+fn test_multiple_questions_per_session_answered_sequentially() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    app.state
+        .sessions
+        .insert("ses_multi_q".into(), make_test_session("ses_multi_q"));
+    app.selected = 0;
+
+    let q1 = ertangle_core::UserQuestion {
+        id: "qst_seq_1".into(),
+        session: "ses_multi_q".into(),
+        question: "Question 1".into(),
+        header: Some("First".into()),
+        options: vec![ertangle_core::QuestionOption::plain("Choice A")],
+        multi_select: false,
+        custom: true,
+    };
+    let q2 = ertangle_core::UserQuestion {
+        id: "qst_seq_2".into(),
+        session: "ses_multi_q".into(),
+        question: "Question 2".into(),
+        header: Some("Second".into()),
+        options: vec![ertangle_core::QuestionOption::plain("Choice B")],
+        multi_select: false,
+        custom: true,
+    };
+
+    app.state
+        .pending_questions
+        .insert("qst_seq_1".into(), q1.clone());
+    app.state
+        .pending_questions
+        .insert("qst_seq_2".into(), q2.clone());
+
+    // First question is available
+    let active_q1 = app.selected_question().unwrap();
+    assert_eq!(active_q1.id, "qst_seq_1");
+
+    // Open picker for q1 and submit
+    crate::menu::start_question_picker(&mut app, &active_q1);
+    let enter_key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+    crate::menu::handle_pick_key(&mut app, &mut w, enter_key).unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+
+    // Simulate daemon resolving q1 and removing it from state
+    app.state.pending_questions.remove("qst_seq_1");
+
+    // Next question is now available on the same session
+    let active_q2 = app.selected_question().unwrap();
+    assert_eq!(active_q2.id, "qst_seq_2");
+
+    // Open picker for q2 and submit
+    crate::menu::start_question_picker(&mut app, &active_q2);
+    crate::menu::handle_pick_key(&mut app, &mut w, enter_key).unwrap();
+    app.state.pending_questions.remove("qst_seq_2");
+
+    assert!(app.selected_question().is_none());
+}
+
+fn make_test_session(id: &str) -> Session {
+    Session {
+        id: id.into(),
+        kind: AgentKind::OpenCode,
+        label: format!("worker/{id}"),
+        cwd: "/work".into(),
+        branch: None,
+        role: Role::Worker,
+        status: SessionStatus::Busy,
+        model: None,
+        cost: Cost::default(),
+        parent: None,
+        created_ms: ertangle_core::now_millis(),
+        transport: "acp".into(),
+        status_note: None,
+        repo_root: None,
+        context: None,
+        native_id: None,
+        permission: Default::default(),
+        budget_usd: None,
+        over_budget: false,
+        handed_off_to: None,
+        effort: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+    }
+}
