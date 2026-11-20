@@ -80,6 +80,7 @@
 | [T73](T73-session-cleanup.md) | Session cleanup: auto-archive merged workers, retention, prune | P2 | — |
 | [T74](T74-shell-exec-and-web-commands.md) | Shell command execution in session cwd + web command palette | P2 | — |
 | [T75](T75-thinking-display-without-emoji.md) | Emoji-free animated thinking display with folded preview | P2 | — |
+| [T76](T76-tui-session-flow-dashboard.md) | TUI session flow dashboard: live session status and message flow | P3 | — |
 
 ## Language convention
 
