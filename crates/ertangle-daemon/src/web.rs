@@ -851,6 +851,43 @@ mod tests {
         assert!(css.contains("top: 0;"));
     }
 
+    #[test]
+    fn question_card_is_vertical_and_survives_rerender() {
+        // Option rows are vertical full-width labels, not crammed into .btn-row.
+        assert!(INDEX_HTML.contains(".q-opt {"));
+        assert!(INDEX_HTML.contains("class=\"q-opt-desc\""));
+        assert!(INDEX_HTML.contains(".q-submit-row { display:flex; justify-content:flex-end; }"));
+        assert!(INDEX_HTML.contains("min-height:44px"));
+        // Re-render is gated by a signature so selections and custom text persist.
+        assert!(INDEX_HTML.contains("function setCardHtml("));
+        assert!(INDEX_HTML.contains("el.dataset.sig === sig"));
+        assert!(!INDEX_HTML.contains("urgentActionRow.innerHTML = questionAnswerHtml"));
+        // Grouped questions share one submit that sends one op per question.
+        assert!(INDEX_HTML.contains("function questionGroupOf("));
+        assert!(INDEX_HTML.contains("function submitQuestionGroup("));
+        assert!(INDEX_HTML.contains("op: \"answer_question\""));
+        // Enter in the custom input submits.
+        assert!(INDEX_HTML.contains("event.key==='Enter'"));
+    }
+
+    #[test]
+    fn chat_question_renders_inline_above_composer() {
+        let slot = INDEX_HTML
+            .find("id=\"chat-question-slot\"")
+            .expect("inline question slot");
+        let transcript = INDEX_HTML
+            .find("id=\"chat-transcript\"")
+            .expect("transcript");
+        let composer = INDEX_HTML.find("id=\"chat-composer\"").expect("composer");
+        assert!(transcript < slot && slot < composer);
+        let css_start = INDEX_HTML.find("#chat-question-slot {").expect("slot CSS");
+        let css_end = INDEX_HTML[css_start..].find('}').expect("end") + css_start;
+        let css = &INDEX_HTML[css_start..css_end];
+        assert!(css.contains("max-height:50vh"));
+        assert!(css.contains("overflow-y:auto"));
+        assert!(INDEX_HTML.contains("function answerQuestionInChat("));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()
