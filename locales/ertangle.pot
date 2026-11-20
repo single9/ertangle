@@ -2898,6 +2898,10 @@ msgid "↑↓ 移動 · 1-9 直接選擇 · Enter 選擇 · Esc 稍後回答"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "s 跳過此題"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "[Enter 回答]"
 msgstr ""
 
@@ -3663,6 +3667,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "已送出問題回覆"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "至少要回答群組中的一題"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

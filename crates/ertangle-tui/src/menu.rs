@@ -697,6 +697,7 @@ fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
                 enter_custom(p);
             }
         }
+        KeyCode::Char('s') if !ctrl => return skip_question(app, writer),
         KeyCode::Char(c @ '1'..='9') if !ctrl => {
             let i = (c as usize) - ('1' as usize);
             if i >= rows {
@@ -731,6 +732,31 @@ fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
         _ => {}
     }
     Ok(())
+}
+
+/// 跳過群組中的目前問題 (送出空答案)；群組至少要有一題有答案，所以不能全部跳過。
+fn skip_question(app: &mut App, writer: &mut HostRouter) -> Result<()> {
+    let Some(p) = app.picker.as_ref() else {
+        return Ok(());
+    };
+    let PickStage::Question {
+        questions,
+        index,
+        collected,
+        ..
+    } = &p.stage
+    else {
+        return Ok(());
+    };
+    if questions.len() < 2 {
+        return Ok(());
+    }
+    let last = *index + 1 == questions.len();
+    if last && collected.iter().all(|(_, _, a)| a.is_empty()) {
+        app.status = tr!("至少要回答群組中的一題");
+        return Ok(());
+    }
+    finish_question(app, writer, Vec::new())
 }
 
 /// 已勾選的選項，依問題給定的選項順序排列。

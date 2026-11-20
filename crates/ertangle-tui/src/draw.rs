@@ -781,6 +781,11 @@ fn draw_question_picker(f: &mut TuiFrame, app: &App) {
     } else {
         tr!("↑↓ 移動 · 1-9 直接選擇 · Enter 選擇 · Esc 稍後回答")
     };
+    let hint = if questions.len() > 1 && !*custom_mode {
+        format!("{hint} · {}", tr!("s 跳過此題"))
+    } else {
+        hint
+    };
     for l in wrap_display(&hint, inner_w) {
         lines.push(Line::from(Span::styled(l, dim)));
     }

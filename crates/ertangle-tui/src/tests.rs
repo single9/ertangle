@@ -4595,3 +4595,27 @@ fn question_picker_group_walks_sequentially_and_sends_together() {
     assert!(a < b);
     assert!(sent.contains("Vanilla") && sent.contains("Mango"), "{sent}");
 }
+
+#[test]
+fn question_picker_group_skip_sends_empty_answer_but_not_all_skipped() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let q1 = qpick_q("qst_s1", false, true, Some("g"));
+    let q2 = qpick_q("qst_s2", false, true, Some("g"));
+    app.state
+        .pending_questions
+        .insert(q1.id.clone(), q1.clone());
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    // Skipping every question is refused on the last one.
+    crate::menu::start_question_picker(&mut app, &q1);
+    qpick_key(&mut app, &mut w, KeyCode::Char('s'));
+    qpick_key(&mut app, &mut w, KeyCode::Char('s'));
+    assert!(app.picker.is_some());
+    assert!(qpick_sent(&mut peer).is_empty());
+    qpick_key(&mut app, &mut w, KeyCode::Char('2'));
+    assert!(app.picker.is_none());
+    let sent = qpick_sent(&mut peer);
+    assert_eq!(sent.matches("answer_question").count(), 2, "{sent}");
+    assert!(sent.contains("Chocolate"), "{sent}");
+    assert!(sent.contains("\"answers\":[]"), "{sent}");
+}
