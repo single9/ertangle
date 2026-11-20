@@ -76,7 +76,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         }
     };
 
-    // Bus 被隱藏時，待核准請求或提問必須在別處看得到。
+    // When the bus is hidden, pending approvals and questions must still be visible.
     let has_pending =
         !app.state.pending_permissions.is_empty() || !app.state.pending_questions.is_empty();
     let center = if !right_bus && has_pending {
@@ -639,7 +639,7 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     );
 }
 
-/// 一行待核准／提問提示 (Bus 隱藏時使用)：優先顯示目前選取 session 的請求。
+/// One-line approval or question banner (used when the bus is hidden): prefer the selected session.
 pub(crate) fn draw_pending_banner(f: &mut TuiFrame, area: Rect, app: &App) {
     let selected = app.selected_id();
     let perm_mine = app

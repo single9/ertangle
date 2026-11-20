@@ -253,7 +253,7 @@ pub enum Request {
         req: String,
         decision: Decision,
     },
-    /// agent (經 MCP `ertangle_question`) 提出問題並等待使用者回覆。
+    /// Agent asks a question through MCP `ertangle_question` and waits for the user's answer.
     McpQuestion {
         session: SessionId,
         question: String,
@@ -264,7 +264,7 @@ pub enum Request {
         #[serde(default)]
         multi_select: bool,
     },
-    /// 回覆互動問題。
+    /// Reply to an interactive question.
     AnswerQuestion {
         session: SessionId,
         id: String,
@@ -435,7 +435,7 @@ pub enum Frame {
     PermissionDecision {
         decision: Decision,
     },
-    /// 互動問題回覆 (給 MCP `ertangle_question` 或 client)。
+    /// Interactive question answer (for MCP `ertangle_question` or a client).
     QuestionAnswer {
         answers: Vec<String>,
     },

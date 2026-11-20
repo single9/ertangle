@@ -1556,7 +1556,7 @@ pub(crate) fn ask_user(
     }
 }
 
-/// 向使用者提出互動問題並阻塞等待答案 (最多 5 分鐘，逾時視為放棄)。
+/// Ask the user an interactive question and block until answered (5-minute timeout, treated as abandoned).
 pub(crate) fn ask_user_question(
     shared: &Arc<Shared>,
     sid: &str,
@@ -1584,7 +1584,7 @@ pub(crate) fn ask_user_question(
     }
 }
 
-/// MCP `ertangle_question`：提出問題並等候人類回答。
+/// MCP `ertangle_question`: ask a question and wait for the human answer.
 pub(crate) fn handle_mcp_question(
     shared: &Arc<Shared>,
     reply: &ClientTx,
@@ -1612,7 +1612,7 @@ pub(crate) fn handle_mcp_question(
     let _ = reply.send(Frame::QuestionAnswer { answers });
 }
 
-/// 人類回覆問題。
+/// Answer an interactive question from a human.
 pub(crate) fn handle_answer_question(
     shared: &Arc<Shared>,
     reply: &ClientTx,

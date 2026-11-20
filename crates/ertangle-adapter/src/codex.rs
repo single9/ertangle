@@ -35,6 +35,18 @@ struct PendingQuestion {
     q_key: Option<String>,
 }
 
+/// Build the JSON-RPC result for Codex `item/tool/requestUserInput`.
+fn user_input_answer_result(answers: &[String], key: &str) -> Value {
+    let mut answers_by_id = serde_json::Map::new();
+    if !answers.is_empty() {
+        answers_by_id.insert(
+            key.to_string(),
+            json!({ "answers": answers, "other": null }),
+        );
+    }
+    json!({ "answers": answers_by_id })
+}
+
 struct Conn {
     session_id: String,
     stdin: Mutex<ChildStdin>,
@@ -623,15 +635,11 @@ impl AgentControl for CodexControl {
             bail!("{}", tr!("未知的問題請求：{id}", id = id));
         };
         if method == "item/tool/requestUserInput" {
-            let mut map = serde_json::Map::new();
-            if !answers.is_empty() {
-                let key = q_key.unwrap_or_else(|| "q0".to_string());
-                map.insert(key, json!(answers));
-            }
+            let key = q_key.unwrap_or_else(|| "q0".to_string());
             self.conn.write(&json!({
                 "jsonrpc": "2.0",
                 "id": rpc_id,
-                "result": { "answers": map }
+                "result": user_input_answer_result(answers, &key)
             }))
         } else {
             let result = if answers.is_empty() {
@@ -971,6 +979,19 @@ fn thread_start_params(spec: &SessionSpec) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn user_input_answer_result_has_codex_shape() {
+        let result = user_input_answer_result(&["Postgres".into(), "Redis".into()], "db");
+        assert_eq!(
+            result,
+            json!({ "answers": { "db": { "answers": ["Postgres", "Redis"], "other": null } } })
+        );
+        assert_eq!(
+            user_input_answer_result(&[], "db"),
+            json!({ "answers": {} })
+        );
+    }
 
     #[test]
     fn approval_verdict_mapping() {

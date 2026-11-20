@@ -316,7 +316,7 @@ pub(crate) enum PickStage {
         kind: AgentKind,
         model: Option<String>,
     },
-    /// 回答互動問題。
+    /// Answer an interactive question.
     Question {
         id: String,
         session: ertangle_core::SessionId,

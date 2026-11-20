@@ -858,7 +858,7 @@ impl App {
             .map(|p| p.req.clone())
     }
 
-    /// 回傳目前選取 session 尚未回覆的提問。
+    /// Return the unanswered question for the selected session.
     pub(crate) fn selected_question(&self) -> Option<ertangle_core::UserQuestion> {
         let id = self.selected_id()?;
         self.state

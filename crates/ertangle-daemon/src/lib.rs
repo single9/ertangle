@@ -285,7 +285,7 @@ pub(crate) struct Inner {
     pub(crate) waiters: Vec<Waiter>,
     /// 等待人類回覆的 MCP 核准請求：req id → 決定通道。
     pub(crate) approval_waiters: HashMap<String, Sender<Decision>>,
-    /// 等待人類回覆的互動問題：qst id → 答案通道。
+    /// Pending interactive questions awaiting human answers: question id -> answer channel.
     pub(crate) question_waiters: HashMap<String, Sender<Vec<String>>>,
     pub(crate) bus_guard: BusGuard,
     pub(crate) policy: PolicyEngine,

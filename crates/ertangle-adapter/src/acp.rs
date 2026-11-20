@@ -843,7 +843,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             "protocolVersion": 1,
             "clientCapabilities": {
                 "fs": { "readTextFile": false, "writeTextFile": false },
-                "elicitation": { "form": true }
+                "elicitation": { "form": {} }
             }
         }),
         CALL_TIMEOUT,
