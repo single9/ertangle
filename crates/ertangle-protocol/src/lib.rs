@@ -496,6 +496,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn restart_request_serde_roundtrip() {
+        let json = serde_json::to_string(&Request::Restart).unwrap();
+        assert_eq!(json, r#"{"op":"restart"}"#);
+        assert!(matches!(
+            serde_json::from_str::<Request>(&json).unwrap(),
+            Request::Restart
+        ));
+    }
+
+    #[test]
     fn merge_strategy_parses_and_request_defaults_to_none() {
         assert_eq!(
             "merge".parse::<MergeStrategy>().unwrap(),
