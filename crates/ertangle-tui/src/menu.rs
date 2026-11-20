@@ -322,6 +322,15 @@ pub(crate) enum PickStage {
         session: ertangle_core::SessionId,
         multi_select: bool,
         selected: std::collections::HashSet<String>,
+        /// 同一組 (group) 必須一起回答的所有問題，依 id 排序。
+        questions: Vec<ertangle_core::UserQuestion>,
+        /// 目前顯示的問題在 `questions` 的位置。
+        index: usize,
+        /// 已回答問題的 (session, id, answers)；最後一題答完才一起送出。
+        collected: Vec<(ertangle_core::SessionId, String, Vec<String>)>,
+        /// 是否正在輸入自訂答案 (文字不會過濾選項)。
+        custom_mode: bool,
+        custom_text: String,
     },
     /// 選擇多 Agent 團隊範本。
     Playbook,
@@ -478,42 +487,352 @@ pub(crate) fn start_handoff_picker(app: &mut App) {
     }
 }
 
+/// 開啟問題選擇器；若問題屬於某個 group，會一併帶入同 session 同 group 的其他問題，
+/// 依 id 排序後逐題回答。
 pub(crate) fn start_question_picker(app: &mut App, q: &ertangle_core::UserQuestion) {
-    let mut items: Vec<(String, String)> = Vec::new();
-    for opt in &q.options {
-        let label = match &opt.description {
-            Some(desc) if !desc.is_empty() => format!("{} ({})", opt.label, desc),
-            _ => opt.label.clone(),
-        };
-        items.push((label, opt.label.clone()));
+    let mut questions: Vec<ertangle_core::UserQuestion> = match &q.group {
+        Some(g) => app
+            .state
+            .pending_questions
+            .values()
+            .filter(|o| o.session == q.session && o.group.as_ref() == Some(g))
+            .cloned()
+            .collect(),
+        None => Vec::new(),
+    };
+    if !questions.iter().any(|o| o.id == q.id) {
+        questions.push(q.clone());
     }
-    let title = match &q.header {
-        Some(h) if !h.is_empty() => format!("{}: {}", h, q.question),
-        _ => q.question.clone(),
-    };
-    let title_suffix = if q.multi_select {
-        tr!(" (Space 勾選 · Enter 送出 · Esc 取消)")
-    } else {
-        tr!(" (Enter 選擇 · 可輸入自訂答案 · Esc 取消)")
-    };
-    app.mode = Mode::Pick;
-    app.picker = Some(Picker {
+    questions.sort_by(|a, b| a.id.cmp(&b.id));
+    let index = questions.iter().position(|o| o.id == q.id).unwrap_or(0);
+    let mut picker = Picker {
         stage: PickStage::Question {
-            id: q.id.clone(),
+            id: String::new(),
             session: q.session.clone(),
-            multi_select: q.multi_select,
-            selected: std::collections::HashSet::new(),
+            multi_select: false,
+            selected: Default::default(),
+            questions,
+            index,
+            collected: Vec::new(),
+            custom_mode: false,
+            custom_text: String::new(),
         },
         resume_scope: ResumeScope::default(),
-        title: format!("{title}{title_suffix}"),
-        items,
+        title: String::new(),
+        items: Vec::new(),
         filter: String::new(),
         cursor: 0,
         pending: None,
         loading: false,
         group_effort: false,
         variants: Default::default(),
-    });
+    };
+    load_question(&mut picker, index);
+    app.mode = Mode::Pick;
+    app.picker = Some(picker);
+}
+
+/// 把 `questions[index]` 載入選擇器 (重設游標、勾選與自訂輸入)。
+fn load_question(p: &mut Picker, index: usize) {
+    let PickStage::Question {
+        id,
+        session,
+        multi_select,
+        selected,
+        questions,
+        index: cur,
+        custom_mode,
+        custom_text,
+        ..
+    } = &mut p.stage
+    else {
+        return;
+    };
+    let Some(q) = questions.get(index) else {
+        return;
+    };
+    *cur = index;
+    *id = q.id.clone();
+    *session = q.session.clone();
+    *multi_select = q.multi_select;
+    selected.clear();
+    custom_text.clear();
+    *custom_mode = q.options.is_empty() && q.custom;
+    p.items = q
+        .options
+        .iter()
+        .map(|o| (o.label.clone(), o.label.clone()))
+        .collect();
+    p.title = if questions.len() > 1 {
+        tr!("問題 ({n}/{total})", n = index + 1, total = questions.len())
+    } else {
+        tr!("問題")
+    };
+    p.filter.clear();
+    p.cursor = 0;
+}
+
+/// 目前問題的游標列數 (選項 + 「自訂答案」列)。
+fn question_rows(p: &Picker) -> usize {
+    let PickStage::Question {
+        questions, index, ..
+    } = &p.stage
+    else {
+        return 0;
+    };
+    let custom = questions.get(*index).is_some_and(|q| q.custom);
+    p.items.len() + usize::from(custom)
+}
+
+/// 記下目前問題的答案；還有下一題就前進，否則把整組答案送出。
+fn finish_question(app: &mut App, writer: &mut HostRouter, answers: Vec<String>) -> Result<()> {
+    let Some(p) = app.picker.as_mut() else {
+        return Ok(());
+    };
+    let next = {
+        let PickStage::Question {
+            id,
+            session,
+            collected,
+            questions,
+            index,
+            ..
+        } = &mut p.stage
+        else {
+            return Ok(());
+        };
+        collected.push((session.clone(), id.clone(), answers));
+        (*index + 1 < questions.len()).then_some(*index + 1)
+    };
+    if let Some(next) = next {
+        load_question(p, next);
+        return Ok(());
+    }
+    let collected = match std::mem::replace(&mut p.stage, PickStage::Agent) {
+        PickStage::Question { collected, .. } => collected,
+        _ => Vec::new(),
+    };
+    app.picker = None;
+    app.mode = Mode::Normal;
+    for (session, id, answers) in collected {
+        crate::send(
+            writer,
+            &ertangle_protocol::Request::AnswerQuestion {
+                session,
+                id,
+                answers,
+            },
+        )?;
+    }
+    app.status = tr!("已送出問題回覆");
+    Ok(())
+}
+
+/// 問題選擇器的按鍵處理：不做 type-to-filter，自訂答案走獨立的輸入模式。
+fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
+    let Some(p) = app.picker.as_mut() else {
+        return Ok(());
+    };
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let rows = question_rows(p);
+    let n_opts = p.items.len();
+    let (multi, custom_mode) = match &p.stage {
+        PickStage::Question {
+            multi_select,
+            custom_mode,
+            ..
+        } => (*multi_select, *custom_mode),
+        _ => return Ok(()),
+    };
+
+    if custom_mode {
+        return handle_custom_input(app, writer, key);
+    }
+    let toggle = |p: &mut Picker, i: usize| {
+        let Some((_, val)) = p.items.get(i).cloned() else {
+            return;
+        };
+        if let PickStage::Question { selected, .. } = &mut p.stage {
+            if !selected.remove(&val) {
+                selected.insert(val);
+            }
+        }
+    };
+    let enter_custom = |p: &mut Picker| {
+        if let PickStage::Question { custom_mode, .. } = &mut p.stage {
+            *custom_mode = true;
+        }
+    };
+    match key.code {
+        KeyCode::Esc => {
+            // 不回答：問題仍留在 pending。
+            app.picker = None;
+            app.mode = Mode::Normal;
+        }
+        KeyCode::Down | KeyCode::Tab => {
+            if rows > 0 {
+                p.cursor = (p.cursor + 1) % rows;
+            }
+        }
+        KeyCode::Up | KeyCode::BackTab => {
+            if rows > 0 {
+                p.cursor = (p.cursor + rows - 1) % rows;
+            }
+        }
+        KeyCode::Char('n') if ctrl => {
+            if rows > 0 {
+                p.cursor = (p.cursor + 1) % rows;
+            }
+        }
+        KeyCode::Char('p') if ctrl => {
+            if rows > 0 {
+                p.cursor = (p.cursor + rows - 1) % rows;
+            }
+        }
+        KeyCode::Char(' ') if multi && !ctrl => {
+            if p.cursor < n_opts {
+                let c = p.cursor;
+                toggle(p, c);
+            } else if p.cursor < rows {
+                enter_custom(p);
+            }
+        }
+        KeyCode::Char('s') if !ctrl => return skip_question(app, writer),
+        KeyCode::Char(c @ '1'..='9') if !ctrl => {
+            let i = (c as usize) - ('1' as usize);
+            if i >= rows {
+                return Ok(());
+            }
+            p.cursor = i;
+            if i >= n_opts {
+                enter_custom(p);
+            } else if multi {
+                toggle(p, i);
+            } else if let Some((_, v)) = p.items.get(i).cloned() {
+                return finish_question(app, writer, vec![v]);
+            }
+        }
+        KeyCode::Enter => {
+            if p.cursor >= n_opts && p.cursor < rows {
+                enter_custom(p);
+                return Ok(());
+            }
+            let highlighted = p.items.get(p.cursor).map(|(_, v)| v.clone());
+            let answers = if multi {
+                let mut ans = ordered_selection(p);
+                if ans.is_empty() {
+                    ans.extend(highlighted);
+                }
+                ans
+            } else {
+                highlighted.into_iter().collect()
+            };
+            return finish_question(app, writer, answers);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// 跳過群組中的目前問題 (送出空答案)；群組至少要有一題有答案，所以不能全部跳過。
+fn skip_question(app: &mut App, writer: &mut HostRouter) -> Result<()> {
+    let Some(p) = app.picker.as_ref() else {
+        return Ok(());
+    };
+    let PickStage::Question {
+        questions,
+        index,
+        collected,
+        ..
+    } = &p.stage
+    else {
+        return Ok(());
+    };
+    if questions.len() < 2 {
+        return Ok(());
+    }
+    let last = *index + 1 == questions.len();
+    if last && collected.iter().all(|(_, _, a)| a.is_empty()) {
+        app.status = tr!("至少要回答群組中的一題");
+        return Ok(());
+    }
+    finish_question(app, writer, Vec::new())
+}
+
+/// 已勾選的選項，依問題給定的選項順序排列。
+fn ordered_selection(p: &Picker) -> Vec<String> {
+    let PickStage::Question { selected, .. } = &p.stage else {
+        return Vec::new();
+    };
+    p.items
+        .iter()
+        .filter(|(_, v)| selected.contains(v))
+        .map(|(_, v)| v.clone())
+        .collect()
+}
+
+/// 自訂答案輸入模式：所有字元 (含空白) 都是答案的一部分。
+fn handle_custom_input(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
+    let Some(p) = app.picker.as_mut() else {
+        return Ok(());
+    };
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let has_options = !p.items.is_empty();
+    let in_group = matches!(&p.stage, PickStage::Question { questions, .. } if questions.len() > 1);
+    let multi = matches!(
+        p.stage,
+        PickStage::Question {
+            multi_select: true,
+            ..
+        }
+    );
+    let PickStage::Question {
+        custom_mode,
+        custom_text,
+        ..
+    } = &mut p.stage
+    else {
+        return Ok(());
+    };
+    match key.code {
+        KeyCode::Esc => {
+            if has_options {
+                *custom_mode = false;
+                custom_text.clear();
+            } else {
+                // 沒有選項可退回：直接離開，問題仍 pending。
+                app.picker = None;
+                app.mode = Mode::Normal;
+            }
+        }
+        KeyCode::Backspace => {
+            custom_text.pop();
+        }
+        KeyCode::Char(c) if !ctrl => custom_text.push(c),
+        KeyCode::Enter => {
+            let text = custom_text.trim().to_string();
+            if text.is_empty() {
+                if has_options {
+                    *custom_mode = false;
+                    return Ok(());
+                }
+                // 只有自由輸入的選填欄位：群組內留空 Enter 即跳過。
+                if in_group {
+                    return skip_question(app, writer);
+                }
+                return Ok(());
+            }
+            let mut answers = if multi {
+                ordered_selection(p)
+            } else {
+                Vec::new()
+            };
+            answers.push(text);
+            return finish_question(app, writer, answers);
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 pub(crate) fn start_spawn_picker(app: &mut App) {
@@ -890,6 +1209,9 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
         app.should_quit = true;
         return Ok(());
     }
+    if matches!(p.stage, PickStage::Question { .. }) {
+        return handle_question_key(app, writer, key);
+    }
     let n = p.visible().len();
     match key.code {
         KeyCode::Esc => {
@@ -962,29 +1284,6 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
             p.cursor = 0;
         }
         KeyCode::Char(' ') if !ctrl => {
-            let is_multi_qst = matches!(
-                p.stage,
-                PickStage::Question {
-                    multi_select: true,
-                    ..
-                }
-            );
-            if is_multi_qst {
-                let chosen_val = p.visible().get(p.cursor).map(|(_, val)| val.clone());
-                if let Some(val) = chosen_val {
-                    if let PickStage::Question {
-                        ref mut selected, ..
-                    } = p.stage
-                    {
-                        if selected.contains(&val) {
-                            selected.remove(&val);
-                        } else {
-                            selected.insert(val);
-                        }
-                    }
-                    return Ok(());
-                }
-            }
             p.filter.push(' ');
             p.cursor = 0;
         }
@@ -1186,48 +1485,8 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         }
                     }
                 }
-                PickStage::Question {
-                    id,
-                    session,
-                    multi_select,
-                    selected,
-                } => {
-                    let answers: Vec<String> = if multi_select {
-                        let mut ans: Vec<String> = selected.into_iter().collect();
-                        if ans.is_empty() {
-                            if let Some(v) = chosen {
-                                if !v.is_empty() {
-                                    ans.push(v);
-                                }
-                            } else if !custom.is_empty() {
-                                ans.push(custom);
-                            }
-                        }
-                        ans
-                    } else if !custom.is_empty()
-                        && chosen.as_deref() != Some(&custom)
-                        && p.visible().is_empty()
-                    {
-                        vec![custom]
-                    } else if let Some(v) = chosen {
-                        vec![v]
-                    } else if !custom.is_empty() {
-                        vec![custom]
-                    } else {
-                        Vec::new()
-                    };
-                    app.picker = None;
-                    app.mode = Mode::Normal;
-                    crate::send(
-                        writer,
-                        &ertangle_protocol::Request::AnswerQuestion {
-                            session,
-                            id,
-                            answers,
-                        },
-                    )?;
-                    app.status = tr!("已送出問題回覆");
-                }
+                // 問題選擇器由 `handle_question_key` 處理。
+                PickStage::Question { .. } => {}
                 PickStage::Project => {
                     let chosen_path = if chosen.is_some() {
                         chosen

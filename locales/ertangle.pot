@@ -2882,6 +2882,30 @@ msgid "Enter 使用自訂值：{value}"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "✎ 自訂答案…"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "輸入自訂答案 · Enter 送出 · Esc 返回選項"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "↑↓ 移動 · 1-9 或 Space 勾選 · Enter 送出 · Esc 稍後回答"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "↑↓ 移動 · 1-9 直接選擇 · Enter 選擇 · Esc 稍後回答"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "s 跳過此題"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "留空 Enter 跳過此題"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "[Enter 回答]"
 msgstr ""
 
@@ -3638,11 +3662,19 @@ msgid "交接給哪個 agent"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid " (Space 勾選 · Enter 送出 · Esc 取消)"
+msgid "問題 ({n}/{total})"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid " (Enter 選擇 · 可輸入自訂答案 · Esc 取消)"
+msgid "問題"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已送出問題回覆"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "至少要回答群組中的一題"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -3715,10 +3747,6 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
-msgstr ""
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "已送出問題回覆"
 msgstr ""
 
 #: crates/ertangle-tui/src/mouse.rs
