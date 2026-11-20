@@ -94,7 +94,41 @@ fn handle_ctrl_key(app: &mut App, key: KeyEvent) -> Result<bool> {
     }
 }
 
+/// Handles keys that only apply inside the Flow view; returns true when consumed.
+fn handle_flow_key(app: &mut App, key: KeyEvent) -> bool {
+    let step = |app: &mut App, delta: isize| {
+        let n = crate::flow::build_flow_model(app, ertangle_core::now_millis())
+            .nodes
+            .len();
+        let cur = app.flow_cursor.min(n.saturating_sub(1));
+        app.flow_cursor = cur.saturating_add_signed(delta).min(n.saturating_sub(1));
+    };
+    match key.code {
+        KeyCode::Char('j') | KeyCode::Down => step(app, 1),
+        KeyCode::Char('k') | KeyCode::Up => step(app, -1),
+        KeyCode::Enter => {
+            let model = crate::flow::build_flow_model(app, ertangle_core::now_millis());
+            let idx = app.flow_cursor.min(model.nodes.len().saturating_sub(1));
+            if let Some(node) = model.nodes.get(idx) {
+                app.select_or_pend(&node.id);
+            }
+            app.view = CenterView::Transcript;
+            app.selection = None;
+        }
+        KeyCode::Esc => app.view = app.flow_return,
+        KeyCode::Tab => {
+            app.selection = None;
+            app.view = CenterView::Transcript;
+        }
+        _ => return false,
+    }
+    true
+}
+
 fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
+    if app.view == CenterView::Flow && handle_flow_key(app, key) {
+        return Ok(());
+    }
     match key.code {
         KeyCode::Char('q') => {
             app.should_quit = true;
@@ -116,7 +150,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
                     CenterView::Worktrees
                 }
                 CenterView::Worktrees => CenterView::Tasks,
-                CenterView::Tasks | CenterView::Grid => CenterView::Transcript,
+                CenterView::Tasks | CenterView::Grid | CenterView::Flow => CenterView::Transcript,
             };
         }
         KeyCode::Char('g') => {
@@ -137,7 +171,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             }
             CenterView::Transcript => scroll_transcript_lines(app, 1),
             CenterView::Tasks => crate::tasks::move_task_cursor(app, 1),
-            CenterView::Worktrees | CenterView::Grid => {}
+            CenterView::Worktrees | CenterView::Grid | CenterView::Flow => {}
         },
         KeyCode::Up => match app.view {
             CenterView::Diff => {
@@ -146,7 +180,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             }
             CenterView::Transcript => scroll_transcript_lines(app, -1),
             CenterView::Tasks => crate::tasks::move_task_cursor(app, -1),
-            CenterView::Worktrees | CenterView::Grid => {}
+            CenterView::Worktrees | CenterView::Grid | CenterView::Flow => {}
         },
         KeyCode::Char('j') => {
             if app.view == CenterView::Diff {
@@ -319,6 +353,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         KeyCode::Char('O') => toggle_tools(app),
         KeyCode::Char('L') => app.cycle_layout(),
         KeyCode::Char('b') => app.toggle_bus(),
+        KeyCode::Char('F') => crate::app::toggle_flow(app),
         KeyCode::Char('V') => crate::project::toggle_grid(app),
         KeyCode::Esc => {
             app.selection = None;

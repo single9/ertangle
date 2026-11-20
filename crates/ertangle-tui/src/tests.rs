@@ -5175,3 +5175,203 @@ fn tui_bang_key_prefills_prompt_shell_mode() {
     assert_eq!(app.input_cursor, 1);
     assert!(app.status.contains("shell 命令"), "{}", app.status);
 }
+
+// ---- T76b: Flow view ----
+
+fn flow_node(id: &str, label: &str, depth: usize, status: SessionStatus) -> crate::flow::FlowNode {
+    crate::flow::FlowNode {
+        id: id.into(),
+        label: label.into(),
+        status,
+        depth,
+        unread: 0,
+        queued: 0,
+        questions: 0,
+        permissions: 0,
+        tasks: Vec::new(),
+    }
+}
+
+fn flow_msg_edge(from: &str, to: crate::flow::FlowEndpoint, ts: u64) -> crate::flow::FlowEdge {
+    crate::flow::FlowEdge {
+        from: from.into(),
+        to,
+        kind: crate::flow::FlowEdgeKind::Message(ertangle_core::MsgKind::Chat),
+        count: 3,
+        last_ts: ts,
+        preview: "hello there".into(),
+    }
+}
+
+fn flow_model() -> crate::flow::FlowModel {
+    let mut root = flow_node("a", "root-agent", 0, SessionStatus::Busy);
+    root.unread = 2;
+    root.queued = 1;
+    let child = flow_node("b", "child-agent", 1, SessionStatus::WaitingApproval);
+    crate::flow::FlowModel {
+        summary: crate::flow::FlowSummary {
+            live: 2,
+            busy: 1,
+            waiting: 1,
+            messages_in_window: 5,
+            ..Default::default()
+        },
+        nodes: vec![root, child],
+        ended_folded: 4,
+        edges: vec![
+            crate::flow::FlowEdge {
+                from: "b".into(),
+                to: crate::flow::FlowEndpoint::Unassigned,
+                kind: crate::flow::FlowEdgeKind::BlockedBy {
+                    task: "T9".into(),
+                    dep: "T8".into(),
+                },
+                count: 1,
+                last_ts: 0,
+                preview: String::new(),
+            },
+            flow_msg_edge("a", crate::flow::FlowEndpoint::Session("b".into()), 99_000),
+            flow_msg_edge(
+                "b",
+                crate::flow::FlowEndpoint::Channel("ops".into()),
+                10_000,
+            ),
+            flow_msg_edge("a", crate::flow::FlowEndpoint::Broadcast, 10_000),
+        ],
+        edges_truncated: 2,
+        now_ms: 100_000,
+    }
+}
+
+fn render_flow(model: &crate::flow::FlowModel, w: u16, h: u16) -> String {
+    let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
+    term.draw(|f| crate::flow::draw_flow(f, f.area(), model, 1))
+        .unwrap();
+    buffer_text(&term)
+}
+
+#[test]
+fn flow_renders_sections() {
+    // Wide glyphs leave filler cells in the buffer dump; compare without spaces.
+    let text = render_flow(&flow_model(), 100, 24).replace(' ', "");
+    for want in [
+        "Flow",
+        "2存活",
+        "root-agent",
+        "✉2",
+        "⧗1",
+        "4個已結束",
+        "┄┄blockedby┄┄▶",
+        "T9←T8",
+        "(未指派)",
+        "#ops",
+        "*",
+        "chat×3",
+        "\"hellothere\"",
+        "+2筆更多",
+    ] {
+        assert!(text.contains(want), "missing {want:?} in {text}");
+    }
+    assert!(text.contains("⏸child-agent"));
+}
+
+#[test]
+fn flow_pulse_only_on_recent_edge() {
+    let text = render_flow(&flow_model(), 100, 24);
+    assert_eq!(text.matches('⚡').count(), 1, "{text}");
+}
+
+#[test]
+fn flow_narrow_hides_badges_and_preview() {
+    let text = render_flow(&flow_model(), 50, 14);
+    assert!(text.contains("✉2"));
+    assert!(!text.contains("⧗1"));
+    assert!(!text.contains("hello there"));
+}
+
+#[test]
+fn flow_tiny_sizes_do_not_panic() {
+    let m = flow_model();
+    for (w, h) in [
+        (80, 24),
+        (50, 12),
+        (20, 5),
+        (1, 1),
+        (3, 2),
+        (10, 9),
+        (0, 0),
+        (200, 3),
+    ] {
+        let _ = render_flow(&m, w, h);
+        let _ = render_flow(&crate::flow::FlowModel::default(), w, h);
+    }
+}
+
+#[test]
+fn flow_f_key_and_command_toggle_restore_view() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.view = CenterView::Diff;
+    key(&mut app, &mut w, KeyCode::Char('F'));
+    assert_eq!(app.view, CenterView::Flow);
+    key(&mut app, &mut w, KeyCode::Char('F'));
+    assert_eq!(app.view, CenterView::Diff);
+    app.view = CenterView::Tasks;
+    crate::commands::execute_command(&mut app, &mut w, "flow").unwrap();
+    assert_eq!(app.view, CenterView::Flow);
+    crate::commands::execute_command(&mut app, &mut w, "flow").unwrap();
+    assert_eq!(app.view, CenterView::Tasks);
+}
+
+#[test]
+fn flow_esc_returns_and_enter_goes_to_transcript() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.view = CenterView::Worktrees;
+    key(&mut app, &mut w, KeyCode::Char('F'));
+    key(&mut app, &mut w, KeyCode::Char('j'));
+    key(&mut app, &mut w, KeyCode::Down);
+    key(&mut app, &mut w, KeyCode::Char('k'));
+    assert_eq!(app.view, CenterView::Flow);
+    key(&mut app, &mut w, KeyCode::Esc);
+    assert_eq!(app.view, CenterView::Worktrees);
+    key(&mut app, &mut w, KeyCode::Char('F'));
+    key(&mut app, &mut w, KeyCode::Enter);
+    assert_eq!(app.view, CenterView::Transcript);
+}
+
+#[test]
+fn flow_tab_goes_to_transcript_and_cycle_is_unchanged() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.view = CenterView::Flow;
+    key(&mut app, &mut w, KeyCode::Tab);
+    assert_eq!(app.view, CenterView::Transcript);
+    key(&mut app, &mut w, KeyCode::Tab);
+    assert_eq!(app.view, CenterView::Diff);
+    key(&mut app, &mut w, KeyCode::Tab);
+    assert_eq!(app.view, CenterView::Worktrees);
+    key(&mut app, &mut w, KeyCode::Tab);
+    assert_eq!(app.view, CenterView::Tasks);
+    key(&mut app, &mut w, KeyCode::Tab);
+    assert_eq!(app.view, CenterView::Transcript);
+}
+
+#[test]
+fn flow_keeps_bus_toggle() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.view = CenterView::Flow;
+    let before = (app.bus_overlay, app.right_bus);
+    key(&mut app, &mut w, KeyCode::Char('b'));
+    assert_ne!((app.bus_overlay, app.right_bus), before);
+    assert_eq!(app.view, CenterView::Flow);
+}
+
+#[test]
+fn flow_view_renders_through_main_draw() {
+    let mut app = sample_app(&[]);
+    app.view = CenterView::Flow;
+    let text = render(&mut app);
+    assert!(text.contains("Flow"));
+}
