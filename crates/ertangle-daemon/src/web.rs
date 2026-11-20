@@ -856,7 +856,12 @@ mod tests {
         // Option rows are vertical full-width labels, not crammed into .btn-row.
         assert!(INDEX_HTML.contains(".q-opt {"));
         assert!(INDEX_HTML.contains("class=\"q-opt-desc\""));
-        assert!(INDEX_HTML.contains(".q-submit-row { display:flex; justify-content:flex-end; }"));
+        assert!(INDEX_HTML.contains(".q-submit-row { display:flex; justify-content:flex-end;"));
+        // Minimal list style: options sit in a divided list inside an accent-bar panel.
+        assert!(INDEX_HTML.contains("<div class=\"q-list\">"));
+        assert!(INDEX_HTML.contains("q-group q-panel"));
+        // iOS Safari zooms on inputs below 16px.
+        assert!(INDEX_HTML.contains("border:none; outline:none; font-size:16px;"));
         assert!(INDEX_HTML.contains("min-height:44px"));
         // Re-render is gated by a signature so selections and custom text persist.
         assert!(INDEX_HTML.contains("function setCardHtml("));

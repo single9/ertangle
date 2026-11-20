@@ -322,21 +322,30 @@
     .q-banner-compact { display:flex; align-items:center; gap:8px; }
     .q-banner-compact .q-summary { flex:1; min-width:0; font-size:12px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .q-banner-compact .btn-pill { flex:none; min-height:36px; padding:6px 14px; }
-    #chat-question-slot { display:none; flex-shrink:0; max-height:50vh; overflow-y:auto; -webkit-overflow-scrolling:touch; border-top:2px solid var(--yellow); background:#171306; padding:10px 14px; }
-    .q-card { display:flex; flex-direction:column; gap:8px; }
-    .q-card + .q-card { border-top:1px dashed var(--border); padding-top:10px; margin-top:4px; }
-    .q-head { color:var(--yellow); font-weight:600; font-size:13px; display:flex; justify-content:space-between; gap:8px; }
-    .q-head .q-count { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); white-space:nowrap; }
-    .q-text { font-size:13px; line-height:1.5; color:#fff; white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; }
-    .q-opt { display:flex; align-items:flex-start; gap:10px; min-height:44px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:rgba(0,0,0,0.3); cursor:pointer; width:100%; box-sizing:border-box; }
-    .q-opt input { margin-top:3px; flex:none; width:18px; height:18px; }
-    .q-opt.selected { border-color:var(--yellow); background:rgba(255,200,0,0.12); }
+    #chat-question-slot { display:none; flex-shrink:0; max-height:50vh; overflow-y:auto; -webkit-overflow-scrolling:touch; border-top:1px solid var(--border); background:rgba(14,16,24,0.96); padding:12px 14px; }
+    /* Minimal list style: accent bar on the left, hairline dividers between options. */
+    .q-panel { border-left:3px solid var(--yellow); padding:2px 0 2px 12px; }
+    .q-card { display:flex; flex-direction:column; gap:6px; }
+    .q-card + .q-card { margin-top:16px; }
+    .q-head { color:var(--yellow); font-weight:600; font-size:12px; letter-spacing:0.02em; display:flex; justify-content:space-between; gap:8px; }
+    .q-head .q-count { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); font-weight:400; white-space:nowrap; }
+    .q-text { font-size:14px; line-height:1.55; color:var(--text); white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; }
+    .q-list { display:flex; flex-direction:column; margin-top:6px; border-top:1px solid var(--border); }
+    .q-opt { display:flex; align-items:flex-start; gap:10px; min-height:44px; padding:10px 8px 10px 12px; border-bottom:1px solid var(--border); cursor:pointer; width:100%; box-sizing:border-box; transition:background 0.15s; -webkit-tap-highlight-color:transparent; }
+    .q-opt:hover { background:rgba(255,255,255,0.03); }
+    .q-opt input { margin-top:3px; flex:none; width:16px; height:16px; accent-color:var(--yellow); }
+    .q-opt.selected { background:rgba(255,200,0,0.07); }
+    .q-opt.selected .q-opt-label { color:var(--yellow); }
     .q-opt-body { display:flex; flex-direction:column; gap:2px; min-width:0; }
-    .q-opt-label { font-weight:600; font-size:13px; overflow-wrap:anywhere; }
+    .q-opt-label { font-weight:500; font-size:14px; overflow-wrap:anywhere; }
     .q-opt-desc { font-size:12px; color:var(--text-dim); overflow-wrap:anywhere; }
-    .q-custom { width:100%; box-sizing:border-box; min-height:40px; padding:8px 10px; background:#111; color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:13px; }
-    .q-submit-row { display:flex; justify-content:flex-end; }
-    .q-submit-row .btn-pill { flex:none; min-height:40px; padding:8px 20px; }
+    .q-custom-row { display:flex; align-items:center; gap:10px; padding:4px 8px 4px 12px; border-bottom:1px solid var(--border); }
+    .q-custom-row:focus-within { background:rgba(0,200,255,0.05); }
+    .q-custom-row .q-pen { color:var(--text-dim); width:16px; text-align:center; flex:none; }
+    /* 16px keeps iOS Safari from zooming in on focus. */
+    .q-custom { flex:1; min-width:0; min-height:38px; padding:0; background:transparent; color:var(--text); border:none; outline:none; font-size:16px; }
+    .q-submit-row { display:flex; justify-content:flex-end; margin-top:12px; }
+    .q-submit-row .btn-pill { flex:none; min-height:38px; padding:8px 22px; border-radius:999px; }
     .btn-allow { background: var(--green); color: #000; }
     .btn-always { background: var(--cyan); color: #000; }
     .btn-deny { background: var(--red); color: #fff; }
@@ -3268,7 +3277,7 @@
               <button class="btn-pill btn-allow" onclick="answerQuestionInChat('${sid}')">回答</button>
             </div>`, `banner:${questionSig(questionGroup)}:${total}`);
         }
-        setCardHtml(reviewSlot, `<div style="background:#221804; border:1px solid var(--yellow); padding:10px 12px; border-radius:8px;">${questionCardsHtml(questionGroup, "review", total)}</div>`, `review:${questionSig(questionGroup)}:${total}`);
+        setCardHtml(reviewSlot, questionCardsHtml(questionGroup, "review", total), `review:${questionSig(questionGroup)}:${total}`);
       } else if (pendingKeys.length > 0) {
         const req = state.pending_permissions[pendingKeys[0]];
         pendingApprovalReq = req;
@@ -3939,7 +3948,7 @@
     function questionCardsHtml(qs, scope, total) {
       const cards = qs.map((q, i) => questionAnswerHtml(q, scope, qs.length > 1 ? `${i + 1}/${qs.length}` : (total > 1 ? `1/${total}` : ""))).join("");
       const submit = `<div class="q-submit-row"><button class="btn-pill btn-allow" onclick="submitQuestionGroup('${scope}', '${escapeHtml(qs[0].id)}')">送出答案</button></div>`;
-      return `<div class="q-group">${cards}${submit}</div>`;
+      return `<div class="q-group q-panel">${cards}${submit}</div>`;
     }
 
     function questionAnswerHtml(q, scope, countLabel) {
@@ -3953,18 +3962,32 @@
           </span>
         </label>`).join("");
       const customInput = q.custom
-        ? `<input id="qst-custom-${scope}-${escapeHtml(q.id)}" class="q-custom" type="text" placeholder="自訂答案 (Other)" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuestionGroup('${scope}', '${escapeHtml(q.id)}');}">`
+        ? `<div class="q-custom-row"><span class="q-pen">✎</span><input id="qst-custom-${scope}-${escapeHtml(q.id)}" class="q-custom" type="text" placeholder="自訂答案…" data-qname="${escapeHtml(name)}" data-multi="${q.multi_select ? "1" : ""}" oninput="onQuestionCustomInput(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuestionGroup('${scope}', '${escapeHtml(q.id)}');}"></div>`
         : "";
       return `<div class="q-card">
         <div class="q-head"><span>${escapeHtml(q.header || "提問")}</span>${countLabel ? `<span class="q-count">${escapeHtml(countLabel)}</span>` : ""}</div>
         <div class="q-text">${escapeHtml(q.question)}</div>
-        ${optionInputs}${customInput}
+        <div class="q-list">${optionInputs}${customInput}</div>
       </div>`;
     }
 
     function syncQuestionSelection(input) {
       const group = document.getElementsByName(input.name);
       group.forEach(el => el.closest(".q-opt")?.classList.toggle("selected", el.checked));
+      // Single-select: picking an option replaces any typed custom answer.
+      if (input.type === "radio" && input.checked) {
+        const custom = input.closest(".q-list")?.querySelector(".q-custom");
+        if (custom) custom.value = "";
+      }
+    }
+
+    /** Single-select: typing a custom answer clears the picked option so the text is what gets sent. */
+    function onQuestionCustomInput(el) {
+      if (el.dataset.multi || !el.value) return;
+      document.getElementsByName(el.dataset.qname).forEach(r => {
+        r.checked = false;
+        r.closest(".q-opt")?.classList.remove("selected");
+      });
     }
 
     function answerQuestionInChat(sessionId) {
