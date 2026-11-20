@@ -1,8 +1,8 @@
-# English translation of termade.
-# This file is distributed under the same license as the termade package.
+# English translation of ertangle.
+# This file is distributed under the same license as the ertangle package.
 msgid ""
 msgstr ""
-"Project-Id-Version: termade\n"
+"Project-Id-Version: ertangle\n"
 "Report-Msgid-Bugs-To: \n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
@@ -18,7 +18,7 @@ msgstr "Specify --to, --channel or --broadcast"
 msgid "未知的訊息種類：{kind} (chat/handoff/question/answer/status/artifact)"
 msgstr "Unknown message kind: {kind} (chat/handoff/question/answer/status/artifact)"
 
-#: src/cmd/bus.rs crates/termade-tui/src/input.rs
+#: src/cmd/bus.rs crates/ertangle-tui/src/input.rs
 msgid "已送出訊息"
 msgstr "Message sent"
 
@@ -83,8 +83,8 @@ msgid "已要求 daemon 關閉"
 msgstr "Asked daemon to shut down"
 
 #: src/cmd/daemon.rs
-msgid "termade 遠端連線資訊："
-msgstr "termade remote connection info:"
+msgid "ertangle 遠端連線資訊："
+msgstr "ertangle remote connection info:"
 
 #: src/cmd/daemon.rs
 msgid "Daemon 狀態：執行中 (socket: {sock})"
@@ -115,12 +115,12 @@ msgid "連線範例："
 msgstr "Connection examples:"
 
 #: src/cmd/daemon.rs
-msgid "本機連線：termade --remote 127.0.0.1:7420 --token {token}"
-msgstr "Local connection: termade --remote 127.0.0.1:7420 --token {token}"
+msgid "本機連線：ertangle --remote 127.0.0.1:7420 --token {token}"
+msgstr "Local connection: ertangle --remote 127.0.0.1:7420 --token {token}"
 
 #: src/cmd/daemon.rs
-msgid "Tailscale 遠端連線：termade --remote {ip}:7420 --token {token}"
-msgstr "Tailscale remote connection: termade --remote {ip}:7420 --token {token}"
+msgid "Tailscale 遠端連線：ertangle --remote {ip}:7420 --token {token}"
+msgstr "Tailscale remote connection: ertangle --remote {ip}:7420 --token {token}"
 
 #: src/cmd/daemon.rs
 msgid "Web 版網址：{url}"
@@ -130,12 +130,12 @@ msgstr "Web version URL: {url}"
 msgid "掃描 QR Code 連線 Web 版："
 msgstr "Scan QR Code to connect to Web version:"
 
-#: src/cmd/export.rs crates/termade-daemon/src/config.rs
-#: crates/termade-tui/src/commands.rs
+#: src/cmd/export.rs crates/ertangle-daemon/src/config.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "playbook {name} 沒有成員"
 msgstr "Playbook {name} has no members"
 
-#: src/cmd/export.rs crates/termade-tui/src/commands.rs
+#: src/cmd/export.rs crates/ertangle-tui/src/commands.rs
 msgid "agent {kind} 未安裝；無法啟動 playbook {name}"
 msgstr "Agent {kind} is not installed; cannot start playbook {name}"
 
@@ -172,16 +172,16 @@ msgid "Web 版自訂連接埠 (預設 7421)"
 msgstr "Custom port for Web version (default 7421)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "daemon socket 路徑 (預設讀取 TERMADE_SOCKET 環境變數或標準 runtime 路徑)"
-msgstr "Daemon socket path (defaults to TERMADE_SOCKET environment variable or standard runtime path)"
+msgid "daemon socket 路徑 (預設讀取 ERTANGLE_SOCKET 環境變數或標準 runtime 路徑)"
+msgstr "Daemon socket path (defaults to ERTANGLE_SOCKET environment variable or standard runtime path)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "ertangle — 終端機原生的多 agent 開發環境"
+msgstr "ertangle — a terminal-native multi-agent development environment"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)"
 msgstr "Run as a stdio MCP server (for agent child processes to use as an MCP tool)"
-
-#: src/cmd/helptext/help_strings.rs
-msgid "termade — 終端機原生的多 agent 開發環境"
-msgstr "termade — a terminal-native multi-agent development environment"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "中斷正在執行的 turn"
@@ -224,8 +224,8 @@ msgid "列出所有可接續的已結束與歷史封存 session"
 msgstr "List all resumable ended and archived sessions"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "列出所有由 termade 管理的 git worktree (M3)"
-msgstr "List all git worktrees managed by termade (M3)"
+msgid "列出所有由 ertangle 管理的 git worktree (M3)"
+msgstr "List all git worktrees managed by ertangle (M3)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "包含已讀訊息 (預設只顯示新進未讀)"
@@ -303,7 +303,7 @@ msgstr "Run in a separate git worktree (M3)"
 msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生效)"
 msgstr "Switch a session's model and/or effort at runtime (takes effect from the next turn)"
 
-#: src/cmd/helptext/help_strings.rs crates/termade-tui/src/commands.rs
+#: src/cmd/helptext/help_strings.rs crates/ertangle-tui/src/commands.rs
 msgid "安裝到家目錄 (所有專案共用)"
 msgstr "Install into the home directory (shared by all projects)"
 
@@ -312,12 +312,12 @@ msgid "安裝到目前專案 (預設)"
 msgstr "Install into the current project (default)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "安裝／移除／顯示內嵌的 termade-ade skill"
-msgstr "Install / uninstall / show the embedded termade-ade skill"
+msgid "安裝／移除／顯示內嵌的 ertangle-ade skill"
+msgstr "Install / uninstall / show the embedded ertangle-ade skill"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "寄件者 session id (預設讀 TERMADE_SESSION 環境變數)"
-msgstr "Sender session id (defaults to the TERMADE_SESSION environment variable)"
+msgid "寄件者 session id (預設讀 ERTANGLE_SESSION 環境變數)"
+msgstr "Sender session id (defaults to the ERTANGLE_SESSION environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "寫入各成員 prompt 中 `{{goal}}` 的目標需求"
@@ -388,6 +388,10 @@ msgid "從目前專案移除 (預設)"
 msgstr "Remove from the current project (default)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "把 ertangle-ade skill 安裝到 agent 的 skills 目錄"
+msgstr "Install the ertangle-ade skill into an agent's skills directory"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "把 session (與其子 Session 樹)匯出為 Markdown 協作報告"
 msgstr "Export a session (and its sub-session tree) as a Markdown collaboration report"
 
@@ -396,12 +400,8 @@ msgid "把 session 的工作交接給另一個 agent (額度用完時)：沿用�
 msgstr "Hand a session's work off to another agent (when quota runs out): reuses the same working directory and attaches a handoff brief and diff"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "把 termade-ade skill 安裝到 agent 的 skills 目錄"
-msgstr "Install the termade-ade skill into an agent's skills directory"
-
-#: src/cmd/helptext/help_strings.rs
-msgid "指定 events.jsonl 路徑 (預設為 termade 自己的 log)"
-msgstr "Path to events.jsonl (defaults to termade's own log)"
+msgid "指定 events.jsonl 路徑 (預設為 ertangle 自己的 log)"
+msgstr "Path to events.jsonl (defaults to ertangle's own log)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "指定 session id 或標籤 (未指定則列出所有 session)"
@@ -484,8 +484,8 @@ msgid "權限政策：ask / auto / bypass (省略則依 config.toml，預設 aut
 msgstr "Permission policy: ask / auto / bypass (defaults to config.toml, otherwise auto)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "此 MCP server 代表的 session id (預設讀 TERMADE_SESSION 環境變數)"
-msgstr "Session id this MCP server acts for (defaults to the TERMADE_SESSION environment variable)"
+msgid "此 MCP server 代表的 session id (預設讀 ERTANGLE_SESSION 環境變數)"
+msgstr "Session id this MCP server acts for (defaults to the ERTANGLE_SESSION environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "此 session 的成本上限 (美元，例如 2.50)"
@@ -504,8 +504,8 @@ msgid "為指定 session 的 worktree 建立 GitHub PR (M3)"
 msgstr "Create a GitHub PR for the given session's worktree (M3)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "父 session id 或標籤 (未指定時若有 TERMADE_SESSION 則自動繼承)"
-msgstr "Parent session id or label (inherits TERMADE_SESSION automatically if not given)"
+msgid "父 session id 或標籤 (未指定時若有 ERTANGLE_SESSION 則自動繼承)"
+msgstr "Parent session id or label (inherits ERTANGLE_SESSION automatically if not given)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "產生 shell 自動完成腳本並印到 stdout (bash / zsh / fish)"
@@ -524,8 +524,8 @@ msgid "目標 session id 或標籤"
 msgstr "Target session ID or label"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "移除已安裝的 termade-ade skill"
-msgstr "Remove the installed termade-ade skill"
+msgid "移除已安裝的 ertangle-ade skill"
+msgstr "Remove the installed ertangle-ade skill"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "種類：code / pr / doc / test / run (預設 code)"
@@ -608,8 +608,8 @@ msgid "透過匯流排傳送訊息給其他 session"
 msgstr "Send a message to other sessions over the bus"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "連線遠端 daemon 位址 (例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定)"
-msgstr "Address of a remote daemon to connect to (e.g. 127.0.0.1:7420; can also be set with the TERMADE_REMOTE environment variable)"
+msgid "連線遠端 daemon 位址 (例如 127.0.0.1:7420；亦可透過環境變數 ERTANGLE_REMOTE 設定)"
+msgstr "Address of a remote daemon to connect to (e.g. 127.0.0.1:7420; can also be set with the ERTANGLE_REMOTE environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "逾時毫秒數 (預設 120000 = 2 分鐘)"
@@ -620,12 +620,12 @@ msgid "逾時毫秒數 (預設 60000 = 60 秒)"
 msgstr "Timeout in milliseconds (default 60000 = 60 seconds)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "遠端認證 token (亦可透過環境變數 TERMADE_TOKEN 設定)"
-msgstr "Remote authentication token (can also be set with the TERMADE_TOKEN environment variable)"
+msgid "遠端認證 token (亦可透過環境變數 ERTANGLE_TOKEN 設定)"
+msgstr "Remote authentication token (can also be set with the ERTANGLE_TOKEN environment variable)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "遠端連線認證用的 token (未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發)"
-msgstr "Token for remote authentication (falls back to the TERMADE_TOKEN environment variable; use together with SSH forwarding for safety)"
+msgid "遠端連線認證用的 token (未指定則讀環境變數 ERTANGLE_TOKEN；為安全建議搭配 SSH 轉發)"
+msgstr "Token for remote authentication (falls back to the ERTANGLE_TOKEN environment variable; use together with SSH forwarding for safety)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "重播 event log 並印出歷史事件"
@@ -675,7 +675,7 @@ msgstr "{sid}  (unmanaged session)"
 msgid "(沒有 session)"
 msgstr "(no sessions)"
 
-#: src/cmd/session.rs crates/termade-tui/src/commands.rs
+#: src/cmd/session.rs crates/ertangle-tui/src/commands.rs
 msgid "未知的 agent：{kind_str} (opencode/claude/codex/antigravity)"
 msgstr "Unknown agent: {kind_str} (opencode/claude/codex/antigravity)"
 
@@ -695,8 +695,8 @@ msgstr "Created session"
 msgid "已清空排隊"
 msgstr "Queue cleared"
 
-#: src/cmd/session.rs crates/termade-daemon/src/handlers/session.rs
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: src/cmd/session.rs crates/ertangle-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "找不到 session {session}"
 msgstr "Session {session} not found"
 
@@ -712,7 +712,7 @@ msgstr "No resumable ended or archived sessions"
 msgid "已移除"
 msgstr "Removed"
 
-#: src/cmd/session.rs crates/termade-core/src/lib.rs
+#: src/cmd/session.rs crates/ertangle-core/src/lib.rs
 msgid "已結束"
 msgstr "Exited"
 
@@ -756,7 +756,7 @@ msgstr "Active tools / Subagents:"
 msgid "背景子處理程序："
 msgstr "Background child processes:"
 
-#: src/cmd/session.rs crates/termade-tui/src/ps.rs
+#: src/cmd/session.rs crates/ertangle-tui/src/ps.rs
 msgid "執行時間"
 msgstr "Elapsed"
 
@@ -780,19 +780,19 @@ msgstr "Terminated process PID {p}"
 msgid "已清理 {session} 所有背景處理程序"
 msgstr "Cleaned up all background processes for {session}"
 
-#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
+#: src/cmd/skill.rs crates/ertangle-tui/src/commands.rs
 msgid "找不到家目錄 (HOME)"
 msgstr "Home directory (HOME) not found"
 
-#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
+#: src/cmd/skill.rs crates/ertangle-tui/src/commands.rs
 msgid "已安裝 skill：{p}"
 msgstr "Installed skill: {p}"
 
-#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
+#: src/cmd/skill.rs crates/ertangle-tui/src/commands.rs
 msgid "已移除 skill：{p}"
 msgstr "Removed skill: {p}"
 
-#: src/cmd/skill.rs crates/termade-tui/src/commands.rs
+#: src/cmd/skill.rs crates/ertangle-tui/src/commands.rs
 msgid "沒有安裝 skill (target {t})"
 msgstr "Skill not installed (target {t})"
 
@@ -829,180 +829,180 @@ msgid "已建立 PR"
 msgstr "Created PR"
 
 #: src/cmd/mod.rs
-msgid "請指定 --session <id> 或設定環境變數 TERMADE_SESSION"
-msgstr "Specify --session <id> or set the TERMADE_SESSION environment variable"
+msgid "請指定 --session <id> 或設定環境變數 ERTANGLE_SESSION"
+msgstr "Specify --session <id> or set the ERTANGLE_SESSION environment variable"
 
 #: src/cmd/mod.rs
-msgid "無法連線 daemon (先執行 `termade daemon` 或用 `termade` 啟動)"
-msgstr "Cannot connect to daemon (run `termade daemon` first, or start with `termade`)"
+msgid "無法連線 daemon (先執行 `ertangle daemon` 或用 `ertangle` 啟動)"
+msgstr "Cannot connect to daemon (run `ertangle daemon` first, or start with `ertangle`)"
 
-#: crates/termade-adapter/src/acp.rs crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
 msgid "`{method}` 逾時"
 msgstr "`{method}` timed out"
 
-#: crates/termade-adapter/src/acp.rs crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
 msgid "`{method}` 失敗：{err}"
 msgstr "`{method}` failed: {err}"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "session 尚未就緒"
 msgstr "session is not ready yet"
 
-#: crates/termade-adapter/src/acp.rs crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
 msgid "未知的核准請求：{req}"
 msgstr "Unknown approval request: {req}"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "設定 {what} `{value}` 失敗"
 msgstr "Failed to set {what} `{value}`"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "此 agent 沒有回報可選的 model (configOptions 無 model 項)"
 msgstr "This agent did not report any selectable model (no model entry in configOptions)"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "未知的 model `{wanted}`；可用：{list}"
 msgstr "Unknown model `{wanted}`; available: {list}"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "此 agent 沒有回報可設定的 effort (configOptions 無相關項)"
 msgstr "This agent did not report a configurable effort (no related entry in configOptions)"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "effort `{wanted}` 不在可用清單：{list}"
 msgstr "effort `{wanted}` is not in the available list: {list}"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "此 agent 不支援原生結構化協定"
 msgstr "This agent does not support a native structured protocol"
 
-#: crates/termade-adapter/src/acp.rs crates/termade-adapter/src/claude.rs
-#: crates/termade-adapter/src/codex.rs crates/termade-adapter/src/pty.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/claude.rs
+#: crates/ertangle-adapter/src/codex.rs crates/ertangle-adapter/src/pty.rs
 msgid "找不到指定的執行檔 `{b}`"
 msgstr "Specified executable `{b}` not found"
 
-#: crates/termade-adapter/src/acp.rs crates/termade-adapter/src/claude.rs
-#: crates/termade-adapter/src/codex.rs crates/termade-adapter/src/pty.rs
+#: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/claude.rs
+#: crates/ertangle-adapter/src/codex.rs crates/ertangle-adapter/src/pty.rs
 msgid "找不到 `{prog}`"
 msgstr "`{prog}` not found"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "無法啟動 `{prog} acp`"
 msgstr "Cannot start `{prog} acp`"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "取得 stdin 失敗"
 msgstr "Failed to get stdin"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "取得 stdout 失敗"
 msgstr "Failed to get stdout"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "{kind} 沒有宣告 loadSession，無法接續對話"
 msgstr "{kind} did not declare loadSession; cannot resume the conversation"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "`session/new` 未回傳 sessionId"
 msgstr "`session/new` did not return a sessionId"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "設定 model `{value}` 失敗"
 msgstr "Failed to set model `{value}`"
 
-#: crates/termade-adapter/src/acp.rs
+#: crates/ertangle-adapter/src/acp.rs
 msgid "設定 effort `{value}` 失敗"
 msgstr "Failed to set effort `{value}`"
 
-#: crates/termade-adapter/src/claude.rs
+#: crates/ertangle-adapter/src/claude.rs
 msgid "claude 錯誤：{detail}"
 msgstr "claude error: {detail}"
 
-#: crates/termade-adapter/src/claude.rs
-msgid "claude 逐項核准已由 MCP (termade_approve) 轉發，此請求無效或已逾時"
-msgstr "Claude granular approvals are forwarded via MCP (termade_approve); this request is invalid or expired"
+#: crates/ertangle-adapter/src/claude.rs
+msgid "claude 逐項核准已由 MCP (ertangle_approve) 轉發，此請求無效或已逾時"
+msgstr "Claude granular approvals are forwarded via MCP (ertangle_approve); this request is invalid or expired"
 
-#: crates/termade-adapter/src/claude.rs
+#: crates/ertangle-adapter/src/claude.rs
 msgid "無法啟動 `claude`"
 msgstr "Cannot start `claude`"
 
-#: crates/termade-adapter/src/claude.rs
+#: crates/ertangle-adapter/src/claude.rs
 msgid "取得 claude stdin 失敗"
 msgstr "Failed to get claude stdin"
 
-#: crates/termade-adapter/src/claude.rs
+#: crates/ertangle-adapter/src/claude.rs
 msgid "取得 claude stdout 失敗"
 msgstr "Failed to get claude stdout"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "codex 錯誤：{text}"
 msgstr "codex error: {text}"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "(請執行 `codex login`)"
 msgstr " (run `codex login`)"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "codex thread 尚未就緒"
 msgstr "codex thread is not ready yet"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "無法啟動 `codex app-server`"
 msgstr "Cannot start `codex app-server`"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "取得 codex stdin 失敗"
 msgstr "Failed to get codex stdin"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "取得 codex stdout 失敗"
 msgstr "Failed to get codex stdout"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "codex `initialize` 失敗"
 msgstr "codex `initialize` failed"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "codex `{method}` 失敗"
 msgstr "codex `{method}` failed"
 
-#: crates/termade-adapter/src/codex.rs
+#: crates/ertangle-adapter/src/codex.rs
 msgid "`{method}` 未回傳 thread id"
 msgstr "`{method}` did not return a thread id"
 
-#: crates/termade-adapter/src/models.rs
+#: crates/ertangle-adapter/src/models.rs
 msgid "最新 Fable"
 msgstr "latest Fable"
 
-#: crates/termade-adapter/src/models.rs
+#: crates/ertangle-adapter/src/models.rs
 msgid "最新 Opus"
 msgstr "latest Opus"
 
-#: crates/termade-adapter/src/models.rs
+#: crates/ertangle-adapter/src/models.rs
 msgid "最新 Sonnet"
 msgstr "latest Sonnet"
 
-#: crates/termade-adapter/src/models.rs
+#: crates/ertangle-adapter/src/models.rs
 msgid "最新 Haiku"
 msgstr "latest Haiku"
 
-#: crates/termade-adapter/src/pty.rs
+#: crates/ertangle-adapter/src/pty.rs
 msgid "openpty 失敗"
 msgstr "openpty failed"
 
-#: crates/termade-adapter/src/pty.rs
+#: crates/ertangle-adapter/src/pty.rs
 msgid "spawn agent 失敗"
 msgstr "Failed to spawn agent"
 
-#: crates/termade-adapter/src/pty.rs
+#: crates/ertangle-adapter/src/pty.rs
 msgid "clone reader 失敗"
 msgstr "Failed to clone reader"
 
-#: crates/termade-adapter/src/pty.rs
+#: crates/ertangle-adapter/src/pty.rs
 msgid "take writer 失敗"
 msgstr "Failed to take writer"
 
-#: crates/termade-adapter/src/stderr.rs
+#: crates/ertangle-adapter/src/stderr.rs
 msgid ""
 "⚠ 處理程序以結束碼 {code} 結束，stderr 最後 {count} 行：\n"
 "{lines}\n"
@@ -1010,83 +1010,83 @@ msgstr ""
 "⚠ Process exited with code {code}; last {count} line(s) of stderr:\n"
 "{lines}\n"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "{transport} 不支援執行期切換 model／effort"
 msgstr "{transport} does not support switching model/effort at runtime"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "未知的 effort `{e}`；可用：{list}"
 msgstr "Unknown effort `{e}`; available: {list}"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "執行 kill 失敗"
 msgstr "Failed to run kill"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "kill {args} 失敗"
 msgstr "kill {args} failed"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "拒絕對 PID {pid} 送訊號"
 msgstr "Refusing to signal PID {pid}"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "{kind} 尚不支援 allowed_tools／disallowed_tools；請改用 claude"
 msgstr "{kind} does not support allowed_tools/disallowed_tools yet; use claude instead"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "{kind} 尚不支援 read_only；請改用 claude 或 codex"
 msgstr "{kind} does not support read_only yet; use claude or codex instead"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "sandbox 只適用於 codex"
 msgstr "sandbox only applies to codex"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "PTY 模式無法接續對話"
 msgstr "Cannot resume a conversation in PTY mode"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "{kind} 沒有原生結構化協定，無法接續對話"
 msgstr "{kind} has no native structured protocol; cannot resume the conversation"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "{kind} 尚不支援以結構化模式指定 model ({m})；請改用 --transport pty 並以參數傳入"
 msgstr "{kind} does not support choosing a model in structured mode yet ({m}); use --transport pty and pass it as an argument"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "找不到 `{prog}`，請先安裝"
 msgstr "`{prog}` not found; please install it first"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "此 agent 不支援 ACP"
 msgstr "This agent does not support ACP"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "找不到 `{target}`，請先安裝或改用 --transport pty"
 msgstr "`{target}` not found; install it or use --transport pty"
 
-#: crates/termade-adapter/src/lib.rs
+#: crates/ertangle-adapter/src/lib.rs
 msgid "自訂 agent 沒有原生結構化協定，請用 --transport pty"
 msgstr "Custom agents have no native structured protocol; use --transport pty"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "額度用完：{d} (可用 handoff 交接)"
 msgstr "Quota exhausted: {d} (use handoff to hand off)"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid " …(+{extra} 行)"
 msgstr " …(+{extra} lines)"
 
-#: crates/termade-core/src/lib.rs crates/termade-tui/src/notify.rs
+#: crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/notify.rs
 msgid "失敗"
 msgstr "failed"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "找不到 session：{id}"
 msgstr "Session not found: {id}"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid ""
 "# 協作報告：{label}\n"
 "\n"
@@ -1094,265 +1094,264 @@ msgstr ""
 "# Collaboration report: {label}\n"
 "\n"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "元資料"
 msgstr "Metadata"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "項目"
 msgstr "Item"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "值"
 msgstr "Value"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "標籤"
 msgstr "Label"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "Agent / Model"
 msgstr "Agent / Model"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "角色"
 msgstr "Role"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "分支"
 msgstr "Branch"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "狀態"
 msgstr "Status"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "總花費"
 msgstr "Total cost"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "子 Session 階層"
 msgstr "Sub-session tree"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "花費"
 msgstr "Cost"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "關聯任務"
 msgstr "Related tasks"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "編號"
 msgstr "ID"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "標題"
 msgstr "Title"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "負責人"
 msgstr "Assignee"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "對話與執行紀錄"
 msgstr "Transcript & execution log"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "(尚無逐字稿)"
 msgstr "(No transcript yet)"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "啟動中"
 msgstr "Starting"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "閒置"
 msgstr "Idle"
 
-#: crates/termade-core/src/lib.rs crates/termade-tui/src/app.rs
-#: crates/termade-tui/src/project.rs
+#: crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/app.rs
+#: crates/ertangle-tui/src/project.rs
 msgid "執行中"
 msgstr "running"
 
-#: crates/termade-core/src/lib.rs crates/termade-tui/src/notify.rs
+#: crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/notify.rs
 msgid "等待核准"
 msgstr "awaiting approval"
 
-#: crates/termade-core/src/lib.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/menu.rs
 msgid "休眠"
 msgstr "Sleep"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "{name} 已重置"
 msgstr "{name} reset"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "{name} {pct}% (重置 {remaining})"
 msgstr "{name} {pct}% (resets in {remaining})"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "✗額度已滿"
 msgstr "✗quota full"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "無法讀取 {path}：{e}"
 msgstr "Cannot read {path}: {e}"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "{path} 不是檔案"
 msgstr "{path} is not a file"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "圖片 {name} 太大 ({size} KB，上限 {max} KB)"
 msgstr "Image {name} is too large ({size} KB, limit {max} KB)"
 
-#: crates/termade-core/src/lib.rs
+#: crates/ertangle-core/src/lib.rs
 msgid "讀取 {name} 失敗：{e}"
 msgstr "Failed to read {name}: {e}"
 
-#: crates/termade-daemon/src/bus.rs
+#: crates/ertangle-daemon/src/bus.rs
 msgid "速率限制：{from} → {to_key} 在 1 分鐘內已傳送超過 {cap} 則訊息"
 msgstr "Rate limit: {from} → {to_key} sent more than {cap} messages within 1 minute"
 
-#: crates/termade-daemon/src/bus.rs
+#: crates/ertangle-daemon/src/bus.rs
 msgid "迴圈偵測：{from} → {to_key} 連續傳送相同內容超過 {cap} 次，已斷路"
 msgstr "Loop detected: {from} → {to_key} sent identical content more than {cap} times in a row; circuit broken"
 
-#: crates/termade-daemon/src/bus.rs
+#: crates/ertangle-daemon/src/bus.rs
 msgid "已送出訊息 {msg_id} (收件者已超過成本上限 over_budget，拒絕自動喚醒)"
 msgstr "Message {msg_id} sent (recipient is over_budget, so it will not be woken automatically)"
 
-#: crates/termade-daemon/src/bus.rs
+#: crates/ertangle-daemon/src/bus.rs
 msgid "已送出訊息 {msg_id}"
 msgstr "Message {msg_id} sent"
 
-#: crates/termade-daemon/src/bus.rs
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/bus.rs crates/ertangle-daemon/src/handlers/session.rs
 msgid "({n})"
 msgstr " ({n})"
 
-#: crates/termade-daemon/src/bus.rs
+#: crates/ertangle-daemon/src/bus.rs
 msgid "收件者 {t} 已交接，訊息改投給接手的 {succ_label} ({succ})"
 msgstr "Recipient {t} was handed off; message redirected to its successor {succ_label} ({succ})"
 
-#: crates/termade-daemon/src/bus.rs
+#: crates/ertangle-daemon/src/bus.rs
 msgid "對方 {sid} 已結束，訊息不會被讀取"
 msgstr "{sid} has ended; the message will not be read"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "無法連線遠端 daemon ({remote})"
 msgstr "Cannot connect to remote daemon ({remote})"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "無法連線 daemon ({path})"
 msgstr "Cannot connect to daemon ({path})"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "無法連線遠端 daemon ({addr})"
 msgstr "Cannot connect to remote daemon ({addr})"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "daemon 已關閉連線"
 msgstr "The daemon closed the connection"
 
-#: crates/termade-daemon/src/client.rs
-msgid "無法連線至 TERMADE_REMOTE 指定的遠端 daemon"
-msgstr "Cannot connect to the remote daemon given by TERMADE_REMOTE"
+#: crates/ertangle-daemon/src/client.rs
+msgid "無法連線至 ERTANGLE_REMOTE 指定的遠端 daemon"
+msgstr "Cannot connect to the remote daemon given by ERTANGLE_REMOTE"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "取得自身執行檔路徑失敗"
 msgstr "Failed to get the path of the current executable"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "無法啟動 daemon"
 msgstr "Cannot start daemon"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "daemon 異常退出 ({status})"
 msgstr "The daemon exited unexpectedly ({status})"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "daemon 啟動失敗：{detail}"
 msgstr "Failed to start daemon: {detail}"
 
-#: crates/termade-daemon/src/client.rs
+#: crates/ertangle-daemon/src/client.rs
 msgid "daemon 啟動逾時 ({path})"
 msgstr "Timed out starting daemon ({path})"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "effort {effort} 高於免確認上限 {max}"
 msgstr "effort {effort} is above the no-confirmation limit {max}"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "model {m} 不在免確認清單 ({list})"
 msgstr "model {m} is not in the no-confirmation list ({list})"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "協調者拆解任務，完成後由審查者把關"
 msgstr "Coordinator splits the work, then a reviewer checks the result"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "測試與實作配對協作：先寫失敗測試，再讓它通過"
 msgstr "Test-implement pair: write failing tests first, then make them pass"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "兩個不同 agent 平行審查同一份變更"
 msgstr "Two different agents review the same change in parallel"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "目標需求不可為空"
 msgstr "Goal must not be empty"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "未知的 playbook：{name} (可用：{list})"
 msgstr "Unknown playbook: {name} (available: {list})"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "未知的 agent：{k}"
 msgstr "Unknown agent: {k}"
 
-#: crates/termade-daemon/src/config.rs
+#: crates/ertangle-daemon/src/config.rs
 msgid "`{t}` 不是表格"
 msgstr "`{t}` is not a table"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "執行 git worktree 失敗"
 msgstr "Failed to run git worktree"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "工作目錄不存在：{cwd}"
 msgstr "Working directory does not exist: {cwd}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "執行 git diff 失敗"
 msgstr "Failed to run git diff"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "執行 git ls-files 失敗"
 msgstr "Failed to run git ls-files"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "(目前工作區沒有尚未合併的變更)"
 msgstr "(No unmerged changes in the current worktree)"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "執行 git {args} 失敗"
 msgstr "Failed to run git {args}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "git status 失敗：{detail}"
 msgstr "git status failed: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "合併 {branch} 到 {target} 發生衝突，已還原。衝突檔案：{files}"
 msgstr "Merging {branch} into {target} hit conflicts and was rolled back. Conflicting files: {files}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "啟動合併前驗證指令失敗：{cmd}"
 msgstr "Failed to spawn pre-merge validation command: {cmd}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid ""
 "合併前驗證指令失敗 ({cmd})：\n"
 "{tail}"
@@ -1360,159 +1359,159 @@ msgstr ""
 "Pre-merge validation command failed ({cmd}):\n"
 "{tail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "執行合併前驗證指令失敗：{e}"
 msgstr "Failed to execute pre-merge validation command: {e}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "合併前驗證指令逾時 (300 秒)"
 msgstr "Pre-merge validation command timed out (300s)"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "執行合併前驗證指令異常結束"
 msgstr "Pre-merge validation command terminated unexpectedly"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "工作區仍有未解決的合併衝突標記"
 msgstr "Workspace still contains unresolved merge conflict markers"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "git add 失敗：{detail}"
 msgstr "git add failed: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "commit worktree 失敗：{detail}"
 msgstr "Failed to commit worktree: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "此 session 沒有獨立的 worktree 分支"
 msgstr "This session has no dedicated worktree branch"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "{repo} 不是 git repo"
 msgstr "{repo} is not a git repo"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "主工作區正在合併、rebase 中 ({marker})，請先處理完畢"
 msgstr "The main worktree is in the middle of a merge or rebase ({marker}); finish it first"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "主工作區有未 commit 的變更，請先 commit 或 stash 後再合併"
 msgstr "The main worktree has uncommitted changes; commit or stash them before merging"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "可快轉 (fast-forward)"
 msgstr "can fast-forward"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "需三方合併 (three-way merge)"
 msgstr "needs a three-way merge"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "無未提交變更"
 msgstr "no uncommitted changes"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "待提交檔案 ({count})：{files}"
 msgstr "pending files ({count}): {files}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "[dry-run] [{strategy}] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
 msgstr "[dry-run] [{strategy}] Merge {branch} ({label}) into {target}: {ff_desc}, {pending_desc}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "合併 {branch} 到 {target} 失敗，已還原：{detail}"
 msgstr "Merging {branch} into {target} failed and was rolled back: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "已將 {branch} ({label})合併進 {target}"
 msgstr "Merged {branch} ({label}) into {target}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "{branch} ({label}) 已是最新狀態，無需合併"
 msgstr "{branch} ({label}) is already up to date; nothing to merge"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "squash commit 失敗：{detail}"
 msgstr "Squash commit failed: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "worktree 目錄不存在：{cwd}"
 msgstr "Worktree directory does not exist: {cwd}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "rebase {branch} 至 {target} 失敗，已還原：{detail}"
 msgstr "Rebasing {branch} onto {target} failed and was rolled back: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "快轉合併 {branch} 到 {target} 失敗：{detail}"
 msgstr "Fast-forward merge of {branch} into {target} failed: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "此 session 沒有獨立分支，無法建立 PR"
 msgstr "This session has no dedicated branch; cannot create a PR"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "找不到或無法執行 `gh` CLI"
 msgstr "`gh` CLI not found or cannot be executed"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "有未 commit 變更"
 msgstr "has uncommitted changes"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "無法檢查狀態：{e}"
 msgstr "Cannot check status: {e}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "分支不存在，worktree 仍在"
 msgstr "branch is gone but the worktree still exists"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "尚未合併"
 msgstr "not merged yet"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "無法檢查合併狀態：{e}"
 msgstr "Cannot check merge status: {e}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "不安全的檔案路徑：{file}"
 msgstr "Unsafe file path: {file}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "執行 git apply 失敗"
 msgstr "Failed to run git apply"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "等待 git apply 失敗"
 msgstr "Failed to wait for git apply"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "退回 hunk 失敗：{detail}"
 msgstr "Failed to revert hunk: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "已退回 {file} 的選取區塊"
 msgstr "Reverted selected hunk in {file}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "刪除未追蹤檔案失敗：{file}"
 msgstr "Failed to remove untracked file: {file}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "還原檔案失敗：{detail}"
 msgstr "Failed to restore file: {detail}"
 
-#: crates/termade-daemon/src/git.rs
+#: crates/ertangle-daemon/src/git.rs
 msgid "已還原檔案 {file}"
 msgstr "Restored file {file}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "設定要求每次都先確認"
 msgstr "Configuration requires confirmation every time"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid ""
 "agent {pid} 要建立 {kind} session：model={model} effort={effort}\n"
 "原因：{reasons}\n"
@@ -1522,2616 +1521,2615 @@ msgstr ""
 "Reason: {reasons}\n"
 "Task: {task}"
 
-#: crates/termade-daemon/src/handlers/session.rs crates/termade-tui/src/draw.rs
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-tui/src/draw.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "預設"
 msgstr "default"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "建立子 agent"
 msgstr "Create sub-agent"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "使用者拒絕 (或逾時未回應)建立這個 session；請改用較便宜的 model／較低的 effort，或請使用者自己建立"
 msgstr "The user denied (or did not respond in time to) creating this session; use a cheaper model / lower effort, or ask the user to create it themselves"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{reasons} (agent_spawn.confirm = never)"
 msgstr "{reasons} (agent_spawn.confirm = never)"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "effort 已調降為 {max}"
 msgstr "effort lowered to {max}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "超過子 agent 層數上限 max_depth：目前第 {depth} 層 (上限 {max_depth})"
 msgstr "Sub-agent depth limit max_depth exceeded: now at level {depth} (limit {max_depth})"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已達直接子 agent 數量上限 max_children：目前 {live_children} 個執行中 (上限 {max_children})"
 msgstr "Direct sub-agent limit max_children reached: {live_children} running (limit {max_children})"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已達整棵樹成本上限 tree_usd：目前已花費 ${spent} (上限 ${limit})"
 msgstr "Tree cost limit tree_usd reached: spent ${spent} (limit ${limit})"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "父 session {label} 已達成本上限 session_usd (over_budget)，無法產生子 agent"
 msgstr "Parent session {label} reached its cost limit session_usd (over_budget); cannot spawn a sub-agent"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "父 session {label} 剩餘預算 session_usd 為 $0.00 (已花費 ${spent} / 上限 ${limit})，無法產生子 agent"
 msgstr "Parent session {label} has $0.00 of session_usd budget left (spent ${spent} / limit ${limit}); cannot spawn a sub-agent"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "建立 worktree 失敗：{e}"
 msgstr "Failed to create worktree: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已建立 session {id}"
 msgstr "Created session {id}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "(權限由 {from} 調降為 {to}：不得高於父 session／設定上限)"
 msgstr " (permission lowered from {from} to {to}: cannot exceed the parent session / configured limit)"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "(依 agent_spawn.worktree 使用獨立 worktree)"
 msgstr " (using a dedicated worktree per agent_spawn.worktree)"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid " (權限：{perm})"
 msgstr " (permission: {perm})"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "啟動 agent 失敗：{e}"
 msgstr "Failed to start agent: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{label} 仍在執行，不需要接續"
 msgstr "{label} is still running; no need to resume"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 還沒回報就結束了)；請改用交接 (handoff)"
 msgstr "{label} has no conversation id to resume (PTY, old log, or the agent exited before reporting one); use handoff instead"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{label} 的工作目錄 {cwd} 已不存在，無法接續"
 msgstr "The working directory {cwd} of {label} no longer exists; cannot resume"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "worktree 正由 {user} 使用，不能接續 {label}"
 msgstr "The worktree is in use by {user}; cannot resume {label}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已接續 {label}"
 msgstr "Resumed {label}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "接續 {session} 失敗：{e}"
 msgstr "Failed to resume {session}: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
-msgid "{session} 已結束；可用 :resume (或 `termade resume`)接續原對話"
-msgstr "{session} has ended; use :resume (or `termade resume`) to continue the conversation"
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "{session} 已結束；可用 :resume (或 `ertangle resume`)接續原對話"
+msgstr "{session} has ended; use :resume (or `ertangle resume`) to continue the conversation"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{session} 已結束，且沒有可接續的對話 id"
 msgstr "{session} has ended and has no conversation id to resume"
 
-#: crates/termade-daemon/src/handlers/session.rs
-msgid "session {label} 已超過成本上限 (over_budget)；請先用 `termade budget {label} <金額>` 或 TUI `:budget <金額>` 調高上限"
-msgstr "session {label} is over its cost limit (over_budget); raise the limit first with `termade budget {label} <amount>` or TUI `:budget <amount>`"
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "session {label} 已超過成本上限 (over_budget)；請先用 `ertangle budget {label} <金額>` 或 TUI `:budget <金額>` 調高上限"
+msgstr "session {label} is over its cost limit (over_budget); raise the limit first with `ertangle budget {label} <amount>` or TUI `:budget <amount>`"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "排隊已滿 (上限 {max} 則)"
 msgstr "Queue is full (limit {max})"
 
-#: crates/termade-daemon/src/handlers/session.rs
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-tui/src/commands.rs
 msgid "已排隊 (共 {n} 則，閒下來自動送出)"
 msgstr "Queued ({n} total, sent automatically when idle)"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "送 prompt 失敗：{e}"
 msgstr "Failed to send prompt: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已清空 {count} 則排隊 prompt"
 msgstr "Cleared {count} queued prompt(s)"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "無法將仍有執行中子 session 的 coordinator 降級；請先結束子 session 或加上 --force"
 msgstr "Cannot demote a coordinator with running child sessions; end the child sessions first or pass --force"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已交接給 {kind} (角色變更為 {role})"
 msgstr "Handed off to {kind} (role changed to {role})"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已交接給 {kind}"
 msgstr "Handed off to {kind}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "預算上限必須為大於 0 的數字"
 msgstr "The budget limit must be a number greater than 0"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "新的上限 (${budget})必須高於目前已花費金額 (${spent})"
 msgstr "The new limit (${budget}) must be higher than the amount spent so far (${spent})"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已將 {label} 的預算上限設為 ${budget}"
 msgstr "Set the budget limit of {label} to ${budget}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "session 仍在執行，請先結束 (kill)"
 msgstr "The session is still running; kill it first"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "worktree 仍被 {user} 使用，不能移除"
 msgstr "The worktree is still in use by {user}; cannot remove"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已移除 {label} (worktree 仍由 {sharers} 參照，保留)"
 msgstr "Removed {label} (worktree kept: still referenced by {sharers})"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{label} ({reason})：請先 merge，或用 force 強制移除"
 msgstr "{label} ({reason}): merge first, or use force to remove anyway"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "移除 worktree 失敗：{e}"
 msgstr "Failed to remove worktree: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已移除 {label}"
 msgstr "Removed {label}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "無法取得 session 主處理程序 PID"
 msgstr "Failed to get session main process PID"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "PID {pid} 不屬於 session {sid} 的後代處理程序"
 msgstr "PID {pid} is not a descendant process of session {sid}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "終止 PID {pid} 失敗：{e}"
 msgstr "Failed to terminate PID {pid}: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "請指定 model 或 effort"
 msgstr "Specify a model or effort"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{sid} 已切換 {parts} (下一個回合起生效)"
 msgstr "{sid} switched {parts} (takes effect from the next turn)"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "切換失敗：{e}"
 msgstr "Switch failed: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已休眠 {sid}"
 msgstr "Put {sid} to sleep"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "休眠失敗：{e}"
 msgstr "Failed to sleep: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已喚醒 {sid}"
 msgstr "Woke {sid}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "喚醒失敗：{e}"
 msgstr "Failed to wake: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "核准回覆失敗：{e}"
 msgstr "Failed to reply to approval: {e}"
 
-#: crates/termade-daemon/src/handlers/session.rs
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已分享產出 {id}"
 msgstr "Shared artifact {id}"
 
-#: crates/termade-daemon/src/handlers/task.rs
+#: crates/ertangle-daemon/src/handlers/task.rs
 msgid "找不到前置任務：{list}"
 msgstr "Prerequisite task(s) not found: {list}"
 
-#: crates/termade-daemon/src/handlers/task.rs
+#: crates/ertangle-daemon/src/handlers/task.rs
 msgid "已建立任務 {id}"
 msgstr "Created task {id}"
 
 #. 還在等前置任務：先不通知負責人，等相依性完成再由 `unblock_dependents` 送。
-#: crates/termade-daemon/src/handlers/task.rs
+#: crates/ertangle-daemon/src/handlers/task.rs
 msgid "已建立任務 {id} (blocked：等待 {waiting} 完成後自動解鎖並通知負責人)"
 msgstr "Created task {id} (blocked: waiting for {waiting}; it will unblock automatically and notify the assignee)"
 
-#: crates/termade-daemon/src/handlers/task.rs
+#: crates/ertangle-daemon/src/handlers/task.rs
 msgid "已更新任務 {task_id}"
 msgstr "Updated task {task_id}"
 
-#: crates/termade-daemon/src/handlers/task.rs
+#: crates/ertangle-daemon/src/handlers/task.rs
 msgid "找不到任務 {id}"
 msgstr "Task {id} not found"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "(已移除)"
 msgstr "(removed)"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "取得 diff 失敗：{e}"
 msgstr "Failed to get diff: {e}"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "退回變更失敗：{e}"
 msgstr "Failed to revert changes: {e}"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "session {label} 已結束且無對話 id，無法自動接續解衝突"
 msgstr "Session {label} has ended without conversation ID, cannot auto-resume to resolve conflicts"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "已將衝突委派給 {label}，衝突檔案：{files}"
 msgstr "Delegated conflicts to {label}, conflicting files: {files}"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "委派解衝突失敗，已還原 worktree：{send_err}"
 msgstr "Failed to delegate conflict resolution, worktree rolled back: {send_err}"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "在 worktree 建立衝突標記失敗：{prep_err}"
 msgstr "Failed to prepare conflict markers in worktree: {prep_err}"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "合併衝突 ({files})；輸入 :merge --resolve 交由 Agent 自動解衝突"
 msgstr "Merge conflict ({files}); run :merge --resolve to delegate to agent"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "合併失敗：{e}"
 msgstr "Merge failed: {e}"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "建立 PR 失敗：{e}"
 msgstr "Failed to create PR: {e}"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "{label} (worktree 仍被 {user} 使用)"
 msgstr "{label} (worktree still in use by {user})"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "{label} ({reason})"
 msgstr "{label} ({reason})"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "{label} (移除失敗：{e})"
 msgstr "{label} (removal failed: {e})"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "已清理 {removed} 個 worktree"
 msgstr "Cleaned up {removed} worktree(s)"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "；略過 {count} 個：{list} (可用 --force 強制移除)"
 msgstr "; skipped {count}: {list} (use --force to remove anyway)"
 
-#: crates/termade-daemon/src/handlers/worktree.rs
+#: crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "已送出審查註解"
 msgstr "Review comment sent"
 
-#: crates/termade-daemon/src/handlers/mod.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "遠端認證失敗：token 不符"
 msgstr "Remote authentication failed: token mismatch"
 
-#: crates/termade-daemon/src/handlers/mod.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "daemon 關閉中"
 msgstr "daemon shutting down"
 
-#: crates/termade-daemon/src/handlers/mod.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "Web 版已啟動：{url}"
 msgstr "Web version started: {url}"
 
-#: crates/termade-daemon/src/handlers/mod.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "啟動 Web 版失敗：{e}"
 msgstr "Failed to start Web version: {e}"
 
-#: crates/termade-daemon/src/handlers/mod.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "已停止 Web 版"
 msgstr "Stopped Web version"
 
-#: crates/termade-daemon/src/handlers/mod.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "Web 版未在執行"
 msgstr "Web version is not running"
 
-#: crates/termade-daemon/src/handlers/mod.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "未知的 agent：{kind}"
 msgstr "Unknown agent: {kind}"
 
-#: crates/termade-daemon/src/handlers/mod.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-daemon/src/handlers/mod.rs crates/ertangle-tui/src/menu.rs
 msgid "預設 (依 config.toml)"
 msgstr "Default (from config.toml)"
 
-#: crates/termade-daemon/src/quota_watch.rs
+#: crates/ertangle-daemon/src/quota_watch.rs
 msgid "token 用量已達 {used}/{limit} ({pct}%)，接近上限"
 msgstr "token usage reached {used}/{limit} ({pct}%), nearing the limit"
 
-#: crates/termade-daemon/src/quota_watch.rs
+#: crates/ertangle-daemon/src/quota_watch.rs
 msgid "成本已達 ${spent}/{limit} ({pct}%)，接近上限"
 msgstr "Cost reached ${spent}/{limit} ({pct}%), nearing the limit"
 
-#: crates/termade-daemon/src/quota_watch.rs
+#: crates/ertangle-daemon/src/quota_watch.rs
 msgid "{agent} 額度已用 {used}%，快用完了；需要時用 :handoff 交接給其他 agent"
 msgstr "{agent} quota is {used}% used and nearly exhausted; use :handoff to hand off to another agent if needed"
 
-#: crates/termade-daemon/src/quota_watch.rs
+#: crates/ertangle-daemon/src/quota_watch.rs
 msgid "額度用完，但 [handoff] fallback 沒有可用的 agent；請手動 :handoff"
 msgstr "Quota exhausted, but the [handoff] fallback has no available agent; run :handoff manually"
 
-#: crates/termade-daemon/src/server.rs
-msgid "遠端認證失敗：請設定正確的 TERMADE_TOKEN"
-msgstr "Remote authentication failed: set the correct TERMADE_TOKEN"
+#: crates/ertangle-daemon/src/server.rs
+msgid "遠端認證失敗：請設定正確的 ERTANGLE_TOKEN"
+msgstr "Remote authentication failed: set the correct ERTANGLE_TOKEN"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "未認證的遠端連線：請先送 Hello 帶 token"
 msgstr "Unauthenticated remote connection: send Hello with a token first"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "daemon 處理請求時發生內部錯誤"
 msgstr "Internal error while the daemon was handling the request"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "無法解析請求：{e}"
 msgstr "Cannot parse request: {e}"
 
-#: crates/termade-daemon/src/server.rs
-msgid "TERMADE_TEST_TAILSCALE_IP 位址無效：{ip}"
-msgstr "Invalid TERMADE_TEST_TAILSCALE_IP address: {ip}"
+#: crates/ertangle-daemon/src/server.rs
+msgid "ERTANGLE_TEST_TAILSCALE_IP 位址無效：{ip}"
+msgstr "Invalid ERTANGLE_TEST_TAILSCALE_IP address: {ip}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "無法執行 tailscale 指令，請確認已安裝並加入 PATH"
 msgstr "Failed to run tailscale command; make sure it is installed and in PATH"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "取得 Tailscale IP 失敗：{stderr}"
 msgstr "Failed to get Tailscale IP: {stderr}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "tailscale ip -4 未輸出有效 IP"
 msgstr "tailscale ip -4 did not output a valid IP"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "Tailscale 輸出的 IP 無效：{ip_str}"
 msgstr "Invalid IP output from Tailscale: {ip_str}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "無效的 port 設定：{port_str}"
 msgstr "Invalid port setting: {port_str}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "無法解析監聽位址 {spec}"
 msgstr "Cannot resolve listen address {spec}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "無法解析 Web 監聽位址 {spec}"
 msgstr "Cannot resolve Web listen address {spec}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "讀取 token 檔 {path} 失敗"
 msgstr "Failed to read token file {path}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "token 檔 {path} 權限過寬，請執行 chmod 600"
 msgstr "Token file {path} has overly broad permissions; run chmod 600"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "token 檔 {path} 是空的"
 msgstr "Token file {path} is empty"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "已自動產生遠端 Token 並儲存至 {path}"
 msgstr "Generated remote token and saved to {path}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "建立 token 檔 {path} 失敗"
 msgstr "Failed to create token file {path}"
 
-#: crates/termade-daemon/src/server.rs
-msgid "警告：--token 已棄用 (會出現在 ps 輸出)；請改用 TERMADE_TOKEN 或 --token-file"
-msgstr "Warning: --token is deprecated (it shows up in ps output); use TERMADE_TOKEN or --token-file instead"
+#: crates/ertangle-daemon/src/server.rs
+msgid "警告：--token 已棄用 (會出現在 ps 輸出)；請改用 ERTANGLE_TOKEN 或 --token-file"
+msgstr "Warning: --token is deprecated (it shows up in ps output); use ERTANGLE_TOKEN or --token-file instead"
 
-#: crates/termade-daemon/src/server.rs
-msgid "--listen 需要認證 token：請設定 TERMADE_TOKEN 或 --token-file <path>"
-msgstr "--listen requires an authentication token: set TERMADE_TOKEN or --token-file <path>"
+#: crates/ertangle-daemon/src/server.rs
+msgid "--listen 需要認證 token：請設定 ERTANGLE_TOKEN 或 --token-file <path>"
+msgstr "--listen requires an authentication token: set ERTANGLE_TOKEN or --token-file <path>"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "無法解析監聽位址 {addr}"
 msgstr "Cannot resolve listen address {addr}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "--listen {addr} 不是 loopback 或 Tailscale 位址；TCP 為明文傳輸。建議綁 127.0.0.1、Tailscale 或搭配 SSH 轉發；若確定要公開，加上 --insecure-listen-public"
 msgstr "--listen {addr} is not a loopback or Tailscale address; TCP is plaintext. Bind to 127.0.0.1, Tailscale, or forward over SSH, or add --insecure-listen-public if you really want to expose it"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "警告：daemon 以明文 TCP 對非 loopback/Tailscale 位址 {addr} 開放，token 與內容可被側錄"
 msgstr "Warning: the daemon is exposed over plaintext TCP on non-loopback/Tailscale address {addr}; the token and traffic can be sniffed"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "{dir} 不是目錄"
 msgstr "{dir} is not a directory"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "{dir} 不屬於目前使用者 (uid {uid})，拒絕啟動"
 msgstr "{dir} is not owned by the current user (uid {uid}); refusing to start"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "無法將 {dir} 改為 0700，請手動 chmod 700"
 msgstr "Cannot change {dir} to 0700; run chmod 700 manually"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "建立 {dir} 失敗"
 msgstr "Failed to create {dir}"
 
-#: crates/termade-daemon/src/server.rs
-msgid "已有 daemon 在執行 ({sock})；請直接連線，或先 `termade shutdown`"
-msgstr "A daemon is already running ({sock}); connect to it directly, or run `termade shutdown` first"
+#: crates/ertangle-daemon/src/server.rs
+msgid "已有 daemon 在執行 ({sock})；請直接連線，或先 `ertangle shutdown`"
+msgstr "A daemon is already running ({sock}); connect to it directly, or run `ertangle shutdown` first"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "綁定 {sock} 失敗"
 msgstr "Failed to bind {sock}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "綁定 TCP {addr} 失敗"
 msgstr "Failed to bind TCP {addr}"
 
-#: crates/termade-daemon/src/server.rs
-msgid "termade daemon 遠端監聽已啟動：tcp={addr}"
-msgstr "termade daemon remote listener started: tcp={addr}"
+#: crates/ertangle-daemon/src/server.rs
+msgid "ertangle daemon 遠端監聽已啟動：tcp={addr}"
+msgstr "ertangle daemon remote listener started: tcp={addr}"
 
-#: crates/termade-daemon/src/server.rs
+#: crates/ertangle-daemon/src/server.rs
 msgid "遠端認證 Token 檔案：{path}"
 msgstr "Remote auth token file: {path}"
 
-#: crates/termade-daemon/src/server.rs
-msgid "termade Web 版已啟動：{url}"
-msgstr "termade Web version started: {url}"
+#: crates/ertangle-daemon/src/server.rs
+msgid "ertangle Web 版已啟動：{url}"
+msgstr "ertangle Web version started: {url}"
 
-#: crates/termade-daemon/src/web.rs
+#: crates/ertangle-daemon/src/web.rs
 msgid "綁定 Web 伴侶服務位址 {addr} 失敗"
 msgstr "Failed to bind Web companion address {addr}"
 
-#: crates/termade-daemon/src/web.rs
+#: crates/ertangle-daemon/src/web.rs
 msgid "遠端認證失敗：請提供正確的 Token"
 msgstr "Remote authentication failed: please provide a valid Token"
 
-#: crates/termade-daemon/src/web.rs
+#: crates/ertangle-daemon/src/web.rs
 msgid "未認證的連線：請先發送 Hello 帶 token"
 msgstr "Unauthenticated connection: please send Hello with token first"
 
-#: crates/termade-daemon/src/web.rs
+#: crates/ertangle-daemon/src/web.rs
 msgid "無法解析 JSON：{e}"
 msgstr "Failed to parse JSON: {e}"
 
-#: crates/termade-daemon/src/lib.rs
+#: crates/ertangle-daemon/src/lib.rs
 msgid "開啟 {path} 失敗"
 msgstr "Failed to open {path}"
 
-#: crates/termade-daemon/src/lib.rs
+#: crates/ertangle-daemon/src/lib.rs
 msgid "daemon 重啟，可用 :resume 接續"
 msgstr "daemon restarted; use :resume to continue"
 
-#: crates/termade-daemon/src/lib.rs
+#: crates/ertangle-daemon/src/lib.rs
 msgid "daemon 重啟後自動接續失敗：{e}"
 msgstr "Auto-resume after daemon restart failed: {e}"
 
-#: crates/termade-daemon/src/lib.rs
+#: crates/ertangle-daemon/src/lib.rs
 msgid "排隊 prompt 送出失敗：{e}"
 msgstr "Failed to send queued prompt: {e}"
 
-#: crates/termade-daemon/src/lib.rs
+#: crates/ertangle-daemon/src/lib.rs
 msgid "session 已結束，丟棄 {dropped} 則排隊 prompt"
 msgstr "session ended; dropped {dropped} queued prompt(s)"
 
-#: crates/termade-daemon/src/lib.rs
+#: crates/ertangle-daemon/src/lib.rs
 msgid "daemon 重啟，已自動接續"
 msgstr "daemon restarted; resumed automatically"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "已連線 daemon"
 msgstr "Connected to daemon"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "主機篩選：{h}"
 msgstr "Host filter: {h}"
 
-#: crates/termade-tui/src/app.rs crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/commands.rs
 msgid "主機篩選：全部主機"
 msgstr "Host filter: all hosts"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "[{host}] 錯誤：{message}"
 msgstr "[{host}] Error: {message}"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "錯誤：{message}"
 msgstr "Error: {message}"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "Bus：顯示 (b 或 Esc 關閉)"
 msgstr "Bus: shown (b or Esc to close)"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "Bus：隱藏"
 msgstr "Bus: hidden"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "版面：{layout}"
 msgstr "Layout: {layout}"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "目前是命令模式：按 {keys} 才能輸入文字"
 msgstr "Normal mode: press {keys} to type"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "i 或 Enter"
 msgstr "i or Enter"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "i"
 msgstr "i"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
 msgstr "▸ Tools ×{calls} (✓{ok}) · last: {last}"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "工具：展開 (每筆呼叫都顯示，按 O 摺疊)"
 msgstr "Tools: expanded (every call shown, O to collapse)"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "工具：摺疊 (連續呼叫合成一行，按 O 展開)"
 msgstr "Tools: collapsed (consecutive calls on one line, O to expand)"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "思考顯示：開 (顯示 💭 行)"
 msgstr "Thinking: shown (💭 lines visible)"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "思考顯示：關 (已隱藏 💭 行，按 T 顯示)"
 msgstr "Thinking: hidden (💭 lines hidden, T to show)"
 
-#: crates/termade-tui/src/app.rs crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/input.rs
 msgid "逐字稿：跟隨最新"
 msgstr "Transcript: following latest"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "逐字稿：第 {next} 行 (End 回到最新)"
 msgstr "Transcript: line {next} (End to jump to latest)"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "只顯示本專案的 session、Bus 訊息與任務 ({project})，P 顯示全部"
 msgstr "Showing sessions, Bus messages, and tasks of this project only ({project}), P to show all"
 
-#: crates/termade-tui/src/app.rs
+#: crates/ertangle-tui/src/app.rs
 msgid "顯示全部專案的 session、Bus 訊息與任務，P 只看本專案"
 msgstr "Showing sessions, Bus messages, and tasks of all projects, P for this project only"
 
-#: crates/termade-tui/src/attach.rs
+#: crates/ertangle-tui/src/attach.rs
 msgid "寫入暫存圖片失敗：{e}"
 msgstr "Failed to write temporary image: {e}"
 
-#: crates/termade-tui/src/attach.rs
+#: crates/ertangle-tui/src/attach.rs
 msgid "剪貼簿裡沒有圖片 (需要 wl-paste 或 xclip)"
 msgstr "No image in clipboard (requires wl-paste or xclip)"
 
-#: crates/termade-tui/src/clipboard.rs
+#: crates/ertangle-tui/src/clipboard.rs
 msgid "沒有可複製的內容"
 msgstr "Nothing to copy"
 
-#: crates/termade-tui/src/clipboard.rs
+#: crates/ertangle-tui/src/clipboard.rs
 msgid "沒有第 {n} 則訊息 (共 {total} 則)"
 msgstr "No message #{n} ({total} total)"
 
-#: crates/termade-tui/src/clipboard.rs
+#: crates/ertangle-tui/src/clipboard.rs
 msgid "第 {n} 則訊息"
 msgstr "message #{n}"
 
-#: crates/termade-tui/src/clipboard.rs
+#: crates/ertangle-tui/src/clipboard.rs
 msgid "最新訊息 (第 {n} 則)"
 msgstr "latest message (#{n})"
 
-#: crates/termade-tui/src/clipboard.rs
+#: crates/ertangle-tui/src/clipboard.rs
 msgid "指定訊息編號僅適用於 Transcript 視圖"
 msgstr "Specifying a message number only applies to the Transcript view"
 
-#: crates/termade-tui/src/clipboard.rs
+#: crates/ertangle-tui/src/clipboard.rs
 msgid "主要區塊"
 msgstr "main pane"
 
-#: crates/termade-tui/src/clipboard.rs
+#: crates/ertangle-tui/src/clipboard.rs
 msgid "已複製{label} {lines} 行 ({backend})"
 msgstr "Copied {lines} lines of {label} ({backend})"
 
-#: crates/termade-tui/src/clipboard.rs crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/clipboard.rs crates/ertangle-tui/src/mouse.rs
 msgid "複製失敗：{e}"
 msgstr "Copy failed: {e}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已傳送訊息至 {target_str}"
 msgstr "Message sent to {target_str}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "附件錯誤：{e}"
 msgstr "Attachment error: {e}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已送出 prompt (含 {n} 個附件)"
 msgstr "Prompt sent (with {n} attachments)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已送出 prompt"
 msgstr "Prompt sent"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr "No session selected"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已超過成本上限，先用 :budget <金額> 調高"
 msgstr "Cost limit exceeded; raise it with :budget <amount> first"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已送出 prompt (含 {n_att} 個附件)"
 msgstr "Prompt sent (with {n_att} attachments)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "排隊為空 (:queue <文字> 排入，或在輸入框按 Alt-Enter)"
 msgstr "Queue is empty (:queue <text> to add, or Alt-Enter in the input box)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "排隊 {n} 則：{list}"
 msgstr "{n} queued: {list}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已清空 {n} 則排隊 prompt"
 msgstr "Cleared {n} queued prompts"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已取消最後一則排隊，內容放回輸入框"
 msgstr "Removed the last queued prompt and put it back in the input box"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "沒有排隊中的 prompt"
 msgstr "No queued prompts"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[agent[:model] prompt]  新增 agent；不帶參數開選擇器"
 msgstr "[agent[:model] prompt]  Start an agent; without arguments opens the picker"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "開選擇器：agent → model → prompt"
 msgstr "Open the picker: agent → model → prompt"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[名稱 [目標需求]]  啟動多 Agent 團隊範本；不帶參數開選擇器"
 msgstr "[name [goal]]  Launch a multi-agent team playbook; no args opens the picker"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[路徑]  匯出目前 session 樹為 Markdown，寫檔並複製到剪貼簿"
 msgstr "[path]  Export the current session tree as Markdown, save to a file and copy to clipboard"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "說明面板：所有按鍵與命令"
 msgstr "Help panel: all keys and commands"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "開啟額度面板：已安裝 agent 的各視窗用量與重置時間"
 msgstr "Open the quota panel: usage and reset time per window for installed agents"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "<金額>  設定或調高選取 session 的成本上限 (美元)"
 msgstr "<amount>  Set or raise the cost limit of the selected session (USD)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[agent[:model]] [說明]  把選取 session 的工作交接給另一個 agent"
 msgstr "[agent[:model]] [note]  Hand off the selected session's work to another agent"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[prompt]  不帶參數開選擇器；有 prompt 時接續選取的 session"
 msgstr "[prompt]  Without args open picker; with prompt resume selected session"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[名稱]  切換選取 session 的 model (下一回合起生效)；不帶參數列出目前與可選項"
 msgstr "[name]  Switch the selected session's model (from the next turn); without arguments lists current and available"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[low|medium|high|xhigh|max]  切換選取 session 的推理強度；不帶參數顯示目前值"
 msgstr "[low|medium|high|xhigh|max]  Switch the selected session's reasoning effort; without arguments shows the current value"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "開啟設定面板：用清單切換預設 model、effort、權限、agent 建立 session 的防呆"
 msgstr "Open the settings panel: default model, effort, permission, and agent spawn guardrails"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "不帶參數開設定面板；[--repo] <agent|permission|model|effort> <值>  直接寫入 config.toml (空值＝刪除)"
 msgstr "Without arguments opens settings; [--repo] <agent|permission|model|effort> <value>  writes config.toml directly (empty = delete)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "結束選取的 session"
 msgstr "Kill the selected session"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "中斷選取 session 的目前回合"
 msgstr "Interrupt the selected session's current turn"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "休眠選取的 session"
 msgstr "Put the selected session to sleep"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "喚醒選取的 session"
 msgstr "Wake the selected session"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[session] [--force]  移除已結束的 session"
 msgstr "[session] [--force]  Remove an ended session"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[--force]  清除所有已結束的 session (預設保留未合併或有變更的 worktree)"
 msgstr "[--force]  Remove all ended sessions (keeps unmerged or dirty worktrees by default)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[session] [--dry-run] [--resolve]  合併 worktree 回主工作區"
 msgstr "[session] [--dry-run] [--resolve]  Merge the worktree back into the main checkout"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "顯示選取 session 的 diff"
 msgstr "Show the selected session's diff"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "(Diff 視圖) 退回游標所在的 hunk 或整個檔案；:discard! 直接執行"
 msgstr "(Diff view) Revert the hunk or entire file at the cursor; :discard! executes immediately"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[session]  清理已合併的 worktree"
 msgstr "[session]  Clean up merged worktrees"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "顯示 worktree 清單"
 msgstr "Show the worktree list"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "回到 transcript 視圖"
 msgstr "Back to the transcript view"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容 (同 f)"
 msgstr "[text]  Search the visible transcript or diff (same as f)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[three|two|tabs]  切換版面"
 msgstr "[three|two|tabs]  Switch layout"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "原始文字／Markdown 切換"
 msgstr "Toggle raw text / Markdown"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs
 msgid "顯示／隱藏思考"
 msgstr "Show / hide thinking"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs
 msgid "展開／摺疊工具呼叫"
 msgstr "Expand / collapse tool calls"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)"
 msgstr "[here|all]  Show this project only / all projects (sessions, Bus, tasks)"
 
-#: crates/termade-tui/src/commands.rs
-msgid "[install|uninstall|show] [claude|agents|codex] [global]  安裝 termade-ade skill"
-msgstr "[install|uninstall|show] [claude|agents|codex] [global]  Install the termade-ade skill"
+#: crates/ertangle-tui/src/commands.rs
+msgid "[install|uninstall|show] [claude|agents|codex] [global]  安裝 ertangle-ade skill"
+msgstr "[install|uninstall|show] [claude|agents|codex] [global]  Install the ertangle-ade skill"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[on|off|test]  開關通知 (回合結束／等待核准／失敗／額度用完)；不帶參數顯示狀態"
 msgstr "[on|off|test]  Toggle notifications (turn done / awaiting approval / failed / quota exhausted); without arguments shows status"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[文字|clear]  排隊 prompt，session 閒下來自動送；不帶參數列出"
 msgstr "[text|clear]  Queue a prompt, sent when the session is idle; without arguments lists the queue"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "取消最後一則排隊並放回輸入框"
 msgstr "Remove the last queued prompt and put it back in the input box"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[on|off|status|qr|<addr>]  設定與啟動 Web 版"
 msgstr "[on|off|status|qr|<addr>]  Configure and start the Web version"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "顯示 Web 版網址與連線資訊"
 msgstr "Display Web version URL and connection info"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "顯示／隱藏 Bus 浮層"
 msgstr "Show / hide the Bus overlay"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "<標題>  新增任務"
 msgstr "<title>  Add a task"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "任務視圖：依狀態分組，Enter 跳到負責人"
 msgstr "Task view: grouped by status, Enter jumps to the assignee"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "<todo|doing|blocked|review|done>  改任務視圖選取任務的狀態"
 msgstr "<todo|doing|blocked|review|done>  Change the status of the task selected in the task view"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "<訊息>  廣播給所有 session"
 msgstr "<message>  Broadcast to all sessions"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "[編號]  複製主要區塊；Transcript 可指定第幾則訊息 (預設最新)"
 msgstr "[number]  Copy main pane; in Transcript, specify message number (default: latest)"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs
 msgid "離開 (保留 daemon)"
 msgstr "Quit (keep the daemon running)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "結束本專案所有執行中的 session (不動 daemon 與其他專案)"
 msgstr "Stop all running sessions of this project (daemon and other projects untouched)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "關閉共用 daemon (結束所有專案的 session)並離開；有 session 在跑時需 :shutdown! 確認"
 msgstr "Shut down the shared daemon (ending sessions of all projects) and quit; requires :shutdown! while sessions are running"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：:budget <金額> (或 :budget <session> <金額>)"
 msgstr "Usage: :budget <amount> (or :budget <session> <amount>)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "無效的金額：{amount_str}"
 msgstr "Invalid amount: {amount_str}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已設定成本上限為 {limit}"
 msgstr "Cost limit set to {limit}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "未知的 agent：{kind_str}"
 msgstr "Unknown agent: {kind_str}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已要求交接給 {kind}"
 msgstr "Handoff to {kind} requested"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs
 msgid "輸入目標需求後按 Enter 啟動 playbook {name}"
 msgstr "Enter the goal and press Enter to start playbook {name}"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "已送出結束"
 msgstr "Kill sent"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "已送出中斷"
 msgstr "Interrupt sent"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：:bg-kill <PID> (或 :bg-kill --all)"
 msgstr "Usage: :bg-kill <PID> (or :bg-kill --all)"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/ps.rs
 msgid "已要求清理 {session} 底下所有背景處理程序"
 msgstr "Requested cleanup of all background processes for {session}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已請求終止處理程序 PID {pid}"
 msgstr "Requested termination of process PID {pid}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "無效的 PID：{rest}"
 msgstr "Invalid PID: {rest}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "沒有可清除的已結束 session"
 msgstr "No ended sessions to clean"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已要求清除 {n} 個已結束的 session"
 msgstr "Requested removal of {n} ended sessions"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "逐字稿顯示：原始文字"
 msgstr "Transcript: raw text"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "逐字稿顯示：Markdown 渲染"
 msgstr "Transcript: rendered Markdown"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：:scope [here|all]"
 msgstr "Usage: :scope [here|all]"
 
-#: crates/termade-tui/src/commands.rs
-msgid "termade：測試通知"
-msgstr "termade: test notification"
+#: crates/ertangle-tui/src/commands.rs
+msgid "ertangle：測試通知"
+msgstr "ertangle: test notification"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已送出測試通知；{state}"
 msgstr "Test notification sent; {state}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：:notify [on|off|test]"
 msgstr "Usage: :notify [on|off|test]"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已關閉 Web 版並儲存至設定檔"
 msgstr "Web version disabled and saved to config"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "正在啟動 Web 版…"
 msgstr "Starting Web version…"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "Web 版 QR Code"
 msgstr "Web Version QR Code"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "Web 版網址：{url} (輸入 :web qr 開啟 QR Code，或 :web on|off 控制)"
 msgstr "Web version URL: {url} (type :web qr to open QR Code, or :web on|off to control)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "主機篩選：{target}"
 msgstr "Host filter: {target}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "未知的主機：{target}，可用主機：{avail}"
 msgstr "Unknown host: {target}, available hosts: {avail}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：/layout three|two|tabs"
 msgstr "Usage: /layout three|two|tabs"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：copy [訊息編號]"
 msgstr "Usage: copy [message number]"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "shutdown 會關掉共用的 daemon，結束 {n} 個執行中的 session (其他專案 {others} 個)。確定請輸入 :shutdown!；只想結束本專案請用 :stop；只離開 TUI 用 :quit"
 msgstr "shutdown stops the shared daemon and ends {n} running sessions ({others} in other projects). Type :shutdown! to confirm; use :stop to end only this project, or :quit to just leave the TUI"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已要求結束本專案 {n} 個執行中的 session"
 msgstr "Requested stop of {n} running sessions in this project"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已要求接續"
 msgstr "Resume requested"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "未知的命令：/{verb} (沒有選取的 session 可轉發)"
 msgstr "Unknown command: /{verb} (no selected session to forward it to)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已轉發 /{verb} 給 agent (它沒有回報這個指令，可能被當成一般文字)"
 msgstr "Forwarded /{verb} to the agent (it did not report this command; it may be treated as plain text)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已轉發原生指令 /{verb} 給 agent"
 msgstr "Forwarded native command /{verb} to the agent"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "(agent 原生指令，原樣轉發)"
 msgstr "(agent native command, forwarded as is)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "未知的 playbook：{name}"
 msgstr "Unknown playbook: {name}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已從 playbook {name} 啟動 {count} 個 session"
 msgstr "Started {count} sessions from playbook {name}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "建立匯出目錄失敗：{e}"
 msgstr "Failed to create export directory: {e}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "寫入匯出檔失敗：{e}"
 msgstr "Failed to write export file: {e}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已匯出至 {path} 並複製到剪貼簿 ({backend})"
 msgstr "Exported to {path} and copied to clipboard ({backend})"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已匯出至 {path} (剪貼簿失敗：{e})"
 msgstr "Exported to {path} (clipboard failed: {e})"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已跳轉至 {label} ({id})"
 msgstr "Jumped to {label} ({id})"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "找不到符合 `{query}` 的 session"
 msgstr "No session matches `{query}`"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "⚠ bypass 會跳過所有權限檢查；再按一次 Enter 確認"
 msgstr "⚠ bypass skips all permission checks; press Enter again to confirm"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已要求啟動 {kind}"
 msgstr "Requested start of {kind}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "請先切換到 Diff 視圖再執行退回"
 msgstr "Switch to the Diff view before discarding changes"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "目前位置沒有可退回的變更"
 msgstr "No discardable changes at the current position"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "⚠ 將退回 {file} 的目前 hunk；再按一次 X 或輸入 :discard! 確認"
 msgstr "⚠ Will revert the current hunk in {file}; press X again or run :discard! to confirm"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "⚠ 將還原整個檔案 {file} 的變更；再按一次 X 或輸入 :discard! 確認"
 msgstr "⚠ Will restore the entire file {file}; press X again or run :discard! to confirm"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "此 session 沒有待核准請求"
 msgstr "This session has no pending approval"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已允許"
 msgstr "Allowed"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已一律允許"
 msgstr "Always allowed"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已拒絕"
 msgstr "Denied"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "model：{current}　可選：{choices}"
 msgstr "model: {current}  available: {choices}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "(未回報)"
 msgstr "(not reported)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "(用 :model <名稱> 直接指定)"
 msgstr "(use :model <name> to set it directly)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "effort：{current}　可選：{choices}"
 msgstr "effort: {current}  available: {choices}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "(預設)"
 msgstr "(default)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "切換 {verb} → {value} (下一回合起生效)"
 msgstr "Switching {verb} → {value} (from the next turn)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "預設：agent={agent} permission={permission} model={model} effort={effort} ({target})"
 msgstr "Defaults: agent={agent} permission={permission} model={model} effort={effort} ({target})"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "未選 session，model／effort 不顯示"
 msgstr "no session selected, model/effort not shown"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "permission 只能是 ask、auto、bypass"
 msgstr "permission must be ask, auto, or bypass"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "model／effort 預設是針對某個 agent；先選取一個 session"
 msgstr "model/effort defaults are per agent; select a session first"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "無效的 port 設定：{value}"
 msgstr "Invalid port setting: {value}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "可設定：agent、permission、model、effort、web、web-port"
 msgstr "Configurable: agent, permission, model, effort, web, web-port"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已移除 {key} 預設 ({path})"
 msgstr "Removed default {key} ({path})"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已將預設 {key} 設為 {value} ({path})，新建立的 session 起生效"
 msgstr "Set default {key} to {value} ({path}); applies to new sessions"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/settings.rs
 msgid "寫入設定失敗：{e}"
 msgstr "Failed to write settings: {e}"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "推理強度"
 msgstr "Reasoning effort"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "安裝到目前專案 (加 global 則裝到家目錄)"
 msgstr "Install into the current project (add global for the home directory)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "移除已安裝的 skill"
 msgstr "Remove the installed skill"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "顯示 skill 安裝位置與注入設定"
 msgstr "Show the skill install path and injection setting"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "預設的 agent"
 msgstr "Default agent"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "預設權限 (ask／auto／bypass)"
 msgstr "Default permission (ask/auto/bypass)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "選取 session 的 agent 的預設 model"
 msgstr "Default model for the selected session's agent"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "選取 session 的 agent 的預設 effort"
 msgstr "Default effort for the selected session's agent"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "Web 版支援 (off／tailscale／位址／port)"
 msgstr "Web version support (off/tailscale/address/port)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "Web 版自訂連接埠 (例如 7421、8080)"
 msgstr "Custom port for Web version (e.g. 7421, 8080)"
 
-#: crates/termade-tui/src/commands.rs
-msgid "寫到 .termade/config.toml"
-msgstr "Write to .termade/config.toml"
+#: crates/ertangle-tui/src/commands.rs
+msgid "寫到 .ertangle/config.toml"
+msgstr "Write to .ertangle/config.toml"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "每個動作都要人同意"
 msgstr "Every action needs approval"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "自動核准一般動作"
 msgstr "Approve routine actions automatically"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "完全不問"
 msgstr "Never ask"
 
-#: crates/termade-tui/src/commands.rs crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/settings.rs
 msgid "關閉"
 msgstr "Off"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "Tailscale 自動偵測"
 msgstr "Tailscale (auto-detect)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "本機位址"
 msgstr "Local address"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "全網位址"
 msgstr "Public address"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "預設連接埠"
 msgstr "Default port"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "常用連接埠"
 msgstr "Common port"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "用法：:skill [install|uninstall|show] [claude|agents|codex] [global]"
 msgstr "Usage: :skill [install|uninstall|show] [claude|agents|codex] [global]"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "skill {state}：{p} (注入協作說明可在 :settings 開關)"
 msgstr "skill {state}: {p} (toggle injection into collaboration instructions in :settings)"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "已安裝"
 msgstr "installed"
 
-#: crates/termade-tui/src/commands.rs
+#: crates/ertangle-tui/src/commands.rs
 msgid "未安裝"
 msgstr "not installed"
 
-#: crates/termade-tui/src/diff.rs
+#: crates/ertangle-tui/src/diff.rs
 msgid "▸ [已摺疊] {path} (+{added} -{removed}) — 按 Enter 展開"
 msgstr "▸ [collapsed] {path} (+{added} -{removed}) — press Enter to expand"
 
-#: crates/termade-tui/src/diff.rs
+#: crates/ertangle-tui/src/diff.rs
 msgid "沒有更多檔案"
 msgstr "No more files"
 
-#: crates/termade-tui/src/diff.rs
+#: crates/ertangle-tui/src/diff.rs
 msgid "[{idx}/{total}] {path} (+{added} -{removed})"
 msgstr "[{idx}/{total}] {path} (+{added} -{removed})"
 
-#: crates/termade-tui/src/diff.rs
+#: crates/ertangle-tui/src/diff.rs
 msgid "已摺疊 {path}"
 msgstr "Collapsed {path}"
 
-#: crates/termade-tui/src/diff.rs
+#: crates/ertangle-tui/src/diff.rs
 msgid "已展開 {path}"
 msgstr "Expanded {path}"
 
-#: crates/termade-tui/src/diff.rs
+#: crates/ertangle-tui/src/diff.rs
 msgid "沒有更多 hunk"
 msgstr "No more hunks"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 命令 (Tab 自動完成) "
 msgstr " Commands (Tab to complete) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 專案檔案 (Tab 採用) "
 msgstr " Project files (Tab to accept) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 說明 (Esc 關閉) "
 msgstr " Help (Esc to close) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"
 msgstr " ↑↓ move · Enter pick · ←→ cycle · Esc close"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 設定 (寫入全域 config.toml) "
 msgstr " Settings (config.toml) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 過濾："
 msgstr " Filter: "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " (沒有符合的項目)"
 msgstr " (no matches)"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " {item}{loading} · Enter 選定 · Esc 返回 "
 msgstr " {item}{loading} · Enter select · Esc back "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "(載入中…)"
 msgstr " (loading…)"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "連線網址："
 msgstr "URL: "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "按 Esc、Enter、Space 或 q 關閉"
 msgstr "Press Esc, Enter, Space or q to close"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  載入可用 model 中…"
 msgstr "  Loading available models…"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "(沒有選項)"
 msgstr "(no options)"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "Enter 使用自訂值：{value}"
 msgstr "Enter to use custom value: {value}"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "[a]llow [A]lways [d]eny"
 msgstr "[a]llow [A]lways [d]eny"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "(j/k 選取該 session 後 a/d)"
 msgstr "(select that session with j/k, then a/d)"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "⏸ {label} 要求 {title}：{detail}{more} {keys}"
 msgstr "⏸ {label} requests {title}: {detail}{more} {keys}"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " (尚無 session，按 n 建立)"
 msgstr " (no sessions yet, press n to create one)"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "剩{pct}%"
 msgstr "{pct}% left"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  bus:{n} 未讀"
 msgstr "  bus:{n} unread"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "思考"
 msgstr "thinking"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "工具展開"
 msgstr "tools expanded"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "滑鼠關"
 msgstr "mouse off"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "⏸暫停跟隨"
 msgstr "⏸not following"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " Sessions "
 msgstr " Sessions "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " Sessions · +{n} "
 msgstr " Sessions · +{n} "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " Sessions · 全部 "
 msgstr " Sessions · all "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " (尚無 session：按 n 建立) "
 msgstr " (no sessions: press n to create one) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
 msgstr "Agent output appears here. Press i to type a prompt, n to create a session, g for the Diff view."
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k 選行 · {{/}} hunk · (/) 檔案 · Enter 摺疊 · X 退回 · c 註解 · M 合併 "
 msgstr " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k line · {{/}} hunk · (/) file · Enter fold · X discard · c comment · M merge "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "(尚無 diff 資料，按 r 重新載入)"
 msgstr "(no diff data yet, press r to reload)"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"
 msgstr "(no separate worktrees; use --worktree or Ctrl-W when creating a session)"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "⏸ 核准 "
 msgstr "⏸ Approval "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "{title}：{detail}"
 msgstr "{title}: {detail}"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  [a] 允許  [A] 一律允許  [d] 拒絕"
 msgstr "  [a] allow  [A] always allow  [d] deny"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "agent 之間的訊息與任務看板會出現在這裡。"
 msgstr "Messages between agents and the task board appear here."
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " Bus / Tasks · 本專案 "
 msgstr " Bus / Tasks · This project "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
 msgstr " Bus / Tasks · This project ({n} elsewhere, P to show) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 請先按 {keys} 才能輸入 "
 msgstr " Press {keys} to type "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 輸入 (i 輸入 · ? 說明) "
 msgstr " Input (i to type · ? help) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 說明 "
 msgstr " Help "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 設定 "
 msgstr " Settings "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " QR Code "
 msgstr " QR Code "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 額度 "
 msgstr " Quota "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 處理程序 "
 msgstr " Processes "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " prompt (@ 附檔 · Enter 送出 · Alt-Enter 排隊) "
 msgstr " prompt (@ attach · Enter send · Alt-Enter queue) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " prompt (排隊 {n} 則 · Alt-Enter 再排) "
 msgstr " prompt ({n} queued · Alt-Enter to queue more) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " spawn → {target} · role={role} · worktree={worktree} · 權限={permission} · Ctrl-R role · Ctrl-F effort "
 msgstr " spawn → {target} · role={role} · worktree={worktree} · permission={permission} · Ctrl-R role · Ctrl-F effort "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " spawn：<agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "
 msgstr " spawn: <agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 選單 "
 msgstr " Menu "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 選擇 (Enter 確認 · Esc 取消) "
 msgstr " Select (Enter confirm · Esc cancel) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " message → 選取的 session "
 msgstr " message → selected session "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " review 註解 → 選取的 session "
 msgstr " review comment → selected session "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 跳轉 session "
 msgstr " Jump to session "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid " 搜尋 (Enter／↓ 下一個 · ↑ 上一個 · Esc 離開) "
 msgstr " Search (Enter/↓ next · ↑ previous · Esc exit) "
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "請先按 {keys} 才能輸入文字"
 msgstr "Press {keys} to type"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "按 {keys} 開始輸入，? 看說明"
 msgstr "Press {keys} to type, ? for help"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  i 輸入  ? 說明  Space 選單  : 命令  q 離開"
 msgstr "  i type  ? help  Space menu  : command  q quit"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  ? 說明  c 註解  M 合併  q 離開"
 msgstr "  ? help  c comment  M merge  q quit"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  ? 說明  M 合併  G 清理  q 離開"
 msgstr "  ? help  M merge  G clean up  q quit"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"
 msgstr "  j/k select task  Enter go to assignee  :task-status <status>  ? help"
 
-#: crates/termade-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
 msgstr "  Select a session to switch panes (4 per page)  Enter/V back to single transcript  ? help"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "常用"
 msgstr "Common"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "選單 (s session、g git、v 檢視、m 訊息)"
 msgstr "Menu (s session, g git, v view, m message)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "命令列 (輸入時會提示，Tab 自動完成)；也可用 /"
 msgstr "Command line (hints while typing, Tab to complete); / also works"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "新增 agent：選 agent → model → 輸入 prompt"
 msgstr "New agent: pick agent → model → type prompt"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "對選取的 session 輸入 prompt (也可 @peer、#channel 傳訊息)"
 msgstr "Type a prompt for the selected session (or message with @peer, #channel)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "選取下一個／上一個 session"
 msgstr "Select next / previous session"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "依關鍵字跳轉到 session"
 msgstr "Jump to a session by keyword"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "這個說明面板"
 msgstr "This help panel"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "開啟設定面板 (含 Web 版支援)"
 msgstr "Open settings panel (including Web version support)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "顯示 Web 版網址與 QR Code"
 msgstr "Display Web version URL and QR Code"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "離開 (保留 daemon)／關閉 daemon 並離開"
 msgstr "Quit (keep daemon) / shut down daemon and quit"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "prompt 輸入"
 msgstr "Prompt input"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "@檔名"
 msgstr "@file"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "附加檔案或圖片；會在專案內模糊搜尋，↑↓ 選、Tab 採用"
 msgstr "Attach a file or image; fuzzy-searches the project, ↑↓ select, Tab accept"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "貼上剪貼簿圖片 (需 wl-paste 或 xclip)"
 msgstr "Paste an image from the clipboard (requires wl-paste or xclip)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "滑鼠拖曳"
 msgstr "Mouse drag"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(輸入框內)選取文字，放開即複製到剪貼簿 (OSC 52)"
 msgstr "(in the input box) select text; release to copy to the clipboard (OSC 52)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "拖曳檔案"
 msgstr "Drag a file"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "把檔案拖進終端機會自動轉成 @路徑"
 msgstr "Dropping a file into the terminal turns it into @path"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(spawn 時)切換是否使用獨立 git worktree"
 msgstr "(when spawning) toggle using a separate git worktree"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(spawn 時)切換角色 worker／coordinator／reviewer"
 msgstr "(when spawning) cycle role worker/coordinator/reviewer"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(spawn 時)切換權限 ask／auto／bypass"
 msgstr "(when spawning) cycle permission ask/auto/bypass"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(spawn 時)切換 effort；預設不指定"
 msgstr "(when spawning) cycle effort; unset by default"
 
-#: crates/termade-tui/src/help.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/help.rs crates/ertangle-tui/src/menu.rs
 msgid "中斷目前回合"
 msgstr "Interrupt the current turn"
 
-#: crates/termade-tui/src/help.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/help.rs crates/ertangle-tui/src/menu.rs
 msgid "結束 session"
 msgstr "Kill session"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "休眠／喚醒"
 msgstr "Sleep / wake"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "核准：允許／一律允許／拒絕"
 msgstr "Approval: allow / always allow / deny"
 
-#: crates/termade-tui/src/help.rs crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/help.rs crates/ertangle-tui/src/menu.rs
 msgid "交接給其他 agent (額度用完時)"
 msgstr "Hand off to another agent (when quota runs out)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "接續已結束的 session：同一個 agent 接回原對話"
 msgstr "Resume an ended session: same agent, same conversation"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "移除已結束的 session；Space s X 全部清除"
 msgstr "Remove an ended session; Space s X removes all"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "強制清除未合併或有變更的 worktree (會失去內容)"
 msgstr "Force-clean unmerged or dirty worktrees (discards changes)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "檢視"
 msgstr "View"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "切換 Overview／Diff／Worktrees／Tasks"
 msgstr "Switch Overview / Diff / Worktrees / Tasks"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(Tasks 視圖)選任務／跳到負責人的 session"
 msgstr "(Tasks view) select task / jump to the assignee's session"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "Diff 檢視"
 msgstr "Diff view"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "切換版面：三欄 (Sessions／中央／Project)／兩欄／分頁"
 msgstr "Switch layout: three columns (Sessions / center / Project) / two columns / tabs"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "網格檢視：一次看 4 個 session (Enter 返回)"
 msgstr "Grid view: watch 4 sessions at once (Enter to return)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "顯示／隱藏 Bus (三欄時取代右欄的 Project)"
 msgstr "Show/hide Bus (replaces the Project panel in the right column of the three-column layout)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "原始文字／Markdown；顯示／隱藏思考"
 msgstr "Raw text / Markdown; show / hide thinking"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "展開／摺疊工具呼叫 (預設摺疊)"
 msgstr "Expand / collapse tool calls (collapsed by default)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(輸入 prompt 或命令時)回顧歷史輸入"
 msgstr "(while typing a prompt or command) browse input history"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "只看本專案／顯示全部專案 (session、Bus、任務)"
 msgstr "Show this project only / all projects (sessions, Bus, tasks)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(輸入 prompt 時)換行；輸入框隨行數長高，貼上保留換行"
 msgstr "(while typing a prompt) new line; the input box grows, pasted newlines are kept"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(輸入 prompt 時)排隊，session 閒下來自動送出"
 msgstr "(while typing a prompt) queue it, sent when the session is idle"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "捲動 transcript；End 回到最新"
 msgstr "Scroll the transcript; End jumps to latest"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "搜尋逐字稿或 diff (邊打邊找)；Enter／↓ 下一個、↑ 上一個、Esc 離開"
 msgstr "Search the transcript or diff (incremental); Enter/↓ next, ↑ previous, Esc exit"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "f 的範圍"
 msgstr "Scope of f"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "只找畫面上顯示的內容：摺疊的工具、隱藏的思考、超過 4000 行的舊內容找不到"
 msgstr "Only searches what is displayed: collapsed tools, hidden thinking, and content older than 4000 lines are not found"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "拖曳 / Y / F2"
 msgstr "Drag / Y / F2"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "選取複製；複製內容 (Transcript 預設最新訊息，可用 :copy N 指定)；切換滑鼠擷取"
 msgstr "Select to copy; copy content (latest message in Transcript, or :copy N); toggle mouse capture"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "Diff 與 git"
 msgstr "Diff and git"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "移動游標／跳到上一個、下一個 hunk"
 msgstr "Move cursor / jump to previous, next hunk"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "跳到上一個、下一個檔案 (diff --git)"
 msgstr "Jump to previous, next file (diff --git)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(Diff 視圖)摺疊／展開目前游標所在的檔案"
 msgstr "(Diff view) Fold / unfold the file at the cursor"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(Diff 視圖)退回游標所在的 hunk 或整個檔案；再按一次 X 或 :discard! 確認"
 msgstr "(Diff view) Revert the hunk or entire file at the cursor; press X again or :discard! to confirm"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "對游標所在行寫審查註解，送回該 agent"
 msgstr "Write a review comment on the cursor line and send it to the agent"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "合併選取 session 的 worktree；:merge --dry-run 先看；:merge --resolve 委派解衝突"
 msgstr "Merge selected session's worktree; preview with :merge --dry-run; delegate conflicts with :merge --resolve"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "清理已合併的 worktree"
 msgstr "Clean up merged worktrees"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "命令 (: 開頭)"
 msgstr "Commands (start with :)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "啟動 agent，如 :spawn --role coord claude:opus 做某事；不帶參數開選擇器"
 msgstr "Start an agent, e.g. :spawn --role coord claude:opus do something; without arguments opens the picker"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "啟動多 Agent 團隊範本，如 :playbook tdd-pair 完成登入功能；不帶參數開選擇器 (Space s b)"
 msgstr "Launch a multi-agent team playbook, e.g. :playbook tdd-pair implement login; no args opens the picker (Space s b)"
 
-#: crates/termade-tui/src/help.rs
-msgid "匯出目前 session 樹為 Markdown 至 .termade/exports/ 並複製到剪貼簿；可指定路徑"
-msgstr "Export the current session tree as Markdown to .termade/exports/ and copy to clipboard; a path can be specified"
+#: crates/ertangle-tui/src/help.rs
+msgid "匯出目前 session 樹為 Markdown 至 .ertangle/exports/ 並複製到剪貼簿；可指定路徑"
+msgstr "Export the current session tree as Markdown to .ertangle/exports/ and copy to clipboard; a path can be specified"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "交接給另一個 agent，如 :handoff codex 補充說明"
 msgstr "Hand off to another agent, e.g. :handoff codex extra notes"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "接續已結束的 session (處理程序死掉或 daemon 重啟後)；可接 prompt"
 msgstr "Resume an ended session (after the process died or the daemon restarted); optional prompt"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "移除選取的 session／清除所有已結束的 session (含 worktree)"
 msgstr "Remove selected session / clean all ended sessions (including worktrees)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "複製內容；Transcript 可指定第 N 則訊息 (預設最新)"
 msgstr "Copy content; in Transcript, specify message #N (default: latest)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "結束／中斷選取的 session"
 msgstr "Kill / interrupt the selected session"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "排隊 prompt (查看／clear)／取消最後一則放回輸入框"
 msgstr "Queue a prompt (list / clear) / take back the last one into the input box"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "各 agent 帳號額度與重置時間"
 msgstr "Quota and reset time for each agent account"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "設定或調高選取 session 的成本上限，如 :budget 10"
 msgstr "Set or raise the selected session's cost limit, e.g. :budget 10"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "切換版面；:raw、:thoughts、:bus、:grid 切換顯示"
 msgstr "Switch layout; :raw, :thoughts, :bus, :grid toggle display"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "on|off 開關通知 (回合結束、等待核准、失敗、額度用完)；test 試發；方式在 config.toml [tui] notify"
 msgstr "on|off toggles notifications (turn done, awaiting approval, failed, quota exhausted); test sends one; methods in config.toml [tui] notify"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "搜尋逐字稿或 diff，如 :find error (同 f)"
 msgstr "Search the transcript or diff, e.g. :find error (same as f)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "新增任務／廣播訊息"
 msgstr "Add a task / broadcast a message"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "任務視圖／改選取任務的狀態 (todo doing blocked review done)"
 msgstr "Task view / change the selected task's status (todo doing blocked review done)"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "畫面上的標記"
 msgstr "Screen indicators"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "該 session 的 context 用量；≥80% 黃、≥92% 紅"
 msgstr "Context usage of the session; ≥80% yellow, ≥92% red"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "該 session 的成本與上限；達警告門檻黃、超過上限紅"
 msgstr "Cost and limit of the session; yellow at the warning threshold, red over the limit"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "帳號額度最吃緊的視窗；≥70% 黃、≥90% 紅"
 msgstr "Tightest quota window of the account; ≥70% yellow, ≥90% red"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "agent:model；!bypass 表示跳過所有權限檢查"
 msgstr "agent:model; !bypass means all permission checks are skipped"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "忙碌／閒置／失敗／結束"
 msgstr "busy / idle / failed / ended"
 
-#: crates/termade-tui/src/help.rs
+#: crates/ertangle-tui/src/help.rs
 msgid "(Tasks 視圖)任務的前置任務；黃色是還沒完成的"
 msgstr "(Tasks view) prerequisite tasks; yellow ones are not done yet"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "命令：spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown"
 msgstr "Commands: spawn / merge / diff / gc / sleep / wake / task / broadcast / copy / shutdown"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "輸入關鍵字跳轉至匹配的 session (label / id / branch)"
 msgstr "Type a keyword to jump to a matching session (label / id / branch)"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "對 `{loc}` 留下審查註解 (Enter 送回 agent)"
 msgstr "Leave a review comment on `{loc}` (Enter sends it to the agent)"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "命令 (Tab 自動完成)：spawn rm clean kill merge diff gc task …"
 msgstr "Command (Tab to complete): spawn rm clean kill merge diff gc task …"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "輸入要送給選取 session 的訊息"
 msgstr "Type a message for the selected session"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "已要求重整"
 msgstr "Refresh requested"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "滑鼠擷取：開 (可拖曳選取中央區塊並自動複製；Shift+拖曳可原生選取)"
 msgstr "Mouse capture: on (drag to select and copy the center pane; Shift+drag for native selection)"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "滑鼠擷取：關 (可直接拖曳選取複製；滾輪用終端機 alternate scroll)"
 msgstr "Mouse capture: off (drag to select natively; the wheel uses the terminal's alternate scroll)"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "已清除選取"
 msgstr "Selection cleared"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "逐字稿：已到最前"
 msgstr "Transcript: at the beginning"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "權限 = {permission}"
 msgstr "Permission = {permission}"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "預設(config)"
 msgstr "default (config)"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "effort = {effort}"
 msgstr "effort = {effort}"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "角色 = {role}"
 msgstr "role = {role}"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "已貼上剪貼簿圖片"
 msgstr "Pasted image from clipboard"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "已選 {path}"
 msgstr "Selected {path}"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "沒有符合的路徑"
 msgstr "No matching path"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "候選：{list}"
 msgstr "Candidates: {list}"
 
-#: crates/termade-tui/src/input.rs
+#: crates/ertangle-tui/src/input.rs
 msgid "已切換到輸入模式 (Enter 送出 · Esc 取消)"
 msgstr "Switched to input mode (Enter to send · Esc to cancel)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "設定 (預設 model／effort／權限…)"
 msgstr "Settings (default model / effort / permission…)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "Web 版 (網址與 QR Code)"
 msgstr "Web version (URL & QR Code)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "複製內容 (Transcript 預設最新訊息)"
 msgstr "Copy content (latest message in Transcript)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "說明 (所有按鍵與命令)"
 msgstr "Help (all keys and commands)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "結束本專案所有 session"
 msgstr "Stop all sessions of this project"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "關閉共用 daemon 並離開"
 msgstr "Shut down the shared daemon and quit"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "新增 agent… (選 agent 與 model)"
 msgstr "New agent… (pick agent and model)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "啟動多 Agent 團隊範本 (playbook)"
 msgstr "Launch a multi-agent team playbook"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "接續已結束的 session (接回原對話)"
 msgstr "Resume an ended session (same conversation)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "切換 model (執行中)"
 msgstr "Switch model (running)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "切換 effort (執行中)"
 msgstr "Switch effort (running)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "處理程序與 Subagent"
 msgstr "Processes & Subagents"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "各 agent 額度 (用量與重置時間)"
 msgstr "Agent quotas (usage and reset times)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "喚醒"
 msgstr "Wake"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "移除已結束的 session"
 msgstr "Remove ended session"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "清除所有已結束的 session"
 msgstr "Remove all ended sessions"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "merge 回主工作區"
 msgstr "Merge into the main checkout"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "merge 乾跑 (dry-run)"
 msgstr "Merge dry run"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "合併並委派解衝突"
 msgstr "Merge and delegate conflicts"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "gc 已合併的 worktree"
 msgstr "gc merged worktrees"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "任務視圖"
 msgstr "Task view"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "切換版面"
 msgstr "Switch layout"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "網格檢視 (一次看 4 個 session)"
 msgstr "Grid view (4 sessions at once)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "原始文字／Markdown"
 msgstr "Raw text / Markdown"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "只看本專案／全部專案"
 msgstr "This project / all projects"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "顯示／隱藏 Bus"
 msgstr "Show / hide Bus"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "訊息給選取的 session"
 msgstr "Message the selected session"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "廣播給所有人"
 msgstr "Broadcast to everyone"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "新增任務"
 msgstr "Add task"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "附加檔案／圖片… (@路徑，Tab 自動完成)"
 msgstr "Attach file / image… (@path, Tab to complete)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr "No `{c}` in this menu (Backspace back, Esc close)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "交接給哪個 agent"
 msgstr "Hand off to which agent"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "選擇 agent"
 msgstr "Choose agent"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有可用的 playbook"
 msgstr "No playbooks available"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "選擇團隊範本 (選完輸入目標需求)"
 msgstr "Choose a team playbook (then enter the goal)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有可接續的 session (已結束且具備對話 id)"
 msgstr "No resumable sessions (ended and with conversation id)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "封存"
 msgstr "archived"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "接續 session (Enter 確認 · Esc 取消)"
 msgstr "Resume session (Enter to confirm · Esc to cancel)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "已要求交接給 {target} (舊 session 會停止，新 agent 沿用同一個工作目錄)"
 msgstr "Handoff to {target} requested (the old session stops; the new agent uses the same working directory)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort"
 msgstr "spawn → {target}: type a prompt and press Enter (may be empty), Ctrl-R to cycle role, Ctrl-F to cycle effort"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有符合的 agent"
 msgstr "No matching agent"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "{agent} 的 model (輸入可過濾；無符合時 Enter 使用輸入值)"
 msgstr "Model for {agent} (type to filter; Enter uses the typed value if nothing matches)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "{role} (警告：仍有 {count} 個執行中子 session)"
 msgstr "{role} (warning: {count} running child session(s) remain)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "交接後的角色 (Enter 確認 · Esc 取消)"
 msgstr "Role after handoff (Enter to confirm · Esc to cancel)"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "已要求交接給 {target} (角色：{role})"
 msgstr "Requested handoff to {target} (role: {role})"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有符合的 playbook"
 msgstr "No matching playbook"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "已要求接續 {label}"
 msgstr "Resume requested for {label}"
 
-#: crates/termade-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
 msgstr "{label} has no resumable conversation id (PTY, older log, or agent exited without reporting)"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "輸入模式：Enter 送出 · Esc 取消 · 可拖曳選取複製"
 msgstr "Input mode: Enter to send · Esc to cancel · drag to select and copy"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "已選取 {n} 個字元 (放開滑鼠複製)"
 msgstr "Selected {n} chars (release the mouse to copy)"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "已複製輸入框選取內容 ({n} 個字元 · {backend})"
 msgstr "Copied input selection ({n} chars · {backend})"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "選取第 {from}–{to} 行 (放開滑鼠複製)"
 msgstr "Selected lines {from}–{to} (release the mouse to copy)"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "選取範圍沒有文字"
 msgstr "Selection contains no text"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "已複製選取 {n} 行 ({backend})"
 msgstr "Copied {n} selected lines ({backend})"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "已開啟連結：{url}"
 msgstr "Opened link: {url}"
 
-#: crates/termade-tui/src/mouse.rs
+#: crates/ertangle-tui/src/mouse.rs
 msgid "無法開啟連結：{e}"
 msgstr "Cannot open link: {e}"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "做完了"
 msgstr "done"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "等待核准 {tool}"
 msgstr "awaiting approval for {tool}"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "額度用完"
 msgstr "quota exhausted"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "{label}：{what}"
 msgstr "{label}: {what}"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "通知：關閉 (config.toml 的 [tui] notify 是空的)"
 msgstr "Notifications: disabled ([tui] notify in config.toml is empty)"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgctxt "列表分隔"
 msgid "、"
 msgstr ", "
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "通知：開 ({methods})"
 msgstr "Notifications: on ({methods})"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "通知：關 ({methods})"
 msgstr "Notifications: off ({methods})"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "；notify_command 未設定"
 msgstr "; notify_command is not set"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "；忽略未知方式：{methods}"
 msgstr "; ignoring unknown methods: {methods}"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "通知寫入終端機失敗：{e}"
 msgstr "Failed to write notification to the terminal: {e}"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "通知：notify_command 未設定"
 msgstr "Notifications: notify_command is not set"
 
-#: crates/termade-tui/src/notify.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "通知命令執行失敗：{e}"
 msgstr "Notification command failed: {e}"
 
-#: crates/termade-tui/src/project.rs
+#: crates/ertangle-tui/src/project.rs
 msgid "協作"
 msgstr "Collaboration"
 
-#: crates/termade-tui/src/project.rs
+#: crates/ertangle-tui/src/project.rs
 msgid "最新訊息"
 msgstr "Latest messages"
 
-#: crates/termade-tui/src/project.rs
+#: crates/ertangle-tui/src/project.rs
 msgid "目前沒有協作或執行中的項目。b 切換 Bus。"
 msgstr "No collaboration or running items. Press b to switch to Bus."
 
-#: crates/termade-tui/src/project.rs
+#: crates/ertangle-tui/src/project.rs
 msgid " Project · 全部專案 "
 msgstr " Project · all projects "
 
-#: crates/termade-tui/src/project.rs
+#: crates/ertangle-tui/src/project.rs
 msgid "尚無 session：按 n 建立"
 msgstr "No sessions yet: press n to create one"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid "已強制終止處理程序 PID {pid} (SIGKILL)"
 msgstr "Forcibly terminated process PID {pid} (SIGKILL)"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid "已請求終止處理程序 PID {pid} (SIGTERM，再按一次強制終止)"
 msgstr "Requested termination of process PID {pid} (SIGTERM, press again to force kill)"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid "沒有可終止的背景處理程序"
 msgstr "No background processes to terminate"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid " ─── 執行中工具／Subagent ───"
 msgstr " ─── Active Tools / Subagents ───"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid " ─── 背景子處理程序 (PID / 執行時間 / 命令列) ───"
 msgstr " ─── Background Child Processes (PID / Elapsed / Command) ───"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid "  (目前沒有殘留的背景子處理程序)"
 msgstr "  (No background child processes remaining)"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid "命令列摘要"
 msgstr "Command summary"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid " ↑↓/j/k 移動 · x 單獨終止 (連按強制) · X 清理全部 · Esc/q 關閉"
 msgstr " ↑↓/j/k Move · x Terminate (repeat to force) · X Clean all · Esc/q Close"
 
-#: crates/termade-tui/src/ps.rs
+#: crates/ertangle-tui/src/ps.rs
 msgid " 處理程序與 Subagent 監控 ({label}) "
 msgstr " Process & Subagent Monitor ({label}) "
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "此 agent 尚未回報額度資料"
 msgstr "No quota data reported by this agent yet"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "✗ 額度已滿"
 msgstr "✗ quota reached"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "⚠ 接近上限"
 msgstr "⚠ near limit"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "{ago} 前更新"
 msgstr "updated {ago} ago"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "已重置"
 msgstr "reset"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "{t} 後重置"
 msgstr "resets in {t}"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "剩 {pct}%"
 msgstr "{pct}% left"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "找不到已安裝的 agent"
 msgstr "No installed agents found"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "全部"
 msgstr "All"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "Tab / ← → 切換 agent · Esc / q 關閉"
 msgstr "Tab / ← → switch agent · Esc / q close"
 
-#: crates/termade-tui/src/quota.rs
+#: crates/ertangle-tui/src/quota.rs
 msgid "Agent 額度 (剩餘)"
 msgstr "Agent Quotas (Remaining)"
 
-#: crates/termade-tui/src/search.rs
+#: crates/ertangle-tui/src/search.rs
 msgid "這個視圖不支援搜尋 (逐字稿與 Diff 才有)"
 msgstr "This view does not support search (only the transcript and Diff do)"
 
-#: crates/termade-tui/src/search.rs
+#: crates/ertangle-tui/src/search.rs
 msgid "已離開搜尋"
 msgstr "Search closed"
 
-#: crates/termade-tui/src/search.rs
+#: crates/ertangle-tui/src/search.rs
 msgid "找不到「{query}」"
 msgstr "\"{query}\" not found"
 
-#: crates/termade-tui/src/search.rs
+#: crates/ertangle-tui/src/search.rs
 msgid "搜尋「{query}」停在 {current}/{total} (f 再搜尋)"
 msgstr "Search \"{query}\" stopped at {current}/{total} (f to search again)"
 
-#: crates/termade-tui/src/search.rs
+#: crates/ertangle-tui/src/search.rs
 msgid "搜尋：輸入文字 (只找畫面上顯示的內容)"
 msgstr "Search: type text (only searches what is displayed)"
 
-#: crates/termade-tui/src/search.rs
+#: crates/ertangle-tui/src/search.rs
 msgid "搜尋：找不到「{query}」"
 msgstr "Search: \"{query}\" not found"
 
-#: crates/termade-tui/src/search.rs
+#: crates/ertangle-tui/src/search.rs
 msgid "搜尋 {current}/{total}"
 msgstr "Search {current}/{total}"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "新 session 預設值"
 msgstr "New-session defaults"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "Worker 啟動順序 (agent 建立子 session 時依序挑第一個已安裝的)"
 msgstr "Worker launch order (first installed agent is used when an agent spawns a sub-session)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "各 agent 的預設值"
 msgstr "Per-agent defaults"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "agent 自行建立 session 的防呆"
 msgstr "Guardrails for agent-created sessions"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "Git 與 worktree"
 msgstr "Git and worktree"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "協作說明"
 msgstr "Collaboration instructions"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "Web 版"
 msgstr "Web companion"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "介面"
 msgstr "Interface"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "預設 agent"
 msgstr "Default agent"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "預設角色"
 msgstr "Default role"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "預設權限"
 msgstr "Default permission"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "第 1 順位"
 msgstr "1st priority"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "第 2 順位"
 msgstr "2nd priority"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "第 3 順位"
 msgstr "3rd priority"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "第 4 順位"
 msgstr "4th priority"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "下面兩項設定的對象 agent"
 msgstr "Agent for rows below"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "{agent} 的預設 model (清單載入中…)"
 msgstr "{agent} model (loading…)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "{agent} 的預設 model"
 msgstr "{agent} model"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "{agent} 的預設 effort"
 msgstr "{agent} effort"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "agent 自己建立的 session 用獨立 worktree"
 msgstr "Agent spawns use a worktree"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "agent 建立高消耗 session 時"
 msgstr "Agent spawns costly session"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "agent 建立 session 免確認的 effort 上限"
 msgstr "Effort cap, no confirmation"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "daemon 重啟時自動接續執行中的 session"
 msgstr "Auto-resume on restart"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "worktree 共用 cargo target (編譯排隊、不重複)"
 msgstr "Shared cargo target"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "worktree 合併策略"
 msgstr "Worktree merge strategy"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "把協作說明注入每個 agent"
 msgstr "Inject collab instructions"
 
-#: crates/termade-tui/src/settings.rs
-msgid "把 termade-ade skill 注入協作說明"
-msgstr "Inject termade-ade skill"
+#: crates/ertangle-tui/src/settings.rs
+msgid "把 ertangle-ade skill 注入協作說明"
+msgstr "Inject ertangle-ade skill"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "把省 token 提示注入協作說明"
 msgstr "Inject token-saving hints into the collaboration instructions"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "Web 版支援 (Web UI)"
 msgstr "Web UI"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "Web 版連接埠 (Web Port)"
 msgstr "Web port"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "介面語言"
 msgstr "Language"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "未設定"
 msgstr "Not set"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "未設定 (coordinator)"
 msgstr "Not set (coordinator)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "未設定 (auto)"
 msgstr "Not set (auto)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "ask：每個動作都問"
 msgstr "ask: confirm each action"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "auto：自動核准一般動作"
 msgstr "auto: approve routine"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "bypass：完全不問"
 msgstr "bypass: never ask"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "未設定 (agent 自己的預設)"
 msgstr "Not set (agent default)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "開"
 msgstr "On"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "關"
 msgstr "Off"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "超出範圍才問使用者"
 msgstr "Ask only beyond limits"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "每次都問使用者"
 msgstr "Always ask"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "不問 (effort 調降、model 拒絕)"
 msgstr "Never ask, auto-downgrade"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "Tailscale (自動 IP:{port})"
 msgstr "Tailscale (auto IP:{port})"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "本機 (127.0.0.1:{port})"
 msgstr "Local (127.0.0.1:{port})"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "全網 (0.0.0.0:{port})"
 msgstr "Public (0.0.0.0:{port})"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "預設 (7421)"
 msgstr "Default (7421)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "自動 (依 LANG 環境變數)"
 msgstr "Auto (from LANG)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "已儲存到 {path} (新建立的 session 起生效)"
 msgstr "Saved to {path} (applies to new sessions)"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "已關閉 Web 版並儲存至 {path}"
 msgstr "Web version disabled and saved to {path}"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "已啟動 Web 版並儲存至 {path}"
 msgstr "Web version started and saved to {path}"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "已儲存到 {path}"
 msgstr "Saved to {path}"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "已更新 Web 版連接埠並儲存至 {path}"
 msgstr "Web version port updated and saved to {path}"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "已更新合併策略並儲存至 {path}"
 msgstr "Merge strategy updated and saved to {path}"
 
-#: crates/termade-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs
 msgid "載入翻譯失敗：{e}"
 msgstr "Failed to load translation: {e}"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "沒有選取的任務"
 msgstr "No task selected"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "這個任務還沒有負責人"
 msgstr "This task has no assignee yet"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "負責人的 session ({id})已不存在"
 msgstr "The assignee's session ({id}) no longer exists"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "已跳到負責人 {label}"
 msgstr "Jumped to assignee {label}"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "task-status 作用在任務視圖選取的任務：先用 :tasks 或 Tab 切過去"
 msgstr "task-status applies to the task selected in the task view: switch there with :tasks or Tab first"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "用法：task-status <todo|doing|blocked|review|done>"
 msgstr "Usage: task-status <todo|doing|blocked|review|done>"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "任務 {id} → {status}"
 msgstr "Task {id} → {status}"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid " Tasks ({n}/{total} · 本專案，P 顯示全部) "
 msgstr " Tasks ({n}/{total} · this project, P to show all) "
 
-#: crates/termade-tui/src/tasks.rs
-msgid "還沒有任務。用 :task <標題> 建立，或讓 agent 呼叫 termade_task_create。"
-msgstr "No tasks yet. Create one with :task <title>, or have an agent call termade_task_create."
+#: crates/ertangle-tui/src/tasks.rs
+msgid "還沒有任務。用 :task <標題> 建立，或讓 agent 呼叫 ertangle_task_create。"
+msgstr "No tasks yet. Create one with :task <title>, or have an agent call ertangle_task_create."
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "{id} · 負責人 {assignee} · 建立者 {creator}"
 msgstr "{id} · assignee {assignee} · created by {creator}"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "  ? {id} (已不存在)"
 msgstr "  ? {id} (no longer exists)"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid "(沒有說明)"
 msgstr "(no description)"
 
-#: crates/termade-tui/src/tasks.rs
+#: crates/ertangle-tui/src/tasks.rs
 msgid " 任務說明 (Enter 跳到負責人 · :task-status <狀態>) "
 msgstr " Task details (Enter go to assignee · :task-status <status>) "
 
-#: crates/termade-tui/src/hosts.rs
+#: crates/ertangle-tui/src/hosts.rs
 msgid "找不到主機 {host} 的連線"
 msgstr "Cannot find connection for host {host}"
 
-#: crates/termade-tui/src/lib.rs
+#: crates/ertangle-tui/src/lib.rs
 msgid "重連中"
 msgstr "reconnecting"
 
-#: crates/termade-tui/src/lib.rs
+#: crates/ertangle-tui/src/lib.rs
 msgid "與 {host} 連線中斷，正在重連…"
 msgstr "Disconnected from {host}, reconnecting…"
 
-#: crates/termade-tui/src/lib.rs
+#: crates/ertangle-tui/src/lib.rs
 msgid "已重新連線至 {host}"
 msgstr "Reconnected to {host}"
 
-#: crates/termade-tui/src/lib.rs
+#: crates/ertangle-tui/src/lib.rs
 msgid "daemon 連線已中斷 (可能被關閉了)。畫面是最後的狀態，按 q 離開後重新啟動"
 msgstr "Lost connection to the daemon (it may have been shut down). The screen shows the last state; press q to quit and restart"
 
-#: crates/termade-tui/src/lib.rs
+#: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
 
@@ -4312,8 +4310,8 @@ msgstr "Connection lost, reconnecting; please wait"
 #~ msgid "行動端隨身審核器未在執行"
 #~ msgstr "Mobile companion is not running"
 
-#~ msgid "termade 行動端隨身審核器已啟動：{url}"
-#~ msgstr "termade mobile companion started: {url}"
+#~ msgid "ertangle 行動端隨身審核器已啟動：{url}"
+#~ msgstr "ertangle mobile companion started: {url}"
 
 #~ msgid "[on|off|status|qr|<addr>]  設定與啟動行動端 Web 隨身審核器"
 #~ msgstr "[on|off|status|qr|<addr>]  Configure and start the mobile web companion"
@@ -4354,8 +4352,8 @@ msgstr "Connection lost, reconnecting; please wait"
 #~ msgid "已啟動行動端隨身審核器並儲存至 {path}"
 #~ msgstr "Started mobile companion and saved to {path}"
 
-#~ msgid "termade 行動端隨身審核器已啟動：http://{web_addr}"
-#~ msgstr "termade mobile companion started: http://{web_addr}"
+#~ msgid "ertangle 行動端隨身審核器已啟動：http://{web_addr}"
+#~ msgstr "ertangle mobile companion started: http://{web_addr}"
 
 #~ msgid "行動端隨身審核器網址：{url}"
 #~ msgstr "Mobile companion URL: {url}"

@@ -1,8 +1,8 @@
 //! 任務看板子命令 (tasks、task、task-update)。
 
 use anyhow::{bail, Context, Result};
-use termade_core::TaskStatus;
-use termade_protocol::{Frame, Request};
+use ertangle_core::TaskStatus;
+use ertangle_protocol::{Frame, Request};
 use tr::tr;
 
 use super::roundtrip;
@@ -50,7 +50,7 @@ pub(crate) fn cmd_task_create(
     assignee: Option<String>,
     depends_on: Vec<String>,
 ) -> Result<()> {
-    let created_by = std::env::var("TERMADE_SESSION").ok();
+    let created_by = ertangle_core::env_var("ERTANGLE_SESSION");
     let frame = roundtrip(&Request::TaskCreate {
         title,
         detail: detail.unwrap_or_default(),

@@ -1,4 +1,4 @@
-# git-cliff configuration for termade
+# git-cliff configuration for ertangle
 # https://git-cliff.org/docs/configuration
 
 [changelog]
@@ -27,7 +27,7 @@ footer = """
 """
 trim = true
 postprocessors = [
-    { pattern = '<REPO>', replace = "https://github.com/single9/termade" },
+    { pattern = '<REPO>', replace = "https://github.com/single9/ertangle" },
 ]
 
 [git]

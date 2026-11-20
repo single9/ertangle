@@ -459,6 +459,91 @@ dependencies = [
 ]
 
 [[package]]
+name = "ertangle"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "ertangle-adapter",
+ "ertangle-core",
+ "ertangle-daemon",
+ "ertangle-protocol",
+ "ertangle-tui",
+ "serde_json",
+ "tr",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "ertangle-adapter"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "ertangle-core",
+ "ertangle-protocol",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "tr",
+ "tracing",
+]
+
+[[package]]
+name = "ertangle-core"
+version = "0.8.0"
+dependencies = [
+ "rspolib",
+ "serde",
+ "serde_json",
+ "tr",
+ "uuid",
+]
+
+[[package]]
+name = "ertangle-daemon"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "ertangle-adapter",
+ "ertangle-core",
+ "ertangle-protocol",
+ "nix 0.28.0",
+ "serde",
+ "serde_json",
+ "toml",
+ "tr",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ertangle-protocol"
+version = "0.8.0"
+dependencies = [
+ "ertangle-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ertangle-tui"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "ertangle-adapter",
+ "ertangle-core",
+ "ertangle-daemon",
+ "ertangle-protocol",
+ "ratatui",
+ "serde_json",
+ "tr",
+ "unicode-width",
+]
+
+[[package]]
 name = "euclid"
 version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1638,91 +1723,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "termade"
-version = "0.8.0"
-dependencies = [
- "anyhow",
- "clap",
- "clap_complete",
- "serde_json",
- "termade-adapter",
- "termade-core",
- "termade-daemon",
- "termade-protocol",
- "termade-tui",
- "tr",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "termade-adapter"
-version = "0.8.0"
-dependencies = [
- "anyhow",
- "portable-pty",
- "serde",
- "serde_json",
- "termade-core",
- "termade-protocol",
- "tr",
- "tracing",
-]
-
-[[package]]
-name = "termade-core"
-version = "0.8.0"
-dependencies = [
- "rspolib",
- "serde",
- "serde_json",
- "tr",
- "uuid",
-]
-
-[[package]]
-name = "termade-daemon"
-version = "0.8.0"
-dependencies = [
- "anyhow",
- "nix 0.28.0",
- "serde",
- "serde_json",
- "termade-adapter",
- "termade-core",
- "termade-protocol",
- "toml",
- "tr",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "termade-protocol"
-version = "0.8.0"
-dependencies = [
- "serde",
- "serde_json",
- "termade-core",
-]
-
-[[package]]
-name = "termade-tui"
-version = "0.8.0"
-dependencies = [
- "anyhow",
- "crossterm",
- "ratatui",
- "serde_json",
- "termade-adapter",
- "termade-core",
- "termade-daemon",
- "termade-protocol",
- "tr",
- "unicode-width",
 ]
 
 [[package]]

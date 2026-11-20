@@ -1,5 +1,5 @@
 #!/bin/sh
-# 從原始碼抽出 `tr!` 字串產生 locales/termade.pot，再用 msgmerge 更新每個 locales/*.po。
+# 從原始碼抽出 `tr!` 字串產生 locales/ertangle.pot，再用 msgmerge 更新每個 locales/*.po。
 # 需要 xtr (`cargo install xtr`，只當開發工具，不加進 Cargo.toml) 與 GNU gettext 的 msgmerge。
 set -eu
 cd "$(dirname "$0")/.."
@@ -7,9 +7,9 @@ cd "$(dirname "$0")/.."
 # clap 的說明文字 (doc comment) xtr 抽不到：先由執行檔印成 tr_noop! 清單，再一起抽。
 cargo run --quiet -- __help-strings > src/cmd/helptext/help_strings.rs
 
-pot=locales/termade.pot
+pot=locales/ertangle.pot
 # 只記檔名不記行號，避免改一行程式碼就讓 .pot 整份變動。
-xtr --package-name termade -k tr -k tr_noop -n file -o "$pot.tmp" \
+xtr --package-name ertangle -k tr -k tr_noop -n file -o "$pot.tmp" \
     src/main.rs src/cmd/helptext/help_strings.rs crates/*/src/lib.rs
 # POT-Creation-Date 每次都不同，拿掉才能比對 .pot 是否過期。
 grep -v '^"POT-Creation-Date:' "$pot.tmp" > "$pot"

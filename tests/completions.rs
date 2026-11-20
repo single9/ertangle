@@ -1,4 +1,4 @@
-//! `termade completions` 與 `termade __complete sessions` 的整合測試。
+//! `ertangle completions` 與 `ertangle __complete sessions` 的整合測試。
 
 use std::os::unix::net::UnixListener;
 use std::path::Path;
@@ -6,24 +6,24 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_termade")
+    env!("CARGO_BIN_EXE_ertangle")
 }
 
 fn cmd_with_env(root: &Path, sock: &Path) -> Command {
     let mut cmd = Command::new(bin());
-    cmd.env("TERMADE_SOCKET", sock)
+    cmd.env("ERTANGLE_SOCKET", sock)
         .env("XDG_RUNTIME_DIR", root.join("run"))
         .env("XDG_STATE_HOME", root.join("state"))
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env(
-            "TERMADE_CLAUDE_BIN",
+            "ERTANGLE_CLAUDE_BIN",
             format!(
-                "{}/crates/termade-adapter/tests/fake_claude.sh",
+                "{}/crates/ertangle-adapter/tests/fake_claude.sh",
                 env!("CARGO_MANIFEST_DIR")
             ),
         )
-        .env_remove("TERMADE_REMOTE")
-        .env_remove("TERMADE_TOKEN");
+        .env_remove("ERTANGLE_REMOTE")
+        .env_remove("ERTANGLE_TOKEN");
     cmd
 }
 
@@ -31,14 +31,14 @@ fn cmd_with_env(root: &Path, sock: &Path) -> Command {
 fn cli_completions_and_complete_sessions_e2e() {
     // macOS 的 temp_dir 經過符號連結 (/var → /private/var)，先正規化讓路徑比較一致。
     let tmp = std::fs::canonicalize(std::env::temp_dir()).unwrap();
-    let root = tmp.join(format!("termade-compl-{}", std::process::id()));
+    let root = tmp.join(format!("ertangle-compl-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let proj_a = root.join("proj-a");
     let proj_b = root.join("proj-b");
     std::fs::create_dir_all(&proj_a).unwrap();
     std::fs::create_dir_all(&proj_b).unwrap();
 
-    // 1. `termade completions <zsh|bash|fish>` 輸出非空腳本並含主要子命令與旗標值。
+    // 1. `ertangle completions <zsh|bash|fish>` 輸出非空腳本並含主要子命令與旗標值。
     for shell in ["zsh", "bash", "fish"] {
         let out = Command::new(bin())
             .args(["completions", shell])
@@ -64,7 +64,7 @@ fn cli_completions_and_complete_sessions_e2e() {
     assert!(out.stderr.is_empty(), "不應有 stderr：{:?}", out.stderr);
     assert!(!missing_sock.exists(), "不應建立 socket");
     assert!(
-        !root.join("state/termade/daemon.log").exists(),
+        !root.join("state/ertangle/daemon.log").exists(),
         "不應啟動背景 daemon"
     );
 
@@ -73,7 +73,7 @@ fn cli_completions_and_complete_sessions_e2e() {
     let _listener = UnixListener::bind(&slow_sock).unwrap();
     let t0 = Instant::now();
     let out = cmd_with_env(&root, &slow_sock)
-        .env("TERMADE_COMPLETE_TIMEOUT_MS", "80")
+        .env("ERTANGLE_COMPLETE_TIMEOUT_MS", "80")
         .args(["__complete", "sessions"])
         .output()
         .unwrap();

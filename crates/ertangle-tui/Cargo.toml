@@ -1,0 +1,18 @@
+[package]
+name = "ertangle-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tr.workspace = true
+ertangle-core.workspace = true
+ertangle-protocol.workspace = true
+ertangle-daemon.workspace = true
+ertangle-adapter.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+unicode-width.workspace = true

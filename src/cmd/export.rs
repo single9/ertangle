@@ -4,9 +4,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Result};
-use termade_core::AgentKind;
-use termade_daemon::config::Config;
-use termade_protocol::{Frame, Request};
+use ertangle_core::AgentKind;
+use ertangle_daemon::config::Config;
+use ertangle_protocol::{Frame, Request};
 use tr::tr;
 
 use super::{join, roundtrip};
@@ -21,11 +21,11 @@ fn agent_available(kind: &AgentKind) -> bool {
         .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(bin).is_file()))
 }
 
-/// `termade playbook <name> "<goal>"`：展開範本並一次啟動整個團隊。
+/// `ertangle playbook <name> "<goal>"`：展開範本並一次啟動整個團隊。
 pub(crate) fn cmd_playbook(name: String, goal: Vec<String>) -> Result<()> {
     let goal = join(goal);
     let cwd = std::env::current_dir().unwrap_or_default();
-    let cfg = Config::load(&termade_daemon::config_dir(), &cwd);
+    let cfg = Config::load(&ertangle_daemon::config_dir(), &cwd);
     let spawns = cfg.playbook_spawns(&name, &goal).map_err(|e| anyhow!(e))?;
     if spawns.is_empty() {
         bail!("{}", tr!("playbook {name} 沒有成員", name = name));
@@ -92,7 +92,7 @@ pub(crate) fn cmd_playbook(name: String, goal: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// `termade export <session> [--tree] [--diff] [-o <path>]`。
+/// `ertangle export <session> [--tree] [--diff] [-o <path>]`。
 pub(crate) fn cmd_export(
     session: String,
     tree: bool,

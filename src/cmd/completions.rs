@@ -7,15 +7,15 @@ use anyhow::Result;
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
 use clap::{Arg, Command, CommandFactory};
 use clap_complete::Shell;
-use termade_core::{AgentKind, State};
-use termade_protocol::{Frame, Request};
+use ertangle_core::{AgentKind, State};
+use ertangle_protocol::{Frame, Request};
 use tr::tr;
 
 // ---------------------------------------------------------------------------
 // 旗標的可用值 (自動完成腳本會列出這些；別名仍可解析但不列出)
 // ---------------------------------------------------------------------------
 
-/// `--effort` 的可用值；與 `termade_adapter::EFFORT_LEVELS` 相同 (有測試比對)。
+/// `--effort` 的可用值；與 `ertangle_adapter::EFFORT_LEVELS` 相同 (有測試比對)。
 pub(crate) const EFFORT_VALUES: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
 /// `--kind`／`handoff --to`：接受 `kind` 或 `kind:model`，kind 的部分交給 [`AgentKind::parse`] (含別名)。
@@ -76,7 +76,7 @@ pub(crate) fn permission_values() -> PossibleValuesParser {
 }
 
 // ---------------------------------------------------------------------------
-// `termade completions <shell>`
+// `ertangle completions <shell>`
 // ---------------------------------------------------------------------------
 
 /// 參數 id 屬於這份清單、且沒有固定可用值時，視為「要填 session」。
@@ -97,7 +97,7 @@ pub(crate) fn cmd_completions(shell: Shell) -> Result<()> {
 pub(crate) fn completion_script(shell: Shell) -> String {
     let mut cmd = command_for_completion();
     let mut buf = Vec::new();
-    clap_complete::generate(shell, &mut cmd, "termade", &mut buf);
+    clap_complete::generate(shell, &mut cmd, "ertangle", &mut buf);
     let script = String::from_utf8_lossy(&buf).to_string();
     match shell {
         Shell::Zsh => zsh_with_sessions(&script),
@@ -115,7 +115,7 @@ fn command_for_completion() -> Command {
         .filter(|s| !s.is_hide_set())
         .cloned()
         .collect();
-    let mut cmd = Command::new("termade").version(env!("CARGO_PKG_VERSION"));
+    let mut cmd = Command::new("ertangle").version(env!("CARGO_PKG_VERSION"));
     if let Some(a) = base.get_about() {
         cmd = cmd.about(a.clone());
     }
@@ -124,15 +124,15 @@ fn command_for_completion() -> Command {
 
 const ZSH_SESSIONS_FN: &str = r#"
 # session 名稱 (label，沒有 label 時是 id)；daemon 沒在跑時不列出任何東西，也不會啟動它。
-_termade_sessions() {
+_ertangle_sessions() {
     local -a sessions
-    sessions=(${(f)"$(command termade __complete sessions 2>/dev/null)"})
+    sessions=(${(f)"$(command ertangle __complete sessions 2>/dev/null)"})
     compadd -a sessions
 }
 "#;
 
-/// 把要填 session 的參數從 `_default` 換成 `_termade_sessions`。
-/// 函式定義放在第一行 (`#compdef`)之後：檔案被 autoload 時，結尾會直接呼叫 `_termade`，定義要先出現。
+/// 把要填 session 的參數從 `_default` 換成 `_ertangle_sessions`。
+/// 函式定義放在第一行 (`#compdef`)之後：檔案被 autoload 時，結尾會直接呼叫 `_ertangle`，定義要先出現。
 fn zsh_with_sessions(script: &str) -> String {
     let mut out = String::with_capacity(script.len() + ZSH_SESSIONS_FN.len());
     for (i, line) in script.lines().enumerate() {
@@ -143,7 +143,7 @@ fn zsh_with_sessions(script: &str) -> String {
                     || line.contains(&format!(":{}:_default", id.to_uppercase()))
             });
         if is_session_spec {
-            out.push_str(&line.replace(":_default", ":_termade_sessions"));
+            out.push_str(&line.replace(":_default", ":_ertangle_sessions"));
         } else {
             out.push_str(line);
         }
@@ -155,7 +155,7 @@ fn zsh_with_sessions(script: &str) -> String {
     out
 }
 
-/// 包一層：先跑 clap 產生的 `_termade`，游標在 session 參數上時改列 session 名稱。
+/// 包一層：先跑 clap 產生的 `_ertangle`，游標在 session 參數上時改列 session 名稱。
 fn bash_with_sessions(script: &str, cmd: &Command) -> String {
     // 第一個位置參數是 session 的子命令，以及 `子命令:--旗標` 的組合，都從 CLI 定義取得。
     let mut positional = Vec::new();
@@ -173,8 +173,8 @@ fn bash_with_sessions(script: &str, cmd: &Command) -> String {
     format!(
         r#"{script}
 # session 名稱 (label，沒有 label 時是 id)；daemon 沒在跑時不列出任何東西，也不會啟動它。
-_termade_with_sessions() {{
-    _termade "$@"
+_ertangle_with_sessions() {{
+    _ertangle "$@"
     local cur="${{COMP_WORDS[COMP_CWORD]}}" prev="${{COMP_WORDS[COMP_CWORD-1]}}" sub="${{COMP_WORDS[1]}}" want=""
     [[ "$cur" == -* ]] && return 0
     case "$sub:$prev" in
@@ -187,11 +187,11 @@ _termade_with_sessions() {{
     fi
     if [[ -n "$want" ]]; then
         local IFS=$'\n'
-        COMPREPLY=( $(compgen -W "$(command termade __complete sessions 2>/dev/null)" -- "$cur") )
+        COMPREPLY=( $(compgen -W "$(command ertangle __complete sessions 2>/dev/null)" -- "$cur") )
     fi
     return 0
 }}
-complete -F _termade_with_sessions -o bashdefault -o default termade
+complete -F _ertangle_with_sessions -o bashdefault -o default ertangle
 "#,
         flags = flags.join("|"),
         positional = positional.join("|"),
@@ -199,17 +199,16 @@ complete -F _termade_with_sessions -o bashdefault -o default termade
 }
 
 // ---------------------------------------------------------------------------
-// `termade __complete sessions`
+// `ertangle __complete sessions`
 // ---------------------------------------------------------------------------
 
-/// 等 daemon 回覆的上限 (毫秒)；可用 `TERMADE_COMPLETE_TIMEOUT_MS` 調整。
+/// 等 daemon 回覆的上限 (毫秒)；可用 `ERTANGLE_COMPLETE_TIMEOUT_MS` 調整。
 const DEFAULT_TIMEOUT_MS: u64 = 200;
 
 /// 每行印出一個 session 名稱。任何失敗 (daemon 沒跑、逾時、協定錯誤)都是「不輸出、結束碼 0」，
 /// 而且絕不啟動 daemon：按 Tab 不該有副作用。
 pub(crate) fn cmd_complete_sessions() -> Result<()> {
-    let timeout = std::env::var("TERMADE_COMPLETE_TIMEOUT_MS")
-        .ok()
+    let timeout = ertangle_core::env_var("ERTANGLE_COMPLETE_TIMEOUT_MS")
         .and_then(|v| v.parse().ok())
         .unwrap_or(DEFAULT_TIMEOUT_MS);
     // 連線與讀取都放在另一條執行緒，主執行緒只等到時限；逾時就直接結束行程。
@@ -227,11 +226,13 @@ pub(crate) fn cmd_complete_sessions() -> Result<()> {
 
 fn fetch_session_names() -> Option<Vec<String>> {
     // 本機模式下 socket 不存在就不必嘗試連線。
-    if std::env::var_os("TERMADE_REMOTE").is_none() && !termade_daemon::socket_path().exists() {
+    if ertangle_core::env_var_os("ERTANGLE_REMOTE").is_none()
+        && !ertangle_daemon::socket_path().exists()
+    {
         return None;
     }
     // 直接連線，不經過 `ensure_daemon`。
-    let mut client = termade_daemon::Client::connect().ok()?;
+    let mut client = ertangle_daemon::Client::connect().ok()?;
     client.send(&Request::Snapshot).ok()?;
     let state = loop {
         match client.recv().ok()? {
@@ -261,7 +262,7 @@ fn session_names(state: &State, project: &str) -> Vec<String> {
 }
 
 /// 專案根目錄：cwd 所在 git repo 的頂層，不在 repo 內就用 cwd 本身。
-/// 與 TUI 預設範圍用的規則相同 (`termade-tui` 的 `home_project`)。
+/// 與 TUI 預設範圍用的規則相同 (`ertangle-tui` 的 `home_project`)。
 fn home_project(cwd: &std::path::Path) -> String {
     std::process::Command::new("git")
         .arg("-C")
@@ -283,7 +284,7 @@ mod tests {
     use clap::Parser;
 
     fn spawn_args(args: &[&str]) -> (Option<String>, String, Option<String>, Option<String>) {
-        let mut argv = vec!["termade", "spawn"];
+        let mut argv = vec!["ertangle", "spawn"];
         argv.extend_from_slice(args);
         match Cli::try_parse_from(argv).map(|c| c.cmd) {
             Ok(Some(Cmd::Spawn {
@@ -339,10 +340,10 @@ mod tests {
             assert_eq!(spawn_args(&["--kind", kind]).0.as_deref(), Some(kind));
         }
         assert!(spawn_args(&[]).0.is_none());
-        assert!(Cli::try_parse_from(["termade", "spawn", "--kind", "nope"]).is_err());
-        assert!(Cli::try_parse_from(["termade", "handoff", "s1", "--to", "agy:pro"]).is_ok());
+        assert!(Cli::try_parse_from(["ertangle", "spawn", "--kind", "nope"]).is_err());
+        assert!(Cli::try_parse_from(["ertangle", "handoff", "s1", "--to", "agy:pro"]).is_ok());
         assert!(Cli::try_parse_from([
-            "termade",
+            "ertangle",
             "handoff",
             "s1",
             "--to",
@@ -354,7 +355,7 @@ mod tests {
             "--force"
         ])
         .is_ok());
-        assert!(Cli::try_parse_from(["termade", "handoff", "s1", "--to", "nope"]).is_err());
+        assert!(Cli::try_parse_from(["ertangle", "handoff", "s1", "--to", "nope"]).is_err());
     }
 
     #[test]
@@ -376,44 +377,44 @@ mod tests {
             ["--permission", "nope"],
             ["--effort", "nope"],
         ] {
-            let argv = ["termade", "spawn"].into_iter().chain(bad);
+            let argv = ["ertangle", "spawn"].into_iter().chain(bad);
             assert!(Cli::try_parse_from(argv).is_err(), "{bad:?} 應被拒絕");
         }
     }
 
     #[test]
     fn effort_values_match_adapter() {
-        assert_eq!(EFFORT_VALUES, termade_adapter::EFFORT_LEVELS);
+        assert_eq!(EFFORT_VALUES, ertangle_adapter::EFFORT_LEVELS);
     }
 
     #[test]
     fn zsh_script_completes_sessions() {
         let script = completion_script(Shell::Zsh);
-        // 函式定義要在結尾呼叫 `_termade` 之前。
-        let def = script.find("_termade_sessions() {").expect("應定義函式");
-        let tail = script.rfind("_termade \"$@\"").expect("應有結尾呼叫");
-        assert!(script.starts_with("#compdef termade\n") && def < tail);
+        // 函式定義要在結尾呼叫 `_ertangle` 之前。
+        let def = script.find("_ertangle_sessions() {").expect("應定義函式");
+        let tail = script.rfind("_ertangle \"$@\"").expect("應有結尾呼叫");
+        assert!(script.starts_with("#compdef ertangle\n") && def < tail);
         for spec in [
-            "':session:_termade_sessions'",
-            ":SESSION:_termade_sessions'",
-            ":PARENT:_termade_sessions'",
-            ":ASSIGNEE:_termade_sessions'",
+            "':session:_ertangle_sessions'",
+            ":SESSION:_ertangle_sessions'",
+            ":PARENT:_ertangle_sessions'",
+            ":ASSIGNEE:_ertangle_sessions'",
         ] {
             assert!(script.contains(spec), "zsh 腳本應含 {spec}");
         }
         // `ask <peer>` 帶說明文字；`send --to` 是 session，`handoff --to` 是 agent 種類。
         assert!(script
             .lines()
-            .any(|l| l.contains(":peer -- ") && l.contains(":_termade_sessions")));
-        assert!(script.contains(":TO:_termade_sessions'"));
+            .any(|l| l.contains(":peer -- ") && l.contains(":_ertangle_sessions")));
+        assert!(script.contains(":TO:_ertangle_sessions'"));
         assert!(script.contains(":TO:(opencode claude codex antigravity)'"));
-        assert!(!script.contains(":REPLY_TO:_termade_sessions"));
+        assert!(!script.contains(":REPLY_TO:_ertangle_sessions"));
     }
 
     #[test]
     fn bash_script_completes_sessions() {
         let script = completion_script(Shell::Bash);
-        assert!(script.contains("complete -F _termade_with_sessions"));
+        assert!(script.contains("complete -F _ertangle_with_sessions"));
         let line = |needle: &str| {
             script
                 .lines()
@@ -440,7 +441,7 @@ mod tests {
             "id": "ses_1", "kind": "claude_code", "label": "worker/a", "cwd": "/p/a",
             "status": "idle", "created_at": 0,
         });
-        let Ok(base) = serde_json::from_value::<termade_core::Session>(json) else {
+        let Ok(base) = serde_json::from_value::<ertangle_core::Session>(json) else {
             // Session 的必填欄位變動時，這個測試交給 tests/completions.rs 的端到端測試把關。
             return;
         };
@@ -455,7 +456,7 @@ mod tests {
         };
         add("ses_1", "worker/a", "/p/a", None);
         add("ses_2", "", "/p/a", None);
-        add("ses_3", "wt", "/p/a/.termade/wt/ses_3", Some("/p/a"));
+        add("ses_3", "wt", "/p/a/.ertangle/wt/ses_3", Some("/p/a"));
         add("ses_4", "other", "/p/b", None);
         let mut names = session_names(&state, "/p/a");
         names.sort();

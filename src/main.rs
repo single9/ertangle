@@ -1,8 +1,8 @@
-//! `termade` — 單一執行檔，多種模式。
+//! `ertangle` — 單一執行檔，多種模式。
 //!
-//! * `termade` / `termade tui`：確保 daemon 在跑，然後 attach TUI。
-//! * `termade daemon [--listen host:port] [--token secret]`：前景執行 daemon (支援 M5 遠端連線)。
-//! * `termade mcp`：stdio MCP server (供 agent 子處理程序呼叫協作原語)。
+//! * `ertangle` / `ertangle tui`：確保 daemon 在跑，然後 attach TUI。
+//! * `ertangle daemon [--listen host:port] [--token secret]`：前景執行 daemon (支援 M5 遠端連線)。
+//! * `ertangle mcp`：stdio MCP server (供 agent 子處理程序呼叫協作原語)。
 //! * M2 協作：`whoami`、`peers`/`sessions`、`spawn`、`prompt`、`send`、`inbox`、`wait`、`ask`、`tasks`、`task`、`task-update`、`status`、`artifact`
 //! * M3 工作區與審查：`worktrees`、`diff`、`review`、`merge`、`pr`、`gc`
 //! * M4 打磨：`sleep`、`wake`、`cost`、`replay`、`export`、`playbook`
@@ -20,15 +20,15 @@ use cmd::{
 
 #[derive(Parser)]
 #[command(
-    name = "termade",
+    name = "ertangle",
     version,
-    about = "termade — 終端機原生的多 agent 開發環境"
+    about = "ertangle — 終端機原生的多 agent 開發環境"
 )]
 struct Cli {
-    /// 連線遠端 daemon 位址 (例如 127.0.0.1:7420；亦可透過環境變數 TERMADE_REMOTE 設定)
+    /// 連線遠端 daemon 位址 (例如 127.0.0.1:7420；亦可透過環境變數 ERTANGLE_REMOTE 設定)
     #[arg(long, global = true)]
     remote: Option<String>,
-    /// 遠端認證 token (亦可透過環境變數 TERMADE_TOKEN 設定)
+    /// 遠端認證 token (亦可透過環境變數 ERTANGLE_TOKEN 設定)
     #[arg(long, global = true)]
     token: Option<String>,
     #[command(subcommand)]
@@ -50,7 +50,7 @@ enum Cmd {
         /// Web 版自訂連接埠 (預設 7421)
         #[arg(long)]
         web_port: Option<u16>,
-        /// 遠端連線認證用的 token (未指定則讀環境變數 TERMADE_TOKEN；為安全建議搭配 SSH 轉發)
+        /// 遠端連線認證用的 token (未指定則讀環境變數 ERTANGLE_TOKEN；為安全建議搭配 SSH 轉發)
         #[arg(long)]
         token: Option<String>,
         /// 從檔案讀取 token (權限需為 0600 或 0400；避免 token 出現在 process list)
@@ -67,10 +67,10 @@ enum Cmd {
     },
     /// stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)
     Mcp {
-        /// 此 MCP server 代表的 session id (預設讀 TERMADE_SESSION 環境變數)
+        /// 此 MCP server 代表的 session id (預設讀 ERTANGLE_SESSION 環境變數)
         #[arg(long)]
         session: Option<String>,
-        /// daemon socket 路徑 (預設讀取 TERMADE_SOCKET 環境變數或標準 runtime 路徑)
+        /// daemon socket 路徑 (預設讀取 ERTANGLE_SOCKET 環境變數或標準 runtime 路徑)
         #[arg(long)]
         socket: Option<PathBuf>,
     },
@@ -113,7 +113,7 @@ enum Cmd {
         /// 權限政策：ask / auto / bypass (省略則依 config.toml，預設 auto)
         #[arg(long, value_parser = permission_values(), ignore_case = true)]
         permission: Option<String>,
-        /// 父 session id 或標籤 (未指定時若有 TERMADE_SESSION 則自動繼承)
+        /// 父 session id 或標籤 (未指定時若有 ERTANGLE_SESSION 則自動繼承)
         #[arg(long)]
         parent: Option<String>,
         /// 明確指定 model (優先於 kind 的 `:model` 與設定檔)
@@ -237,7 +237,7 @@ enum Cmd {
         /// 廣播給所有 session
         #[arg(long, conflicts_with_all = ["to", "channel"])]
         broadcast: bool,
-        /// 寄件者 session id (預設讀 TERMADE_SESSION 環境變數)
+        /// 寄件者 session id (預設讀 ERTANGLE_SESSION 環境變數)
         #[arg(long)]
         from: Option<String>,
         /// 訊息種類：chat (預設)/ handoff / question / answer / status / artifact
@@ -331,7 +331,7 @@ enum Cmd {
         #[arg(long)]
         session: Option<String>,
     },
-    /// 列出所有由 termade 管理的 git worktree (M3)
+    /// 列出所有由 ertangle 管理的 git worktree (M3)
     Worktrees {
         #[arg(long)]
         json: bool,
@@ -398,7 +398,7 @@ enum Cmd {
         /// 只重播序號大於此值的事件
         #[arg(long, default_value = "0")]
         since: u64,
-        /// 指定 events.jsonl 路徑 (預設為 termade 自己的 log)
+        /// 指定 events.jsonl 路徑 (預設為 ertangle 自己的 log)
         #[arg(long)]
         file: Option<PathBuf>,
         /// 包含已輪替的舊紀錄檔 (events.jsonl.1 等；預設只讀目前活躍檔)
@@ -428,7 +428,7 @@ enum Cmd {
         #[arg(short = 'o', long)]
         output: Option<PathBuf>,
     },
-    /// 安裝／移除／顯示內嵌的 termade-ade skill
+    /// 安裝／移除／顯示內嵌的 ertangle-ade skill
     Skill {
         #[command(subcommand)]
         cmd: SkillCmd,
@@ -450,7 +450,7 @@ enum Cmd {
 
 #[derive(Subcommand)]
 pub(crate) enum SkillCmd {
-    /// 把 termade-ade skill 安裝到 agent 的 skills 目錄
+    /// 把 ertangle-ade skill 安裝到 agent 的 skills 目錄
     Install {
         /// 目標 agent：claude (.claude/skills)、agents (.agents/skills)、codex (.codex/skills)
         #[arg(long, default_value = "claude", value_parser = ["claude", "agents", "codex"])]
@@ -462,7 +462,7 @@ pub(crate) enum SkillCmd {
         #[arg(long)]
         project: bool,
     },
-    /// 移除已安裝的 termade-ade skill
+    /// 移除已安裝的 ertangle-ade skill
     Uninstall {
         /// 目標 agent：claude、agents、codex
         #[arg(long, default_value = "claude", value_parser = ["claude", "agents", "codex"])]
@@ -481,10 +481,10 @@ pub(crate) enum SkillCmd {
 /// 依全域設定的 `[tui] language` 與環境變數決定介面語言。daemon 也走這裡，
 /// 所以 daemon 回給使用者的訊息跟 daemon 啟動時的語言一致。
 fn init_language() {
-    let path = termade_daemon::config_dir().join("config.toml");
-    let cfg = termade_daemon::config::Config::load_file(&path);
-    let lang = termade_core::i18n::resolve(cfg.tui.language.as_deref());
-    if let Err(e) = termade_core::i18n::set_language(lang) {
+    let path = ertangle_daemon::config_dir().join("config.toml");
+    let cfg = ertangle_daemon::config::Config::load_file(&path);
+    let lang = ertangle_core::i18n::resolve(cfg.tui.language.as_deref());
+    if let Err(e) = ertangle_core::i18n::set_language(lang) {
         tracing::warn!("載入翻譯失敗，改用繁體中文：{e}");
     }
 }
@@ -494,7 +494,7 @@ fn main() -> Result<()> {
     init_language();
     let cli = {
         use clap::{CommandFactory, FromArgMatches};
-        let cmd = if termade_core::i18n::current() == termade_core::i18n::Language::ZhTw {
+        let cmd = if ertangle_core::i18n::current() == ertangle_core::i18n::Language::ZhTw {
             Cli::command()
         } else {
             cmd::helptext::localize(Cli::command())
@@ -502,17 +502,17 @@ fn main() -> Result<()> {
         Cli::from_arg_matches(&cmd.get_matches()).unwrap_or_else(|e| e.exit())
     };
     if let Some(r) = &cli.remote {
-        std::env::set_var("TERMADE_REMOTE", r);
+        std::env::set_var("ERTANGLE_REMOTE", r);
     }
     // daemon 子命令自己處理 --token (含棄用警告)，避免與全域 --token 混淆。
     if let Some(t) = &cli.token {
         if !matches!(cli.cmd, Some(Cmd::Daemon { .. })) {
-            std::env::set_var("TERMADE_TOKEN", t);
+            std::env::set_var("ERTANGLE_TOKEN", t);
         }
     }
 
     match cli.cmd.unwrap_or(Cmd::Tui) {
-        Cmd::Tui => termade_tui::run(),
+        Cmd::Tui => ertangle_tui::run(),
         Cmd::Daemon {
             listen,
             web,
@@ -529,7 +529,7 @@ fn main() -> Result<()> {
             insecure_listen_public,
         ),
         Cmd::RemoteInfo { json } => cmd_remote_info(json),
-        Cmd::Mcp { session, socket } => termade_daemon::mcp::run_with_socket(session, socket),
+        Cmd::Mcp { session, socket } => ertangle_daemon::mcp::run_with_socket(session, socket),
         Cmd::Whoami { session, json } => cmd_whoami(session, json),
         Cmd::Sessions { json } => cmd_sessions(json),
         Cmd::Spawn {
@@ -646,7 +646,7 @@ fn main() -> Result<()> {
             strategy,
         } => {
             let strategy = strategy
-                .map(|s| s.parse::<termade_protocol::MergeStrategy>())
+                .map(|s| s.parse::<ertangle_protocol::MergeStrategy>())
                 .transpose()
                 .map_err(anyhow::Error::msg)?;
             cmd_merge(session, dry_run, resolve, strategy)
@@ -687,7 +687,7 @@ fn main() -> Result<()> {
 
 fn init_tracing() {
     use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_from_env("TERMADE_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
+    let filter = EnvFilter::try_from_env("ERTANGLE_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)

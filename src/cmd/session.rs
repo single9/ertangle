@@ -1,15 +1,15 @@
 //! Session 相關子命令 (whoami、sessions、spawn、prompt、cancel、kill、sleep、wake、status)。
 
 use anyhow::{bail, Context, Result};
-use termade_core::{AgentKind, PermissionPolicy, Role};
-use termade_protocol::{Frame, Request, SpawnRequest, Transport};
+use ertangle_core::{AgentKind, PermissionPolicy, Role};
+use ertangle_protocol::{Frame, Request, SpawnRequest, Transport};
 use tr::tr;
 
 use super::{join, resolve_self_session, roundtrip};
 
 pub(crate) fn cmd_whoami(session: Option<String>, json: bool) -> Result<()> {
     let sid = session
-        .or_else(|| std::env::var("TERMADE_SESSION").ok())
+        .or_else(|| ertangle_core::env_var("ERTANGLE_SESSION"))
         .unwrap_or_else(|| "human".into());
     let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
         bail!("{}", tr!("未取得快照"));
@@ -140,7 +140,7 @@ pub(crate) fn cmd_spawn(
         ),
         None => None,
     };
-    let parent = parent.or_else(|| std::env::var("TERMADE_SESSION").ok());
+    let parent = parent.or_else(|| ertangle_core::env_var("ERTANGLE_SESSION"));
     // 沒指定 --cwd 時用呼叫者所在的目錄 (daemon 是共用的，它的 cwd 不一定是這個專案)。
     let cwd = cwd.or_else(|| {
         std::env::current_dir()
@@ -174,11 +174,11 @@ pub(crate) fn cmd_spawn(
     }
 }
 
-pub(crate) fn load_attachments(paths: &[String]) -> Result<Vec<termade_core::Attachment>> {
+pub(crate) fn load_attachments(paths: &[String]) -> Result<Vec<ertangle_core::Attachment>> {
     paths
         .iter()
         .map(|p| {
-            termade_core::Attachment::load(std::path::Path::new(p)).map_err(|e| anyhow::anyhow!(e))
+            ertangle_core::Attachment::load(std::path::Path::new(p)).map_err(|e| anyhow::anyhow!(e))
         })
         .collect()
 }
@@ -242,7 +242,7 @@ pub(crate) fn cmd_resume(session: Option<String>, list: bool, text: Vec<String>)
         let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
             bail!("{}", tr!("未取得快照"));
         };
-        let mut rows: Vec<(&termade_core::Session, bool)> = state
+        let mut rows: Vec<(&ertangle_core::Session, bool)> = state
             .sessions
             .values()
             .filter(|s| !s.status.is_live() && s.native_id.is_some())
@@ -312,9 +312,9 @@ pub(crate) fn cmd_handoff(
     })?;
     let parent_change = match parent.as_deref().map(str::trim) {
         None => None,
-        Some(p) if p.eq_ignore_ascii_case("none") => Some(termade_protocol::ParentChange::None),
-        Some(p) if p.eq_ignore_ascii_case("keep") => Some(termade_protocol::ParentChange::Keep),
-        Some(p) => Some(termade_protocol::ParentChange::Session(p.to_string())),
+        Some(p) if p.eq_ignore_ascii_case("none") => Some(ertangle_protocol::ParentChange::None),
+        Some(p) if p.eq_ignore_ascii_case("keep") => Some(ertangle_protocol::ParentChange::Keep),
+        Some(p) => Some(ertangle_protocol::ParentChange::Session(p.to_string())),
     };
     let role = role.as_deref().map(Role::parse);
     match roundtrip(&Request::Handoff {
@@ -449,7 +449,7 @@ pub(crate) fn cmd_ps(session: Option<String>, json: bool) -> Result<()> {
                 } else {
                     "[tool]"
                 };
-                let elapsed = (termade_core::now_millis().saturating_sub(t.started_ms)) / 1000;
+                let elapsed = (ertangle_core::now_millis().saturating_sub(t.started_ms)) / 1000;
                 println!("  {:<10} {:<15} {} ({}s)", tag, t.name, t.summary, elapsed);
             }
         }

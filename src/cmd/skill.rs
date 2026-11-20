@@ -1,4 +1,4 @@
-//! `termade skill install|uninstall|show`：安裝內嵌的 `termade-ade` skill。
+//! `ertangle skill install|uninstall|show`：安裝內嵌的 `ertangle-ade` skill。
 
 use std::path::{Path, PathBuf};
 
@@ -26,13 +26,13 @@ fn base_dir(global: bool) -> Result<PathBuf> {
 
 pub(crate) fn run_in(base: &Path, cmd: &SkillCmd) -> Result<String> {
     match cmd {
-        SkillCmd::Show => Ok(termade_daemon::skill::SKILL_MD.to_string()),
+        SkillCmd::Show => Ok(ertangle_daemon::skill::SKILL_MD.to_string()),
         SkillCmd::Install { target, .. } => {
-            let p = termade_daemon::skill::install(base, target)?;
+            let p = ertangle_daemon::skill::install(base, target)?;
             Ok(tr!("已安裝 skill：{p}", p = p.display()))
         }
         SkillCmd::Uninstall { target, .. } => {
-            match termade_daemon::skill::uninstall(base, target)? {
+            match ertangle_daemon::skill::uninstall(base, target)? {
                 Some(d) => Ok(tr!("已移除 skill：{p}", p = d.display())),
                 None => bail!(tr!("沒有安裝 skill (target {t})", t = target)),
             }
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn install_show_uninstall_in_temp_dir() {
-        let t = std::env::temp_dir().join(termade_core::new_id("skillcli"));
+        let t = std::env::temp_dir().join(ertangle_core::new_id("skillcli"));
         std::fs::create_dir_all(&t).unwrap();
         let inst = SkillCmd::Install {
             target: "claude".into(),
@@ -73,7 +73,7 @@ mod tests {
             project: true,
         };
         run_in(&t, &inst).unwrap();
-        assert!(t.join(".claude/skills/termade-ade/SKILL.md").is_file());
+        assert!(t.join(".claude/skills/ertangle-ade/SKILL.md").is_file());
         let un = SkillCmd::Uninstall {
             target: "claude".into(),
             global: false,
@@ -81,7 +81,9 @@ mod tests {
         };
         run_in(&t, &un).unwrap();
         assert!(run_in(&t, &un).is_err());
-        assert!(run_in(&t, &SkillCmd::Show).unwrap().contains("termade-ade"));
+        assert!(run_in(&t, &SkillCmd::Show)
+            .unwrap()
+            .contains("ertangle-ade"));
         let _ = std::fs::remove_dir_all(&t);
     }
 }

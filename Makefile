@@ -1,4 +1,4 @@
-# termade Makefile
+# ertangle Makefile
 
 CARGO       ?= $(shell PATH="$(HOME)/.cargo/bin:$(PATH)" which cargo 2>/dev/null || echo cargo)
 # 自動偵測 pip 安裝的 ziglang；找不到時留空 (可用 ZIG_DIR=... 覆寫)
@@ -9,10 +9,10 @@ PREFIX      ?= $(HOME)/.local
 BINDIR      ?= $(PREFIX)/bin
 DIST_DIR    ?= dist
 
-BIN_LINUX           := target/release/termade
-BIN_MACOS_ARM64     := target/aarch64-apple-darwin/release/termade
-BIN_MACOS_X86_64    := target/x86_64-apple-darwin/release/termade
-BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/termade
+BIN_LINUX           := target/release/ertangle
+BIN_MACOS_ARM64     := target/aarch64-apple-darwin/release/ertangle
+BIN_MACOS_X86_64    := target/x86_64-apple-darwin/release/ertangle
+BIN_MACOS_UNIVERSAL := target/universal2-apple-darwin/release/ertangle
 
 .PHONY: check-zigbuild all build dev run tui daemon shutdown test clippy lint fmt \
         macos macos-arm64 macos-x86_64 macos-universal dist install install-completions clean help \
@@ -61,7 +61,7 @@ clippy lint:
 fmt:
 	PATH="$(BUILD_PATH)" $(CARGO) fmt
 
-## 從原始碼抽出 tr! 字串更新 locales/termade.pot 與各 .po (需要 xtr 與 gettext 的 msgmerge)
+## 從原始碼抽出 tr! 字串更新 locales/ertangle.pot 與各 .po (需要 xtr 與 gettext 的 msgmerge)
 i18n-extract:
 	PATH="$(BUILD_PATH)" sh scripts/i18n-extract.sh
 
@@ -124,25 +124,26 @@ macos: macos-arm64 macos-x86_64 macos-universal
 ## 打包 Linux 與 macOS 執行檔至 dist/ 目錄
 dist: build macos
 	@mkdir -p $(DIST_DIR)
-	cp $(BIN_LINUX)           $(DIST_DIR)/termade-linux-x86_64
-	cp $(BIN_MACOS_ARM64)     $(DIST_DIR)/termade-macos-arm64
-	cp $(BIN_MACOS_X86_64)    $(DIST_DIR)/termade-macos-x86_64
-	cp $(BIN_MACOS_UNIVERSAL) $(DIST_DIR)/termade-macos-universal
+	cp $(BIN_LINUX)           $(DIST_DIR)/ertangle-linux-x86_64
+	cp $(BIN_MACOS_ARM64)     $(DIST_DIR)/ertangle-macos-arm64
+	cp $(BIN_MACOS_X86_64)    $(DIST_DIR)/ertangle-macos-x86_64
+	cp $(BIN_MACOS_UNIVERSAL) $(DIST_DIR)/ertangle-macos-universal
 	@ls -lh $(DIST_DIR)/
 
-## 安裝本機執行檔至 $(BINDIR)/termade (預設 ~/.local/bin/termade)
+## 安裝本機執行檔至 $(BINDIR)/ertangle (預設 ~/.local/bin/ertangle)，並建立短別名 ert
 install: build
 	@mkdir -p $(BINDIR)
-	install -m 755 $(BIN_LINUX) $(BINDIR)/termade
-	@echo "已安裝至 $(BINDIR)/termade"
+	install -m 755 $(BIN_LINUX) $(BINDIR)/ertangle
+	ln -sf ertangle $(BINDIR)/ert
+	@echo "已安裝至 $(BINDIR)/ertangle (短別名 $(BINDIR)/ert)"
 
 ## 依目前 SHELL 安裝 shell 自動完成腳本 (zsh / bash / fish)
 install-completions: build
 	@sh_name="$$(basename "$${SHELL:-}")"; \
 	case "$$sh_name" in \
-	  zsh)  dest="$(HOME)/.local/share/zsh/site-functions/_termade" ;; \
-	  bash) dest="$(HOME)/.local/share/bash-completion/completions/termade" ;; \
-	  fish) dest="$(HOME)/.config/fish/completions/termade.fish" ;; \
+	  zsh)  dest="$(HOME)/.local/share/zsh/site-functions/_ertangle" ;; \
+	  bash) dest="$(HOME)/.local/share/bash-completion/completions/ertangle" ;; \
+	  fish) dest="$(HOME)/.config/fish/completions/ertangle.fish" ;; \
 	  *)    echo "無法從 SHELL='$${SHELL:-}' 判斷 shell (請指定 SHELL=zsh|bash|fish)" >&2; exit 1 ;; \
 	esac; \
 	mkdir -p "$$(dirname "$$dest")"; \
@@ -159,13 +160,13 @@ help:
 	@echo "用法: make <target>"
 	@echo ""
 	@echo "常用目標:"
-	@echo "  make build            建置本機 release 執行檔 (target/release/termade)"
+	@echo "  make build            建置本機 release 執行檔 (target/release/ertangle)"
 	@echo "  make run              建置並啟動 TUI"
 	@echo "  make test             執行單元測試"
 	@echo "  make lint             執行 cargo clippy --all-targets -- -D warnings"
-	@echo "  make install          安裝 termade 至 $(BINDIR)/termade"
+	@echo "  make install          安裝 ertangle 至 $(BINDIR)/ertangle"
 	@echo "  make install-completions  依目前 SHELL 安裝自動完成腳本 (zsh / bash / fish)"
-	@echo "  make i18n-extract     更新 locales/termade.pot 與各語言 .po"
+	@echo "  make i18n-extract     更新 locales/ertangle.pot 與各語言 .po"
 	@echo "  make i18n-check       檢查翻譯檔 (CI 也會跑)"
 	@echo "  make setup-hooks      安裝 git pre-commit hook (自動檢查 fmt、clippy 與 i18n)"
 	@echo "  make pre-commit       一鍵執行 commit 前檢查 (自動 fmt、跑 clippy 與 i18n)"
@@ -177,8 +178,8 @@ help:
 	@echo ""
 	@echo "macOS 交叉編譯目標:"
 	@echo "  make macos            建置全部 macOS 版本 (arm64 / x86_64 / universal2)"
-	@echo "  make macos-arm64      建置 target/aarch64-apple-darwin/release/termade"
-	@echo "  make macos-x86_64     建置 target/x86_64-apple-darwin/release/termade"
-	@echo "  make macos-universal  建置 target/universal2-apple-darwin/release/termade"
+	@echo "  make macos-arm64      建置 target/aarch64-apple-darwin/release/ertangle"
+	@echo "  make macos-x86_64     建置 target/x86_64-apple-darwin/release/ertangle"
+	@echo "  make macos-universal  建置 target/universal2-apple-darwin/release/ertangle"
 	@echo "  make dist             將 Linux 與 macOS 執行檔彙整至 dist/"
 	@echo "  make clean            清除 target/ 與 dist/"

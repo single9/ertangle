@@ -12,8 +12,8 @@ pub(crate) mod task;
 pub(crate) mod worktree;
 
 use anyhow::{bail, Context, Result};
-use termade_daemon::Client;
-use termade_protocol::{Frame, Request};
+use ertangle_daemon::Client;
+use ertangle_protocol::{Frame, Request};
 use tr::tr;
 
 pub(crate) fn join(parts: Vec<String>) -> String {
@@ -22,13 +22,13 @@ pub(crate) fn join(parts: Vec<String>) -> String {
 
 pub(crate) fn resolve_self_session(explicit: Option<String>) -> Result<String> {
     explicit
-        .or_else(|| std::env::var("TERMADE_SESSION").ok())
-        .with_context(|| tr!("請指定 --session <id> 或設定環境變數 TERMADE_SESSION"))
+        .or_else(|| ertangle_core::env_var("ERTANGLE_SESSION"))
+        .with_context(|| tr!("請指定 --session <id> 或設定環境變數 ERTANGLE_SESSION"))
 }
 
 pub(crate) fn connect() -> Result<Client> {
     Client::connect()
-        .with_context(|| tr!("無法連線 daemon (先執行 `termade daemon` 或用 `termade` 啟動)"))
+        .with_context(|| tr!("無法連線 daemon (先執行 `ertangle daemon` 或用 `ertangle` 啟動)"))
 }
 
 /// 送一個請求並等待第一個非 Ready 的回覆。

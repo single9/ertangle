@@ -1,6 +1,6 @@
 //! `--help` 的翻譯。clap 的說明文字來自 doc comment，`xtr` 抽不到，所以分兩步：
 //!
-//! 1. `termade __help-strings` 走一遍命令樹，把所有說明文字印成 `help_strings.rs`
+//! 1. `ertangle __help-strings` 走一遍命令樹，把所有說明文字印成 `help_strings.rs`
 //!    (每條包成 `tr_noop!`，xtr 才抽得到)；`scripts/i18n-extract.sh` 會重新產生它。
 //! 2. 執行時期用 [`localize`] 把命令樹裡的說明文字逐條換成翻譯 (沒有翻譯就保持原文)。
 
@@ -11,7 +11,7 @@ mod help_strings;
 
 /// 把整棵命令樹的說明文字換成目前語言的翻譯。
 pub(crate) fn localize(cmd: Command) -> Command {
-    let tr = |s: String| termade_core::tr_dyn!(s.as_str());
+    let tr = |s: String| ertangle_core::tr_dyn!(s.as_str());
     let mut cmd = cmd;
     if let Some(a) = cmd.get_about().map(|s| s.to_string()) {
         cmd = cmd.about(tr(a));
@@ -58,17 +58,17 @@ fn collect(cmd: &Command, out: &mut BTreeSet<String>) {
     }
 }
 
-/// 印出 `help_strings.rs` 的內容 (`termade __help-strings > src/cmd/helptext/help_strings.rs`)。
+/// 印出 `help_strings.rs` 的內容 (`ertangle __help-strings > src/cmd/helptext/help_strings.rs`)。
 pub(crate) fn dump(cmd: &Command) {
     let mut set = BTreeSet::new();
     collect(cmd, &mut set);
-    println!("//! 由 `termade __help-strings` 產生，請勿手改；用 `make i18n-extract` 更新。");
+    println!("//! 由 `ertangle __help-strings` 產生，請勿手改；用 `make i18n-extract` 更新。");
     println!("//! 只是讓 xtr 抽得到 clap 的說明文字，執行時期不使用。");
     println!();
     println!("#[allow(dead_code)]");
     println!("pub(super) const HELP_STRINGS: &[&str] = &[");
     for s in set {
-        println!("    termade_core::tr_noop!({s:?}),");
+        println!("    ertangle_core::tr_noop!({s:?}),");
     }
     println!("];");
 }
@@ -76,7 +76,7 @@ pub(crate) fn dump(cmd: &Command) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use termade_core::i18n::{set_language, Language};
+    use ertangle_core::i18n::{set_language, Language};
 
     #[test]
     fn localize_translates_about_args_and_subcommands() {

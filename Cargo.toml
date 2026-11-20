@@ -1,5 +1,5 @@
 [package]
-name = "termade"
+name = "ertangle"
 description = "Terminal-native multi-agent development environment (TUI)"
 version.workspace = true
 edition.workspace = true
@@ -8,14 +8,14 @@ repository.workspace = true
 readme = "README.md"
 
 [[bin]]
-name = "termade"
+name = "ertangle"
 path = "src/main.rs"
 
 [dependencies]
-termade-core = { workspace = true }
-termade-protocol = { workspace = true }
-termade-daemon = { workspace = true }
-termade-tui = { workspace = true }
+ertangle-core = { workspace = true }
+ertangle-protocol = { workspace = true }
+ertangle-daemon = { workspace = true }
+ertangle-tui = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true }
@@ -25,7 +25,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-termade-adapter = { workspace = true }
+ertangle-adapter = { workspace = true }
 
 [workspace]
 resolver = "2"
@@ -36,14 +36,14 @@ default-members = [".", "crates/*"]
 version = "0.8.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/single9/termade"
+repository = "https://github.com/single9/ertangle"
 
 [workspace.dependencies]
-termade-core = { path = "crates/termade-core" }
-termade-protocol = { path = "crates/termade-protocol" }
-termade-adapter = { path = "crates/termade-adapter" }
-termade-daemon = { path = "crates/termade-daemon" }
-termade-tui = { path = "crates/termade-tui" }
+ertangle-core = { path = "crates/ertangle-core" }
+ertangle-protocol = { path = "crates/ertangle-protocol" }
+ertangle-adapter = { path = "crates/ertangle-adapter" }
+ertangle-daemon = { path = "crates/ertangle-daemon" }
+ertangle-tui = { path = "crates/ertangle-tui" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

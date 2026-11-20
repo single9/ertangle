@@ -1,7 +1,7 @@
 //! Worktree 與程式碼審查子命令 (worktrees、diff、review、merge、pr、gc)。
 
 use anyhow::{bail, Result};
-use termade_protocol::{Frame, MergeStrategy, Request};
+use ertangle_protocol::{Frame, MergeStrategy, Request};
 use tr::tr;
 
 use super::{join, roundtrip};

@@ -1,8 +1,8 @@
 //! 匯流排訊息子命令 (send、inbox、wait、ask、artifact)。
 
 use anyhow::{bail, Context, Result};
-use termade_core::{ArtifactKind, MsgKind, Target};
-use termade_protocol::{Frame, Request};
+use ertangle_core::{ArtifactKind, MsgKind, Target};
+use ertangle_protocol::{Frame, Request};
 use tr::tr;
 
 use super::{join, resolve_self_session, roundtrip};
@@ -31,7 +31,7 @@ pub(crate) fn cmd_send(
             kind = kind
         )
     })?;
-    let from = from.or_else(|| std::env::var("TERMADE_SESSION").ok());
+    let from = from.or_else(|| ertangle_core::env_var("ERTANGLE_SESSION"));
     match roundtrip(&Request::BusSend {
         from,
         to: target,

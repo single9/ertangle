@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use termade_daemon::RemoteOptions;
-use termade_protocol::Request;
+use ertangle_daemon::RemoteOptions;
+use ertangle_protocol::Request;
 use tr::tr;
 
 use super::roundtrip;
@@ -17,7 +17,7 @@ pub(crate) fn cmd_daemon(
     token_file: Option<PathBuf>,
     insecure_listen_public: bool,
 ) -> Result<()> {
-    termade_daemon::run_remote(RemoteOptions {
+    ertangle_daemon::run_remote(RemoteOptions {
         listen,
         web,
         web_port,
@@ -34,21 +34,21 @@ pub(crate) fn cmd_shutdown() -> Result<()> {
 }
 
 pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
-    let sock = termade_daemon::socket_path();
-    let running = termade_daemon::is_running();
-    let token_path = termade_daemon::default_token_path();
+    let sock = ertangle_daemon::socket_path();
+    let running = ertangle_daemon::is_running();
+    let token_path = ertangle_daemon::default_token_path();
     let token_exists = token_path.exists();
     let token = if token_exists {
-        termade_daemon::read_token_file(&token_path).ok()
+        ertangle_daemon::read_token_file(&token_path).ok()
     } else {
         None
     };
-    let tailscale_ip = termade_daemon::detect_tailscale_ip()
+    let tailscale_ip = ertangle_daemon::detect_tailscale_ip()
         .ok()
         .map(|ip| ip.to_string());
 
-    let cfg = termade_daemon::config::Config::load_file(
-        &termade_daemon::config_dir().join("config.toml"),
+    let cfg = ertangle_daemon::config::Config::load_file(
+        &ertangle_daemon::config_dir().join("config.toml"),
     );
     let web_port = cfg.web.resolved_port();
     let token_hint = token.as_deref().unwrap_or("<token>");
@@ -72,7 +72,7 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{}", tr!("termade 遠端連線資訊："));
+    println!("{}", tr!("ertangle 遠端連線資訊："));
     if running {
         println!(
             "  {}",
@@ -118,7 +118,7 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
     println!(
         "  {}",
         tr!(
-            "本機連線：termade --remote 127.0.0.1:7420 --token {token}",
+            "本機連線：ertangle --remote 127.0.0.1:7420 --token {token}",
             token = token_hint
         )
     );
@@ -126,7 +126,7 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
         println!(
             "  {}",
             tr!(
-                "Tailscale 遠端連線：termade --remote {ip}:7420 --token {token}",
+                "Tailscale 遠端連線：ertangle --remote {ip}:7420 --token {token}",
                 ip = ip,
                 token = token_hint
             )
@@ -135,7 +135,7 @@ pub(crate) fn cmd_remote_info(json: bool) -> Result<()> {
 
     println!();
     println!("  {}", tr!("Web 版網址：{url}", url = &web_url));
-    if let Some(qr) = termade_daemon::web::qr::QrCode::encode(&web_url) {
+    if let Some(qr) = ertangle_daemon::web::qr::QrCode::encode(&web_url) {
         println!();
         println!("{}", tr!("掃描 QR Code 連線 Web 版："));
         print!("{}", qr.render_terminal());

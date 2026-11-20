@@ -1,0 +1,19 @@
+[package]
+name = "ertangle-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tr.workspace = true
+ertangle-core.workspace = true
+ertangle-protocol.workspace = true
+ertangle-adapter.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml = "1"
+anyhow.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+nix = { version = "0.28", default-features = false, features = ["user"] }

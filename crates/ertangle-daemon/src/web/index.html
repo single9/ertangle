@@ -1,0 +1,4175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#090a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <title>ertangle companion</title>
+  <style>
+    :root {
+      --bg: #090a0f;
+      --card-bg: #13151f;
+      --card-hover: #1a1c29;
+      --card-selected: #182338;
+      --border: #232636;
+      --border-subtle: #191b26;
+      --text: #f1f3f9;
+      --text-dim: #82899d;
+      --text-muted: #52576b;
+      --primary: #3b82f6;
+      --cyan: #06b6d4;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      touch-action: pan-x pan-y;
+      -webkit-text-size-adjust: 100%;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      position: relative;
+    }
+
+    /* 頂部導覽列 */
+    header {
+      background: rgba(14, 16, 24, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 6px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 20;
+      min-height: 50px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      margin-right: 8px;
+      padding: 2px 4px;
+      border-radius: 8px;
+      transition: background 0.15s ease;
+    }
+    .header-left:active {
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .status-dot.connected { background: var(--green); box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
+    .status-dot.connecting { background: var(--yellow); }
+    .status-dot.disconnected { background: var(--red); }
+    .session-title-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+    }
+    .header-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+    }
+    .header-project-text {
+      color: #60a5fa;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .header-breadcrumb-dot {
+      color: var(--text-muted);
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+    .header-model-text {
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .header-main-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+      line-height: 1.3;
+    }
+    .header-label-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .header-chevron {
+      width: 12px;
+      height: 12px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+    .header-status-tag {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      padding: 1px 5px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      color: var(--text-dim);
+      background: rgba(148, 163, 184, 0.12);
+    }
+    .header-status-tag.running {
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .header-status-tag.waiting {
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .project-pill {
+      font-size: 10px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: #93c5fd;
+      background: #172554;
+      border: 1px solid #1e3a8a;
+      padding: 1px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .session-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .session-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .icon-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .icon-btn:active { background: var(--card-hover); color: var(--text); }
+    .cost-badge {
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      padding: 3px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--cyan);
+      flex-shrink: 0;
+    }
+
+    /* 逐字稿即時搜尋列 */
+    #search-bar-wrap {
+      background: #11131c;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 14px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    /* 主要內容視圖 */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab-view {
+      display: none;
+      height: 100%;
+      flex-direction: column;
+    }
+    .tab-view.active {
+      display: flex;
+    }
+
+    /* 置頂緊急核准卡片 */
+    .urgent-banner {
+      background: linear-gradient(135deg, #2b1f05 0%, #171306 100%);
+      border-bottom: 2px solid var(--yellow);
+      padding: 12px 14px;
+      flex-shrink: 0;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .urgent-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--yellow);
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .urgent-desc {
+      font-size: 12px;
+      color: #fff;
+      font-family: var(--font-mono);
+      background: rgba(0,0,0,0.4);
+      padding: 6px 8px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-pill {
+      flex: 1;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .btn-allow { background: var(--green); color: #000; }
+    .btn-always { background: var(--cyan); color: #000; }
+    .btn-deny { background: var(--red); color: #fff; }
+
+    /* 對話視圖結構 (Turn-based Chat Architecture) */
+    #chat-transcript {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chat-turn {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      animation: turnFadeIn 0.2s ease;
+    }
+    /* 串流中被替換的既有對話框不重播淡入，否則每個輸出片段都會從透明閃一次。 */
+    .chat-turn.turn-updated { animation: none; }
+    @keyframes turnFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .turn-user {
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .turn-agent {
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .turn-peer {
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .peer-tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: #fde68a;
+      background: rgba(217, 119, 6, 0.15);
+      border: 1px solid rgba(217, 119, 6, 0.35);
+      padding: 1px 8px;
+      border-radius: 4px;
+    }
+    /* 與 .bubble-agent 併用 (沿用其 Markdown 樣式)，以較高的選擇器權重覆寫外觀 */
+    .bubble-agent.bubble-peer {
+      background: rgba(217, 119, 6, 0.08);
+      color: var(--text);
+      border: 1px dashed rgba(217, 119, 6, 0.4);
+      border-radius: 4px 18px 18px 18px;
+    }
+    .turn-system {
+      align-items: center;
+      margin: 4px 0;
+    }
+    .system-pill {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-family: var(--font-mono);
+    }
+    .turn-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 2px;
+      padding-left: 2px;
+    }
+    .agent-tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .user-tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f8fafc;
+      background: #1d3557;
+      border: 1px solid rgba(147, 197, 253, 0.35);
+      padding: 1px 8px;
+      border-radius: 4px;
+    }
+    .model-tag {
+      font-size: 11px;
+      color: var(--cyan);
+      font-family: var(--font-mono);
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.2);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    /* 對話氣泡 */
+    .turn-bubble {
+      max-width: 90%;
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+      position: relative;
+    }
+    .bubble-user {
+      background: #1d3557;
+      color: #f8fafc;
+      border-radius: 18px 18px 4px 18px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    .bubble-agent {
+      max-width: 96%;
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px 18px 18px 18px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    .bubble-agent p {
+      margin-bottom: 10px;
+    }
+    .bubble-agent p:last-child {
+      margin-bottom: 0;
+    }
+    .bubble-agent pre {
+      background: #090a0f;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      overflow-x: auto;
+      margin: 10px 0;
+      line-height: 1.45;
+    }
+    .bubble-agent code.inline-code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #38bdf8;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    .bubble-agent ul, .bubble-agent ol {
+      margin: 6px 0 10px 20px;
+    }
+    .bubble-agent li {
+      margin-bottom: 4px;
+    }
+
+    /* 程式碼區塊外框與標題列 */
+    .code-block-wrap {
+      background: #090a0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    .code-block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+    }
+    .code-block-wrap pre {
+      margin: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+    }
+    .code-copy-btn {
+      background: none;
+      border: none;
+      color: var(--cyan);
+      font-size: 11px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .code-copy-btn:active {
+      background: rgba(6, 182, 212, 0.15);
+    }
+
+    /* 連結樣式：Web 外部超連結 vs 檔案引用膠囊 */
+    .chat-web-link {
+      color: var(--cyan);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      word-break: break-all;
+    }
+    .chat-file-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(96, 165, 250, 0.12);
+      border: 1px solid rgba(96, 165, 250, 0.28);
+      border-radius: 6px;
+      padding: 2px 7px;
+      color: #93c5fd;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      vertical-align: middle;
+      margin: 2px 2px;
+      text-decoration: none;
+      word-break: break-all;
+      transition: background 0.15s ease;
+    }
+    .chat-file-pill:active {
+      background: rgba(96, 165, 250, 0.25);
+    }
+    .file-icon {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      flex-shrink: 0;
+    }
+    .file-code-table {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre;
+    }
+    .file-code-row {
+      display: flex;
+      padding: 1px 4px;
+    }
+    .file-code-row.highlight {
+      background: rgba(122, 162, 247, 0.2);
+      border-left: 2px solid var(--blue);
+      border-radius: 2px;
+    }
+    .file-code-lineno {
+      width: 38px;
+      flex: none;
+      color: var(--text-dim);
+      text-align: right;
+      padding-right: 12px;
+      user-select: none;
+      opacity: 0.5;
+    }
+    .file-code-text {
+      flex: 1;
+      overflow-x: auto;
+      color: var(--text);
+    }
+
+    /* Markdown 表格：窄螢幕時橫向捲動，儲存格內文字換行 */
+    .chat-table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      margin: 8px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chat-table {
+      border-collapse: collapse;
+      font-size: 13px;
+      line-height: 1.45;
+      min-width: 100%;
+    }
+    .chat-table th, .chat-table td {
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      vertical-align: top;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      min-width: 3em;
+      max-width: 28em;
+    }
+    .chat-table th {
+      background: rgba(255, 255, 255, 0.05);
+      font-weight: 600;
+      color: var(--text);
+    }
+    .chat-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+
+    /* 標題、引言與分隔線 */
+    .chat-h1 { font-size: 16px; font-weight: 700; margin: 12px 0 6px 0; color: var(--text); }
+    .chat-h2 { font-size: 15px; font-weight: 700; margin: 10px 0 5px 0; color: var(--text); }
+    .chat-h3 { font-size: 14px; font-weight: 600; margin: 8px 0 4px 0; color: var(--text); }
+    .chat-quote {
+      border-left: 3px solid var(--cyan);
+      padding-left: 10px;
+      margin: 6px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    .chat-hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+
+    /* 思考過程折疊卡片 */
+    .turn-collapse {
+      width: 100%;
+      max-width: 96%;
+      background: #0d0f16;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 12px;
+    }
+    .turn-collapse summary {
+      padding: 6px 10px;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .turn-collapse summary:hover { color: var(--text); }
+    .collapse-content {
+      padding: 8px 12px;
+      border-top: 1px solid var(--border-subtle);
+      background: #08090d;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    /* 工具清單由範本產生，範本的換行與縮排不能被 pre-wrap 當成空白行，否則每筆之間隔著大片空白，
+       打開時在 200px 內只看得到一筆。 */
+    .collapse-content.tool-run-list {
+      white-space: normal;
+      max-height: 50vh;
+    }
+
+    /* 工具呼叫聚合清單：每筆一行「狀態 + 工具名 + 精簡目標」，點開才看完整指令與結果。 */
+    .tool-run-list { padding: 4px 8px; }
+    .tool-sum-counts { color: var(--text-dim); font-weight: 400; opacity: 0.8; }
+    .tool-item { border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+    .tool-item:last-child { border-bottom: none; }
+    .tool-item > summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 2px;
+      cursor: pointer;
+      min-width: 0;
+    }
+    .tool-item > summary::-webkit-details-marker { display: none; }
+    .tool-st { width: 12px; flex-shrink: 0; text-align: center; font-size: 11px; }
+    .tool-st.ok { color: #34d399; }
+    .tool-st.err { color: #f87171; }
+    .tool-st.run { color: var(--yellow); }
+    .tool-name {
+      flex-shrink: 0;
+      color: var(--cyan);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tool-target {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .tool-detail {
+      padding: 4px 4px 8px 20px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--text-dim);
+    }
+    .tool-detail .tool-full { color: var(--text); margin-bottom: 4px; }
+    .tool-detail .tool-out.err { color: #f87171; }
+
+    /* 對話輸入區域 */
+    #chat-composer {
+      background: rgba(14, 16, 24, 0.95);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-top: 1px solid var(--border);
+      padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 8px) 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .composer-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .toggle-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 3px 8px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+    }
+    .toggle-pill.active {
+      background: #1a2738;
+      border-color: var(--cyan);
+      color: var(--cyan);
+      font-weight: 600;
+    }
+    .queue-info-pill {
+      background: #2b1f05;
+      border: 1px solid var(--yellow);
+      color: var(--yellow);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+    }
+    .composer-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    #prompt-textarea {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 8px 14px;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      color: var(--text);
+      resize: none;
+      min-height: 38px;
+      max-height: 120px;
+      line-height: 1.4;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #prompt-textarea:focus { border-color: var(--cyan); }
+    .btn-circle {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .btn-send { background: var(--cyan); color: #000; }
+    .btn-cancel-round { background: #2a1b1e; color: var(--red); border: 1px solid #4a2128; }
+
+    /* 接續醒目標示 */
+    .resume-strip {
+      background: #241c09;
+      border: 1px solid var(--yellow);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin: 8px 14px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--yellow);
+    }
+
+    /* 審核視圖 (Approval & Diff) */
+    .review-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .diff-line {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 4px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      cursor: pointer;
+    }
+    .diff-add { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .diff-del { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .diff-hdr { color: var(--cyan); font-weight: 600; }
+
+    /* 任務板視圖 (Tasks) */
+    .tasks-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .filter-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .filter-chip.active {
+      background: #182333;
+      border-color: var(--cyan);
+      color: var(--cyan);
+      font-weight: 600;
+    }
+    .task-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .task-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .task-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .task-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+    }
+    .st-todo { background: #2e2609; color: var(--yellow); border: 1px solid var(--yellow); }
+    .st-doing { background: #0c2b1a; color: var(--green); border: 1px solid var(--green); }
+    .st-done { background: #1c1d24; color: var(--text-dim); text-decoration: line-through; }
+
+    /* Session 切換視圖 (Sessions) */
+    .sessions-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .quota-card {
+      background: linear-gradient(135deg, #131929 0%, #0d121c 100%);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 12px;
+    }
+    .quota-title {
+      font-weight: 600;
+      color: var(--cyan);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    /* Session 卡片與清單 (Sessions View & Picker Sheet) */
+    .sessions-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 14px 28px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sessions-top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+    .sessions-page-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .sessions-page-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      margin-top: 1px;
+    }
+    .session-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+      position: relative;
+    }
+    .session-card:active {
+      background: var(--card-hover);
+      transform: scale(0.99);
+    }
+    .session-card.active {
+      border-color: rgba(6, 182, 212, 0.4);
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(14, 16, 24, 0.8) 100%);
+      border-left: 3px solid var(--cyan);
+    }
+    .session-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .session-card-context {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .session-card-project {
+      color: #60a5fa;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .session-card-dot {
+      color: var(--text-muted);
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+    .session-card-model {
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .session-card-body {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }
+    .session-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+    .session-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .session-card-stats {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      flex-wrap: wrap;
+    }
+    .session-kind-badge {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .session-cost-badge {
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      color: var(--cyan);
+    }
+    .session-active-indicator {
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .session-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .session-settings-btn {
+      padding: 4px 8px;
+      background: var(--card-hover);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .session-settings-btn:active {
+      color: var(--text);
+      background: var(--border);
+    }
+    .session-open-btn {
+      padding: 4px 10px;
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      border-radius: 6px;
+      color: var(--cyan);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .session-open-btn:active {
+      background: rgba(6, 182, 212, 0.25);
+    }
+    .session-item {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .session-item.active {
+      border-color: var(--cyan);
+      background: #111a26;
+    }
+    .session-info-left {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      overflow: hidden;
+    }
+    .session-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .session-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .session-actions-btn {
+      padding: 5px 10px;
+      background: var(--card-hover);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* 總覽 (Overview) */
+    .ov-wrap { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+    .ov-sum { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--text-dim); align-items: center; }
+    .ov-sum b { color: var(--text); font-size: 15px; }
+    .ov-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; font-size: 12px; }
+    .ov-card.active { border-color: var(--cyan); }
+    .ov-child { margin-left: 14px; border-left: 2px solid var(--border); padding-left: 8px; }
+    .ov-head { display: flex; align-items: center; gap: 6px; }
+    .ov-title { font-weight: 600; font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ov-role { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #182333; color: var(--cyan); }
+    .ov-dim { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+    .ov-tool { color: var(--yellow); font-family: var(--font-mono); }
+    .ov-minis { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; }
+    .ov-mini { flex: 0 0 86%; scroll-snap-align: start; background: #000; border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; min-width: 0; }
+    .ov-mini-h { padding: 5px 10px; font-size: 11px; color: var(--cyan); border-bottom: 1px solid var(--border); cursor: pointer; }
+    .ov-mini pre { margin: 0; padding: 6px 10px; height: 180px; overflow: auto; font-family: var(--font-mono); font-size: 10.5px; white-space: pre-wrap; word-break: break-all; color: var(--text-dim); }
+    @media (min-width: 900px) {
+      .ov-minis { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
+      .ov-mini { flex: none; }
+      .ov-mini pre { height: 240px; }
+    }
+
+    /* 底部導覽列 (Bottom Navigation Bar) */
+    nav {
+      background: rgba(14, 16, 24, 0.95);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      flex-shrink: 0;
+      z-index: 20;
+    }
+    .nav-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 8px 0 6px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      position: relative;
+    }
+    .nav-btn.active {
+      color: var(--cyan);
+      font-weight: 600;
+    }
+    .nav-svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .nav-badge {
+      position: absolute;
+      top: 6px;
+      right: calc(50% - 14px);
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--yellow);
+    }
+
+    /* 底部滑出抽屜 (Bottom Sheet) */
+    .sheet-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      z-index: 50;
+    }
+    .sheet-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .sheet-container {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #141620;
+      border-top: 1px solid var(--border);
+      border-radius: 20px 20px 0 0;
+      padding: 16px 18px calc(env(safe-area-inset-bottom, 0px) + 16px) 18px;
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+      z-index: 51;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 88vh;
+      overflow-y: auto;
+    }
+    .sheet-backdrop.open .sheet-container {
+      transform: translateY(0);
+    }
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: #373c4f;
+      align-self: center;
+      margin-bottom: 4px;
+    }
+    .sheet-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .sheet-close {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: #1a1c26;
+      color: var(--text-dim);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      flex: none;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sheet-close:hover, .sheet-close:active {
+      background: #252838;
+      color: var(--text);
+      border-color: #3b4261;
+      transform: scale(0.95);
+    }
+    .sheet-close svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+      stroke: currentColor;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+    .sheet-input {
+      width: 100%;
+      background: #0d0e14;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
+    }
+    .sheet-input:focus { border-color: var(--cyan); }
+
+    /* 自訂分段選取器 */
+    .segmented-grid {
+      display: flex;
+      gap: 6px;
+      background: #0d0e14;
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .segmented-grid::-webkit-scrollbar { display: none; }
+    .seg-btn {
+      flex: 1;
+      min-width: 60px;
+      padding: 6px 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .seg-btn.active {
+      background: #1e2538;
+      color: var(--cyan);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    /* 自訂模型選擇清單 */
+    .model-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 180px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .model-card {
+      background: #0d0e14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .model-card.active {
+      border-color: var(--cyan);
+      background: #121c2b;
+    }
+    .model-id-text {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--text);
+    }
+    .model-desc-text {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .model-check {
+      color: var(--cyan);
+      font-size: 14px;
+      display: none;
+    }
+    .model-card.active .model-check { display: block; }
+
+    .sheet-btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .btn-action {
+      flex: 1;
+      background: var(--cyan);
+      color: #000;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 0;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-secondary {
+      background: var(--card-hover);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-danger-outline {
+      background: transparent;
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
+
+    /* 浮層 Toast */
+    #toast {
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 0px) + 52px);
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(20, 22, 32, 0.95);
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.25s ease;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #toast.error {
+      border-color: var(--red);
+      color: #fca5a5;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 頂部導覽列 (點擊開啟 Session 與專案切換抽屜) -->
+    <header>
+      <div class="header-left" onclick="openSessionPickerSheet()">
+        <div class="session-title-wrap">
+          <div class="header-breadcrumb">
+            <span id="header-project" class="header-project-text" onclick="event.stopPropagation(); openProjectSheet()" style="text-decoration:underline dotted; cursor:pointer;">專案 ▾</span>
+            <span class="header-breadcrumb-dot">•</span>
+            <span id="header-model" class="header-model-text">模型</span>
+          </div>
+          <div class="header-main-title">
+            <span id="conn-dot" class="status-dot"></span>
+            <span id="header-label" class="header-label-text">ertangle</span>
+            <svg class="header-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <span id="header-status-badge" class="header-status-tag">連線中…</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" onclick="toggleSearchBar()" title="搜尋逐字稿">
+          <svg class="nav-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+        <button class="icon-btn" onclick="openCurrentSessionSettings()" title="Session 設定">
+          <svg class="nav-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+        <div id="header-cost" class="cost-badge" style="display:none;">$0.00</div>
+      </div>
+    </header>
+
+    <!-- 搜尋列抽屜 -->
+    <div id="search-bar-wrap">
+      <svg class="nav-svg" style="width:14px; height:14px; color:var(--text-dim);" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input id="search-keyword" class="search-input" placeholder="在逐字稿中搜尋…" oninput="filterTranscript()">
+      <button style="background:none; border:none; color:var(--text-dim); font-size:12px; cursor:pointer;" onclick="toggleSearchBar()">關閉</button>
+    </div>
+
+    <!-- 主要內容區 -->
+    <main>
+      <!-- TAB 1: 對話 (Chat) -->
+      <!-- TAB 0: 總覽 (Overview) -->
+      <div id="view-overview" class="tab-view active">
+        <div class="ov-wrap">
+          <div id="ov-summary" class="ov-sum"></div>
+          <div id="ov-tree" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <div id="ov-minis" class="ov-minis"></div>
+        </div>
+      </div>
+
+      <!-- TAB 1: 對話 (Chat) -->
+      <div id="view-chat" class="tab-view">
+        <!-- 待核准置頂橫幅 -->
+        <div id="urgent-approval-banner" class="urgent-banner" style="display:none;">
+          <div class="urgent-title">
+            <span>待核准操作 (Waiting Approval)</span>
+            <span id="urgent-session-id" style="font-family:var(--font-mono); font-size:11px;"></span>
+          </div>
+          <div id="urgent-detail" class="urgent-desc"></div>
+          <div class="btn-row">
+            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
+            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
+            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
+          </div>
+        </div>
+
+        <!-- 歷史 Session 接續提示條 -->
+        <div id="resume-strip" class="resume-strip">
+          <span>此對話目前已結束或中斷</span>
+          <button class="btn-pill" style="flex:none; background:var(--yellow); color:#000; padding:4px 10px; font-size:11px;" onclick="resumeCurrentSession()">接續對話 (Resume)</button>
+        </div>
+
+        <!-- 結構化對話串流區域 -->
+        <div id="chat-transcript">
+          <div style="text-align:center; color:var(--text-dim); margin-top:30px; font-size:12px;">載入中…</div>
+        </div>
+
+        <!-- 底部輸入列 -->
+        <div id="chat-composer">
+          <div class="composer-toolbar">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div id="queue-toggle" class="toggle-pill" onclick="toggleQueue()">
+                <span>佇列模式</span>
+              </div>
+              <div id="queue-count-pill" class="queue-info-pill" onclick="openQueueManageSheet()">
+                0 則排隊中
+              </div>
+            </div>
+            <span id="composer-status" style="color:var(--text-dim); font-size:11px; font-family:var(--font-mono);"></span>
+          </div>
+          <div class="composer-row">
+            <textarea id="prompt-textarea" rows="1" placeholder="輸入 prompt 給 Agent…"></textarea>
+            <button id="btn-cancel" class="btn-circle btn-cancel-round" style="display:none;" onclick="cancelTurn()" title="中斷回合">
+              <svg class="nav-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"></rect></svg>
+            </button>
+            <button id="btn-send" class="btn-circle btn-send" onclick="sendPrompt()" title="送出">
+              <svg class="nav-svg" style="width:18px; height:18px; stroke:#000;" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: 審核與 Diff (Review) -->
+      <div id="view-review" class="tab-view">
+        <div class="review-wrap">
+          <!-- 權限審查卡片 -->
+          <div class="section-card">
+            <div class="section-title">權限審查 (Approval)</div>
+            <div id="review-approval-slot" style="color:var(--text-dim); font-size:13px; margin-top:6px;">
+              目前無等待核准的操作。
+            </div>
+          </div>
+
+          <!-- Git 變更與審查留言 -->
+          <div class="section-card" style="flex:1; display:flex; flex-direction:column;">
+            <div class="section-header">
+              <div class="section-title">工作區變更 (Git Diff)</div>
+              <div style="display:flex; gap:6px;">
+                <button id="btn-pr-diff" class="btn-pill btn-secondary" style="display:none; padding:4px 8px; font-size:11px; flex:none;" onclick="openPrSheet()">建立 PR</button>
+                <button id="btn-merge-diff" class="btn-pill btn-always" style="display:none; padding:4px 10px; font-size:11px; flex:none;" onclick="confirmMerge()">一鍵 Merge</button>
+              </div>
+            </div>
+            <div id="diff-status-text" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">無變更</div>
+            <div id="diff-lines-container" style="flex:1; overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: 任務板 (Tasks) -->
+      <div id="view-tasks" class="tab-view">
+        <div class="tasks-wrap">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:14px; font-weight:600; color:var(--text);">協作任務看板</span>
+            <button class="btn-pill btn-always" style="flex:none; padding:5px 12px; font-size:12px;" onclick="openNewTaskSheet()">+ 新增任務</button>
+          </div>
+          <div class="filter-bar">
+            <div class="filter-chip active" onclick="setTaskFilter('all', this)">全部</div>
+            <div class="filter-chip" onclick="setTaskFilter('todo', this)">待處理</div>
+            <div class="filter-chip" onclick="setTaskFilter('doing', this)">進行中</div>
+            <div class="filter-chip" onclick="setTaskFilter('done', this)">已完成</div>
+          </div>
+          <div id="tasks-list"></div>
+        </div>
+      </div>
+
+      <!-- TAB 4: Session 切換與管理 (Sessions) -->
+      <div id="view-sessions" class="tab-view">
+        <div class="sessions-wrap">
+          <!-- 帳號額度檢視卡片 -->
+          <div id="quota-container" style="display:none;"></div>
+
+          <div class="sessions-top-bar">
+            <div>
+              <div class="sessions-page-title">Agent Sessions</div>
+              <div id="sessions-count-sub" class="sessions-page-sub">共 0 個 Session</div>
+            </div>
+            <button class="btn-pill btn-allow" style="flex:none; padding:6px 14px; font-size:12px;" onclick="openNewSessionSheet()">+ 建立新 Session</button>
+          </div>
+          <!-- 專案篩選列 -->
+          <div class="filter-bar" id="session-project-filter-bar"></div>
+          <div id="sessions-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部導覽列 -->
+    <nav>
+      <button class="nav-btn active" onclick="switchNavTab('overview')">
+        <svg class="nav-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+        <span>總覽</span>
+      </button>
+      <button class="nav-btn" onclick="switchNavTab('chat')">
+        <svg class="nav-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        <span>對話</span>
+      </button>
+      <button class="nav-btn" onclick="switchNavTab('review')">
+        <span id="nav-review-badge" class="nav-badge" style="display:none;"></span>
+        <svg class="nav-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        <span>審核</span>
+      </button>
+      <button class="nav-btn" onclick="switchNavTab('tasks')">
+        <svg class="nav-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line><line x1="9" y1="17" x2="13" y2="17"></line></svg>
+        <span>任務</span>
+      </button>
+      <button class="nav-btn" onclick="switchNavTab('sessions')">
+        <svg class="nav-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Session</span>
+      </button>
+    </nav>
+
+    <!-- 懸浮提示 Toast -->
+    <div id="toast"></div>
+
+    <!-- 抽屜 P：專案切換 -->
+    <div id="sheet-project" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">切換專案</div>
+        <div id="project-list" style="display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- 抽屜 0：頂部點選快速切換 Session (含專案識別) -->
+    <div id="sheet-session-picker" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">切換 Session 與專案</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn-pill btn-allow" style="flex:none; padding:5px 12px; font-size:12px;" onclick="closeSheet('sheet-session-picker'); openNewSessionSheet();">+ 建立新 Session</button>
+            <button class="sheet-close" onclick="closeSheet('sheet-session-picker')" aria-label="關閉" title="關閉">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="picker-sessions-list" style="display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- 抽屜 1：建立新 Session (分段控制 + 點選式模型清單) -->
+    <div id="sheet-new-session" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">建立新 Agent Session</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-new-session')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 專案工作區選擇 -->
+        <div class="form-group">
+          <label class="form-label">所屬專案 (工作目錄)</label>
+          <div class="segmented-grid" id="new-project-segments"></div>
+          <input id="new-cwd-custom" class="sheet-input" style="display:none; margin-top:4px;" placeholder="手動輸入工作目錄路徑">
+        </div>
+
+        <!-- 自訂 Agent 種類分段切換器 -->
+        <div class="form-group">
+          <label class="form-label">Agent 種類 (Kind)</label>
+          <div class="segmented-grid" id="new-kind-segments">
+            <button class="seg-btn active" onclick="setNewKind('opencode', this)">opencode</button>
+            <button class="seg-btn" onclick="setNewKind('claude', this)">claude</button>
+            <button class="seg-btn" onclick="setNewKind('antigravity', this)">antigravity</button>
+            <button class="seg-btn" onclick="setNewKind('codex', this)">codex</button>
+          </div>
+        </div>
+
+        <!-- 自訂模型選擇清單 -->
+        <div class="form-group">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label class="form-label">選擇模型 (點擊直接選取)</label>
+            <span style="font-size:11px; color:var(--cyan); cursor:pointer;" onclick="toggleCustomModelInput()">自訂模型名稱…</span>
+          </div>
+          <div id="new-model-list" class="model-card-list"></div>
+          <input id="new-model-custom" class="sheet-input" style="display:none; margin-top:4px;" placeholder="手動輸入模型 ID (例如 ollama/qwen:7b)">
+        </div>
+
+        <!-- 自訂推理強度 (Effort) 分段按鈕 -->
+        <div class="form-group">
+          <label class="form-label">推理強度 (Effort)</label>
+          <div class="segmented-grid" id="new-effort-segments">
+            <button class="seg-btn active" onclick="setNewEffort('', this)">預設</button>
+            <button class="seg-btn" onclick="setNewEffort('low', this)">low</button>
+            <button class="seg-btn" onclick="setNewEffort('medium', this)">medium</button>
+            <button class="seg-btn" onclick="setNewEffort('high', this)">high</button>
+            <button class="seg-btn" onclick="setNewEffort('max', this)">max</button>
+          </div>
+        </div>
+
+        <!-- 自訂權限政策 (Permission) 分段按鈕 -->
+        <div class="form-group">
+          <label class="form-label">權限政策 (Permission)</label>
+          <div class="segmented-grid" id="new-permission-segments">
+            <button class="seg-btn active" onclick="setNewPermission('auto', this)">auto (自動核准)</button>
+            <button class="seg-btn" onclick="setNewPermission('ask', this)">ask (逐項問人)</button>
+            <button class="seg-btn" onclick="setNewPermission('bypass', this)">bypass (略過)</button>
+          </div>
+        </div>
+
+        <!-- 標籤、預算與 Worktree -->
+        <div style="display:flex; gap:10px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">自訂標籤 (選填)</label>
+            <input id="new-label" class="sheet-input" placeholder="例如：worker/ui">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">預算上限 (USD)</label>
+            <input id="new-budget" class="sheet-input" type="number" step="0.5" placeholder="無上限 (例 3.00)">
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; margin:4px 0;">
+          <input id="new-worktree" type="checkbox" style="width:16px; height:16px; cursor:pointer;">
+          <label for="new-worktree" style="font-size:13px; color:var(--text); cursor:pointer;">在獨立的 Git Worktree 分支執行</label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">初始 Prompt</label>
+          <textarea id="new-prompt" class="sheet-input" rows="3" placeholder="請描述想要指派給此 Agent 的工作任務…"></textarea>
+        </div>
+
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-new-session')">取消</button>
+          <button class="btn-action" onclick="submitDetailedSession()">立即啟動 Session</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜 2：Session 控制與管理面板 -->
+    <div id="sheet-session-manage" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title" id="manage-session-title">Session 控制面板</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-session-manage')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 執行期切換模型 -->
+        <div class="form-group">
+          <label class="form-label">執行期切換模型 (點擊直接切換)</label>
+          <div id="manage-model-list" class="model-card-list"></div>
+          <input id="manage-model-custom" class="sheet-input" style="display:none; margin-top:4px;" placeholder="手動輸入自訂模型">
+        </div>
+
+        <!-- 執行期切換 Effort -->
+        <div class="form-group">
+          <label class="form-label">推理強度 (Effort)</label>
+          <div class="segmented-grid" id="manage-effort-segments">
+            <button class="seg-btn" onclick="setManageEffort('low', this)">low</button>
+            <button class="seg-btn" onclick="setManageEffort('medium', this)">medium</button>
+            <button class="seg-btn" onclick="setManageEffort('high', this)">high</button>
+            <button class="seg-btn" onclick="setManageEffort('max', this)">max</button>
+          </div>
+        </div>
+        <button class="btn-pill btn-secondary" style="padding:9px 0;" onclick="submitSwitchModel()">套用模型與推理強度變更</button>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
+
+        <!-- 調高成本預算 -->
+        <div class="form-group">
+          <label class="form-label">調高成本預算上限 (USD)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="manage-budget" class="sheet-input" type="number" step="0.5" placeholder="例如 5.00">
+            <button class="btn-pill btn-secondary" style="flex:none; padding:0 12px;" onclick="submitSetBudget()">設定預算</button>
+          </div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
+
+        <!-- 工作交接 (Handoff) -->
+        <div class="form-group">
+          <label class="form-label">工作交接 (Handoff 轉交給其他 Agent)</label>
+          <div class="segmented-grid" id="handoff-kind-segments" style="margin-bottom:6px;">
+            <button class="seg-btn active" onclick="setHandoffKind('claude', this)">claude</button>
+            <button class="seg-btn" onclick="setHandoffKind('antigravity', this)">antigravity</button>
+            <button class="seg-btn" onclick="setHandoffKind('codex', this)">codex</button>
+            <button class="seg-btn" onclick="setHandoffKind('opencode', this)">opencode</button>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input id="handoff-note" class="sheet-input" placeholder="交接補充說明 (選填)">
+            <button class="btn-pill btn-secondary" style="flex:none; padding:0 12px;" onclick="submitHandoff()">執行交接</button>
+          </div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;">
+
+        <!-- 休眠、喚醒、Kill、Remove -->
+        <div style="display:flex; gap:8px;">
+          <button class="btn-pill btn-secondary" style="flex:1;" onclick="toggleSleepCurrent()">休眠 (Sleep) / 喚醒 (Wake)</button>
+          <button class="btn-pill btn-danger-outline" style="flex:1;" onclick="killCurrentSession()">強制結束 (Kill)</button>
+        </div>
+        <button class="btn-pill btn-danger-outline" style="padding:8px 0;" onclick="removeCurrentSession()">從清單中移除此 Session</button>
+      </div>
+    </div>
+
+    <!-- 抽屜 3：排隊佇列檢視與清空 -->
+    <div id="sheet-queue-manage" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">待送 Prompt 佇列</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-queue-manage')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div id="queue-items-container" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto;"></div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-queue-manage')">關閉</button>
+          <button class="btn-action btn-danger-outline" onclick="submitClearQueue()">清空待送佇列</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜 4：新增任務 -->
+    <div id="sheet-new-task" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">建立協作任務</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-new-task')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">任務標題</label>
+          <input id="sheet-task-title" class="sheet-input" placeholder="例如：補齊單元測試、修正斷線重連…">
+        </div>
+        <div class="form-group">
+          <label class="form-label">詳細說明 (選填)</label>
+          <textarea id="sheet-task-detail" class="sheet-input" rows="2" placeholder="補充驗收標準或背景說明…"></textarea>
+        </div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-new-task')">取消</button>
+          <button class="btn-action" onclick="submitNewTask()">建立任務</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜 5：行內審查註解 -->
+    <div id="sheet-review-comment" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">留下程式碼審查註解</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-review-comment')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div id="sheet-review-preview" style="font-family:var(--font-mono); font-size:11px; background:#000; padding:6px 8px; border-radius:6px; color:var(--text-dim); overflow-x:auto;"></div>
+        <div class="form-group">
+          <label class="form-label">審查意見</label>
+          <textarea id="sheet-review-text" class="sheet-input" rows="2" placeholder="說明需要修改的理由或建議…"></textarea>
+        </div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-review-comment')">取消</button>
+          <button class="btn-action" onclick="submitReviewComment()">送出審查註解</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜 6：建立 GitHub PR -->
+    <div id="sheet-create-pr" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">為目前 Worktree 建立 Pull Request</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-create-pr')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">PR 標題</label>
+          <input id="pr-title" class="sheet-input" placeholder="例如：feat: 實作新功能">
+        </div>
+        <div class="form-group">
+          <label class="form-label">PR 說明 (選填)</label>
+          <textarea id="pr-body" class="sheet-input" rows="3" placeholder="描述此 PR 的改動重點…"></textarea>
+        </div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-create-pr')">取消</button>
+          <button class="btn-action" onclick="submitCreatePr()">送出建立 PR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜 7：檔案引用與路徑互動面板 (含文字與圖片即時預覽) -->
+    <div id="sheet-file-action" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container" style="max-height:88vh; display:flex; flex-direction:column;">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div id="file-action-label" class="sheet-title" style="margin-bottom:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">檔案資訊</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-file-action')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 檔案路徑與快捷複製 -->
+        <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="min-width:0; flex:1;">
+            <div style="font-size:10px; color:var(--text-dim); margin-bottom:2px;">檔案路徑</div>
+            <div id="file-action-path" style="font-family:var(--font-mono); font-size:11px; color:var(--text); word-break:break-all; max-height:36px; overflow-y:auto;"></div>
+          </div>
+          <button class="btn-pill btn-secondary" style="flex:none; padding:4px 8px; font-size:11px;" onclick="copyFileActionPath()" title="複製路徑">
+            複製路徑
+          </button>
+        </div>
+
+        <!-- 檔案內容預覽區域 -->
+        <div style="flex:1; min-height:200px; max-height:48vh; background:#0d0e14; border:1px solid var(--border); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#161822; border-bottom:1px solid var(--border); font-size:11px; color:var(--text-dim);">
+            <span id="file-preview-info">讀取檔案中…</span>
+            <div style="display:flex; gap:6px;">
+              <button id="btn-copy-file-content" class="btn-pill btn-secondary" style="padding:2px 8px; font-size:11px; display:none;" onclick="copyFileContent()">複製內容</button>
+              <a id="btn-open-raw-file" class="btn-pill btn-secondary" style="padding:2px 8px; font-size:11px; text-decoration:none; display:none;" target="_blank" rel="noopener">在新分頁開啟 ↗</a>
+            </div>
+          </div>
+          <div id="file-preview-body" style="flex:1; overflow:auto; padding:10px; -webkit-overflow-scrolling:touch;">
+            <div style="color:var(--text-dim); font-size:12px; text-align:center; padding:30px 0;">正在載入檔案內容…</div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button class="btn-pill btn-secondary" style="justify-content:center; padding:10px;" onclick="viewFileDiff()">
+            <span>🔍 查看工作區 Diff</span>
+          </button>
+          <button class="btn-pill btn-secondary" style="justify-content:center; padding:9px; color:var(--text-dim);" onclick="closeSheet('sheet-file-action')">
+            關閉
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 抽屜：遠端連線 Token 認證 -->
+    <div id="sheet-token-auth" class="sheet-backdrop" onclick="closeSheetOnBackdrop(event, this)">
+      <div class="sheet-container">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="sheet-title">🔐 遠端連線認證</div>
+          <button class="sheet-close" onclick="closeSheet('sheet-token-auth')" aria-label="關閉" title="關閉">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div style="color:var(--text-dim); font-size:12px; margin:8px 0 12px 0; line-height:1.5;">
+          請輸入 ertangle 遠端 Token (可在電腦端執行 <code style="font-family:var(--font-mono); color:var(--text); background:rgba(255,255,255,0.08); padding:2px 5px; border-radius:4px;">ertangle remote-info</code> 取得)。
+        </div>
+        <div class="form-group">
+          <label class="form-label">連線 Token</label>
+          <input id="sheet-token-input" class="sheet-input" style="font-family:var(--font-mono); font-size:12px;" placeholder="貼上 64 位元 Token 字串">
+        </div>
+        <div class="sheet-btn-row">
+          <button class="btn-action btn-secondary" onclick="closeSheet('sheet-token-auth')">取消</button>
+          <button class="btn-action" onclick="submitTokenAuth()">確認並連線</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 0. 防止手機瀏覽器雙擊放大 (Double-tap to zoom disable)
+    let lastTouchEndTime = 0;
+    document.addEventListener("touchend", function(event) {
+      const now = Date.now();
+      if (now - lastTouchEndTime <= 300) {
+        event.preventDefault();
+      }
+      lastTouchEndTime = now;
+    }, { passive: false });
+
+    document.addEventListener("dblclick", function(e) {
+      e.preventDefault();
+    }, { passive: false });
+
+    // 1. 初始化 Token (優先讀取 ?token=... 與 #token=...，並保存至 localStorage)
+    let token = "";
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const hashStr = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+      const hashParams = new URLSearchParams(hashStr);
+
+      if (searchParams.has("token") && searchParams.get("token")) {
+        token = searchParams.get("token");
+        localStorage.setItem("ertangle_token", token);
+        try {
+          history.replaceState(null, "", window.location.pathname + (window.location.hash || ""));
+        } catch (_) {}
+      } else if (hashParams.has("token") && hashParams.get("token")) {
+        token = hashParams.get("token");
+        localStorage.setItem("ertangle_token", token);
+        try {
+          history.replaceState(null, "", window.location.pathname + window.location.search);
+        } catch (_) {}
+      } else {
+        token = localStorage.getItem("ertangle_token") || "";
+      }
+    } catch (_) {
+      token = "";
+    }
+
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const pj = q.get("project") || h.get("project");
+      if (pj) {
+        pendingProjectParam = pj;
+        q.delete("project"); h.delete("project");
+        const qs = q.toString(), hs = h.toString();
+        history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
+      }
+    } catch (_) {}
+
+    let ws = null;
+    let state = {
+      sessions: {},
+      tasks: {},
+      pending_permissions: {},
+      transcripts: {},
+      quotas: {},
+      queues: {},
+      seq: 0
+    };
+    let activeSession = null;
+    let currentTab = "overview";
+    let daemonEpoch = null;
+    let pendingApprovalReq = null;
+    let queueMode = false;
+    let taskFilter = "all";
+    let projectScope = "all";
+    try { projectScope = localStorage.getItem("ertangle_project") || "all"; } catch (_) {}
+    let pendingProjectParam = null;
+    let pendingReviewLine = null;
+
+    let newSessionState = {
+      cwd: "",
+      kind: "opencode",
+      model: "",
+      effort: "",
+      permission: "auto"
+    };
+
+    let manageSessionState = {
+      model: "",
+      effort: "",
+      handoffKind: "claude"
+    };
+
+    // 離線備援清單：連上 daemon 後改用 list_models 回傳的清單 (與 TUI 同源)。
+    // Claude 清單需與 crates/ertangle-adapter/src/models.rs 的 CLAUDE_MODELS 同步。
+    const DEFAULT_MODEL = { id: "", label: "預設 (依設定檔)", desc: "使用 config.toml 的預設模型" };
+    const OTHER_MODEL_HINT = { id: "", label: "預設 (依設定檔)", desc: "其他模型請用「自訂模型」輸入 id" };
+    const MODEL_CATALOG = {
+      claude: [
+        DEFAULT_MODEL,
+        { id: "fable", label: "最新 Fable", desc: "別名，永遠指向最新 Fable" },
+        { id: "opus", label: "最新 Opus", desc: "別名，永遠指向最新 Opus" },
+        { id: "sonnet", label: "最新 Sonnet", desc: "別名，永遠指向最新 Sonnet" },
+        { id: "haiku", label: "最新 Haiku", desc: "別名，永遠指向最新 Haiku" },
+        { id: "claude-fable-5-2", label: "Claude Fable 5.2", desc: "固定版本 claude-fable-5-2" },
+        { id: "claude-fable-5-1", label: "Claude Fable 5.1", desc: "固定版本 claude-fable-5-1" },
+        { id: "claude-fable-5", label: "Claude Fable 5", desc: "固定版本 claude-fable-5" },
+        { id: "claude-opus-5-5", label: "Claude Opus 5.5", desc: "固定版本 claude-opus-5-5" },
+        { id: "claude-opus-5", label: "Claude Opus 5", desc: "固定版本 claude-opus-5" },
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", desc: "固定版本 claude-opus-4-8" },
+        { id: "claude-opus-4-7", label: "Claude Opus 4.7", desc: "固定版本 claude-opus-4-7" },
+        { id: "claude-opus-4-6", label: "Claude Opus 4.6", desc: "固定版本 claude-opus-4-6" },
+        { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", desc: "固定版本 claude-sonnet-5-5" },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", desc: "固定版本 claude-sonnet-5" },
+        { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", desc: "固定版本 claude-sonnet-4-6" },
+        { id: "claude-haiku-5-5", label: "Claude Haiku 5.5", desc: "固定版本 claude-haiku-5-5" },
+        { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", desc: "固定版本 claude-haiku-4-5" }
+      ],
+      antigravity: [OTHER_MODEL_HINT],
+      codex: [OTHER_MODEL_HINT],
+      opencode: [OTHER_MODEL_HINT]
+    };
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.className = `show ${isError ? "error" : ""}`;
+      setTimeout(() => { t.className = ""; }, 2500);
+    }
+
+    // 專案識別 = 專案根目錄完整路徑 (repo_root ?? cwd)；顯示用 basename，重名時加上層目錄
+    function projectRoot(s) { return (s && (s.repo_root || s.cwd)) || ""; }
+    function pathParts(p) { return p.split("/").filter(Boolean); }
+    function isLive(s) { return !["exited", "failed"].includes((s && s.status) || ""); }
+
+    function getAllProjects() {
+      const m = new Map();
+      for (const id in state.sessions) {
+        const s = state.sessions[id];
+        const r = projectRoot(s);
+        const e = m.get(r) || { root: r, count: 0, live: 0 };
+        e.count++;
+        if (isLive(s)) e.live++;
+        m.set(r, e);
+      }
+      const list = Array.from(m.values());
+      const seen = {};
+      list.forEach(e => { const b = pathParts(e.root).pop() || "專案"; seen[b] = (seen[b] || 0) + 1; });
+      list.forEach(e => {
+        const parts = pathParts(e.root);
+        const b = parts.pop() || "專案";
+        e.name = seen[b] > 1 && parts.length ? `${parts[parts.length - 1]}/${b}` : b;
+      });
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function getProjectName(session) {
+      if (!session) return "預設專案";
+      const r = projectRoot(session);
+      const e = getAllProjects().find(x => x.root === r);
+      return e ? e.name : (pathParts(r).pop() || "專案");
+    }
+
+    // 目前有效的專案範圍 (已不存在的專案視為「全部」)
+    function curScope() {
+      if (projectScope === "all") return "all";
+      for (const id in state.sessions) if (projectRoot(state.sessions[id]) === projectScope) return projectScope;
+      return "all";
+    }
+    function inScope(s) { const c = curScope(); return !!s && (c === "all" || projectRoot(s) === c); }
+    function scopedIds() { return Object.keys(state.sessions).filter(id => inScope(state.sessions[id])); }
+
+    // 選出專案內第一個存活 session (優先 coordinator)
+    function pickSession(scopeRoot) {
+      const ids = Object.keys(state.sessions).filter(id => scopeRoot === "all" || projectRoot(state.sessions[id]) === scopeRoot);
+      const live = ids.filter(id => isLive(state.sessions[id]));
+      const pool = live.length ? live : ids;
+      return pool.find(id => state.sessions[id].role === "coordinator") || pool[0] || null;
+    }
+
+    function setProjectScope(root, pick = true) {
+      projectScope = root || "all";
+      try { localStorage.setItem("ertangle_project", projectScope); } catch (_) {}
+      if (pick) {
+        const a = state.sessions[activeSession];
+        if (!a || !inScope(a)) activeSession = pickSession(curScope());
+      }
+      updateAllViews();
+    }
+
+    function openProjectSheet() {
+      const box = document.getElementById("project-list");
+      const cur = curScope();
+      const total = Object.keys(state.sessions).length;
+      let html = `<div class="session-card ${cur === "all" ? "active" : ""}" data-root="all"><div class="session-card-body"><span class="session-card-title">全部專案 (${total})</span></div></div>`;
+      getAllProjects().forEach(e => {
+        html += `<div class="session-card ${cur === e.root ? "active" : ""}" data-root="${escapeHtml(e.root)}">
+          <div class="session-card-body"><span class="session-card-title">${escapeHtml(e.name)} (${e.count})</span></div>
+          <div class="ov-dim" style="font-size:11px;">${escapeHtml(e.root)} • 存活 ${e.live}</div></div>`;
+      });
+      box.innerHTML = html;
+      box.onclick = ev => {
+        const el = ev.target.closest("[data-root]");
+        if (!el) return;
+        closeSheet("sheet-project");
+        setProjectScope(el.dataset.root);
+      };
+      openSheet("sheet-project");
+    }
+
+    function shortenModelName(model) {
+      if (!model) return "";
+      let m = String(model);
+      return m.replace(/-\d{8}$/, "").replace(/-\d{4}-\d{2}-\d{2}$/, "");
+    }
+
+    function formatStatus(status) {
+      const map = {
+        starting: "啟動中",
+        busy: "執行中",
+        running: "執行中",
+        working: "執行中",
+        idle: "閒置",
+        waiting_approval: "待核准",
+        waiting: "待核准",
+        sleeping: "休眠",
+        exited: "已結束",
+        failed: "失敗",
+        done: "已完成",
+        error: "錯誤",
+        stopped: "已停止"
+      };
+      return map[status] || status || "閒置";
+    }
+
+    function openTokenAuthSheet() {
+      const input = document.getElementById("sheet-token-input");
+      if (input) input.value = token || "";
+      openSheet("sheet-token-auth");
+      setTimeout(() => { if (input) { input.focus(); input.select(); } }, 200);
+    }
+
+    function submitTokenAuth() {
+      const input = document.getElementById("sheet-token-input");
+      const val = input ? input.value.trim() : "";
+      if (val) {
+        token = val;
+        try { localStorage.setItem("ertangle_token", token); } catch(_) {}
+        closeSheet("sheet-token-auth");
+        showToast("已設定 Token，正在連線…");
+        if (ws) {
+          ws.onclose = null;
+          try { ws.close(); } catch(_) {}
+        }
+        connect();
+      } else {
+        showToast("請輸入 Token 字串", true);
+      }
+    }
+
+    function connect() {
+      const dot = document.getElementById("conn-dot");
+      const statusBadge = document.getElementById("header-status-badge");
+      if (dot) {
+        dot.className = "status-dot connecting";
+        dot.onclick = openTokenAuthSheet;
+      }
+      if (statusBadge) {
+        statusBadge.innerText = "連線中…";
+        statusBadge.className = "header-status-tag waiting";
+        statusBadge.onclick = openTokenAuthSheet;
+      }
+
+      if (!token) {
+        if (dot) dot.className = "status-dot disconnected";
+        if (statusBadge) {
+          statusBadge.innerText = "需認證";
+          statusBadge.className = "header-status-tag waiting";
+        }
+        openTokenAuthSheet();
+        return;
+      }
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+      ws.onopen = () => {
+        if (dot) dot.className = "status-dot connected";
+        // 斷線前送出但沒收到回覆的 list_models 要能重送。
+        for (const k in modelRequested) delete modelRequested[k];
+        ws.send(JSON.stringify({
+          op: "hello",
+          client: "web",
+          since: state.seq > 0 ? state.seq : null,
+          token: token || null,
+          epoch: daemonEpoch
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const frame = JSON.parse(event.data);
+          handleFrame(frame);
+        } catch (e) {
+          console.error("Frame parse error:", e);
+        }
+      };
+
+      ws.onclose = () => {
+        if (dot) dot.className = "status-dot disconnected";
+        if (statusBadge) {
+          statusBadge.innerText = "已斷線";
+          statusBadge.className = "header-status-tag";
+        }
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    function handleFrame(frame) {
+      const op = frame.ev;
+      if (op === "ready") {
+        daemonEpoch = frame.epoch;
+      } else if (op === "snapshot") {
+        state = frame.state;
+        if (!state.archived_sessions) state.archived_sessions = {};
+        if (!state.transcripts) state.transcripts = {};
+        if (!state.queues) state.queues = {};
+        if (!state.messages) state.messages = [];
+        if (pendingProjectParam && Object.keys(state.sessions).length) {
+          projectScope = pendingProjectParam;
+          pendingProjectParam = null;
+          try { localStorage.setItem("ertangle_project", projectScope); } catch (_) {}
+          activeSession = pickSession(curScope());
+        }
+        updateAllViews();
+      } else if (op === "record") {
+        applyRecord(frame.record);
+      } else if (op === "models") {
+        onModelsFrame(frame);
+      } else if (op === "diff") {
+        renderDiff(frame.diff);
+      } else if (op === "ok") {
+        if (frame.note) showToast(frame.note);
+      } else if (op === "error") {
+        showToast(frame.message, true);
+        if (frame.message.includes("Token") || frame.message.includes("token") || frame.message.includes("認證")) {
+          openTokenAuthSheet();
+        }
+      }
+    }
+
+    function applyRecord(record) {
+      state.seq = record.seq;
+      // daemon 的 Record 以 `#[serde(flatten)]` 序列化：事件欄位 (kind、session…) 直接在頂層，沒有 `event` 包裝。
+      const event = record.event || record;
+      if (!event.kind) return;
+      const kind = event.kind;
+
+      if (kind === "session_started") {
+        if (state.archived_sessions) delete state.archived_sessions[event.session.id];
+        state.sessions[event.session.id] = event.session;
+        if (!state.transcripts[event.session.id]) state.transcripts[event.session.id] = [];
+      } else if (kind === "session_status") {
+        const x = state.sessions[event.session];
+        if (x) {
+          x.status = event.status;
+          if (event.status !== "busy" && event.status !== "waiting_approval") x.active_tools = [];
+        }
+      } else if (kind === "session_bg_procs") {
+        if (state.sessions[event.session]) state.sessions[event.session].bg_procs = event.procs || [];
+      } else if (kind === "session_context") {
+        const x = state.sessions[event.session];
+        if (x) {
+          const old = x.context || {};
+          x.context = { used: event.used === 0 ? (old.used || 0) : event.used, window: event.window != null ? event.window : old.window };
+        }
+      } else if (kind === "session_limited") {
+        const x = state.sessions[event.session];
+        if (x) { x.status = "failed"; x.status_note = `額度用完：${(event.detail || "").slice(0, 80)} (可用 handoff 交接)`; }
+      } else if (kind === "session_exited") {
+        const x = state.sessions[event.session];
+        if (x && isLive(x)) x.status = "exited";
+      } else if (kind === "session_over_budget") {
+        if (state.sessions[event.session]) state.sessions[event.session].over_budget = true;
+      } else if (kind === "session_budget") {
+        const x = state.sessions[event.session];
+        if (x) { x.budget_usd = event.budget_usd; x.over_budget = false; }
+      } else if (kind === "session_label") {
+        if (state.sessions[event.session]) state.sessions[event.session].label = event.label;
+      } else if (kind === "session_handed_off") {
+        if (state.sessions[event.from]) state.sessions[event.from].handed_off_to = event.to;
+      } else if (kind === "queue_changed") {
+        if (event.items && event.items.length) state.queues[event.session] = event.items;
+        else delete state.queues[event.session];
+      } else if (kind === "bus_message") {
+        if (!state.messages) state.messages = [];
+        state.messages.push(event.message);
+        while (state.messages.length > 200) state.messages.shift();
+      } else if (kind === "session_model") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].model = event.model;
+        }
+      } else if (kind === "session_effort") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].effort = event.effort;
+        }
+      } else if (kind === "session_native_id") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].native_id = event.native_id;
+        }
+      } else if (kind === "session_note") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].status_note = event.note;
+        }
+      } else if (kind === "session_removed") {
+        const removed = state.sessions[event.session];
+        if (removed && removed.native_id) {
+          if (!state.archived_sessions) state.archived_sessions = {};
+          removed.status = "exited";
+          state.archived_sessions[event.session] = removed;
+        } else {
+          delete state.transcripts[event.session];
+        }
+        delete state.sessions[event.session];
+        delete state.queues[event.session];
+        if (activeSession === event.session) {
+          activeSession = pickSession(curScope()) || Object.keys(state.sessions)[0] || null;
+        }
+      } else if (kind === "permission_requested") {
+        state.pending_permissions[event.request.req] = event.request;
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      } else if (kind === "permission_resolved") {
+        delete state.pending_permissions[event.req];
+      } else if (kind === "task_changed") {
+        state.tasks[event.task.id] = event.task;
+      } else if (kind === "quota_updated") {
+        if (!state.quotas) state.quotas = {};
+        state.quotas[event.quota.agent] = event.quota;
+      } else if (kind === "cost") {
+        if (state.sessions[event.session]) {
+          state.sessions[event.session].cost = event.cost;
+        }
+      } else if (kind === "user_prompt") {
+        if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
+        // 與 core/TUI 一致：第一行 `❯ `，後續行兩個空格縮排，讓分組邏輯可正確辨識多行 prompt。
+        const parts = String(event.text).split("\n");
+        if (parts[parts.length - 1] === "") parts.pop();
+        // 非使用者 (其他 agent 或 ertangle) 送的 prompt 以 `» [來源] ` 標示，與 core 的 fold 一致。
+        let head = "❯ ";
+        if (event.from) {
+          const src = state.sessions[event.from];
+          head = `» [${src ? src.label : event.from}] `;
+        }
+        parts.forEach((l, i) => state.transcripts[event.session].push(i === 0 ? `${head}${l}` : `  ${l}`));
+        if (event.session === activeSession) renderCurrentChatTranscript();
+      } else if (kind === "output") {
+        if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
+        const parts = String(event.text).split("\n");
+        if (parts[parts.length - 1] === "") parts.pop();
+        parts.forEach(l => state.transcripts[event.session].push(l));
+        if (state.transcripts[event.session].length > 2000) state.transcripts[event.session].splice(0, state.transcripts[event.session].length - 2000);
+        if (event.session === activeSession) renderCurrentChatTranscript();
+      } else if (kind === "tool_call") {
+        const x = state.sessions[event.session];
+        if (x) {
+          if (!x.active_tools) x.active_tools = [];
+          if (event.ok == null && event.name) {
+            x.active_tools.push({ name: event.name, summary: String(event.input || "").slice(0, 80), started_ms: Date.now(), is_subagent: /^(task|agent|dispatch_agent|invoke_subagent|spawn_agent|subagent)$/i.test(event.name) });
+          } else if (event.ok != null) {
+            const i = event.name ? x.active_tools.findIndex(t => t.name === event.name) : -1;
+            if (i >= 0) x.active_tools.splice(i, 1); else if (x.active_tools.length) x.active_tools.shift();
+          }
+        }
+        const icon = event.ok === true ? "✓" : (event.ok === false ? "✗" : "…");
+        const summary = `▸ ${event.name} ${event.input || ""}`;
+        if (!state.transcripts[event.session]) state.transcripts[event.session] = [];
+        state.transcripts[event.session].push(summary);
+        if (event.ok != null) {
+          state.transcripts[event.session].push(`  ${icon} ${event.ok ? "ok" : "fail"}`);
+        }
+        if (event.session === activeSession) renderCurrentChatTranscript();
+      }
+
+      updateAllViews();
+    }
+
+    function groupTranscriptIntoTurns(lines) {
+      const turns = [];
+      let currentAgentTurn = null;
+      let currentUserTurn = null;
+
+      function flushAgent() {
+        if (currentAgentTurn) {
+          if (currentAgentTurn.textParts.length > 0 || currentAgentTurn.tools.length > 0 || currentAgentTurn.thoughts.length > 0) {
+            turns.push(currentAgentTurn);
+          }
+          currentAgentTurn = null;
+        }
+      }
+      function flushUser() {
+        if (currentUserTurn) {
+          if (currentUserTurn.parts.length > 0) {
+            const text = currentUserTurn.parts.join("\n");
+            turns.push(currentUserTurn.from
+              ? { type: "peer", from: currentUserTurn.from, text }
+              : { type: "user", text });
+          }
+          currentUserTurn = null;
+        }
+      }
+
+      for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        if (raw == null) continue;
+        const line = String(raw);
+
+        // core/TUI 以 `❯ ` 標記使用者 prompt、`» [來源] ` 標記其他 agent 或 ertangle 送的 prompt。
+        // `> ` 是 agent 回覆中的 Markdown 引言，不是使用者訊息。
+        const peer = line.match(/^» \[([^\]]*)\] (.*)$/);
+        if (line.startsWith("❯ ") || peer) {
+          flushAgent();
+          flushUser();
+          currentUserTurn = peer
+            ? { from: peer[1], parts: [peer[2]] }
+            : { from: null, parts: [line.substring(2)] };
+        } else if (currentUserTurn && line.startsWith("  ") && !line.startsWith("  ✓") && !line.startsWith("  ✗")) {
+          // 多行 prompt 的後續行：core 以兩個空格縮排對齊。
+          currentUserTurn.parts.push(line.substring(2));
+        } else if (line.startsWith("💭 ")) {
+          flushUser();
+          if (!currentAgentTurn) {
+            currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
+          }
+          currentAgentTurn.thoughts.push(line.substring(2));
+        } else if (line.startsWith("▸ ") || line.startsWith("[工具 ")) {
+          flushUser();
+          if (!currentAgentTurn) {
+            currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
+          }
+          currentAgentTurn.tools.push({ call: line.replace(/^\[工具\s*/, "").replace(/^▸\s*/, ""), result: null });
+        } else if (line.startsWith("  ✓") || line.startsWith("  ✗")) {
+          if (currentAgentTurn && currentAgentTurn.tools.length > 0) {
+            currentAgentTurn.tools[currentAgentTurn.tools.length - 1].result = line.trim();
+          } else {
+            flushUser();
+            if (!currentAgentTurn) {
+              currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
+            }
+            currentAgentTurn.textParts.push(line);
+          }
+        } else if (line.startsWith("[系統]") || line.startsWith("ertangle:")) {
+          flushUser();
+          flushAgent();
+          turns.push({
+            type: "system",
+            text: line
+          });
+        } else {
+          flushUser();
+          if (!currentAgentTurn) {
+            currentAgentTurn = { type: "agent", textParts: [], thoughts: [], tools: [] };
+          }
+          currentAgentTurn.textParts.push(line);
+        }
+      }
+      flushUser();
+      flushAgent();
+      return turns;
+    }
+
+    // 每筆 record (串流輸出片段、cost、context…) 都會要求重繪；合併到下一個 frame 只畫一次，
+    // 避免手機上逐字稿反覆清空重建造成閃爍。
+    let chatRenderPending = false;
+    function renderCurrentChatTranscript() {
+      if (chatRenderPending) return;
+      chatRenderPending = true;
+      requestAnimationFrame(() => {
+        chatRenderPending = false;
+        renderChatTranscriptNow();
+      });
+    }
+
+    // 以 HTML 字串比對每一則，只替換內容有變的節點：未變動的對話框不重建，
+    // 已展開的 <details> (思考過程、工具呼叫) 在替換時保留展開狀態。
+    function reconcileChatRows(box, rows) {
+      if (box.children.length && box.children[0].dataset.html === undefined) box.innerHTML = "";
+      rows.forEach((r, i) => {
+        const key = r.className + "\u0000" + r.html;
+        const old = box.children[i];
+        if (old && old.dataset.html === key) return;
+        const row = document.createElement("div");
+        row.className = r.className;
+        row.innerHTML = r.html;
+        row.dataset.html = key;
+        if (old) {
+          row.classList.add("turn-updated");
+          const openFlags = Array.from(old.querySelectorAll("details")).map(d => d.open);
+          row.querySelectorAll("details").forEach((d, j) => { if (openFlags[j]) d.open = true; });
+          box.replaceChild(row, old);
+        } else {
+          box.appendChild(row);
+        }
+      });
+      while (box.children.length > rows.length) box.removeChild(box.lastChild);
+    }
+
+    function renderChatTranscriptNow() {
+      const box = document.getElementById("chat-transcript");
+      const prevScrollTop = box.scrollTop;
+      const isNearBottom = box.scrollHeight - box.clientHeight - prevScrollTop < 60;
+      const rows = [];
+
+      if (!activeSession) {
+        reconcileChatRows(box, [{ className: "chat-empty", html: `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無可用 Session，點擊上方選單建立新對話</div>` }]);
+        return;
+      }
+      const lines = state.transcripts[activeSession] || [];
+      if (lines.length === 0) {
+        reconcileChatRows(box, [{ className: "chat-empty", html: `<div style="text-align:center; color:var(--text-dim); margin-top:30px;">尚無對話紀錄，請在下方輸入 Prompt 開始互動</div>` }]);
+        return;
+      }
+
+      const turns = groupTranscriptIntoTurns(lines);
+      const current = state.sessions[activeSession] || {};
+      const agentLabel = current.label || activeSession;
+      const modelTag = current.model || current.kind || "agent";
+
+      turns.forEach(turn => {
+        if (turn.type === "user") {
+          const row = { className: "chat-turn turn-user" };
+          row.html = `
+            <div class="turn-header">
+              <span class="user-tag">你</span>
+            </div>
+            <div class="turn-bubble bubble-user">
+              <div class="bubble-content">${renderSimpleMarkdown(turn.text)}</div>
+            </div>
+          `;
+          rows.push(row);
+        } else if (turn.type === "peer") {
+          const row = { className: "chat-turn turn-peer" };
+          const who = turn.from === "ertangle" ? "ertangle 通知" : `來自 ${turn.from}`;
+          row.html = `
+            <div class="turn-header">
+              <span class="peer-tag">${escapeHtml(who)}</span>
+            </div>
+            <div class="turn-bubble bubble-agent bubble-peer">
+              <div class="bubble-content">${renderSimpleMarkdown(turn.text)}</div>
+            </div>
+          `;
+          rows.push(row);
+        } else if (turn.type === "agent") {
+          const row = { className: "chat-turn turn-agent" };
+
+          let html = `
+            <div class="turn-header">
+              <span class="agent-tag">${escapeHtml(agentLabel)}</span>
+              <span class="model-tag">${escapeHtml(modelTag)}</span>
+            </div>
+          `;
+
+          if (turn.thoughts && turn.thoughts.length > 0) {
+            html += `
+              <details class="turn-collapse">
+                <summary>思考過程 (${turn.thoughts.length} 行) ▾</summary>
+                <div class="collapse-content">${escapeHtml(turn.thoughts.join("\n"))}</div>
+              </details>
+            `;
+          }
+
+          if (turn.tools && turn.tools.length > 0) {
+            html += renderToolList(turn.tools);
+          }
+
+          if (turn.textParts && turn.textParts.length > 0) {
+            const joinedText = turn.textParts.join("\n").trim();
+            if (joinedText.length > 0) {
+              html += `
+                <div class="turn-bubble bubble-agent">
+                  <div class="bubble-content">${renderSimpleMarkdown(joinedText)}</div>
+                </div>
+              `;
+            }
+          }
+
+          row.html = html;
+          rows.push(row);
+        } else if (turn.type === "system") {
+          rows.push({ className: "chat-turn turn-system", html: `<span class="system-pill">${escapeHtml(turn.text)}</span>` });
+        }
+      });
+      reconcileChatRows(box, rows);
+
+      if (isNearBottom || prevScrollTop === 0) {
+        box.scrollTop = box.scrollHeight;
+      } else {
+        box.scrollTop = prevScrollTop;
+      }
+    }
+
+    // 把 `Name: args` 形式的工具呼叫拆成精簡的工具名與目標，讓手機上一行讀得完：
+    // 路徑只留最後兩層、Bash 只留第一行並去掉開頭的 `cd … &&`、MCP 工具去掉 `mcp__伺服器__` 前綴。
+    function toolCallParts(call) {
+      const s = String(call || "");
+      const i = s.indexOf(":");
+      let name = (i > 0 ? s.slice(0, i) : s).trim();
+      let args = (i > 0 ? s.slice(i + 1) : "").trim();
+      const mcp = name.match(/^mcp__[^_]+(?:_[^_]+)*?__(.+)$/);
+      if (mcp) name = mcp[1];
+      let target = args.split("\n")[0];
+      if (/^(\/|~\/)[^\s]*$/.test(target)) {
+        target = target.split("/").filter(Boolean).slice(-2).join("/");
+      } else if (/^bash$/i.test(name)) {
+        target = target.replace(/^cd\s+\S+\s*&&\s*/, "");
+      }
+      return { name: name || "tool", target, full: args };
+    }
+
+    function renderToolList(tools) {
+      const counts = {};
+      tools.forEach(t => { const n = toolCallParts(t.call).name; counts[n] = (counts[n] || 0) + 1; });
+      const countText = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([n, c]) => `${n} ${c}`).join(" · ");
+      const items = tools.map(t => {
+        const p = toolCallParts(t.call);
+        const res = t.result ? t.result.replace(/^[✓✗]\s*/, "") : "";
+        const st = !t.result ? ["run", "…"] : (t.result.startsWith("✗") ? ["err", "✗"] : ["ok", "✓"]);
+        const out = res && res !== "ok" && res !== "fail"
+          ? `<div class="tool-out ${st[0]}">${escapeHtml(res)}</div>` : "";
+        return `<details class="tool-item"><summary><span class="tool-st ${st[0]}">${st[1]}</span>` +
+          `<span class="tool-name">${escapeHtml(p.name)}</span>` +
+          `<span class="tool-target">${escapeHtml(p.target)}</span></summary>` +
+          `<div class="tool-detail"><div class="tool-full">${escapeHtml(p.full || p.name)}</div>${out}</div></details>`;
+      }).join("");
+      return `<details class="turn-collapse"><summary>工具呼叫 (${tools.length} 次) ` +
+        `<span class="tool-sum-counts">${escapeHtml(countText)}</span> ▾</summary>` +
+        `<div class="collapse-content tool-run-list">${items}</div></details>`;
+    }
+
+    function renderMarkdown(text) {
+      if (!text) return "";
+      let src = String(text);
+
+      const codeBlocks = [];
+      const inlineCodes = [];
+
+      // 1. 抽離圍籬程式碼區塊
+      src = src.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push({ lang: lang || "text", code: code.replace(/\n$/, "") });
+        return `%%%CODE_BLOCK_${idx}%%%`;
+      });
+
+      // 1b. 抽離表格 (GFM：表頭列 + 分隔列 + 資料列)；儲存格內容各自以行內 Markdown 渲染。
+      const tables = [];
+      {
+        const lines = src.split("\n");
+        const outLines = [];
+        let i = 0;
+        while (i < lines.length) {
+          if (isMdTableRow(lines[i]) && i + 1 < lines.length && isMdTableSep(lines[i + 1])) {
+            const header = splitMdTableRow(lines[i]);
+            const aligns = splitMdTableRow(lines[i + 1]).map(c => {
+              const l = c.startsWith(":"), r = c.endsWith(":");
+              return l && r ? "center" : (r ? "right" : "left");
+            });
+            const body = [];
+            let j = i + 2;
+            while (j < lines.length && isMdTableRow(lines[j])) {
+              body.push(splitMdTableRow(lines[j]));
+              j++;
+            }
+            const cell = (tag, text, c) =>
+              `<${tag} style="text-align:${aligns[c] || "left"}">${renderMarkdownInline(text)}</${tag}>`;
+            let html = `<div class="chat-table-wrap"><table class="chat-table"><thead><tr>`;
+            header.forEach((h, c) => { html += cell("th", h, c); });
+            html += `</tr></thead><tbody>`;
+            body.forEach(row => {
+              html += "<tr>";
+              header.forEach((_, c) => { html += cell("td", row[c] || "", c); });
+              html += "</tr>";
+            });
+            html += `</tbody></table></div>`;
+            outLines.push(`%%%TABLE_${tables.length}%%%`);
+            tables.push(html);
+            i = j;
+          } else {
+            outLines.push(lines[i]);
+            i++;
+          }
+        }
+        src = outLines.join("\n");
+      }
+
+      // 2. 抽離行內程式碼
+      src = src.replace(/`([^`\n]+)`/g, (match, code) => {
+        const idx = inlineCodes.length;
+        inlineCodes.push(code);
+        return `%%%INLINE_CODE_${idx}%%%`;
+      });
+
+      // 3. HTML 特殊符號轉義
+      let safe = escapeHtml(src);
+
+      // 4. 解析 Markdown 連結 [label](url)
+      safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, url) => {
+        const trimmedUrl = url.trim();
+        if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+          return `<a href="${trimmedUrl}" target="_blank" rel="noopener" class="chat-web-link">${label} ↗</a>`;
+        } else if (trimmedUrl.startsWith("file://")) {
+          const rawPath = trimmedUrl.replace(/^file:\/\//, "");
+          return `<span class="chat-file-pill" onclick="openFileActionSheet('${escapeHtml(rawPath)}', '${escapeHtml(label)}')"><svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>${label}</span></span>`;
+        } else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(trimmedUrl)) {
+          return label;
+        } else {
+          return `<a href="${trimmedUrl}" class="chat-web-link">${label}</a>`;
+        }
+      });
+
+      // 5. 自動識別獨立網址
+      safe = safe.replace(/(^|[^"=])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener" class="chat-web-link">$2 ↗</a>');
+
+      // 6. 標題與分隔線
+      safe = safe.replace(/^### (.*)$/gm, '<h3 class="chat-h3">$1</h3>');
+      safe = safe.replace(/^## (.*)$/gm, '<h2 class="chat-h2">$1</h2>');
+      safe = safe.replace(/^# (.*)$/gm, '<h1 class="chat-h1">$1</h1>');
+      safe = safe.replace(/^---+$/gm, '<hr class="chat-hr">');
+
+      // 7. 引言
+      safe = safe.replace(/^> (.*)$/gm, '<blockquote class="chat-quote">$1</blockquote>');
+
+      // 8. 粗體、斜體、刪除線
+      safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      safe = safe.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      safe = safe.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
+      // 9. 清單
+      safe = safe.replace(/^[\*\-] (.*)$/gm, '<li class="chat-li-bullet">$1</li>');
+      safe = safe.replace(/(<li class="chat-li-bullet">[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+      safe = safe.replace(/<\/ul>\s*<ul>/g, '');
+
+      safe = safe.replace(/^\d+\. (.*)$/gm, '<li class="chat-li-num">$1</li>');
+      safe = safe.replace(/(<li class="chat-li-num">[\s\S]*?<\/li>)/g, '<ol>$1</ol>');
+      safe = safe.replace(/<\/ol>\s*<ol>/g, '');
+
+      // 10. 段落與換行
+      safe = safe.replace(/\n\n+/g, '</p><p>');
+      safe = safe.replace(/\n/g, '<br>');
+
+      // 11. 還原行內程式碼
+      inlineCodes.forEach((code, i) => {
+        safe = safe.replace(`%%%INLINE_CODE_${i}%%%`, `<code class="inline-code">${escapeHtml(code)}</code>`);
+      });
+
+      // 12. 還原圍籬程式碼區塊
+      codeBlocks.forEach((b, i) => {
+        const blockHtml = `
+          <div class="code-block-wrap">
+            <div class="code-block-header">
+              <span class="code-lang-tag">${escapeHtml(b.lang)}</span>
+              <button class="code-copy-btn" onclick="copyCode(this)">複製</button>
+            </div>
+            <pre><code>${escapeHtml(b.code)}</code></pre>
+          </div>
+        `;
+        safe = safe.replace(`%%%CODE_BLOCK_${i}%%%`, blockHtml);
+      });
+
+      // 13. 還原表格 (連同前後的換行一起替換，避免多出空白行)
+      tables.forEach((html, i) => {
+        safe = safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), html);
+      });
+
+      return `<p>${safe}</p>`;
+    }
+
+    // 表格儲存格：只處理行內語法 (程式碼、連結、粗斜體、刪除線)。
+    function renderMarkdownInline(text) {
+      const html = renderMarkdown(String(text).replace(/\\\|/g, "|"));
+      return html.replace(/^<p>/, "").replace(/<\/p>$/, "");
+    }
+
+    function isMdTableRow(line) {
+      const t = String(line).trim();
+      return t.length >= 2 && t.includes("|");
+    }
+
+    function isMdTableSep(line) {
+      const cells = splitMdTableRow(line);
+      return cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c.trim()));
+    }
+
+    // 依 `|` 切儲存格；行內程式碼中的 `|` 與跳脫的 `\|` 不切。
+    function splitMdTableRow(line) {
+      let t = String(line).trim();
+      if (t.startsWith("|")) t = t.slice(1);
+      if (t.endsWith("|") && !t.endsWith("\\|")) t = t.slice(0, -1);
+      const cells = [];
+      let cur = "", inCode = false, escaped = false;
+      for (const ch of t) {
+        if (escaped) { cur += ch; escaped = false; continue; }
+        if (ch === "\\") { cur += ch; escaped = true; continue; }
+        if (ch === "`") { inCode = !inCode; cur += ch; continue; }
+        if (ch === "|" && !inCode) { cells.push(cur.trim()); cur = ""; continue; }
+        cur += ch;
+      }
+      cells.push(cur.trim());
+      return cells;
+    }
+
+    const renderSimpleMarkdown = renderMarkdown;
+
+    function copyCode(btn) {
+      const wrap = btn.closest(".code-block-wrap");
+      const codeEl = wrap ? wrap.querySelector("pre code") : null;
+      if (codeEl) {
+        navigator.clipboard.writeText(codeEl.innerText).then(() => {
+          showToast("已複製程式碼至剪貼簿");
+          btn.innerText = "已複製！";
+          setTimeout(() => { btn.innerText = "複製"; }, 2000);
+        });
+      }
+    }
+
+    let currentFileActionPath = "";
+    let currentLoadedFileText = "";
+
+    function openFileActionSheet(path, label) {
+      currentFileActionPath = path;
+      currentLoadedFileText = "";
+      document.getElementById("file-action-label").innerText = label || "檔案資訊";
+      document.getElementById("file-action-path").innerText = path;
+
+      const previewInfo = document.getElementById("file-preview-info");
+      const previewBody = document.getElementById("file-preview-body");
+      const copyContentBtn = document.getElementById("btn-copy-file-content");
+      const openRawBtn = document.getElementById("btn-open-raw-file");
+
+      previewInfo.innerText = "讀取中…";
+      previewBody.innerHTML = `<div style="color:var(--text-dim); font-size:12px; text-align:center; padding:30px 0;">正在載入檔案內容…</div>`;
+      if (copyContentBtn) copyContentBtn.style.display = "none";
+      if (openRawBtn) openRawBtn.style.display = "none";
+
+      openSheet("sheet-file-action");
+
+      // 解析行號錨點 (例如 #L10-L25 或 #L42)
+      let cleanPath = path;
+      let lineAnchor = null;
+      if (cleanPath.includes("#")) {
+        const parts = cleanPath.split("#");
+        cleanPath = parts[0];
+        lineAnchor = parts[1];
+      }
+
+      const fileUrl = `/file?path=${encodeURIComponent(cleanPath)}&session=${encodeURIComponent(activeSession || "")}&token=${encodeURIComponent(token || "")}`;
+      if (openRawBtn) {
+        openRawBtn.href = fileUrl;
+        openRawBtn.style.display = "inline-flex";
+      }
+
+      const ext = cleanPath.split(".").pop().toLowerCase();
+      const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "avif"].includes(ext);
+
+      if (isImg) {
+        previewInfo.innerText = `圖片預覽 (${ext.toUpperCase()})`;
+        previewBody.innerHTML = `
+          <div style="display:flex; justify-content:center; align-items:center; min-height:180px; background:#08090d; border-radius:6px; padding:10px;">
+            <img src="${fileUrl}" alt="${escapeHtml(label)}" style="max-width:100%; max-height:42vh; object-fit:contain; border-radius:6px; box-shadow:0 2px 12px rgba(0,0,0,0.5);" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'color:var(--red); font-size:12px; padding:20px; text-align:center;\\'>⚠️ 載入圖片失敗 (可能路徑不存在或無權限)</div>';">
+          </div>
+        `;
+        return;
+      }
+
+      fetch(fileUrl)
+        .then(async resp => {
+          if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(errText || `HTTP ${resp.status}`);
+          }
+          const contentType = resp.headers.get("content-type") || "";
+          const contentLength = resp.headers.get("content-length");
+          const sizeStr = contentLength ? formatBytes(parseInt(contentLength)) : "";
+
+          if (contentType.startsWith("image/")) {
+            previewInfo.innerText = `圖片預覽 (${sizeStr})`;
+            previewBody.innerHTML = `
+              <div style="display:flex; justify-content:center; align-items:center; min-height:180px; background:#08090d; border-radius:6px; padding:10px;">
+                <img src="${fileUrl}" alt="${escapeHtml(label)}" style="max-width:100%; max-height:42vh; object-fit:contain; border-radius:6px;">
+              </div>
+            `;
+          } else if (contentType.startsWith("text/") || contentType.includes("json") || contentType.includes("yaml") || contentType.includes("javascript")) {
+            const text = await resp.text();
+            currentLoadedFileText = text;
+            renderTextFilePreview(text, lineAnchor, sizeStr, ext);
+          } else {
+            previewInfo.innerText = `二進位檔案 (${sizeStr})`;
+            previewBody.innerHTML = `
+              <div style="text-align:center; padding:30px 10px; color:var(--text-dim); font-size:12px;">
+                <div style="font-size:32px; margin-bottom:8px;">📦</div>
+                <div style="color:var(--text); font-weight:500; margin-bottom:4px;">非純文字或不支援內嵌預覽之格式</div>
+                <div style="font-size:11px; margin-bottom:12px;">MIME: ${escapeHtml(contentType)} • 大小: ${sizeStr}</div>
+                <a href="${fileUrl}" target="_blank" rel="noopener" class="btn-pill btn-always" style="display:inline-flex; text-decoration:none; padding:6px 14px; font-size:12px;">在新分頁開啟或下載</a>
+              </div>
+            `;
+          }
+        })
+        .catch(err => {
+          previewInfo.innerText = "讀取失敗";
+          previewBody.innerHTML = `<div style="color:var(--red); font-size:12px; padding:30px 10px; text-align:center;">⚠️ ${escapeHtml(err.message)}</div>`;
+        });
+    }
+
+    function renderTextFilePreview(text, lineAnchor, sizeStr, ext) {
+      const previewInfo = document.getElementById("file-preview-info");
+      const previewBody = document.getElementById("file-preview-body");
+      const copyContentBtn = document.getElementById("btn-copy-file-content");
+
+      const lines = text.split("\n");
+      previewInfo.innerText = `${lines.length} 行${sizeStr ? " • " + sizeStr : ""}${ext ? " • " + ext : ""}`;
+      if (copyContentBtn) copyContentBtn.style.display = "inline-flex";
+
+      let startLine = null;
+      let endLine = null;
+      if (lineAnchor) {
+        const m = lineAnchor.match(/L(\d+)(?:-L?(\d+))?/i);
+        if (m) {
+          startLine = parseInt(m[1]);
+          endLine = m[2] ? parseInt(m[2]) : startLine;
+        }
+      }
+
+      let html = `<div class="file-code-table">`;
+      for (let i = 0; i < lines.length; i++) {
+        const lineNum = i + 1;
+        const isHighlighted = (startLine !== null && lineNum >= startLine && lineNum <= endLine);
+        html += `<div class="file-code-row ${isHighlighted ? 'highlight' : ''}" id="file-line-${lineNum}">` +
+          `<span class="file-code-lineno">${lineNum}</span>` +
+          `<span class="file-code-text">${escapeHtml(lines[i]) || ' '}</span>` +
+        `</div>`;
+      }
+      html += `</div>`;
+      previewBody.innerHTML = html;
+
+      if (startLine !== null) {
+        setTimeout(() => {
+          const target = document.getElementById(`file-line-${startLine}`);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 100);
+      }
+    }
+
+    function copyFileContent() {
+      if (currentLoadedFileText) {
+        navigator.clipboard.writeText(currentLoadedFileText).then(() => {
+          showToast("已複製檔案內容至剪貼簿");
+        });
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (isNaN(bytes) || bytes === 0) return "0 B";
+      const k = 1024;
+      const sizes = ["B", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
+    }
+
+    function copyFileActionPath() {
+      if (currentFileActionPath) {
+        navigator.clipboard.writeText(currentFileActionPath).then(() => {
+          showToast("已複製路徑至剪貼簿");
+        });
+      }
+    }
+
+    function viewFileDiff() {
+      closeSheet("sheet-file-action");
+      switchNavTab("review");
+      showToast("已切換至審核視圖");
+    }
+
+    function escapeHtml(str) {
+      return (str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function updateAllViews() {
+      if (!state.sessions[activeSession] || (!inScope(state.sessions[activeSession]) && pickSession(curScope()))) {
+        activeSession = pickSession(curScope());
+      }
+
+      // 1. 頂部狀態列 (含專案識別與模型資訊)
+      const current = activeSession ? state.sessions[activeSession] : null;
+      const labelEl = document.getElementById("header-label");
+      const projectEl = document.getElementById("header-project");
+      const modelEl = document.getElementById("header-model");
+      const statusBadge = document.getElementById("header-status-badge");
+
+      if (labelEl) labelEl.innerText = current ? (current.label || activeSession) : "ertangle";
+      if (projectEl) {
+        const sc = curScope();
+        const pe = getAllProjects().find(x => x.root === sc);
+        projectEl.innerText = (sc === "all" ? "全部專案" : (pe ? pe.name : "專案")) + " ▾";
+      }
+
+      if (current) {
+        const shortModel = shortenModelName(current.model);
+        if (modelEl) modelEl.innerText = shortModel || current.kind || "agent";
+
+        const st = current.status || "idle";
+        if (statusBadge) {
+          statusBadge.innerText = formatStatus(st);
+          if (st === "busy" || st === "running" || st === "working") {
+            statusBadge.className = "header-status-tag running";
+          } else if (st === "waiting_approval" || st === "waiting") {
+            statusBadge.className = "header-status-tag waiting";
+          } else {
+            statusBadge.className = "header-status-tag";
+          }
+        }
+      } else {
+        if (modelEl) modelEl.innerText = "ready";
+        if (statusBadge) {
+          statusBadge.innerText = "閒置";
+          statusBadge.className = "header-status-tag";
+        }
+      }
+
+      let totalCost = 0;
+      for (const id in state.sessions) {
+        const s = state.sessions[id];
+        if (s.cost && s.cost.usd) totalCost += s.cost.usd;
+      }
+      const costEl = document.getElementById("header-cost");
+      if (costEl) {
+        if (totalCost > 0) {
+          costEl.style.display = "block";
+          costEl.innerText = `$${totalCost.toFixed(2)}`;
+        } else {
+          costEl.style.display = "none";
+        }
+      }
+
+      // 2. 審查橫幅
+      const pendingKeys = Object.keys(state.pending_permissions || {}).sort((a, b) => {
+        const sa = inScope(state.sessions[state.pending_permissions[a].session]) ? 0 : 1;
+        const sb = inScope(state.sessions[state.pending_permissions[b].session]) ? 0 : 1;
+        return sa - sb;
+      });
+      const urgentBanner = document.getElementById("urgent-approval-banner");
+      const navBadge = document.getElementById("nav-review-badge");
+      const reviewSlot = document.getElementById("review-approval-slot");
+
+      if (pendingKeys.length > 0) {
+        const req = state.pending_permissions[pendingKeys[0]];
+        pendingApprovalReq = req;
+        urgentBanner.style.display = "block";
+        navBadge.style.display = "block";
+        document.getElementById("urgent-session-id").innerText = req.session;
+        document.getElementById("urgent-detail").innerText = `${req.title}：${req.detail}`;
+
+        reviewSlot.innerHTML = `
+          <div style="background:#221804; border:1px solid var(--yellow); padding:10px 12px; border-radius:8px;">
+            <div style="color:var(--yellow); font-weight:600; margin-bottom:4px;">${escapeHtml(req.title)}</div>
+            <div style="font-family:var(--font-mono); font-size:12px; margin-bottom:8px;">${escapeHtml(req.detail)}</div>
+            <div class="btn-row">
+              <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
+              <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
+              <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
+            </div>
+          </div>
+        `;
+      } else {
+        urgentBanner.style.display = "none";
+        navBadge.style.display = "none";
+        pendingApprovalReq = null;
+        reviewSlot.innerHTML = `<span style="color:var(--text-dim);">目前無等待核准的操作。</span>`;
+      }
+
+      // 3. 逐字稿重繪
+      if (currentTab === "chat") {
+        renderCurrentChatTranscript();
+      }
+
+      // 4. Session 狀態與接續提示
+      const resumeStrip = document.getElementById("resume-strip");
+      const cancelBtn = document.getElementById("btn-cancel");
+      const queuePill = document.getElementById("queue-count-pill");
+
+      if (current) {
+        const st = (current.status || "").toLowerCase();
+        if (st === "failed" || st === "exited") {
+          resumeStrip.style.display = "flex";
+          cancelBtn.style.display = "none";
+        } else {
+          resumeStrip.style.display = "none";
+          cancelBtn.style.display = (st === "busy") ? "flex" : "none";
+        }
+
+        const qItems = (state.queues && state.queues[activeSession]) ? state.queues[activeSession] : [];
+        if (qItems.length > 0) {
+          queuePill.style.display = "block";
+          queuePill.innerText = `${qItems.length} 則排隊中`;
+        } else {
+          queuePill.style.display = "none";
+        }
+      } else {
+        resumeStrip.style.display = "none";
+        cancelBtn.style.display = "none";
+        queuePill.style.display = "none";
+      }
+
+      // 5. 任務板渲染
+      renderTasksList();
+
+      // 6. Session 列表與專案篩選列渲染
+      renderSessionsList();
+
+      // 7. 額度資訊
+      renderQuota();
+
+      // 8. 總覽
+      if (currentTab === "overview") renderOverview();
+    }
+
+    function filterTranscript() {
+      const query = document.getElementById("search-keyword").value.toLowerCase().trim();
+      const turns = document.querySelectorAll("#chat-transcript .chat-turn");
+      turns.forEach(t => {
+        if (!query || t.innerText.toLowerCase().includes(query)) {
+          t.style.display = "";
+        } else {
+          t.style.display = "none";
+        }
+      });
+    }
+
+    function toggleSearchBar() {
+      const wrap = document.getElementById("search-bar-wrap");
+      const isVisible = wrap.style.display === "flex";
+      wrap.style.display = isVisible ? "none" : "flex";
+      if (!isVisible) {
+        document.getElementById("search-keyword").focus();
+      } else {
+        document.getElementById("search-keyword").value = "";
+        filterTranscript();
+      }
+    }
+
+    function renderTasksList() {
+      const container = document.getElementById("tasks-list");
+      container.onclick = ev => {
+        const el = ev.target.closest("[data-task]");
+        if (el) cycleTaskStatus(el.dataset.task, el.dataset.st);
+      };
+      container.innerHTML = "";
+      const taskKeys = Object.keys(state.tasks || {}).filter(id => {
+        if (curScope() === "all") return true;
+        const t = state.tasks[id];
+        return inScope(state.sessions[t.assignee]) || inScope(state.sessions[t.created_by]);
+      });
+      if (taskKeys.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:var(--text-dim); margin-top:20px;">目前尚無協作任務</div>`;
+        return;
+      }
+
+      taskKeys.forEach(id => {
+        const t = state.tasks[id];
+        const st = (t.status || "todo").toLowerCase();
+        if (taskFilter !== "all" && st !== taskFilter) return;
+
+        const card = document.createElement("div");
+        card.className = "task-card";
+        const badgeClass = st === "done" ? "st-done" : (st === "doing" ? "st-doing" : "st-todo");
+        card.innerHTML = `
+          <div class="task-top">
+            <span class="task-title">${escapeHtml(t.title)}</span>
+            <span class="task-badge ${badgeClass}" data-task="${escapeHtml(t.id)}" data-st="${escapeHtml(t.status)}">${escapeHtml(t.status)}</span>
+          </div>
+          ${t.detail ? `<div style="font-size:12px; color:var(--text-dim);">${escapeHtml(t.detail)}</div>` : ""}
+          <div style="font-size:10px; color:#666;">指派：${escapeHtml(t.assignee ? ((state.sessions[t.assignee] || {}).label || t.assignee) : "未指派")}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function setTaskFilter(filter, el) {
+      taskFilter = filter;
+      document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+      el.classList.add("active");
+      renderTasksList();
+    }
+
+    function renderSessionsList() {
+      const container = document.getElementById("sessions-list");
+      container.innerHTML = "";
+
+      const sids = Object.keys(state.sessions);
+      const projects = getAllProjects();
+      const cur = curScope();
+
+      // 專案篩選列 (即全域專案範圍)
+      const pFilterBar = document.getElementById("session-project-filter-bar");
+      pFilterBar.innerHTML = `<div class="filter-chip ${cur === "all" ? "active" : ""}" data-root="all">全部專案 (${sids.length})</div>` +
+        projects.map(p => `<div class="filter-chip ${cur === p.root ? "active" : ""}" data-root="${escapeHtml(p.root)}">${escapeHtml(p.name)} (${p.count})</div>`).join("");
+      pFilterBar.onclick = ev => {
+        const el = ev.target.closest("[data-root]");
+        if (el) setProjectScope(el.dataset.root);
+      };
+      container.onclick = ev => {
+        const act = ev.target.closest("[data-act]");
+        const card = ev.target.closest("[data-sid]");
+        if (!card) return;
+        if (act && act.dataset.act === "settings") openSessionSettings(card.dataset.sid);
+        else if (act && act.dataset.act === "resume") {
+          if (ws) {
+            ws.send(JSON.stringify({ op: "resume", session: card.dataset.sid }));
+            showToast("已發送接續請求…");
+          }
+        }
+        else selectSession(card.dataset.sid);
+      };
+
+      // 更新副標題計數
+      const countSub = document.getElementById("sessions-count-sub");
+      if (countSub) {
+        countSub.innerText = `共 ${sids.length} 個 Session • 跨 ${projects.length} 個專案`;
+      }
+
+      if (sids.length === 0 && Object.keys(state.archived_sessions || {}).length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; color:var(--text-dim); padding:32px 16px;">
+            <div style="font-size:14px; margin-bottom:8px;">目前尚無任何 Session</div>
+            <button class="btn-pill btn-allow" onclick="openNewSessionSheet()">立即建立新 Session</button>
+          </div>
+        `;
+        return;
+      }
+
+      sids.forEach(id => {
+        const s = state.sessions[id];
+        const pName = getProjectName(s);
+        if (!inScope(s)) return;
+
+        const isActive = (id === activeSession);
+        const shortModel = shortenModelName(s.model) || s.kind || "agent";
+        const st = s.status || "idle";
+        const statusText = formatStatus(st);
+        let statusClass = "header-status-tag";
+        if (st === "busy" || st === "running" || st === "working") statusClass = "header-status-tag running";
+        else if (st === "waiting_approval" || st === "waiting") statusClass = "header-status-tag waiting";
+
+        const costStr = s.cost && s.cost.usd ? `$${s.cost.usd.toFixed(2)}` : "$0.00";
+
+        const item = document.createElement("div");
+        item.className = `session-card ${isActive ? "active" : ""}`;
+        item.dataset.sid = id;
+        item.innerHTML = `
+          <div class="session-card-header">
+            <div class="session-card-context">
+              <span class="session-card-project">${escapeHtml(pName)}</span>
+              <span class="session-card-dot">•</span>
+              <span class="session-card-model">${escapeHtml(shortModel)}</span>
+            </div>
+            <span class="${statusClass}">${escapeHtml(statusText)}</span>
+          </div>
+          <div class="session-card-body">
+            <span class="session-card-title">${escapeHtml(s.label || id)}</span>
+          </div>
+          <div class="session-card-footer">
+            <div class="session-card-stats">
+              <span class="session-kind-badge">${escapeHtml(s.kind || "agent")}</span>
+              ${costStr !== "$0.00" ? `<span class="session-cost-badge">${costStr}</span>` : ""}
+              ${isActive ? `<span class="session-active-indicator">● 目前使用中</span>` : ""}
+            </div>
+            <div class="session-card-actions" onclick="event.stopPropagation()">
+              <button class="session-settings-btn" data-act="settings" title="Session 設定">
+                <svg class="nav-svg" style="width:13px; height:13px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                <span>設定</span>
+              </button>
+              <button class="session-open-btn" data-act="open">
+                <span>進入對話</span>
+                <svg class="nav-svg" style="width:12px; height:12px;" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+
+      const archIds = Object.keys(state.archived_sessions || {}).filter(id => {
+        const s = state.archived_sessions[id];
+        return s && s.native_id && inScope(s);
+      }).sort((a, b) => ((state.archived_sessions[b] || {}).created_ms || 0) - ((state.archived_sessions[a] || {}).created_ms || 0));
+
+      if (archIds.length > 0) {
+        const details = document.createElement("details");
+        details.style.cssText = "margin-top:14px; border-top:1px solid var(--border); padding-top:10px;";
+        const sum = document.createElement("summary");
+        sum.style.cssText = "cursor:pointer; font-size:12px; color:var(--text-dim); padding:4px 2px; user-select:none;";
+        sum.innerText = `歷史封存 Session (${archIds.length} 個可接續)`;
+        details.appendChild(sum);
+        archIds.forEach(id => {
+          const s = state.archived_sessions[id];
+          const pName = getProjectName(s);
+          const shortModel = shortenModelName(s.model) || s.kind || "agent";
+          const item = document.createElement("div");
+          item.className = "session-card";
+          item.style.marginTop = "8px";
+          item.style.opacity = "0.85";
+          item.dataset.sid = id;
+          item.innerHTML = `
+            <div class="session-card-header">
+              <div class="session-card-context">
+                <span class="session-card-project">${escapeHtml(pName)}</span>
+                <span class="session-card-dot">•</span>
+                <span class="session-card-model">${escapeHtml(shortModel)}</span>
+              </div>
+              <span class="header-status-tag">已封存</span>
+            </div>
+            <div class="session-card-body">
+              <span class="session-card-title">${escapeHtml(s.label || id)}</span>
+              ${s.status_note ? `<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">${escapeHtml(s.status_note)}</div>` : ""}
+            </div>
+            <div class="session-card-footer">
+              <div class="session-card-stats">
+                <span class="session-kind-badge">${escapeHtml(s.kind || "agent")}</span>
+              </div>
+              <div class="session-card-actions" onclick="event.stopPropagation()">
+                <button class="session-open-btn" data-act="resume" style="background:var(--yellow); color:#000; border:none;">
+                  <span>接續對話 (Resume)</span>
+                </button>
+              </div>
+            </div>
+          `;
+          details.appendChild(item);
+        });
+        container.appendChild(details);
+      }
+    }
+
+    function formatQuotaDuration(ms) {
+      if (ms <= 0) return "已重置";
+      const mins = Math.floor(ms / 60000);
+      if (mins < 1) return "<1m";
+      if (mins < 60) return `${mins}m`;
+      if (mins < 1440) return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}m`;
+      return `${Math.floor(mins / 1440)}d${Math.floor((mins % 1440) / 60)}h`;
+    }
+
+    function formatQuotaLabel(agent, name) {
+      if (agent === "antigravity") {
+        const map = {
+          "5h": "Gemini (5h)",
+          "7d": "Gemini (7d)",
+          "argon-5h": "Gemini 4 Argon (5h)",
+          "argon-7d": "Gemini 4 Argon (7d)",
+          "3p-5h": "Claude / GPT (5h)",
+          "3p-7d": "Claude / GPT (7d)"
+        };
+        if (map[name]) return map[name];
+      }
+      return name;
+    }
+
+    function renderQuota() {
+      const qc = document.getElementById("quota-container");
+      if (!state.quotas || Object.keys(state.quotas).length === 0) {
+        qc.style.display = "none";
+        return;
+      }
+      qc.style.display = "block";
+      qc.innerHTML = "";
+      const now = Date.now();
+      for (const k in state.quotas) {
+        const q = state.quotas[k];
+        const card = document.createElement("div");
+        card.className = "quota-card";
+        const badge = q.reached
+          ? `<span style="color:var(--red);">✗ 額度已滿</span>`
+          : q.warning
+            ? `<span style="color:var(--yellow);">⚠ 接近上限</span>`
+            : `<span style="color:var(--text-dim); font-weight:400;">正常</span>`;
+        const rows = (q.windows || []).map(w => {
+          const resetPast = w.resets_at_ms != null && w.resets_at_ms <= now;
+          const rem = resetPast ? 100 : Math.max(0, Math.min(100, 100 - (w.used_percent || 0)));
+          const color = rem <= 10 ? "var(--red)" : rem <= 30 ? "var(--yellow)" : "var(--green, #4ade80)";
+          const resetText = w.resets_at_ms == null
+            ? ""
+            : resetPast
+              ? "已重置"
+              : `${formatQuotaDuration(w.resets_at_ms - now)} 後重置`;
+          return `
+            <div style="margin-top:6px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:3px;">
+                <span>${escapeHtml(formatQuotaLabel(q.agent || k, w.name))}</span>
+                <span><strong style="color:${color};">剩 ${Math.round(rem)}%</strong>${resetText ? ` <span style="color:var(--text-dim);">· ${escapeHtml(resetText)}</span>` : ""}</span>
+              </div>
+              <div style="height:5px; background:#1e293b; border-radius:999px; overflow:hidden;">
+                <div style="width:${rem.toFixed(1)}%; height:100%; background:${color}; border-radius:999px;"></div>
+              </div>
+            </div>
+          `;
+        }).join("");
+        card.innerHTML = `
+          <div class="quota-title">
+            <span>${escapeHtml(q.agent || k)}</span>
+            ${badge}
+          </div>
+          ${rows || `<div style="color:var(--text-dim); font-size:11px;">尚無視窗明細</div>`}
+        `;
+        qc.appendChild(card);
+      }
+    }
+
+    // 核心切換：切換 Session 並立即更新頂部狀態與對話
+    function selectSession(id) {
+      if (!state.sessions[id]) return;
+      activeSession = id;
+      closeSheet("sheet-session-picker");
+      switchNavTab("chat");
+      updateAllViews();
+      const s = state.sessions[id];
+      showToast(`已切換至 ${s.label || id}`);
+    }
+
+    // 頂部點選開啟專屬 Session 切換抽屜
+    function openSessionPickerSheet() {
+      const container = document.getElementById("picker-sessions-list");
+      container.innerHTML = "";
+      const sids = scopedIds();
+
+      if (sids.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:24px 16px;">目前無任何可用 Session</div>`;
+      } else {
+        sids.forEach(id => {
+          const s = state.sessions[id];
+          const pName = getProjectName(s);
+          const isActive = (id === activeSession);
+          const shortModel = shortenModelName(s.model) || s.kind || "agent";
+          const st = s.status || "idle";
+          const statusText = formatStatus(st);
+          let statusClass = "header-status-tag";
+          if (st === "busy" || st === "running" || st === "working") statusClass = "header-status-tag running";
+          else if (st === "waiting_approval" || st === "waiting") statusClass = "header-status-tag waiting";
+
+          const card = document.createElement("div");
+          card.className = `session-card ${isActive ? "active" : ""}`;
+          card.innerHTML = `
+            <div class="session-card-header">
+              <div class="session-card-context">
+                <span class="session-card-project">${escapeHtml(pName)}</span>
+                <span class="session-card-dot">•</span>
+                <span class="session-card-model">${escapeHtml(shortModel)}</span>
+              </div>
+              <span class="${statusClass}">${escapeHtml(statusText)}</span>
+            </div>
+            <div class="session-card-body">
+              <span class="session-card-title">${escapeHtml(s.label || id)}</span>
+            </div>
+            <div class="session-card-footer" style="padding-top:4px;">
+              <span class="session-kind-badge">${escapeHtml(s.kind || "agent")}</span>
+              ${isActive ? `<span class="session-active-indicator">✓ 目前使用中</span>` : `<span style="font-size:11px; color:var(--text-dim);">點選立即切換</span>`}
+            </div>
+          `;
+          card.onclick = () => selectSession(id);
+          container.appendChild(card);
+        });
+      }
+
+      openSheet("sheet-session-picker");
+    }
+
+    function fmtElapsed(ms) {
+      const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+      return sec >= 60 ? `${Math.floor(sec / 60)}m${sec % 60}s` : `${sec}s`;
+    }
+    function targetText(to) {
+      if (!to) return "?";
+      if (typeof to === "string") return "全體";
+      if (to.direct != null) return (state.sessions[to.direct] || {}).label || to.direct;
+      if (to.channel != null) return "#" + to.channel;
+      return "?";
+    }
+    function lastMessageFor(id) {
+      const lab = (state.sessions[id] || {}).label;
+      const ms = state.messages || [];
+      for (let i = ms.length - 1; i >= 0; i--) {
+        const m = ms[i];
+        const d = m.to && typeof m.to === "object" ? m.to.direct : null;
+        if (m.from === id || (d != null && (d === id || d === lab))) return m;
+      }
+      return null;
+    }
+    function ovCard(id, depth, kids) {
+      const s = state.sessions[id];
+      const st = s.status || "idle";
+      const role = typeof s.role === "string" ? s.role : (s.role ? Object.keys(s.role)[0] : "worker");
+      const stCls = (st === "busy") ? " running" : (st === "waiting_approval" ? " waiting" : "");
+      let h = `<div class="ov-card ${id === activeSession ? "active" : ""}" data-sid="${escapeHtml(id)}">
+        <div class="ov-head"><span class="ov-title">${escapeHtml(s.label || id)}</span><span class="ov-role">${escapeHtml(role)}</span><span class="header-status-tag${stCls}">${escapeHtml(formatStatus(st))}</span></div>`;
+      if (s.status_note) h += `<div class="ov-dim">${escapeHtml(s.status_note)}</div>`;
+      (s.active_tools || []).forEach(t => {
+        h += `<div class="ov-tool">${t.is_subagent ? "🤖 子代理" : "⚙"} ${escapeHtml(t.name)} • ${fmtElapsed(t.started_ms)}${t.summary ? ` <span class="ov-dim">${escapeHtml(t.summary)}</span>` : ""}</div>`;
+      });
+      const bg = s.bg_procs || [];
+      if (bg.length) h += `<div class="ov-dim">背景處理程序 ${bg.length}：${escapeHtml(bg.slice(0, 3).map(b => b.name).join("、"))}</div>`;
+      Object.values(state.tasks || {}).filter(t => t.assignee === id && (t.status === "doing" || t.status === "blocked")).forEach(t => {
+        h += `<div>${t.status === "blocked" ? "⛔" : "▶"} ${escapeHtml(t.title)}</div>`;
+      });
+      const m = lastMessageFor(id);
+      if (m) h += `<div class="ov-dim">✉ ${escapeHtml((state.sessions[m.from] || {}).label || m.from)} → ${escapeHtml(targetText(m.to))}：${escapeHtml(String(m.body).slice(0, 80))}</div>`;
+      h += `</div>`;
+      if (kids.length) h = h + kids.join("");
+      return depth ? `<div class="ov-child">${h}</div>` : h;
+    }
+    function renderOverview() {
+      const ids = scopedIds();
+      const idset = new Set(ids);
+      const kidsOf = {};
+      ids.forEach(id => { const p = state.sessions[id].parent; if (p && idset.has(p)) (kidsOf[p] = kidsOf[p] || []).push(id); });
+      const build = (id, depth, seen) => {
+        if (seen.has(id)) return "";
+        seen.add(id);
+        return ovCard(id, depth, (kidsOf[id] || []).map(k => build(k, depth + 1, seen)));
+      };
+      const roots = ids.filter(id => { const p = state.sessions[id].parent; return !(p && idset.has(p)); });
+      const seen = new Set();
+      const tree = document.getElementById("ov-tree");
+      tree.innerHTML = roots.map(r => build(r, 0, seen)).join("") ||
+        `<div style="text-align:center; color:var(--text-dim); padding:24px;">此專案目前沒有 Session</div>`;
+      tree.onclick = ev => { const el = ev.target.closest("[data-sid]"); if (el) selectSession(el.dataset.sid); };
+
+      const sc = curScope();
+      const pe = getAllProjects().find(x => x.root === sc);
+      const tasks = Object.values(state.tasks || {}).filter(t => inScope(state.sessions[t.assignee]) || inScope(state.sessions[t.created_by]));
+      const pend = Object.values(state.pending_permissions || {}).filter(r => inScope(state.sessions[r.session])).length;
+      document.getElementById("ov-summary").innerHTML =
+        `<b>${escapeHtml(sc === "all" ? "全部專案" : (pe ? pe.name : "專案"))}</b>` +
+        `<span>${ids.length} 個 Session</span><span>存活 ${ids.filter(i => isLive(state.sessions[i])).length}</span>` +
+        `<span>進行中任務 ${tasks.filter(t => t.status === "doing").length}</span>` +
+        (pend ? `<span style="color:var(--yellow);">待核准 ${pend}</span>` : "");
+
+      const minis = ids.filter(i => isLive(state.sessions[i])).slice(0, 4);
+      const mbox = document.getElementById("ov-minis");
+      mbox.innerHTML = minis.map(id => {
+        const lines = (state.transcripts[id] || []).slice(-30).map(l => escapeHtml(String(l))).join("\n");
+        return `<div class="ov-mini"><div class="ov-mini-h" data-sid="${escapeHtml(id)}">${escapeHtml(state.sessions[id].label || id)}</div><pre>${lines}</pre></div>`;
+      }).join("");
+      mbox.onclick = ev => { const el = ev.target.closest("[data-sid]"); if (el) selectSession(el.dataset.sid); };
+      mbox.querySelectorAll("pre").forEach(p => { p.scrollTop = p.scrollHeight; });
+    }
+    setInterval(() => { if (currentTab === "overview") renderOverview(); }, 5000);
+
+    function switchNavTab(tabName) {
+      currentTab = tabName;
+      document.querySelectorAll(".tab-view").forEach(v => v.classList.remove("active"));
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+
+      const targetView = document.getElementById(`view-${tabName}`);
+      if (targetView) targetView.classList.add("active");
+
+      const navIndices = { overview: 0, chat: 1, review: 2, tasks: 3, sessions: 4 };
+      const navBtns = document.querySelectorAll(".nav-btn");
+      if (navBtns[navIndices[tabName]]) navBtns[navIndices[tabName]].classList.add("active");
+
+      if (tabName === "overview") {
+        renderOverview();
+      } else if (tabName === "chat") {
+        renderCurrentChatTranscript();
+      } else if (tabName === "review") {
+        requestDiff();
+      }
+    }
+
+    function sendPrompt() {
+      const textarea = document.getElementById("prompt-textarea");
+      const text = textarea.value.trim();
+      if (!text || !activeSession || !ws) return;
+
+      ws.send(JSON.stringify({
+        op: "prompt",
+        session: activeSession,
+        text: text,
+        attachments: [],
+        queue: queueMode
+      }));
+      textarea.value = "";
+      textarea.style.height = "auto";
+    }
+
+    function toggleQueue() {
+      queueMode = !queueMode;
+      const el = document.getElementById("queue-toggle");
+      el.className = `toggle-pill ${queueMode ? "active" : ""}`;
+      showToast(queueMode ? "已開啟：忙碌時排入佇列" : "已關閉佇列模式");
+    }
+
+    function cancelTurn() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({ op: "cancel", session: activeSession }));
+      showToast("已發送中斷請求…");
+    }
+
+    function resumeCurrentSession() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({
+        op: "resume",
+        session: activeSession,
+        prompt: null
+      }));
+      showToast("正在接續原對話…");
+    }
+
+    function submitPermission(decision) {
+      if (!pendingApprovalReq || !ws) return;
+      ws.send(JSON.stringify({
+        op: "permission",
+        session: pendingApprovalReq.session,
+        req: pendingApprovalReq.req,
+        decision: decision
+      }));
+      showToast(`已送出核准：${decision}`);
+    }
+
+    function requestDiff() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({ op: "worktree_diff", session: activeSession }));
+    }
+
+    function renderDiff(diffText) {
+      const container = document.getElementById("diff-lines-container");
+      container.innerHTML = "";
+      const statusText = document.getElementById("diff-status-text");
+      const mergeBtn = document.getElementById("btn-merge-diff");
+      const prBtn = document.getElementById("btn-pr-diff");
+
+      if (!diffText || diffText.trim().length === 0) {
+        statusText.innerText = "目前工作區無未合併變更。";
+        mergeBtn.style.display = "none";
+        prBtn.style.display = "none";
+        return;
+      }
+
+      statusText.innerText = "變更內容 (點擊行加入註解)：";
+      mergeBtn.style.display = "block";
+      prBtn.style.display = "block";
+
+      diffText.split("\n").forEach((line, idx) => {
+        const row = document.createElement("div");
+        row.className = "diff-line";
+        if (line.startsWith("+")) row.classList.add("diff-add");
+        else if (line.startsWith("-")) row.classList.add("diff-del");
+        else if (line.startsWith("@@") || line.startsWith("diff")) row.classList.add("diff-hdr");
+        row.innerText = line;
+        row.onclick = () => openReviewCommentSheet(idx + 1, line);
+        container.appendChild(row);
+      });
+    }
+
+    function confirmMerge() {
+      if (!activeSession || !ws) return;
+      if (window.confirm("確定合併此 Session 的變更到主分支？")) {
+        ws.send(JSON.stringify({ op: "worktree_merge", session: activeSession, message: null }));
+        showToast("已送出 Worktree 合併請求");
+      }
+    }
+
+    function openPrSheet() {
+      document.getElementById("pr-title").value = "";
+      document.getElementById("pr-body").value = "";
+      openSheet("sheet-create-pr");
+    }
+    function submitCreatePr() {
+      const title = document.getElementById("pr-title").value.trim();
+      if (!title || !activeSession || !ws) return;
+      const body = document.getElementById("pr-body").value.trim();
+      ws.send(JSON.stringify({
+        op: "worktree_pr",
+        session: activeSession,
+        title: title,
+        body: body
+      }));
+      closeSheet("sheet-create-pr");
+      showToast("已送出建立 PR 請求…");
+    }
+
+    function openSheet(id) { document.getElementById(id).classList.add("open"); }
+    function closeSheet(id) { document.getElementById(id).classList.remove("open"); }
+    function closeSheetOnBackdrop(e, el) { if (e.target === el) el.classList.remove("open"); }
+
+    function setNewKind(kind, btnEl) {
+      newSessionState.kind = kind;
+      document.querySelectorAll("#new-kind-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+      renderModelCardList("new-model-list", kind, newSessionState.model, (chosenModel) => {
+        newSessionState.model = chosenModel;
+        document.getElementById("new-model-custom").style.display = "none";
+      });
+    }
+
+    function setNewEffort(effort, btnEl) {
+      newSessionState.effort = effort;
+      document.querySelectorAll("#new-effort-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    function setNewPermission(perm, btnEl) {
+      newSessionState.permission = perm;
+      document.querySelectorAll("#new-permission-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    // daemon 回傳的 model 清單 (agent → [{id,label}])，與 TUI 相同來源。
+    const modelCache = {};
+    const modelRequested = {};
+    const lastModelRender = {};
+
+    // Session.kind 序列化為 claude_code，daemon 與清單用 claude。
+    function normKind(kind) {
+      return kind === "claude_code" ? "claude" : (kind || "opencode");
+    }
+
+    function requestModels(kind) {
+      if (modelCache[kind] || modelRequested[kind]) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      modelRequested[kind] = true;
+      ws.send(JSON.stringify({ op: "list_models", kind }));
+    }
+
+    function onModelsFrame(frame) {
+      modelCache[frame.kind] = frame.models || [];
+      delete modelRequested[frame.kind];
+      for (const id in lastModelRender) {
+        const r = lastModelRender[id];
+        if (r.kind === frame.kind) renderModelCardList(id, r.kind, r.currentVal, r.onSelect);
+      }
+    }
+
+    function renderModelCardList(containerId, kindRaw, currentVal, onSelect) {
+      const kind = normKind(kindRaw);
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+      lastModelRender[containerId] = { kind, currentVal, onSelect };
+      requestModels(kind);
+      const list = modelCache[kind]
+        ? modelCache[kind].map(m => ({
+            id: m.id,
+            label: m.label,
+            desc: m.id ? (m.label === m.id ? "" : m.id) : "使用 config.toml 的預設模型"
+          }))
+        : (MODEL_CATALOG[kind] || [OTHER_MODEL_HINT]);
+      if (!modelCache[kind] && modelRequested[kind]) {
+        const hint = document.createElement("div");
+        hint.className = "model-desc-text";
+        hint.style.padding = "4px 2px";
+        hint.innerText = "正在向 agent 查詢可用模型…";
+        container.appendChild(hint);
+      }
+
+      list.forEach(item => {
+        const card = document.createElement("div");
+        card.className = `model-card ${item.id === currentVal ? "active" : ""}`;
+        card.innerHTML = `
+          <div>
+            <div class="model-id-text">${escapeHtml(item.label)}</div>
+            <div class="model-desc-text">${escapeHtml(item.desc)}</div>
+          </div>
+          <div class="model-check">✓</div>
+        `;
+        card.onclick = () => {
+          container.querySelectorAll(".model-card").forEach(c => c.classList.remove("active"));
+          card.classList.add("active");
+          if (lastModelRender[containerId]) lastModelRender[containerId].currentVal = item.id;
+          onSelect(item.id);
+        };
+        container.appendChild(card);
+      });
+    }
+
+    function toggleCustomModelInput() {
+      const input = document.getElementById("new-model-custom");
+      const isShown = input.style.display === "block";
+      input.style.display = isShown ? "none" : "block";
+      if (!isShown) {
+        input.focus();
+        input.oninput = () => { newSessionState.model = input.value.trim(); };
+      }
+    }
+
+    function openNewSessionSheet() {
+      document.getElementById("new-label").value = "";
+      document.getElementById("new-budget").value = "";
+      document.getElementById("new-prompt").value = "";
+      document.getElementById("new-worktree").checked = false;
+      document.getElementById("new-model-custom").style.display = "none";
+      newSessionState.kind = "opencode";
+      newSessionState.model = "";
+      newSessionState.effort = "";
+      newSessionState.permission = "auto";
+      newSessionState.cwd = "";
+
+      // 渲染專案選擇分段按鈕
+      const projectSegs = document.getElementById("new-project-segments");
+      const projects = getAllProjects();
+      projectSegs.innerHTML = `<button class="seg-btn active" data-root="">預設目錄</button>` +
+        projects.map(p => `<button class="seg-btn" data-root="${escapeHtml(p.root)}">${escapeHtml(p.name)}</button>`).join("");
+      projectSegs.onclick = ev => {
+        const b = ev.target.closest("[data-root]");
+        if (b) setNewProject(b.dataset.root, b);
+      };
+      const sc = curScope();
+      if (sc !== "all") {
+        const b = Array.from(projectSegs.children).find(x => x.dataset.root === sc);
+        if (b) setNewProject(sc, b);
+      }
+
+      const segs = document.querySelectorAll("#new-kind-segments .seg-btn");
+      segs.forEach(b => b.classList.remove("active"));
+      if (segs[0]) segs[0].classList.add("active");
+
+      renderModelCardList("new-model-list", "opencode", "", (m) => { newSessionState.model = m; });
+      openSheet("sheet-new-session");
+    }
+
+    function setNewProject(root, btnEl) {
+      document.querySelectorAll("#new-project-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+      newSessionState.cwd = root || "";
+    }
+
+    function submitDetailedSession() {
+      const promptText = document.getElementById("new-prompt").value.trim();
+      if (!promptText || !ws) return;
+
+      const label = document.getElementById("new-label").value.trim() || null;
+      const budgetVal = parseFloat(document.getElementById("new-budget").value);
+      const budgetUsd = !isNaN(budgetVal) && budgetVal > 0 ? budgetVal : null;
+      const worktree = document.getElementById("new-worktree").checked;
+
+      ws.send(JSON.stringify({
+        op: "spawn",
+        cwd: newSessionState.cwd || null,
+        kind: newSessionState.kind,
+        label: label,
+        model: newSessionState.model || null,
+        effort: newSessionState.effort || null,
+        permission: newSessionState.permission || null,
+        budget_usd: budgetUsd,
+        worktree: worktree,
+        prompt: promptText,
+        role: "worker",
+        transport: "auto"
+      }));
+      closeSheet("sheet-new-session");
+      showToast("已建立新 Agent Session…");
+    }
+
+    let targetManageSessionId = null;
+    function openCurrentSessionSettings() {
+      if (activeSession) openSessionSettings(activeSession);
+    }
+    function openSessionSettings(sessionId) {
+      targetManageSessionId = sessionId;
+      const s = state.sessions[sessionId] || {};
+      const pName = getProjectName(s);
+      document.getElementById("manage-session-title").innerText = `[${pName}] ${s.label || sessionId} 控制面板`;
+      document.getElementById("manage-budget").value = s.budget_usd || "";
+      manageSessionState.model = s.model || "";
+      manageSessionState.effort = s.effort || "";
+      manageSessionState.handoffKind = "claude";
+
+      const kind = s.kind || "opencode";
+      renderModelCardList("manage-model-list", kind, manageSessionState.model, (m) => {
+        manageSessionState.model = m;
+      });
+
+      const effortBtns = document.querySelectorAll("#manage-effort-segments .seg-btn");
+      effortBtns.forEach(b => {
+        if (b.innerText === manageSessionState.effort) b.classList.add("active");
+        else b.classList.remove("active");
+      });
+
+      openSheet("sheet-session-manage");
+    }
+
+    function setManageEffort(effort, btnEl) {
+      manageSessionState.effort = effort;
+      document.querySelectorAll("#manage-effort-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    function setHandoffKind(kind, btnEl) {
+      manageSessionState.handoffKind = kind;
+      document.querySelectorAll("#handoff-kind-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    function submitSwitchModel() {
+      if (!targetManageSessionId || !ws) return;
+      ws.send(JSON.stringify({
+        op: "session_config",
+        session: targetManageSessionId,
+        model: manageSessionState.model || null,
+        effort: manageSessionState.effort || null
+      }));
+      closeSheet("sheet-session-manage");
+      showToast("已更新 Session 模型與推理設定");
+    }
+
+    function submitSetBudget() {
+      if (!targetManageSessionId || !ws) return;
+      const val = parseFloat(document.getElementById("manage-budget").value);
+      if (isNaN(val) || val <= 0) return;
+      ws.send(JSON.stringify({
+        op: "session_budget",
+        session: targetManageSessionId,
+        budget_usd: val
+      }));
+      closeSheet("sheet-session-manage");
+      showToast(`已調整預算上限為 $${val.toFixed(2)}`);
+    }
+
+    function submitHandoff() {
+      if (!targetManageSessionId || !ws) return;
+      const note = document.getElementById("handoff-note").value.trim() || null;
+      ws.send(JSON.stringify({
+        op: "handoff",
+        session: targetManageSessionId,
+        kind: manageSessionState.handoffKind,
+        note: note
+      }));
+      closeSheet("sheet-session-manage");
+      showToast("已送出交接請求…");
+    }
+
+    function toggleSleepCurrent() {
+      if (!targetManageSessionId || !ws) return;
+      const s = state.sessions[targetManageSessionId] || {};
+      const isSleeping = (s.status || "").toLowerCase() === "sleeping";
+      if (isSleeping) {
+        ws.send(JSON.stringify({ op: "wake", session: targetManageSessionId }));
+        showToast("已發送喚醒請求");
+      } else {
+        ws.send(JSON.stringify({ op: "sleep", session: targetManageSessionId }));
+        showToast("已發送休眠請求");
+      }
+      closeSheet("sheet-session-manage");
+    }
+
+    function killCurrentSession() {
+      if (!targetManageSessionId || !ws) return;
+      if (window.confirm("確定強制結束此 Agent 子處理程序 (Kill)？")) {
+        ws.send(JSON.stringify({ op: "kill", session: targetManageSessionId }));
+        closeSheet("sheet-session-manage");
+        showToast("已發送強制結束訊號");
+      }
+    }
+
+    function removeCurrentSession() {
+      if (!targetManageSessionId || !ws) return;
+      if (window.confirm("確定從清單中移除此 Session？")) {
+        ws.send(JSON.stringify({ op: "session_remove", session: targetManageSessionId, force: true }));
+        closeSheet("sheet-session-manage");
+        showToast("已送出移除請求");
+      }
+    }
+
+    function openQueueManageSheet() {
+      const container = document.getElementById("queue-items-container");
+      container.innerHTML = "";
+      const qItems = (state.queues && state.queues[activeSession]) ? state.queues[activeSession] : [];
+      if (qItems.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:10px;">目前佇列為空</div>`;
+      } else {
+        qItems.forEach((text, idx) => {
+          const item = document.createElement("div");
+          item.style.cssText = "background:#0d0e14; border:1px solid var(--border); padding:8px 10px; border-radius:6px; font-size:12px; font-family:var(--font-mono); color:var(--text);";
+          item.innerText = `${idx + 1}. ${text}`;
+          container.appendChild(item);
+        });
+      }
+      openSheet("sheet-queue-manage");
+    }
+
+    function submitClearQueue() {
+      if (!activeSession || !ws) return;
+      ws.send(JSON.stringify({ op: "queue_clear", session: activeSession }));
+      closeSheet("sheet-queue-manage");
+      showToast("已清空待送佇列");
+    }
+
+    function openNewTaskSheet() {
+      document.getElementById("sheet-task-title").value = "";
+      document.getElementById("sheet-task-detail").value = "";
+      openSheet("sheet-new-task");
+    }
+    function submitNewTask() {
+      const title = document.getElementById("sheet-task-title").value.trim();
+      if (!title || !ws) return;
+      const detail = document.getElementById("sheet-task-detail").value.trim();
+      ws.send(JSON.stringify({
+        op: "task_create",
+        title: title,
+        detail: detail,
+        assignee: activeSession,
+        created_by: null,
+        depends_on: []
+      }));
+      closeSheet("sheet-new-task");
+      showToast("已建立協作任務");
+    }
+    function cycleTaskStatus(taskId, currentStatus) {
+      if (!ws) return;
+      const cycle = { Todo: "Doing", Doing: "Done", Done: "Todo", Blocked: "Doing", Review: "Done" };
+      const next = cycle[currentStatus] || "Doing";
+      ws.send(JSON.stringify({ op: "task_update", id: taskId, status: next }));
+    }
+
+    function openReviewCommentSheet(lineNum, lineContent) {
+      pendingReviewLine = lineNum;
+      document.getElementById("sheet-review-preview").innerText = `第 ${lineNum} 行：${lineContent}`;
+      document.getElementById("sheet-review-text").value = "";
+      openSheet("sheet-review-comment");
+    }
+    function submitReviewComment() {
+      const comment = document.getElementById("sheet-review-text").value.trim();
+      if (!comment || !activeSession || !ws) return;
+      ws.send(JSON.stringify({
+        op: "review_comment",
+        session: activeSession,
+        location: `line:${pendingReviewLine}`,
+        comment: comment
+      }));
+      closeSheet("sheet-review-comment");
+      showToast("已送交審查意見給 Agent");
+    }
+
+    const promptTextarea = document.getElementById("prompt-textarea");
+    promptTextarea.addEventListener("input", function() {
+      this.style.height = "auto";
+      this.style.height = (this.scrollHeight) + "px";
+    });
+
+    connect();
+  </script>
+</body>
+</html>

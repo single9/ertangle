@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::{bail, Result};
-use termade_protocol::{Frame, Request};
+use ertangle_protocol::{Frame, Request};
 use tr::tr;
 
 use super::roundtrip;
@@ -20,14 +20,14 @@ pub(crate) fn cmd_quota(json: bool) -> Result<()> {
         println!("{}", tr!("(尚無額度資料：agent 執行過一個回合後才會回報)"));
         return Ok(());
     }
-    let now = termade_core::now_millis();
+    let now = ertangle_core::now_millis();
     for q in state.quotas.values() {
         println!(
             "{}",
             tr!(
                 "{summary}   ({age} 前更新)",
                 summary = q.summary(now),
-                age = termade_core::format_remaining(now.saturating_sub(q.updated_ms))
+                age = ertangle_core::format_remaining(now.saturating_sub(q.updated_ms))
             )
         );
     }
@@ -96,11 +96,11 @@ pub(crate) fn cmd_cost(json: bool) -> Result<()> {
 }
 
 pub(crate) fn cmd_replay(since: u64, file: Option<PathBuf>, all: bool, json: bool) -> Result<()> {
-    let path = file.unwrap_or_else(termade_daemon::log_path);
+    let path = file.unwrap_or_else(ertangle_daemon::log_path);
     let (state, records) = if all {
-        termade_daemon::replay_log_all(&path)?
+        ertangle_daemon::replay_log_all(&path)?
     } else {
-        let older = termade_daemon::rotated_logs(&path);
+        let older = ertangle_daemon::rotated_logs(&path);
         if !older.is_empty() {
             eprintln!(
                 "{}",
@@ -110,11 +110,11 @@ pub(crate) fn cmd_replay(since: u64, file: Option<PathBuf>, all: bool, json: boo
                 )
             );
         }
-        termade_daemon::replay_log(&path)?
+        ertangle_daemon::replay_log(&path)?
     };
     let filtered: Vec<_> = records
         .into_iter()
-        .filter(|r| r.seq > since && !matches!(r.event, termade_core::Event::Snapshot { .. }))
+        .filter(|r| r.seq > since && !matches!(r.event, ertangle_core::Event::Snapshot { .. }))
         .collect();
     if json {
         println!(
