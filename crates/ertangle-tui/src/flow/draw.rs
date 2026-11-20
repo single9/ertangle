@@ -67,24 +67,41 @@ pub(crate) fn draw_flow(f: &mut TuiFrame, area: Rect, model: &FlowModel, cursor:
     );
 }
 
-fn summary_text(model: &FlowModel) -> String {
+/// One-line summary; zero counts are omitted so the line fits narrow panes.
+pub(super) fn summary_text(model: &FlowModel) -> String {
     let s = &model.summary;
-    let mut out = tr!(
-        "{live} 存活 · {busy} 忙碌 · {waiting} 等待 · {ended} 已結束 │ 近 10 分鐘 {msgs} 則訊息 │ 任務 todo {todo} doing {doing} blocked {blocked} review {review}",
-        live = s.live,
-        busy = s.busy,
-        waiting = s.waiting,
-        ended = s.ended,
-        msgs = s.messages_in_window,
-        todo = s.tasks_todo,
-        doing = s.tasks_doing,
-        blocked = s.tasks_blocked,
-        review = s.tasks_review
-    );
-    if let Some(host) = &s.host {
-        out.push_str(&format!(" │ {host}"));
+    let mut sessions = vec![tr!("{n} 存活", n = s.live)];
+    if s.busy > 0 {
+        sessions.push(tr!("{n} 忙碌", n = s.busy));
     }
-    out
+    if s.waiting > 0 {
+        sessions.push(tr!("{n} 等待", n = s.waiting));
+    }
+    if s.ended > 0 {
+        sessions.push(tr!("{n} 已結束", n = s.ended));
+    }
+    let mut groups = vec![sessions.join(" · ")];
+    if s.messages_in_window > 0 {
+        groups.push(tr!("{n} 則訊息/10 分", n = s.messages_in_window));
+    }
+    // Task status words stay in English: they are the literal `:task-status` values.
+    let tasks: Vec<String> = [
+        ("todo", s.tasks_todo),
+        ("doing", s.tasks_doing),
+        ("blocked", s.tasks_blocked),
+        ("review", s.tasks_review),
+    ]
+    .iter()
+    .filter(|(_, n)| *n > 0)
+    .map(|(name, n)| format!("{n} {name}"))
+    .collect();
+    if !tasks.is_empty() {
+        groups.push(tr!("任務 {list}", list = tasks.join(" · ")));
+    }
+    if let Some(host) = &s.host {
+        groups.push(host.clone());
+    }
+    groups.join(" │ ")
 }
 
 fn status_style(status: SessionStatus) -> Style {
@@ -319,4 +336,47 @@ fn truncate(s: &str, w: usize) -> String {
     }
     out.push('…');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::flow::FlowSummary;
+
+    fn model(summary: FlowSummary) -> FlowModel {
+        FlowModel {
+            summary,
+            ..FlowModel::default()
+        }
+    }
+
+    #[test]
+    fn summary_omits_zero_counts() {
+        let text = summary_text(&model(FlowSummary {
+            live: 3,
+            ended: 1,
+            tasks_doing: 1,
+            tasks_blocked: 1,
+            ..FlowSummary::default()
+        }));
+        assert_eq!(text, "3 存活 · 1 已結束 │ 任務 1 doing · 1 blocked");
+    }
+
+    #[test]
+    fn summary_empty_state_shows_only_live_count() {
+        assert_eq!(summary_text(&model(FlowSummary::default())), "0 存活");
+    }
+
+    #[test]
+    fn summary_includes_messages_and_host() {
+        let text = summary_text(&model(FlowSummary {
+            live: 1,
+            busy: 1,
+            waiting: 1,
+            messages_in_window: 8,
+            host: Some("remote".into()),
+            ..FlowSummary::default()
+        }));
+        assert_eq!(text, "1 存活 · 1 忙碌 · 1 等待 │ 8 則訊息/10 分 │ remote");
+    }
 }

@@ -146,3 +146,25 @@ opencode (本機 gemma4)：`spawn nx --prompt "用 shell 執行 sleep 25…"`，
 | agent 反應 | 呼叫 `ertangle_inbox` 後以 `ertangle_send` 回覆 human「pong」(`reply_to` 指向原訊息) |
 
 沒有驗證：調高成本上限後的補提醒 (只有單元測試)。
+
+## T76 Flow 儀表板 (實機，2026-11-21)
+
+環境：Linux、tmux 3.4 (獨立的 tmux server，`XDG_RUNTIME_DIR`／`XDG_STATE_HOME`／`XDG_CONFIG_HOME` 指向暫存目錄的獨立 daemon)、opencode (本機 gemma4)。session 樹：`coord` (coordinator)、`worker/a`、`worker/b`、已 `kill` 的 `worker/old`；任務 T1 指派給 `worker/a`，T2 指派給 `worker/b` 並相依 T1 (blocked)；訊息含 handoff、status×2、`#review` 頻道、broadcast、question。
+
+| 驗證項 | 做法 | 結果 |
+| --- | --- | --- |
+| 開啟 Flow | 一般模式按 `F` | 中央窗格標題 `Flow`，摘要列、節點板、邊列表三區都有內容 |
+| 節點板 | 目視 | 依父子關係縮排；`coord` 收到訊息後顯示 `✉2`；`worker/a`、`worker/b` 顯示 `T:1`；已結束 session 折疊成 `… 1 ended (E to show)` |
+| `E` 顯示已結束 | 按 `E` | `worker/old` 以 `✓` 出現在節點板，再按一次折疊回去 |
+| 依賴邊 | 目視 | `worker/b ┄┄blocked by┄┄▶ worker/a`，附任務 id |
+| 訊息邊 | 目視 | `*` (broadcast)、`#review` (頻道)、`status×2` 合併計數、預覽與相對時間正確 |
+| 閃爍標記 | 新送一則 question 後 0.4 秒與 3 秒各擷取一次 | 0.4 秒時有 `⚡`，3 秒後消失 |
+| 游標與 `Enter` | `j` 後 `Enter` | 反白移到 `worker/a`；切回 Transcript 並選取 `worker/a` |
+| `Esc` | Flow 中按 `Esc` | 回到開啟前的視圖 |
+| 80×24 | `tmux resize-window -x 80 -y 24` | 窄版版面：隱藏多數標記與預覽，不會 panic |
+
+修正：初版摘要列在 80 與 120 欄寬都被截斷，任務數看不到；改成省略為 0 的計數。80×24 時最後一項仍可能被截斷 (以 `…` 結尾)。
+
+沒有驗證：`⧗` 佇列標記 (opencode 回合結束太快，無法讓 prompt 留在佇列，只有單元測試)；`?`／`!perm` 標記；多主機時的主機名稱；edge 上限 40 條 (只有單元測試)。
+
+另外發現 (非 T76 範圍)：連續對同一個 opencode session 送兩個 prompt 時，daemon log 出現 `Session already has an active ACP prompt`，session 狀態回到 `idle` 且佇列是空的，第二個 prompt 疑似遺失而不是排入佇列。

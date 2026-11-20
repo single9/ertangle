@@ -3266,7 +3266,27 @@ msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 
 msgstr ""
 
 #: crates/ertangle-tui/src/flow/draw.rs
-msgid "{live} 存活 · {busy} 忙碌 · {waiting} 等待 · {ended} 已結束 │ 近 10 分鐘 {msgs} 則訊息 │ 任務 todo {todo} doing {doing} blocked {blocked} review {review}"
+msgid "{n} 存活"
+msgstr ""
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "{n} 忙碌"
+msgstr ""
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "{n} 等待"
+msgstr ""
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "{n} 已結束"
+msgstr ""
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "{n} 則訊息/10 分"
+msgstr ""
+
+#: crates/ertangle-tui/src/flow/draw.rs
+msgid "任務 {list}"
 msgstr ""
 
 #: crates/ertangle-tui/src/flow/draw.rs
