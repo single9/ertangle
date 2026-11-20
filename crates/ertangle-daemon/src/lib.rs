@@ -529,6 +529,23 @@ impl Shared {
         );
     }
 
+    /// Advances the inbox cursor after a filtered `ertangle_wait` took `msg`, but only
+    /// when `msg` is the oldest unread message. Otherwise earlier unread messages
+    /// (e.g. from other senders) would be silently marked as read; `msg` then stays
+    /// unread instead, which is safer than losing the others.
+    pub(crate) fn advance_inbox_cursor_if_oldest(
+        &self,
+        inner: &mut Inner,
+        session: &SessionId,
+        msg: &str,
+    ) {
+        let after = inner.state.inbox_cursors.get(session).cloned();
+        let oldest_unread = inner.state.inbox_for(session, after.as_deref());
+        if oldest_unread.first().is_some_and(|m| m.id == msg) {
+            self.advance_inbox_cursor(inner, session, msg);
+        }
+    }
+
     /// `emit` for callers that already hold the `inner` lock.
     pub(crate) fn emit_locked(&self, inner: &mut Inner, event: Event) {
         inner.seq += 1;

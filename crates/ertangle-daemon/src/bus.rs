@@ -285,7 +285,7 @@ impl Shared {
             let mut remaining = Vec::with_capacity(waiters.len());
             for w in waiters {
                 if w.matches(&state_clone, &message) && w.tx.send(message.clone()).is_ok() {
-                    self.advance_inbox_cursor(&mut inner, &w.session, &message.id);
+                    self.advance_inbox_cursor_if_oldest(&mut inner, &w.session, &message.id);
                     woken_by_waiter.insert(w.session.clone());
                 } else {
                     remaining.push(w);
@@ -435,7 +435,7 @@ impl Shared {
             let after = inner.state.inbox_cursors.get(&sid).cloned();
             let unread = inner.state.inbox_for(&sid, after.as_deref());
             if let Some(found) = unread.into_iter().find(|m| waiter.matches(&inner.state, m)) {
-                self.advance_inbox_cursor(&mut inner, &sid, &found.id);
+                self.advance_inbox_cursor_if_oldest(&mut inner, &sid, &found.id);
                 let _ = reply.send(Frame::Messages {
                     messages: vec![found],
                     timed_out: false,

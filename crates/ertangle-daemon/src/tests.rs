@@ -3370,6 +3370,77 @@ fn message_taken_by_waiter_is_not_nudged() {
     assert!(ctl.inputs().is_empty());
 }
 
+fn deliver_from(shared: &Arc<Shared>, from: &str, body: &str) -> String {
+    shared
+        .deliver_message(
+            Some(from.into()),
+            Target::Direct("ses_n".into()),
+            MsgKind::Chat,
+            body.into(),
+            None,
+        )
+        .expect("送出應成功")
+}
+
+fn unread_bodies(shared: &Arc<Shared>) -> String {
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::BusInbox {
+            session: "ses_n".into(),
+            unread_only: true,
+        },
+    );
+    format!("{:?}", rx.try_iter().collect::<Vec<_>>())
+}
+
+fn wait_from(shared: &Arc<Shared>, from: &str) -> ClientRx {
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::BusWait {
+            session: "ses_n".into(),
+            from: Some(from.into()),
+            reply_to: None,
+            timeout_ms: 5_000,
+        },
+    );
+    rx
+}
+
+#[test]
+fn filtered_wait_does_not_mark_earlier_other_sender_messages_read() {
+    // 快速路徑：訊息已在 inbox，from 過濾只取走較新的那則
+    let (shared, _ctl) = nudge_setup(SessionStatus::Busy);
+    deliver_from(&shared, "other", "from-other");
+    deliver_from(&shared, "human", "from-human");
+    let rx = wait_from(&shared, "human");
+    let got = rx.rx.recv_timeout(Duration::from_secs(2)).expect("應收到");
+    assert!(format!("{got:?}").contains("from-human"));
+    assert!(
+        unread_bodies(&shared).contains("from-other"),
+        "other 的訊息不應被吞掉"
+    );
+
+    // 慢速路徑：waiter 先掛著，較舊的 other 訊息仍須保持未讀
+    let (shared, _ctl) = nudge_setup(SessionStatus::Busy);
+    deliver_from(&shared, "other", "from-other");
+    let rx = wait_from(&shared, "human");
+    deliver_from(&shared, "human", "from-human");
+    let got = rx.rx.recv_timeout(Duration::from_secs(2)).expect("應收到");
+    assert!(format!("{got:?}").contains("from-human"));
+    assert!(unread_bodies(&shared).contains("from-other"));
+}
+
+#[test]
+fn filtered_wait_on_oldest_unread_advances_cursor() {
+    let (shared, _ctl) = nudge_setup(SessionStatus::Busy);
+    deliver_from(&shared, "human", "only");
+    let rx = wait_from(&shared, "human");
+    rx.rx.recv_timeout(Duration::from_secs(2)).expect("應收到");
+    assert!(!unread_bodies(&shared).contains("only"));
+}
+
 #[test]
 fn status_messages_and_over_budget_sessions_are_not_nudged() {
     let (shared, ctl) = nudge_setup(SessionStatus::Busy);
