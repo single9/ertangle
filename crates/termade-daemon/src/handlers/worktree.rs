@@ -122,8 +122,12 @@ pub(crate) fn handle_merge(
     session: String,
     dry_run: bool,
     resolve: bool,
-    strategy: MergeStrategy,
+    strategy: Option<MergeStrategy>,
 ) {
+    let strategy =
+        crate::config::Config::load_file(&crate::paths::config_dir().join("config.toml"))
+            .git
+            .merge_strategy(strategy);
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     let default_cwd = shared.default_cwd();

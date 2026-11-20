@@ -28,6 +28,7 @@ pub(crate) enum Item {
     SpawnMaxEffort,
     AutoResume,
     SharedCargoTarget,
+    MergeStrategy,
     CollabInstructions,
     InjectSkill,
     TokenHints,
@@ -36,7 +37,7 @@ pub(crate) enum Item {
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 21] = [
+pub(crate) const ITEMS: [Item; 22] = [
     Item::DefaultAgent,
     Item::DefaultRole,
     Item::DefaultPermission,
@@ -52,6 +53,7 @@ pub(crate) const ITEMS: [Item; 21] = [
     Item::SpawnMaxEffort,
     Item::AutoResume,
     Item::SharedCargoTarget,
+    Item::MergeStrategy,
     Item::CollabInstructions,
     Item::InjectSkill,
     Item::TokenHints,
@@ -157,6 +159,7 @@ impl Item {
             }
             Item::TargetAgent => tr!("各 agent 的預設值"),
             Item::SpawnWorktree => tr!("agent 自行建立 session 的防呆"),
+            Item::MergeStrategy => tr!("Git 與 worktree"),
             Item::CollabInstructions => tr!("協作說明"),
             Item::WebCompanion => tr!("Web 版"),
             Item::Language => tr!("介面"),
@@ -195,6 +198,7 @@ impl Item {
             Item::SpawnMaxEffort => tr!("agent 建立 session 免確認的 effort 上限"),
             Item::AutoResume => tr!("daemon 重啟時自動接續執行中的 session"),
             Item::SharedCargoTarget => tr!("worktree 共用 cargo target (編譯排隊、不重複)"),
+            Item::MergeStrategy => tr!("worktree 合併策略 (merge/squash/rebase)"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
             Item::InjectSkill => tr!("把 termade-ade skill 注入協作說明"),
             Item::TokenHints => tr!("把省 token 提示注入協作說明"),
@@ -224,6 +228,11 @@ impl Item {
             Item::SpawnMaxEffort => c.agent_spawn.max_effort().to_string(),
             Item::AutoResume => on_off(c.agent_spawn.auto_resume()),
             Item::SharedCargoTarget => on_off(c.agent_spawn.shared_cargo_target()),
+            Item::MergeStrategy => c
+                .git
+                .merge_strategy
+                .map(|s| s.to_string())
+                .unwrap_or_default(),
             Item::CollabInstructions => on_off(c.collab.instructions != Some(false)),
             Item::InjectSkill => on_off(c.collab.inject_skill == Some(true)),
             Item::TokenHints => on_off(c.collab.token_hints == Some(true)),
@@ -319,6 +328,12 @@ impl Item {
                 .iter()
                 .map(|l| pair(l, l))
                 .collect(),
+            Item::MergeStrategy => vec![
+                pair("", &tr!("未設定 (merge)")),
+                pair("merge", &tr!("一般合併 (保留提交記錄)")),
+                pair("squash", &tr!("壓成單一提交")),
+                pair("rebase", &tr!("rebase 後快轉 (線性歷史)")),
+            ],
             Item::WebCompanion => {
                 let port = s.cfg.web.resolved_port();
                 vec![
@@ -518,6 +533,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::TokenHints => (&["collab"], "token_hints"),
         Item::AutoResume => (&["agent_spawn"], "auto_resume"),
         Item::SharedCargoTarget => (&["agent_spawn"], "shared_cargo_target"),
+        Item::MergeStrategy => (&["git"], "merge_strategy"),
         Item::WebCompanion | Item::WebPort => return,
         Item::Language => (&["tui"], "language"),
         Item::Model => (&["agents", ""], "model"),
@@ -541,6 +557,10 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
     match Config::set_toml(&path, &tbl, key, toml_value) {
         Ok(()) => {
             s.cfg = Config::load_file(&path);
+            if item == Item::MergeStrategy {
+                app.status = tr!("已更新合併策略並儲存至 {path}", path = path.display());
+                return;
+            }
             if item == Item::Language {
                 // 立即生效：之後畫的每個字串都走新語言。
                 let lang = termade_core::i18n::resolve(Some(&value));
@@ -659,5 +679,47 @@ pub(crate) fn handle_key(app: &mut App, writer: Option<&mut HostRouter>, key: Ke
         KeyCode::Right | KeyCode::Char('l') => cycle(app, writer, 1),
         KeyCode::Left | KeyCode::Char('h') => cycle(app, writer, -1),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use termade_protocol::MergeStrategy;
+
+    fn settings_with(merge_strategy: Option<MergeStrategy>) -> Settings {
+        let mut cfg = Config::default();
+        cfg.git.merge_strategy = merge_strategy;
+        Settings {
+            sub: None,
+            live: Default::default(),
+            requested: Default::default(),
+            cursor: 0,
+            agent: "claude".into(),
+            cfg,
+        }
+    }
+
+    #[test]
+    fn merge_strategy_setting_offers_all_strategies() {
+        let s = settings_with(Some(MergeStrategy::Squash));
+        assert!(ITEMS.contains(&Item::MergeStrategy));
+        assert_eq!(Item::MergeStrategy.current(&s), "squash");
+        let values: Vec<_> = Item::MergeStrategy
+            .choices(&s)
+            .into_iter()
+            .map(|(v, _)| v)
+            .collect();
+        assert_eq!(values, ["", "merge", "squash", "rebase"]);
+    }
+
+    #[test]
+    fn merge_strategy_setting_defaults_to_unset() {
+        let s = settings_with(None);
+        assert_eq!(Item::MergeStrategy.current(&s), "");
+        assert!(Item::MergeStrategy
+            .choices(&s)
+            .first()
+            .is_some_and(|(v, _)| v.is_empty()));
     }
 }

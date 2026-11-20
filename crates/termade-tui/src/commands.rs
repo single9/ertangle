@@ -1674,13 +1674,13 @@ pub(crate) struct MergeArgs {
     pub target: Option<String>,
     pub dry_run: bool,
     pub resolve: bool,
-    pub strategy: MergeStrategy,
+    pub strategy: Option<MergeStrategy>,
 }
 
 pub(crate) fn parse_merge_args(rest: &str) -> MergeArgs {
     let mut dry_run = false;
     let mut resolve = false;
-    let mut strategy = MergeStrategy::Merge;
+    let mut strategy = None;
     let mut target = None;
 
     let mut iter = rest.split_whitespace().peekable();
@@ -1690,14 +1690,14 @@ pub(crate) fn parse_merge_args(rest: &str) -> MergeArgs {
         } else if p == "--resolve" || p == "-r" || p == "resolve" {
             resolve = true;
         } else if p == "--squash" {
-            strategy = MergeStrategy::Squash;
+            strategy = Some(MergeStrategy::Squash);
         } else if p == "--rebase" {
-            strategy = MergeStrategy::Rebase;
+            strategy = Some(MergeStrategy::Rebase);
         } else if let Some(val) = p.strip_prefix("--strategy=") {
-            strategy = val.parse::<MergeStrategy>().unwrap_or_default();
+            strategy = val.parse::<MergeStrategy>().ok();
         } else if p == "--strategy" {
             if let Some(val) = iter.next() {
-                strategy = val.parse::<MergeStrategy>().unwrap_or_default();
+                strategy = val.parse::<MergeStrategy>().ok();
             }
         } else if target.is_none() {
             target = Some(p.to_string());
@@ -1757,7 +1757,7 @@ mod tests {
                 target: None,
                 dry_run: false,
                 resolve: false,
-                strategy: MergeStrategy::Merge,
+                strategy: None,
             }
         );
     }
@@ -1771,7 +1771,7 @@ mod tests {
                 target: Some("ses_1".into()),
                 dry_run: true,
                 resolve: true,
-                strategy: MergeStrategy::Merge,
+                strategy: None,
             }
         );
 
@@ -1782,7 +1782,7 @@ mod tests {
                 target: Some("ses_2".into()),
                 dry_run: true,
                 resolve: true,
-                strategy: MergeStrategy::Merge,
+                strategy: None,
             }
         );
     }
@@ -1791,39 +1791,30 @@ mod tests {
     fn parse_merge_args_strategy_options() {
         assert_eq!(
             parse_merge_args("ses_1 --squash").strategy,
-            MergeStrategy::Squash
+            Some(MergeStrategy::Squash)
         );
         assert_eq!(
             parse_merge_args("ses_1 --rebase").strategy,
-            MergeStrategy::Rebase
+            Some(MergeStrategy::Rebase)
         );
         assert_eq!(
             parse_merge_args("ses_1 --strategy squash").strategy,
-            MergeStrategy::Squash
+            Some(MergeStrategy::Squash)
         );
         assert_eq!(
             parse_merge_args("ses_1 --strategy=rebase").strategy,
-            MergeStrategy::Rebase
+            Some(MergeStrategy::Rebase)
         );
         assert_eq!(
             parse_merge_args("ses_1 --strategy=SQUASH").strategy,
-            MergeStrategy::Squash
+            Some(MergeStrategy::Squash)
         );
         assert_eq!(
             parse_merge_args("ses_1 --strategy merge").strategy,
-            MergeStrategy::Merge
+            Some(MergeStrategy::Merge)
         );
-        assert_eq!(
-            parse_merge_args("ses_1 --strategy invalid").strategy,
-            MergeStrategy::Merge
-        );
-        assert_eq!(
-            parse_merge_args("ses_1 --strategy=invalid").strategy,
-            MergeStrategy::Merge
-        );
-        assert_eq!(
-            parse_merge_args("ses_1 --strategy").strategy,
-            MergeStrategy::Merge
-        );
+        assert_eq!(parse_merge_args("ses_1 --strategy invalid").strategy, None);
+        assert_eq!(parse_merge_args("ses_1 --strategy=invalid").strategy, None);
+        assert_eq!(parse_merge_args("ses_1 --strategy").strategy, None);
     }
 }

@@ -40,4 +40,5 @@ Status: done
 - `592c945` CLI / TUI / MCP: 新增 `--strategy`、`:merge --squash` / `--rebase` 與 MCP `strategy` 參數及解析測試。
 - `fe3d1d4` daemon: 實作三種策略、`--resolve` 的策略導向提示，以及 squash / rebase / 衝突還原測試。
 - `e56861f` 新增本 ticket；coordinator 補上 README、CLI 說明與多國語系目錄。
+- coordinator 後續加入全域 `[git] merge_strategy` 預設與 TUI 設定面板選項；明確指定仍優先於設定值。
 - 三個策略分支已合併回 `main`，完整測試全數通過。

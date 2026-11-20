@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use termade_core::{AgentKind, PermissionPolicy, Role};
-use termade_protocol::SpawnRequest;
+use termade_protocol::{MergeStrategy, SpawnRequest};
 pub use toml::Value as TomlValue;
 use tr::tr;
 
@@ -452,6 +452,15 @@ impl WebCfg {
 pub struct GitCfg {
     /// 合併前執行的驗證指令 (如 "cargo test")。非 0 退出則中止合併。
     pub pre_merge_command: Option<String>,
+    /// worktree 合併的預設策略；CLI／TUI／MCP 明確指定時覆蓋此值。
+    pub merge_strategy: Option<MergeStrategy>,
+}
+
+impl GitCfg {
+    /// 明確指定優先，其次全域設定，最後回退到 `merge`。
+    pub fn merge_strategy(&self, explicit: Option<MergeStrategy>) -> MergeStrategy {
+        explicit.or(self.merge_strategy).unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -1366,6 +1375,30 @@ pre_merge_command = "rm -rf /"
         let local = Config::parse(local_src).unwrap();
         let merged = Config::layered(global, local);
         assert_eq!(merged.git.pre_merge_command.as_deref(), Some("cargo test"));
+    }
+
+    #[test]
+    fn git_merge_strategy_parsing_and_precedence() {
+        let cfg = Config::parse(
+            r#"
+[git]
+merge_strategy = "rebase"
+"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.git.merge_strategy, Some(MergeStrategy::Rebase));
+        assert_eq!(cfg.git.merge_strategy(None), MergeStrategy::Rebase);
+        assert_eq!(
+            cfg.git.merge_strategy(Some(MergeStrategy::Squash)),
+            MergeStrategy::Squash
+        );
+
+        let empty = GitCfg::default();
+        assert_eq!(empty.merge_strategy(None), MergeStrategy::Merge);
+        assert_eq!(
+            empty.merge_strategy(Some(MergeStrategy::Rebase)),
+            MergeStrategy::Rebase
+        );
     }
 
     #[test]

@@ -28,7 +28,7 @@ pub(super) const HELP_STRINGS: &[&str] = &[
     termade_core::tr_noop!("只清理特定 session 的 worktree；未指定則清理所有已結束者"),
     termade_core::tr_noop!("只等待來自特定寄件者的訊息"),
     termade_core::tr_noop!("只重播序號大於此值的事件"),
-    termade_core::tr_noop!("合併策略：merge (預設，保留提交記錄)、squash (壓成單一提交)、rebase (線性歷史)"),
+    termade_core::tr_noop!("合併策略：merge、squash、rebase；省略時使用全域 [git] merge_strategy (預設 merge)"),
     termade_core::tr_noop!("同時綁定 TCP 位址供遠端連線 (例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token)"),
     termade_core::tr_noop!("同步問答：送出 question 訊息並阻塞等待對方回覆 answer"),
     termade_core::tr_noop!("啟動 TUI (預設行為)"),

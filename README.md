@@ -517,7 +517,10 @@ worktree = true
 [git]
 # Git 與 worktree 設定 (安全起見只認全域設定，專案層不可覆寫)
 pre_merge_command = "cargo test"       # 合併前驗證指令；非 0 退出則中止合併
+merge_strategy = "squash"              # worktree 合併預設策略：merge / squash / rebase
 ```
+
+`merge_strategy` 也可以在 TUI 設定面板 (`:settings` → Git 與 worktree) 切換。優先順序為 CLI／`:merge`／MCP 明確指定 > 全域 `merge_strategy` > `merge`。
 
 > [!NOTE]
 > 介面語言也可以在設定面板 (`:settings`) 切換，立即生效。daemon 回傳的訊息跟 daemon 啟動時的語言走，切換後要重啟 daemon 才會一致。想協助翻譯請見 [翻譯指南](docs/TRANSLATING.md)。

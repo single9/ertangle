@@ -260,8 +260,8 @@ msgid "只重播序號大於此值的事件"
 msgstr "Replay only events with a sequence number greater than this value"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "合併策略：merge (預設，保留提交記錄)、squash (壓成單一提交)、rebase (線性歷史)"
-msgstr "Merge strategy: merge (default, keeps commit history), squash (single commit), rebase (linear history)"
+msgid "合併策略：merge、squash、rebase；省略時使用全域 [git] merge_strategy (預設 merge)"
+msgstr "Merge strategy: merge, squash, rebase; omit to use global [git] merge_strategy (default: merge)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "同時綁定 TCP 位址供遠端連線 (例如 127.0.0.1:7420，建議搭配 SSH 轉發；需 token)"
@@ -3856,6 +3856,10 @@ msgid "agent 自行建立 session 的防呆"
 msgstr "Guardrails for agent-created sessions"
 
 #: crates/termade-tui/src/settings.rs
+msgid "Git 與 worktree"
+msgstr "Git and worktree"
+
+#: crates/termade-tui/src/settings.rs
 msgid "協作說明"
 msgstr "Collaboration instructions"
 
@@ -3932,6 +3936,10 @@ msgid "worktree 共用 cargo target (編譯排隊、不重複)"
 msgstr "Shared cargo target"
 
 #: crates/termade-tui/src/settings.rs
+msgid "worktree 合併策略 (merge/squash/rebase)"
+msgstr "Worktree merge strategy (merge/squash/rebase)"
+
+#: crates/termade-tui/src/settings.rs
 msgid "把協作說明注入每個 agent"
 msgstr "Inject collab instructions"
 
@@ -4004,6 +4012,22 @@ msgid "不問 (effort 調降、model 拒絕)"
 msgstr "Never ask, auto-downgrade"
 
 #: crates/termade-tui/src/settings.rs
+msgid "未設定 (merge)"
+msgstr "Unset (merge)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "一般合併 (保留提交記錄)"
+msgstr "Regular merge (keep commit history)"
+
+#: crates/termade-tui/src/settings.rs
+msgid "壓成單一提交"
+msgstr "Squash into a single commit"
+
+#: crates/termade-tui/src/settings.rs
+msgid "rebase 後快轉 (線性歷史)"
+msgstr "Rebase then fast-forward (linear history)"
+
+#: crates/termade-tui/src/settings.rs
 msgid "Tailscale (自動 IP:{port})"
 msgstr "Tailscale (auto IP:{port})"
 
@@ -4042,6 +4066,10 @@ msgstr "Saved to {path}"
 #: crates/termade-tui/src/settings.rs
 msgid "已更新 Web 版連接埠並儲存至 {path}"
 msgstr "Web version port updated and saved to {path}"
+
+#: crates/termade-tui/src/settings.rs
+msgid "已更新合併策略並儲存至 {path}"
+msgstr "Merge strategy updated and saved to {path}"
 
 #: crates/termade-tui/src/settings.rs
 msgid "載入翻譯失敗：{e}"
@@ -4122,6 +4150,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/termade-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "合併策略：merge (預設，保留提交記錄)、squash (壓成單一提交)、rebase (線性歷史)"
+#~ msgstr "Merge strategy: merge (default, keeps commit history), squash (single commit), rebase (linear history)"
 
 #~ msgid "[dry-run] 合併 {branch} ({label})至 {target}：{ff_desc}，{pending_desc}"
 #~ msgstr "[dry-run] Merge {branch} ({label}) into {target}: {ff_desc}, {pending_desc}"

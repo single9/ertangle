@@ -266,7 +266,7 @@ msgid "只重播序號大於此值的事件"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "合併策略：merge (預設，保留提交記錄)、squash (壓成單一提交)、rebase (線性歷史)"
+msgid "合併策略：merge、squash、rebase；省略時使用全域 [git] merge_strategy (預設 merge)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -3843,6 +3843,10 @@ msgid "agent 自行建立 session 的防呆"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "Git 與 worktree"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
 msgid "協作說明"
 msgstr ""
 
@@ -3919,6 +3923,10 @@ msgid "worktree 共用 cargo target (編譯排隊、不重複)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "worktree 合併策略 (merge/squash/rebase)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
 msgid "把協作說明注入每個 agent"
 msgstr ""
 
@@ -3991,6 +3999,22 @@ msgid "不問 (effort 調降、model 拒絕)"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs
+msgid "未設定 (merge)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "一般合併 (保留提交記錄)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "壓成單一提交"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "rebase 後快轉 (線性歷史)"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
 msgid "Tailscale (自動 IP:{port})"
 msgstr ""
 
@@ -4028,6 +4052,10 @@ msgstr ""
 
 #: crates/termade-tui/src/settings.rs
 msgid "已更新 Web 版連接埠並儲存至 {path}"
+msgstr ""
+
+#: crates/termade-tui/src/settings.rs
+msgid "已更新合併策略並儲存至 {path}"
 msgstr ""
 
 #: crates/termade-tui/src/settings.rs

@@ -1071,7 +1071,7 @@ fn merge_resolve_loop_delegates_to_session() {
             session: sb.id.clone(),
             dry_run: false,
             resolve: true,
-            strategy: termade_protocol::MergeStrategy::Merge,
+            strategy: Some(termade_protocol::MergeStrategy::Merge),
         },
     );
 
@@ -1258,7 +1258,7 @@ fn merge_rebase_resolve_loop_delegates_to_session() {
             session: sb.id.clone(),
             dry_run: false,
             resolve: true,
-            strategy: termade_protocol::MergeStrategy::Rebase,
+            strategy: Some(termade_protocol::MergeStrategy::Rebase),
         },
     );
 

@@ -356,9 +356,9 @@ enum Cmd {
         /// 若發生衝突，自動保留標記於 worktree 並委派 agent 解衝突
         #[arg(long)]
         resolve: bool,
-        /// 合併策略：merge (預設，保留提交記錄)、squash (壓成單一提交)、rebase (線性歷史)
-        #[arg(long, default_value = "merge", value_parser = ["merge", "squash", "rebase"])]
-        strategy: String,
+        /// 合併策略：merge、squash、rebase；省略時使用全域 [git] merge_strategy (預設 merge)
+        #[arg(long, value_parser = ["merge", "squash", "rebase"])]
+        strategy: Option<String>,
     },
     /// 為指定 session 的 worktree 建立 GitHub PR (M3)
     Pr {
@@ -646,8 +646,9 @@ fn main() -> Result<()> {
             strategy,
         } => {
             let strategy = strategy
-                .parse::<termade_protocol::MergeStrategy>()
-                .unwrap_or_default();
+                .map(|s| s.parse::<termade_protocol::MergeStrategy>())
+                .transpose()
+                .map_err(anyhow::Error::msg)?;
             cmd_merge(session, dry_run, resolve, strategy)
         }
         Cmd::Pr {

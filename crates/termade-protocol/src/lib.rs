@@ -334,9 +334,9 @@ pub enum Request {
         dry_run: bool,
         #[serde(default)]
         resolve: bool,
-        /// 合併策略；舊 client 省略時為 `merge`。
+        /// 合併策略；省略時由 daemon 的全域 `[git] merge_strategy` 決定，預設 `merge`。
         #[serde(default)]
-        strategy: MergeStrategy,
+        strategy: Option<MergeStrategy>,
     },
     /// 為某個 session 的分支建立 Pull Request (透過 `gh`)。
     WorktreePr {
@@ -472,7 +472,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn merge_strategy_parses_and_defaults_to_merge() {
+    fn merge_strategy_parses_and_request_defaults_to_none() {
         assert_eq!(
             "merge".parse::<MergeStrategy>().unwrap(),
             MergeStrategy::Merge
@@ -493,21 +493,21 @@ mod tests {
             session: "s1".into(),
             dry_run: false,
             resolve: false,
-            strategy: MergeStrategy::Rebase,
+            strategy: Some(MergeStrategy::Rebase),
         })
         .unwrap();
         let back: Request = decode_line(line.trim()).unwrap();
         let Request::WorktreeMerge { strategy, .. } = back else {
             panic!("expected WorktreeMerge")
         };
-        assert_eq!(strategy, MergeStrategy::Rebase);
+        assert_eq!(strategy, Some(MergeStrategy::Rebase));
 
         let legacy = r#"{"op":"worktree_merge","session":"s1"}"#;
         let back: Request = decode_line(legacy).unwrap();
         let Request::WorktreeMerge { strategy, .. } = back else {
             panic!("expected WorktreeMerge")
         };
-        assert_eq!(strategy, MergeStrategy::Merge);
+        assert_eq!(strategy, None);
     }
 
     #[test]

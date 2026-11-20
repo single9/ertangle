@@ -457,7 +457,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     },
                     "strategy": {
                         "type": "string",
-                        "description": "Merge strategy: merge | squash | rebase (default: merge)",
+                        "description": "Merge strategy: merge | squash | rebase (default: global [git] merge_strategy or merge)",
                         "enum": ["merge", "squash", "rebase"]
                     }
                 },
@@ -467,9 +467,8 @@ pub fn tool_definitions() -> Vec<Value> {
     ]
 }
 
-pub(crate) fn parse_merge_strategy(s: Option<&str>) -> MergeStrategy {
+pub(crate) fn parse_merge_strategy(s: Option<&str>) -> Option<MergeStrategy> {
     s.and_then(|val| val.parse::<MergeStrategy>().ok())
-        .unwrap_or(MergeStrategy::Merge)
 }
 
 fn roundtrip(req: &Request) -> Result<Frame> {
@@ -1132,13 +1131,28 @@ mod merge_strategy_tests {
 
     #[test]
     fn parse_merge_strategy_cases() {
-        assert_eq!(parse_merge_strategy(None), MergeStrategy::Merge);
-        assert_eq!(parse_merge_strategy(Some("merge")), MergeStrategy::Merge);
-        assert_eq!(parse_merge_strategy(Some("squash")), MergeStrategy::Squash);
-        assert_eq!(parse_merge_strategy(Some("SQUASH")), MergeStrategy::Squash);
-        assert_eq!(parse_merge_strategy(Some("rebase")), MergeStrategy::Rebase);
-        assert_eq!(parse_merge_strategy(Some("Rebase")), MergeStrategy::Rebase);
-        assert_eq!(parse_merge_strategy(Some("invalid")), MergeStrategy::Merge);
+        assert_eq!(parse_merge_strategy(None), None);
+        assert_eq!(
+            parse_merge_strategy(Some("merge")),
+            Some(MergeStrategy::Merge)
+        );
+        assert_eq!(
+            parse_merge_strategy(Some("squash")),
+            Some(MergeStrategy::Squash)
+        );
+        assert_eq!(
+            parse_merge_strategy(Some("SQUASH")),
+            Some(MergeStrategy::Squash)
+        );
+        assert_eq!(
+            parse_merge_strategy(Some("rebase")),
+            Some(MergeStrategy::Rebase)
+        );
+        assert_eq!(
+            parse_merge_strategy(Some("Rebase")),
+            Some(MergeStrategy::Rebase)
+        );
+        assert_eq!(parse_merge_strategy(Some("invalid")), None);
     }
 
     #[test]

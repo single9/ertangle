@@ -52,7 +52,7 @@ pub(crate) fn cmd_merge(
     session: String,
     dry_run: bool,
     resolve: bool,
-    strategy: MergeStrategy,
+    strategy: Option<MergeStrategy>,
 ) -> Result<()> {
     let frame = roundtrip(&Request::WorktreeMerge {
         session,
