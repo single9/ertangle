@@ -2,11 +2,13 @@
 
 Priority: P1　Scope: `ertangle-protocol`, `ertangle-core`, `ertangle-daemon`, `ertangle-adapter`, `ertangle-tui`, web　Depends on: —
 
-Status: ready-for-agent
+Status: ready-for-human
 
 ## Investigation result
 
 See `T62-probe-notes.md`. The concrete blockers are confirmed: ACP `initialize` does not advertise `clientCapabilities.elicitation`, and `acp.rs` rejects unhandled server-to-client JSON-RPC requests with `-32601`; Codex answers `mcpServer/elicitation/request` with empty content and rejects `item/tool/requestUserInput`. Claude needs an MCP fallback and PTY needs a typed-answer fallback.
+
+Core implementation landed in `c0ba457` and `3353826`. Remaining acceptance gaps (web answering, Claude native tool result, multiple questions, live-agent verification) are tracked in `T63`. This ticket stays open until a real session per agent confirms the picker unblocks the agent.
 
 ## Problem
 

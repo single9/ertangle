@@ -67,6 +67,7 @@
 | [T60](T60-english-first-convention.md) | Adopt English-first tickets and code comments | P3 | — |
 | [T61](T61-gemma-comment-translation.md) | Translate legacy code comments to English with gemma4:std | P3 | T60 |
 | [T62](T62-question-tool-support-for-all-agents.md) | Render interactive question tool calls for every agent | P1 | — |
+| [T63](T63-complete-question-tool-coverage.md) | Complete question tool coverage (web, Claude native, multi-question) | P1 | T62 |
 
 ## Language convention
 
