@@ -879,6 +879,11 @@ pub enum Event {
         session: SessionId,
         text: String,
     },
+    /// A session's inbox read cursor advanced to `msg` (persisted so restarts do not redeliver).
+    InboxRead {
+        session: SessionId,
+        msg: String,
+    },
     /// Session background child process list updated.
     SessionBgProcs {
         session: SessionId,
@@ -1026,6 +1031,9 @@ pub struct State {
     /// Queued raw prompt text list per session (session ID -> items).
     #[serde(default)]
     pub queues: BTreeMap<SessionId, Vec<String>>,
+    /// Last bus message id already delivered to each session (session ID -> message ID).
+    #[serde(default)]
+    pub inbox_cursors: BTreeMap<SessionId, String>,
 }
 
 impl Default for State {
@@ -1044,6 +1052,7 @@ impl Default for State {
             log_ok: true,
             quotas: BTreeMap::new(),
             queues: BTreeMap::new(),
+            inbox_cursors: BTreeMap::new(),
         }
     }
 }
@@ -1146,6 +1155,9 @@ impl State {
                         s.active_tools.clear();
                     }
                 }
+            }
+            Event::InboxRead { session, msg } => {
+                self.inbox_cursors.insert(session.clone(), msg.clone());
             }
             Event::SessionBgProcs { session, procs } => {
                 if let Some(s) = self.sessions.get_mut(session) {
@@ -3308,5 +3320,26 @@ mod attachment_tests {
         });
         assert!(!st.archived_sessions.contains_key("ses_arch"));
         assert!(st.sessions.contains_key("ses_arch"));
+    }
+}
+
+#[cfg(test)]
+mod inbox_cursor_tests {
+    use super::*;
+
+    #[test]
+    fn inbox_read_event_sets_cursor_and_roundtrips() {
+        let mut st = State::new();
+        st.apply(&Record {
+            seq: 1,
+            ts: 0,
+            event: Event::InboxRead {
+                session: "s1".into(),
+                msg: "m9".into(),
+            },
+        });
+        assert_eq!(st.inbox_cursors.get("s1").map(String::as_str), Some("m9"));
+        let back: State = serde_json::from_str(&serde_json::to_string(&st).unwrap()).unwrap();
+        assert_eq!(back.inbox_cursors, st.inbox_cursors);
     }
 }

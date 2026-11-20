@@ -4483,3 +4483,110 @@ fn strip_deleted_suffix_removes_marker_only_at_end() {
         Path::new("/opt/(deleted) x/ertangle")
     );
 }
+
+// ---- T70: persisted inbox cursors + dead assignee warning ----
+
+#[test]
+fn inbox_cursor_survives_daemon_restart() {
+    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-log")));
+    let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    first.emit(Event::SessionStarted {
+        session: restart_session("ses_n", SessionStatus::Idle),
+    });
+    let id = first
+        .deliver_message(
+            Some("human".into()),
+            Target::Direct("ses_n".into()),
+            MsgKind::Chat,
+            "hello".into(),
+            None,
+        )
+        .expect("deliver");
+    // Reading the unread inbox advances the cursor and writes an InboxRead event.
+    let (tx, rx) = client_channel(None);
+    first.handle(
+        &tx,
+        Request::BusInbox {
+            session: "ses_n".into(),
+            unread_only: true,
+        },
+    );
+    assert!(format!("{:?}", rx.rx.try_recv().unwrap()).contains("hello"));
+    first.flush_log();
+    drop(first);
+
+    let second =
+        Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
+    assert_eq!(
+        lock(&second.inner).state.inbox_cursors.get("ses_n"),
+        Some(&id)
+    );
+    let (tx, rx) = client_channel(None);
+    second.handle(
+        &tx,
+        Request::BusInbox {
+            session: "ses_n".into(),
+            unread_only: true,
+        },
+    );
+    let frame = format!("{:?}", rx.rx.try_recv().unwrap());
+    assert!(
+        !frame.contains("hello"),
+        "read message redelivered: {frame}"
+    );
+}
+
+#[test]
+fn unchanged_inbox_cursor_emits_no_event() {
+    let shared = test_shared();
+    {
+        let mut inner = lock(&shared.inner);
+        shared.advance_inbox_cursor(&mut inner, &"s".to_string(), "m1");
+        let seq = inner.seq;
+        shared.advance_inbox_cursor(&mut inner, &"s".to_string(), "m1");
+        assert_eq!(inner.seq, seq);
+    }
+}
+
+#[test]
+fn task_for_unresumable_dead_assignee_warns() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_dead",
+        "worker/dead",
+        SessionStatus::Failed,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    let (frame, _) = create_task(&shared, "t", Some("ses_dead"), &[]);
+    let Frame::Ok { note: Some(note) } = frame else {
+        panic!("expected ok");
+    };
+    let w = crate::mcp::note_warning(&note).expect("warning present");
+    assert!(w.contains("ses_dead") && w.contains("failed"), "{w}");
+    assert!(lock(&shared.inner)
+        .state
+        .inbox_for("ses_dead", None)
+        .is_empty());
+}
+
+#[test]
+fn task_for_live_assignee_has_no_warning() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_ok",
+        "worker/ok",
+        SessionStatus::Idle,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    let (frame, _) = create_task(&shared, "t", Some("ses_ok"), &[]);
+    let Frame::Ok { note: Some(note) } = frame else {
+        panic!("expected ok");
+    };
+    assert!(crate::mcp::note_warning(&note).is_none());
+}

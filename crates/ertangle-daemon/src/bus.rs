@@ -285,9 +285,7 @@ impl Shared {
             let mut remaining = Vec::with_capacity(waiters.len());
             for w in waiters {
                 if w.matches(&state_clone, &message) && w.tx.send(message.clone()).is_ok() {
-                    inner
-                        .inbox_cursors
-                        .insert(w.session.clone(), message.id.clone());
+                    self.advance_inbox_cursor(&mut inner, &w.session, &message.id);
                     woken_by_waiter.insert(w.session.clone());
                 } else {
                     remaining.push(w);
@@ -378,7 +376,7 @@ impl Shared {
                 return;
             };
             let pos = |id: &str| inner.state.messages.iter().position(|m| m.id == id);
-            let cursor = inner.inbox_cursors.get(sid).and_then(|c| pos(c));
+            let cursor = inner.state.inbox_cursors.get(sid).and_then(|c| pos(c));
             let unread: Vec<&BusMessage> = ids
                 .iter()
                 .filter(|id| match (pos(id), cursor) {
@@ -434,10 +432,10 @@ impl Shared {
 
         {
             let mut inner = lock(&self.inner);
-            let after = inner.inbox_cursors.get(&sid).cloned();
+            let after = inner.state.inbox_cursors.get(&sid).cloned();
             let unread = inner.state.inbox_for(&sid, after.as_deref());
             if let Some(found) = unread.into_iter().find(|m| waiter.matches(&inner.state, m)) {
-                inner.inbox_cursors.insert(sid, found.id.clone());
+                self.advance_inbox_cursor(&mut inner, &sid, &found.id);
                 let _ = reply.send(Frame::Messages {
                     messages: vec![found],
                     timed_out: false,
@@ -476,14 +474,15 @@ impl Shared {
         let sid = self.resolve_session(&session);
         let mut inner = lock(&self.inner);
         let after = if unread_only {
-            inner.inbox_cursors.get(&sid).cloned()
+            inner.state.inbox_cursors.get(&sid).cloned()
         } else {
             None
         };
         let messages = inner.state.inbox_for(&sid, after.as_deref());
         if unread_only {
             if let Some(last) = messages.last() {
-                inner.inbox_cursors.insert(sid, last.id.clone());
+                let last_id = last.id.clone();
+                self.advance_inbox_cursor(&mut inner, &sid, &last_id);
             }
         }
         let _ = reply.send(Frame::Messages {

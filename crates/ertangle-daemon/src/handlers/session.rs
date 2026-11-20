@@ -1053,7 +1053,7 @@ pub(crate) fn handle_handoff(
     let git_summary = format!("{git_note}工作區狀態：{status}\n最近的 commit：\n{log}\n最後一個 commit 的變更：\n{stat}\n");
     let brief = {
         let inner = lock(&shared.inner);
-        let after = inner.inbox_cursors.get(&sid).cloned();
+        let after = inner.state.inbox_cursors.get(&sid).cloned();
         let unread = inner.state.inbox_for(&sid, after.as_deref());
         crate::handoff::build_handoff_brief(
             &inner.state,

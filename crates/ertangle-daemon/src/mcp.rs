@@ -494,6 +494,12 @@ pub fn tool_definitions() -> Vec<Value> {
     ]
 }
 
+/// Extracts the `warning: ...` line a task handler appended to its reply note.
+pub(crate) fn note_warning(note: &str) -> Option<&str> {
+    note.lines()
+        .find_map(|l| l.strip_prefix(crate::handlers::task::WARNING_PREFIX))
+}
+
 pub(crate) fn parse_merge_strategy(s: Option<&str>) -> Option<MergeStrategy> {
     s.and_then(|val| val.parse::<MergeStrategy>().ok())
 }
@@ -655,7 +661,11 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .split_whitespace()
                 .find(|t| t.starts_with("task_"))
                 .unwrap_or(&note);
-            Ok(json!({ "ok": true, "id": id, "note": note }))
+            let mut out = json!({ "ok": true, "id": id, "note": note });
+            if let Some(w) = note_warning(&note) {
+                out["warning"] = json!(w);
+            }
+            Ok(out)
         }
 
         "ertangle_inbox" => {
@@ -788,13 +798,19 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             let assignee = args["assignee"].as_str().map(|s| s.to_string());
             let detail = args["detail"].as_str().map(|s| s.to_string());
 
-            roundtrip(&Request::TaskUpdate {
+            let frame = roundtrip(&Request::TaskUpdate {
                 id: id.clone(),
                 status,
                 assignee,
                 detail,
             })?;
-            Ok(json!({ "ok": true, "id": id }))
+            let mut out = json!({ "ok": true, "id": id });
+            if let Frame::Ok { note: Some(note) } = &frame {
+                if let Some(w) = note_warning(note) {
+                    out["warning"] = json!(w);
+                }
+            }
+            Ok(out)
         }
 
         "ertangle_spawn" => {

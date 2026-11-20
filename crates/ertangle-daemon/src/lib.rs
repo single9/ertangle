@@ -280,7 +280,6 @@ pub(crate) struct Inner {
     pub(crate) seq: Seq,
     pub(crate) backlog: VecDeque<Record>,
     pub(crate) sessions: HashMap<SessionId, SessionEntry>,
-    pub(crate) inbox_cursors: HashMap<SessionId, MsgId>,
     /// 送達時收件者正忙、因此沒有喚醒的訊息 (T25)；回到 `Idle` 時合併提醒一次。
     pub(crate) pending_nudge: HashMap<SessionId, Vec<MsgId>>,
     pub(crate) waiters: Vec<Waiter>,
@@ -363,7 +362,6 @@ impl Shared {
                 seq,
                 backlog,
                 sessions: HashMap::new(),
-                inbox_cursors: HashMap::new(),
                 pending_nudge: HashMap::new(),
                 waiters: Vec::new(),
                 approval_waiters: HashMap::new(),
@@ -533,6 +531,26 @@ impl Shared {
     /// 廣播一個事件：更新狀態、寫 log (先遮罩憑證)、推給所有 client。
     pub(crate) fn emit(&self, event: Event) {
         let mut inner = lock(&self.inner);
+        self.emit_locked(&mut inner, event);
+    }
+
+    /// Advances a session's persisted inbox cursor (no-op if unchanged).
+    /// Callers already holding the `inner` lock pass it in to avoid deadlock.
+    pub(crate) fn advance_inbox_cursor(&self, inner: &mut Inner, session: &SessionId, msg: &str) {
+        if inner.state.inbox_cursors.get(session).map(String::as_str) == Some(msg) {
+            return;
+        }
+        self.emit_locked(
+            inner,
+            Event::InboxRead {
+                session: session.clone(),
+                msg: msg.to_string(),
+            },
+        );
+    }
+
+    /// `emit` for callers that already hold the `inner` lock.
+    pub(crate) fn emit_locked(&self, inner: &mut Inner, event: Event) {
         inner.seq += 1;
         let rec = Record {
             seq: inner.seq,

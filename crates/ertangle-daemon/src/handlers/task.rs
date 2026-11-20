@@ -53,15 +53,51 @@ fn assignment_body(state: &State, task: &Task) -> String {
     body.trim_end().to_string()
 }
 
-/// 把指派訊息投遞給負責人 (閒置中的負責人會被喚醒)。自己指派給自己不通知。
-fn notify_assignee(shared: &Arc<Shared>, task: &Task) {
-    let Some(target) = task.assignee.clone().filter(|a| !a.is_empty()) else {
-        return;
-    };
+/// Prefix of the note line that reports a delivery problem (parsed by the MCP layer).
+pub(crate) const WARNING_PREFIX: &str = "warning: ";
+
+/// Whether the assignee session is currently live. Unknown ids count as not live.
+fn assignee_is_live(shared: &Arc<Shared>, target: &str) -> bool {
+    lock(&shared.inner)
+        .state
+        .sessions
+        .get(target)
+        .is_some_and(|s| s.status.is_live())
+}
+
+/// Builds the warning for an assignee that could not be woken.
+fn dead_assignee_warning(shared: &Arc<Shared>, target: &str, reason: &str) -> String {
+    let status = lock(&shared.inner)
+        .state
+        .sessions
+        .get(target)
+        .map(|s| format!("{:?}", s.status).to_lowercase())
+        .unwrap_or_else(|| "unknown".into());
+    format!(
+        "{WARNING_PREFIX}assignee {target} is {status} and could not be resumed ({reason}); reassign the task or :resume it"
+    )
+}
+
+/// Delivers the assignment to the assignee (an idle assignee is woken). Self-assignment
+/// does not notify. A dead (failed/exited) assignee is auto-resumed with the assignment
+/// as its prompt; if that is impossible, returns a warning for the caller to surface.
+fn notify_assignee(shared: &Arc<Shared>, task: &Task) -> Option<String> {
+    let target = task.assignee.clone().filter(|a| !a.is_empty())?;
     if task.created_by.as_ref() == Some(&target) {
-        return;
+        return None;
     }
     let body = assignment_body(&lock(&shared.inner).state, task);
+    if !assignee_is_live(shared, &target) {
+        return match crate::handlers::session::resume_session(
+            shared,
+            &target,
+            Some(body),
+            Some(ertangle_core::PROMPT_FROM_ERTANGLE.to_string()),
+        ) {
+            Ok(_) => None,
+            Err(e) => Some(dead_assignee_warning(shared, &target, &e.to_string())),
+        };
+    }
     let _ = shared.deliver_message(
         task.created_by.clone(),
         Target::Direct(target),
@@ -69,6 +105,7 @@ fn notify_assignee(shared: &Arc<Shared>, task: &Task) {
         body,
         None,
     );
+    None
 }
 
 /// 當任務狀態變為 Review 時，通知同專案的 Reviewer 進行審查。
@@ -127,6 +164,14 @@ fn notify_reviewer_on_review(shared: &Arc<Shared>, task: &Task) {
 /// 任務是否還在等前置任務 (`blocked` 且有相依性沒完成)。
 fn waiting_on_deps(state: &State, task: &Task) -> bool {
     task.status == TaskStatus::Blocked && !state.unfinished_deps(task).is_empty()
+}
+
+/// Appends the optional warning as its own line of the reply note.
+fn with_warning(note: String, warning: Option<String>) -> String {
+    match warning {
+        Some(w) => format!("{note}\n{w}"),
+        None => note,
+    }
 }
 
 pub(crate) fn handle_create(
@@ -191,8 +236,11 @@ pub(crate) fn handle_create(
 
     if waiting.is_empty() {
         // 指派任務時直接投遞一則 handoff 訊息，讓閒置中的負責人被喚醒。
-        notify_assignee(shared, &task);
-        let _ = reply.send(Frame::ok_note(tr!("已建立任務 {id}", id = id)));
+        let warning = notify_assignee(shared, &task);
+        let _ = reply.send(Frame::ok_note(with_warning(
+            tr!("已建立任務 {id}", id = id),
+            warning,
+        )));
     } else {
         // 還在等前置任務：先不通知負責人，等相依性完成再由 `unblock_dependents` 送。
         let _ = reply.send(Frame::ok_note(tr!(
@@ -239,8 +287,9 @@ pub(crate) fn handle_update(
             shared.emit(ertangle_core::Event::TaskChanged { task: task.clone() });
 
             // 還在等前置任務的不通知：解鎖時會送給當時的負責人。
+            let mut warning = None;
             if newly_assigned && !waiting_on_deps(&lock(&shared.inner).state, &task) {
-                notify_assignee(shared, &task);
+                warning = notify_assignee(shared, &task);
             }
             if now_done && !was_done {
                 unblock_dependents(shared, &task_id);
@@ -249,9 +298,9 @@ pub(crate) fn handle_update(
                 notify_reviewer_on_review(shared, &task);
             }
 
-            let _ = reply.send(Frame::ok_note(tr!(
-                "已更新任務 {task_id}",
-                task_id = task_id
+            let _ = reply.send(Frame::ok_note(with_warning(
+                tr!("已更新任務 {task_id}", task_id = task_id),
+                warning,
             )));
         }
         None => {
