@@ -333,10 +333,20 @@
     .q-list { display:flex; flex-direction:column; margin-top:6px; border-top:1px solid var(--border); }
     .q-opt { display:flex; align-items:flex-start; gap:10px; min-height:44px; padding:10px 8px 10px 12px; border-bottom:1px solid var(--border); cursor:pointer; width:100%; box-sizing:border-box; transition:background 0.15s; -webkit-tap-highlight-color:transparent; }
     .q-opt:hover { background:rgba(255,255,255,0.03); }
-    .q-opt input { margin-top:3px; flex:none; width:16px; height:16px; accent-color:var(--yellow); }
+    /* Native input stays for state and a11y but is visually replaced by keycap + mark. */
+    .q-opt { position:relative; align-items:center; }
+    .q-opt input { position:absolute; opacity:0; width:1px; height:1px; pointer-events:none; }
+    .q-opt:focus-within { outline:1px solid var(--cyan); outline-offset:-1px; }
+    .q-key { flex:none; width:22px; height:22px; box-sizing:border-box; border:1px solid #3a4054; border-radius:6px; display:flex; align-items:center; justify-content:center; font:600 12px var(--font-mono); color:var(--text-dim); }
+    .q-opt.selected .q-key { background:var(--yellow); border-color:var(--yellow); color:#000; }
+    .q-mark { flex:none; width:18px; height:18px; display:flex; align-items:center; justify-content:center; color:var(--yellow); font-weight:700; font-size:15px; }
+    .q-mark::after { content:"✓"; visibility:hidden; }
+    .q-opt.selected .q-mark::after { visibility:visible; }
+    .q-multi .q-mark { box-sizing:border-box; border:1.5px solid #4a5168; border-radius:5px; font-size:12px; color:#000; }
+    .q-multi .q-opt.selected .q-mark { background:var(--yellow); border-color:var(--yellow); }
     .q-opt.selected { background:rgba(255,200,0,0.07); }
     .q-opt.selected .q-opt-label { color:var(--yellow); }
-    .q-opt-body { display:flex; flex-direction:column; gap:2px; min-width:0; }
+    .q-opt-body { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
     .q-opt-label { font-weight:500; font-size:14px; overflow-wrap:anywhere; }
     .q-opt-desc { font-size:12px; color:var(--text-dim); overflow-wrap:anywhere; }
     .q-custom-row { display:flex; align-items:center; gap:10px; padding:4px 8px 4px 12px; border-bottom:1px solid var(--border); }
@@ -3953,13 +3963,15 @@
 
     function questionAnswerHtml(q, scope, countLabel) {
       const name = `qopt-${scope}-${q.id}`;
-      const optionInputs = (q.options || []).map(opt => `
+      const optionInputs = (q.options || []).map((opt, i) => `
         <label class="q-opt">
           <input type="${q.multi_select ? "checkbox" : "radio"}" name="${escapeHtml(name)}" value="${escapeHtml(opt.label)}" onchange="syncQuestionSelection(this)">
+          <span class="q-key">${i < 9 ? i + 1 : ""}</span>
           <span class="q-opt-body">
             <span class="q-opt-label">${escapeHtml(opt.label)}</span>
             ${opt.description ? `<span class="q-opt-desc">${escapeHtml(opt.description)}</span>` : ""}
           </span>
+          <span class="q-mark"></span>
         </label>`).join("");
       const customInput = q.custom
         ? `<div class="q-custom-row"><span class="q-pen">✎</span><input id="qst-custom-${scope}-${escapeHtml(q.id)}" class="q-custom" type="text" placeholder="自訂答案…" data-qname="${escapeHtml(name)}" data-multi="${q.multi_select ? "1" : ""}" oninput="onQuestionCustomInput(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuestionGroup('${scope}', '${escapeHtml(q.id)}');}"></div>`
@@ -3967,7 +3979,7 @@
       return `<div class="q-card">
         <div class="q-head"><span>${escapeHtml(q.header || "提問")}</span>${countLabel ? `<span class="q-count">${escapeHtml(countLabel)}</span>` : ""}</div>
         <div class="q-text">${escapeHtml(q.question)}</div>
-        <div class="q-list">${optionInputs}${customInput}</div>
+        <div class="q-list${q.multi_select ? " q-multi" : ""}">${optionInputs}${customInput}</div>
       </div>`;
     }
 
@@ -3980,6 +3992,25 @@
         if (custom) custom.value = "";
       }
     }
+
+    /**
+     * Digit keys 1-9 pick an option of the visible question card (the one holding focus,
+     * else the first). Ignored while typing in an input so custom answers stay editable.
+     */
+    function handleQuestionDigitKey(ev) {
+      if (ev.ctrlKey || ev.metaKey || ev.altKey || !/^[1-9]$/.test(ev.key)) return;
+      const t = ev.target;
+      if (t && (t.tagName === "INPUT" && t.type === "text" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      const cards = Array.from(document.querySelectorAll(".q-card")).filter(c => c.offsetParent !== null);
+      if (!cards.length) return;
+      const card = cards.find(c => c.contains(document.activeElement)) || cards[0];
+      const input = card.querySelectorAll(".q-opt input")[Number(ev.key) - 1];
+      if (!input) return;
+      ev.preventDefault();
+      input.click();
+      input.focus({ preventScroll: true });
+    }
+    document.addEventListener("keydown", handleQuestionDigitKey);
 
     /** Single-select: typing a custom answer clears the picked option so the text is what gets sent. */
     function onQuestionCustomInput(el) {

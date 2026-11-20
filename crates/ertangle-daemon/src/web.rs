@@ -858,8 +858,16 @@ mod tests {
         assert!(INDEX_HTML.contains("class=\"q-opt-desc\""));
         assert!(INDEX_HTML.contains(".q-submit-row { display:flex; justify-content:flex-end;"));
         // Minimal list style: options sit in a divided list inside an accent-bar panel.
-        assert!(INDEX_HTML.contains("<div class=\"q-list\">"));
+        assert!(
+            INDEX_HTML.contains("<div class=\"q-list${q.multi_select ? \" q-multi\" : \"\"}\">")
+        );
         assert!(INDEX_HTML.contains("q-group q-panel"));
+        // Options show a 1-9 keycap and a right-side mark (✓ / checkbox) instead of native dots.
+        assert!(INDEX_HTML.contains("<span class=\"q-key\">"));
+        assert!(INDEX_HTML.contains("<span class=\"q-mark\"></span>"));
+        assert!(
+            INDEX_HTML.contains("document.addEventListener(\"keydown\", handleQuestionDigitKey);")
+        );
         // iOS Safari zooms on inputs below 16px.
         assert!(INDEX_HTML.contains("border:none; outline:none; font-size:16px;"));
         assert!(INDEX_HTML.contains("min-height:44px"));
