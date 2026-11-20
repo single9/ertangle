@@ -1,11 +1,11 @@
-//! 原生 Agent Client Protocol adapter。
+//! Native Agent Client Protocol adapter.
 //!
-//! M0 用於 OpenCode (`opencode acp`)，這是四家 agent 中唯一「原生、零額外相依性」
-//! 就提供結構化協定的一條，因此當作第一個結構化 adapter。
+//! M0 used for OpenCode (`opencode acp`), which is the only one among four agents that provides a structured
+//! protocol natively with zero extra dependencies, and was therefore implemented as the first structured adapter.
 //!
-//! 涵蓋的 ACP 子集：`initialize`、`session/new`、`session/load` (接續)、`session/prompt`、
-//! `session/cancel`，
-//! 以及 server→client 的 `session/update` (串流)與 `session/request_permission` (核准)。
+//! ACP subset covered: `initialize`, `session/new`, `session/load` (resumption), `session/prompt`,
+//! `session/cancel`,
+//! as well as server→client `session/update` (streaming) and `session/request_permission` (approvals).
 
 use crate::stream::StreamBuf;
 use crate::{AgentControl, AgentEvent, SessionSpec};
@@ -23,37 +23,37 @@ use tr::tr;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
-/// `session/load` 要等 agent 把整段歷史重播完，對話長時比一般呼叫久。
+/// `session/load` must wait for the agent to replay the entire history, which takes longer than a normal call for long conversations.
 const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 
 struct Conn {
-    /// 這個 adapter 代表的 agent id (額度事件的 `agent` 欄位)。
+    /// Agent ID represented by this adapter (`agent` field in quota events).
     agent: String,
-    /// 已送出 `reached=true` 的限流額度、尚未被成功回合清除。
+    /// Quota marked as rate limited with `reached=true`, not yet cleared by a successful turn.
     limited: std::sync::atomic::AtomicBool,
-    /// Antigravity 專用：`agy --output-format json -p /quota` 的執行檔與環境變數。
+    /// Antigravity-specific: executable and environment variables for `agy --output-format json -p /quota`.
     quota_prog: Option<(std::path::PathBuf, Vec<(String, String)>)>,
-    /// 避免同時啟動多個額度查詢背景程序。
+    /// Prevents running multiple quota query background processes concurrently.
     quota_refreshing: std::sync::atomic::AtomicBool,
-    /// 我們自己的 session id (事件關聯用)。
+    /// Our own session ID (for event correlation).
     session_id: String,
-    /// agent 回傳的 ACP session id (prompt / cancel 用)。
+    /// Agent's ACP session ID (for prompt / cancel).
     acp_session: Mutex<String>,
     stdin: Mutex<ChildStdin>,
     next_id: AtomicI64,
     pending: Mutex<HashMap<i64, Sender<Value>>>,
-    /// 核准：內部 req id -> (JSON-RPC id, options)
+    /// Approvals: internal req id -> (JSON-RPC id, options)
     perms: Mutex<HashMap<String, (Value, Vec<Value>)>>,
-    /// 串流輸出的行緩衝 (把 token 級 chunk 併成完整行)。
+    /// Line buffer for streaming output (combines token-level chunks into complete lines).
     stream: Mutex<StreamBuf>,
-    /// 第一則 prompt 前置的協作說明 (取出一次即清空)。
+    /// Collaboration instructions prepended to the first prompt (cleared once taken).
     prepend_once: Mutex<Option<String>>,
-    /// agent 在 initialize 宣告支援圖片區塊 (`promptCapabilities.image`)。
+    /// Agent declared image block support during initialize (`promptCapabilities.image`).
     image_ok: std::sync::atomic::AtomicBool,
-    /// `session/load` 進行中：agent 會把歷史以 `session/update` 重播，這段期間的更新一律丟掉，
-    /// 否則逐字稿會重複。由 reader 在收到 load 的回應時清除 (重播一定在回應之前)。
+    /// `session/load` in progress: the agent replays history via `session/update`; updates during this period are discarded,
+    /// otherwise the transcript would duplicate. Cleared by the reader upon receiving the load response (replays always precede the response).
     loading: std::sync::atomic::AtomicBool,
-    /// 權限政策：`Auto` / `Bypass` 時由 adapter 直接代為核准。
+    /// Permission policy: directly auto-approved by adapter when `Auto` / `Bypass`.
     tx: Sender<AgentEvent>,
 }
 
@@ -78,7 +78,7 @@ impl Conn {
         }));
     }
 
-    /// 送一個請求並等待回應。
+    /// Sends a request and waits for response.
     fn call(&self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (s, r) = mpsc::channel();
@@ -99,7 +99,7 @@ impl Conn {
         Ok(msg.get("result").cloned().unwrap_or(Value::Null))
     }
 
-    /// 送出一段 prompt，等整個回合結束。
+    /// Sends a prompt and waits for the entire turn to complete.
     fn prompt(&self, text: &str, atts: &[ertangle_core::Attachment]) -> Result<()> {
         let sid = self
             .acp_session
@@ -126,7 +126,7 @@ impl Conn {
         res.map(|_| ())
     }
 
-    /// 錯誤文字若是限流就送出 `reached=true` 並記下旗標 (之後成功的回合會清除)。
+    /// If the error text indicates rate limiting, emits `reached=true` and sets flag (subsequent successful turns will clear it).
     fn report_rate_limit(&self, error_text: &str) {
         if let Some(q) = rate_limit_quota(&self.agent, error_text) {
             self.limited.store(true, Ordering::SeqCst);
@@ -134,7 +134,7 @@ impl Conn {
         }
     }
 
-    /// 非同步查詢 Antigravity 額度 (不阻塞回合)，同時間最多只跑一個查詢。
+    /// Asynchronously queries Antigravity quota (non-blocking), running at most one query at a time.
     fn refresh_quota_async(self: &Arc<Self>) {
         let Some((prog, env)) = self.quota_prog.clone() else {
             return;
@@ -179,7 +179,7 @@ impl Conn {
                 let _ = self.tx.send(AgentEvent::Commands(names));
             }
             "usage_update" => {
-                // ACP: `used` (目前 context 佔用)與 `size` (視窗大小)。
+                // ACP: `used` (current context tokens) and `size` (window size).
                 if let Some(used) = update["used"].as_u64() {
                     let _ = self.tx.send(AgentEvent::Context {
                         used,
@@ -226,9 +226,9 @@ impl Conn {
                 });
             }
             "tool_call_update" => {
-                // ACP 會用 pending／in_progress 逐步回報同一個工具；只有 completed／failed
-                // 才是結果。以前把「不是 completed」一律當失敗，導致每個成功的 shell 呼叫
-                // 都多印一行 `✗ 失敗`。
+                // ACP reports the same tool incrementally with pending/in_progress; only completed/failed
+                // is the final result. Previously "not completed" was treated as failure, causing successful
+                // shell calls to emit an extra `✗ failed` line.
                 let Some(ok) = tool_update_ok(update) else {
                     return;
                 };
@@ -245,7 +245,7 @@ impl Conn {
         }
     }
 
-    /// 把行緩衝的殘留送出 (換種類或工具呼叫前呼叫)。
+    /// Flushes remaining buffered lines (called before switching event types or tool calls).
     fn flush_stream(&self) {
         let text = self
             .stream
@@ -262,7 +262,7 @@ impl Conn {
         let params = &msg["params"];
         let options = params["options"].as_array().cloned().unwrap_or_default();
 
-        // 一律轉給 daemon：規則引擎與 session 政策 (auto／bypass 自動核准)都在那裡決定。
+        // Always forward to daemon: rule engine and session policy (auto/bypass auto-approval) are evaluated there.
         let req = new_id("perm");
         let title = params["toolCall"]["title"]
             .as_str()
@@ -295,7 +295,7 @@ impl Conn {
     }
 }
 
-/// 把正規化的 [`Decision`] 轉成 ACP 的 `outcome`。
+/// Translates normalized [`Decision`] to ACP `outcome`.
 fn decision_result(decision: Decision, options: &[Value]) -> Value {
     let wanted: &[&str] = match decision {
         Decision::Allow => &["allow_once", "allow_always"],
@@ -323,7 +323,7 @@ fn tool_name(update: &Value) -> String {
         .to_string()
 }
 
-/// `tool_call_update` 的狀態：`Some(true)` 成功、`Some(false)` 失敗、`None` 只是進度。
+/// Status of `tool_call_update`: `Some(true)` succeeded, `Some(false)` failed, `None` progress only.
 fn tool_update_ok(update: &Value) -> Option<bool> {
     match update["status"].as_str().unwrap_or("") {
         "completed" => Some(true),
@@ -332,8 +332,8 @@ fn tool_update_ok(update: &Value) -> Option<bool> {
     }
 }
 
-/// 取出 ACP `content` 裡的純文字 (`ToolCallContent::Content`)，逐字稿才不會顯示 JSON 外殼。
-/// 沒有文字內容時退回 `rawOutput`。
+/// Extracts plain text from ACP `content` (`ToolCallContent::Content`) to avoid showing JSON envelopes in transcripts.
+/// Falls back to `rawOutput` when no text content is available.
 fn tool_result_text(update: &Value) -> Option<String> {
     let mut parts: Vec<&str> = Vec::new();
     for item in update["content"].as_array().into_iter().flatten() {
@@ -356,7 +356,7 @@ fn tool_result_text(update: &Value) -> Option<String> {
     Some(truncate_chars(&text, 4000))
 }
 
-/// 截斷過長的工具輸出，避免逐字稿與 event log 被整份 stdout 撐爆。
+/// Truncates excessively long tool output to prevent transcripts and event logs from ballooning.
 fn truncate_chars(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         return s.to_string();
@@ -366,7 +366,7 @@ fn truncate_chars(s: &str, max: usize) -> String {
     out
 }
 
-/// 錯誤文字是否為限流／額度用完 (`RESOURCE_EXHAUSTED`、HTTP 429、`quota exceeded`、`rate limit`)。
+/// Whether error text indicates rate limiting / quota exhaustion (`RESOURCE_EXHAUSTED`, HTTP 429, `quota exceeded`, `rate limit`).
 fn is_rate_limit_error(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     if lower.contains("resource_exhausted")
@@ -376,14 +376,14 @@ fn is_rate_limit_error(text: &str) -> bool {
     {
         return true;
     }
-    // 獨立的 `429` (前後不是數字)，避免誤判 `4290` 之類。
+    // Standalone `429` (surrounded by non-digits) to avoid matching `4290` etc.
     let b = lower.as_bytes();
     lower.match_indices("429").any(|(i, _)| {
         (i == 0 || !b[i - 1].is_ascii_digit()) && b.get(i + 3).is_none_or(|c| !c.is_ascii_digit())
     })
 }
 
-/// 限流錯誤 → 「額度已用完」的 `Quota` (沒有百分比，只標記 `reached`)；其他錯誤回 `None`。
+/// Rate limit error -> "quota reached" `Quota` (no percentage, only `reached` flag); returns `None` for other errors.
 fn rate_limit_quota(agent: &str, error_text: &str) -> Option<ertangle_core::Quota> {
     is_rate_limit_error(error_text).then(|| ertangle_core::Quota {
         agent: agent.to_string(),
@@ -394,7 +394,7 @@ fn rate_limit_quota(agent: &str, error_text: &str) -> Option<ertangle_core::Quot
     })
 }
 
-/// 回合成功後：若先前標記過限流，回傳解除 (`reached=false`) 的額度並清旗標；否則 `None`。
+/// After a successful turn: if previously rate-limited, emits recovered (`reached=false`) quota and clears flag; otherwise `None`.
 fn recovered_quota(
     agent: &str,
     limited: &std::sync::atomic::AtomicBool,
@@ -410,7 +410,7 @@ fn recovered_quota(
         })
 }
 
-/// 從 JSON-RPC 訊息中安全擷取 id；若不存在或為 null 則回傳安全後備值 (`Value::Null`)。
+/// Safely extracts ID from a JSON-RPC message; returns safe fallback (`Value::Null`) if missing or null.
 pub(crate) fn extract_request_id(msg: &Value) -> Value {
     match msg.get("id") {
         Some(id) if !id.is_null() => id.clone(),
@@ -444,8 +444,8 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
                 }
             }
         } else if let Some(id) = msg.get("id").and_then(|v| v.as_i64()) {
-            // 載入期間唯一在等的請求就是 `session/load`；在同一條讀取執行緒上清旗標，
-            // 回應之後的更新才不會被誤丟。
+            // The only request awaited during loading is `session/load`; clearing flag on the same reader thread
+            // ensures subsequent updates are not mistakenly dropped.
             conn.loading.store(false, Ordering::SeqCst);
             if let Some(s) = conn
                 .pending
@@ -463,7 +463,7 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
 struct AcpControl {
     conn: Arc<Conn>,
     child: Arc<Mutex<Child>>,
-    /// 最近一次回報的 `configOptions` (包成 `{"configOptions": [...]}`)，執行期切換時用來驗證與找 configId。
+    /// Most recently reported `configOptions` (wrapped as `{"configOptions": [...]}`), used to validate and find configId during runtime switches.
     options: Mutex<Value>,
 }
 
@@ -489,7 +489,7 @@ impl AgentControl for AcpControl {
         Ok(())
     }
 
-    /// `session/set_config_option`；回應帶完整 `configOptions`，順便更新快取。
+    /// `session/set_config_option`; response includes complete `configOptions`, also updating the cache.
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         let sid = self
             .conn
@@ -577,7 +577,7 @@ impl AgentControl for AcpControl {
     }
 }
 
-/// 取出只用一次的前置說明，接在第一則 prompt 前面。
+/// Takes the one-time collaboration prefix to prepend before the first prompt.
 fn take_effective_prompt(prepend_once: &Mutex<Option<String>>, text: &str) -> String {
     match prepend_once
         .lock()
@@ -591,7 +591,7 @@ fn take_effective_prompt(prepend_once: &Mutex<Option<String>>, text: &str) -> St
     }
 }
 
-/// ACP prompt 區塊：文字 (含內嵌文字檔)；agent 支援圖片時另加 image 區塊，否則圖片改成一行說明。
+/// ACP prompt blocks: text (including inlined text files); adds image blocks if agent supports images, otherwise describes images as a text line.
 fn prompt_blocks(text: &str, atts: &[ertangle_core::Attachment], image_ok: bool) -> Value {
     let mut blocks =
         vec![json!({ "type": "text", "text": ertangle_core::compose_text(text, atts, !image_ok) })];
@@ -605,8 +605,8 @@ fn prompt_blocks(text: &str, atts: &[ertangle_core::Attachment], image_ok: bool)
     Value::Array(blocks)
 }
 
-/// 從 `session/new` 回應的 `configOptions` 找出 model 選項，並驗證 `wanted` 合法。
-/// 回傳 `(configId, value)`；agent 沒有回報 model 選項或值不在清單內時回傳明確錯誤。
+/// Finds model option from `session/new` response `configOptions` and validates `wanted`.
+/// Returns `(configId, value)`; returns a clear error if the agent reported no model options or the value is not in the list.
 fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
     let opts = new["configOptions"].as_array().cloned().unwrap_or_default();
     let opt = opts
@@ -618,7 +618,7 @@ fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
             ))
         })?;
     let id = opt["id"].as_str().unwrap_or("model").to_string();
-    // options 可能是平的 [{value,name}]，也可能分組 [{options:[...]}]。
+    // Options may be flat [{value,name}] or grouped [{options:[...]}]
     let mut values: Vec<String> = Vec::new();
     for o in opt["options"].as_array().into_iter().flatten() {
         if let Some(v) = o["value"].as_str() {
@@ -643,7 +643,7 @@ fn pick_model_option(new: &Value, wanted: &str) -> Result<(String, String)> {
     Ok((id, wanted.to_string()))
 }
 
-/// 從 `session/new` 的 `configOptions` 找出推理強度選項 (id 或 category 含 effort／reasoning／thought)。
+/// Finds reasoning effort option from `session/new` `configOptions` (id or category containing effort/reasoning/thought).
 fn pick_effort_option(new: &Value, wanted: &str) -> Result<(String, String)> {
     let opts = new["configOptions"].as_array().cloned().unwrap_or_default();
     let is_effort = |s: &str| {
@@ -752,7 +752,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         let child = child.clone();
         let tx = tx.clone();
         std::thread::spawn(move || {
-            // 用 try_wait 輪詢 (而非阻塞 wait)，否則會一直握著鎖，讓 `kill()` 永遠拿不到鎖而死鎖。
+            // Poll with try_wait (rather than blocking wait) to avoid holding the lock indefinitely, which would deadlock `kill()`.
             let code = loop {
                 let status = {
                     let mut c = child.lock().unwrap_or_else(|e| e.into_inner());
@@ -771,7 +771,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         });
     }
 
-    // 握手。
+    // Handshake.
     let init = conn.call(
         "initialize",
         json!({
@@ -804,7 +804,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         }
         None => json!([]),
     };
-    // 只有宣告 `loadSession` 的 agent 之後才接得回來。
+    // Only agents declaring `loadSession` can be reconnected later.
     let can_load = init["agentCapabilities"]["loadSession"]
         .as_bool()
         .unwrap_or(false);
@@ -826,7 +826,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 LOAD_TIMEOUT,
             );
             conn.loading.store(false, Ordering::SeqCst);
-            // 重播的片段可能有一部分已進了行緩衝，丟掉。
+            // Part of the replayed chunks might have entered the stream buffer; discard.
             let _ = conn
                 .stream
                 .lock()
@@ -851,7 +851,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if can_load {
         let _ = tx.send(AgentEvent::NativeId(sid.clone()));
     }
-    // 接續時 model／effort 已存在 agent 的對話裡；回應沒帶 configOptions 就不重設。
+    // When resuming, model/effort already exist in agent conversation; do not reset if response lacks configOptions.
     let has_options = spec.resume.is_none() || new["configOptions"].is_array();
     if let Some(wanted) = spec.model.as_ref().filter(|_| has_options) {
         let (config_id, value) = pick_model_option(&new, wanted)?;
@@ -946,12 +946,12 @@ mod model_tests {
         assert_eq!(tool_result_text(&u).as_deref(), Some("x\ny"));
 
         assert_eq!(tool_result_text(&json!({})), None);
-        // diff 內容沒有純文字：不要硬印 JSON。
+        // Diff content has no plain text: do not print raw JSON.
         assert_eq!(
             tool_result_text(&json!({"content":[{"type":"diff","path":"a.rs"}]})),
             None
         );
-        // 沒有 content 時退回 rawOutput。
+        // Fall back to rawOutput when content is absent.
         assert_eq!(
             tool_result_text(&json!({"rawOutput":{"exit":0}})).as_deref(),
             Some("{\"exit\":0}")
@@ -968,7 +968,7 @@ mod model_tests {
 
 const QUOTA_QUERY_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// 執行 `agy --output-format json -p /quota` 取得原始 JSON；失敗或逾時回 `None`。
+/// Executes `agy --output-format json -p /quota` to obtain raw JSON; returns `None` on failure or timeout.
 fn query_agy_quota(prog: &std::path::Path, env: &[(String, String)]) -> Option<String> {
     let mut cmd = Command::new(prog);
     cmd.args(["--output-format", "json", "-p", "/quota"])
@@ -1004,7 +1004,7 @@ fn query_agy_quota(prog: &std::path::Path, env: &[(String, String)]) -> Option<S
     Some(out)
 }
 
-/// 解析 `agy --output-format json -p /quota` 的輸出為 `Quota`。
+/// Parses output of `agy --output-format json -p /quota` into `Quota`.
 pub(crate) fn parse_agy_quota_json(raw: &str, reached: bool) -> Option<ertangle_core::Quota> {
     let v: Value = serde_json::from_str(raw.trim()).ok()?;
     let groups = v["command"]["data"]["groups"].as_array()?;
@@ -1085,7 +1085,7 @@ fn agy_window_name(group_name: &str, id: &str, window: &str) -> String {
     }
 }
 
-/// 解析 UTC RFC 3339 時間字串 (`YYYY-MM-DDTHH:MM:SSZ` 或帶小數秒) 為 epoch 毫秒。
+/// Parses UTC RFC 3339 timestamp string (`YYYY-MM-DDTHH:MM:SSZ` or with fractional seconds) to epoch milliseconds.
 pub(crate) fn parse_rfc3339_utc_ms(s: &str) -> Option<u64> {
     let s = s.strip_suffix('Z')?;
     let (date, time) = s.split_once('T')?;
@@ -1108,7 +1108,7 @@ pub(crate) fn parse_rfc3339_utc_ms(s: &str) -> Option<u64> {
     {
         return None;
     }
-    // Howard Hinnant 的 civil-from-days 反推：轉成 Unix epoch 天數。
+    // Howard Hinnant's civil-from-days inverse: convert to days since Unix epoch.
     let y_adj = y - if m <= 2 { 1 } else { 0 };
     let era = y_adj.div_euclid(400);
     let yoe = y_adj.rem_euclid(400);

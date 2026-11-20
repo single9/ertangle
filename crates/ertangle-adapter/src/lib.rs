@@ -1,15 +1,15 @@
-//! `ertangle-adapter` — 把各家 agent 的正規化層。
+//! `ertangle-adapter` — Normalization layer for diverse agents.
 //!
-//! 每個 agent 的協定 (ACP、stream-json、app-server、PTY)都在這裡被翻譯成
-//! 同一組 [`AgentEvent`]，所以 daemon 之上完全不需要知道底下是哪一家。
+//! Protocols for each agent (ACP, stream-json, app-server, PTY) are translated here into
+//! a uniform set of [`AgentEvent`]s, so layers above the daemon do not need to know which agent is underneath.
 //!
-//! 結構化 adapter (原生、零額外相依性)：
-//! * [`acp`]：Agent Client Protocol — OpenCode (`opencode acp`)、Antigravity (`agy acp`)。
-//! * [`claude`]：Claude Code 的 `--input-format/--output-format stream-json`。
-//! * [`codex`]：Codex 的 `codex app-server`(stdio JSON-RPC)。
+//! Structured adapters (native, zero extra dependencies):
+//! * [`acp`]: Agent Client Protocol — OpenCode (`opencode acp`), Antigravity (`agy acp`).
+//! * [`claude`]: Claude Code's `--input-format/--output-format stream-json`.
+//! * [`codex`]: Codex's `codex app-server` (stdio JSON-RPC).
 //!
-//! 萬用後備：
-//! * [`pty`]：PTY 直通，**對任何 CLI agent 都有效**。
+//! Universal fallback:
+//! * [`pty`]: PTY passthrough, **works for any CLI agent**.
 
 pub mod acp;
 pub mod ansi;
@@ -29,112 +29,112 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use tr::tr;
 
-/// adapter 正規化後、往上送的事件。
+/// Events sent upward after normalization by the adapter.
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     Status(SessionStatus),
-    /// agent 的文字輸出 (可含換行)。
+    /// Text output from the agent (may contain newlines).
     Output(String),
     ToolCall {
         name: String,
         input: String,
-        /// `None` = 進行中。
+        /// `None` = in progress.
         ok: Option<bool>,
         output: Option<String>,
     },
     Permission(PermissionRequest),
     Cost(Cost),
     Model(String),
-    /// agent 原生的斜線指令名稱 (不含 `/`)。
+    /// Native slash command names of the agent (without `/`).
     Commands(Vec<String>),
-    /// agent 原生的對話 id (接續用)。只有之後能用這個 id 接續時才會送出。
+    /// Native session ID of the agent (for resumption). Sent only when resumption is possible with this ID.
     NativeId(String),
-    /// 額度用完／被限流。
+    /// Quota exhausted / rate limited.
     Limited(String),
-    /// 設定 session 的狀態備註 (例如失敗原因)。
+    /// Sets a status note for the session (e.g. failure reason).
     Note(String),
-    /// session 的 context 用量。
+    /// Session context usage.
     Context {
         used: u64,
         window: Option<u64>,
     },
-    /// 帳號額度狀態更新。
+    /// Account quota status update.
     Quota(ertangle_core::Quota),
-    /// 處理程序結束。
+    /// Process exited.
     Exited(Option<i32>),
 }
 
-/// 啟動一個 session 所需的全部資訊。
+/// All information required to launch a session.
 #[derive(Debug, Clone)]
 pub struct SessionSpec {
     pub id: SessionId,
     pub kind: AgentKind,
     pub cwd: PathBuf,
     pub transport: Transport,
-    /// 自訂執行檔路徑或名稱 (覆寫預設 PATH 探測)。
+    /// Custom executable path or name (overrides default PATH lookup).
     pub bin: Option<String>,
-    /// 額外命令列參數。
+    /// Extra command-line arguments.
     pub args: Vec<String>,
-    /// 要使用的 model (目前僅 Claude 結構化模式支援)。
+    /// Model to use (currently only supported by Claude structured mode).
     pub model: Option<String>,
-    /// 推理強度 (Claude `--effort`、Codex `model_reasoning_effort`、ACP configOption)。
+    /// Reasoning effort (Claude `--effort`, Codex `model_reasoning_effort`, ACP configOption).
     pub effort: Option<String>,
-    /// Claude 專用：額外放行／禁止的工具。
+    /// Claude-specific: extra allowed / disallowed tools.
     pub allowed_tools: Vec<String>,
     pub disallowed_tools: Vec<String>,
-    /// 唯讀模式 (Claude 以 plan 模式達成)。
+    /// Read-only mode (achieved via plan mode in Claude).
     pub read_only: bool,
-    /// Codex 專用 sandbox 模式。
+    /// Codex-specific sandbox mode.
     pub sandbox: Option<String>,
-    /// 額外環境變數。
+    /// Extra environment variables.
     pub env: Vec<(String, String)>,
-    /// 統一權限政策。
+    /// Unified permission policy.
     pub permission: PermissionPolicy,
-    /// 若提供 `ertangle` 執行檔路徑，adapter 會在啟動時將 `ertangle mcp` 注入該 agent。
+    /// If the `ertangle` executable path is provided, the adapter injects `ertangle mcp` into the agent at startup.
     pub mcp_exe: Option<PathBuf>,
-    /// 附加在系統提示 (Claude `--append-system-prompt`、Codex `developerInstructions`)
-    /// 或 ACP 第一則 prompt 前面的協作說明；PTY 不注入。
+    /// Collaboration instructions appended to the system prompt (Claude `--append-system-prompt`, Codex `developerInstructions`)
+    /// or prepended to the first prompt in ACP; not injected for PTY.
     pub system_append: Option<String>,
-    /// 啟動後立刻送出的第一個 prompt。
+    /// First prompt sent immediately after startup.
     pub initial_prompt: Option<String>,
-    /// 初始 prompt 的附件。
+    /// Attachments for the initial prompt.
     pub initial_attachments: Vec<ertangle_core::Attachment>,
-    /// 接續既有對話：agent 原生的對話 id。`None` 表示開新對話。
+    /// Resume an existing conversation: agent's native conversation ID. `None` starts a new conversation.
     pub resume: Option<String>,
     pub cols: u16,
     pub rows: u16,
 }
 
-/// 對一個執行中 session 的控制把手。
+/// Control handle for a running session.
 pub trait AgentControl: Send + Sync {
-    /// 送一段使用者輸入 / prompt。
+    /// Sends user input / prompt text.
     fn send_input(&self, text: &str) -> Result<()>;
-    /// 送 prompt 並附上檔案／圖片。預設把附件併進文字；支援圖片區塊的 adapter 會覆寫。
+    /// Sends a prompt with files/images attached. By default inlines attachments into text; adapters supporting image blocks override this.
     fn send_input_with(&self, text: &str, attachments: &[ertangle_core::Attachment]) -> Result<()> {
         self.send_input(&ertangle_core::compose_text(text, attachments, true))
     }
-    /// 中斷當前回合 (不殺處理程序)。
+    /// Interrupts the current turn (without killing the process).
     fn cancel(&self) -> Result<()>;
-    /// 結束並殺掉處理程序。
+    /// Terminates and kills the process.
     fn kill(&self) -> Result<()>;
-    /// 暫停子處理程序 (SIGSTOP，用於閒置休眠)。
+    /// Pauses child processes (SIGSTOP, used for idle sleep).
     fn sleep(&self) -> Result<()> {
         Ok(())
     }
-    /// 喚醒子處理程序 (SIGCONT)。
+    /// Wakes child processes (SIGCONT).
     fn wake(&self) -> Result<()> {
         Ok(())
     }
-    /// 回覆核准請求。
+    /// Resolves a permission request.
     fn resolve_permission(&self, req: &str, decision: Decision) -> Result<()>;
-    /// 這個 session 實際使用的傳輸方式 (顯示用)。
+    /// Actual transport used by this session (for display).
     fn transport(&self) -> &'static str;
-    /// 取得 agent 主處理程序 PID。
+    /// Gets the agent main process PID.
     fn pid(&self) -> Option<u32> {
         None
     }
-    /// 執行期切換 model 與／或 effort (下一個回合起生效)。
-    /// 成功回傳實際生效的 model (agent 有回報才有)；不支援的 adapter 回傳明確錯誤。
+    /// Switches model and/or effort at runtime (takes effect from the next turn).
+    /// On success returns the model actually in effect (if reported by the agent); unsupported adapters return a clear error.
     fn set_config(&self, model: Option<&str>, effort: Option<&str>) -> Result<Option<String>> {
         let _ = (model, effort);
         bail!(
@@ -147,7 +147,7 @@ pub trait AgentControl: Send + Sync {
     }
 }
 
-/// 檢查 effort 值合法。
+/// Checks if an effort value is valid.
 pub fn check_effort(e: &str) -> Result<()> {
     if !EFFORT_LEVELS.contains(&e) {
         bail!(
@@ -162,10 +162,10 @@ pub fn check_effort(e: &str) -> Result<()> {
     Ok(())
 }
 
-/// 組出 `kill -s <NAME> -- <target>` 的參數。
+/// Builds arguments for `kill -s <NAME> -- <target>`.
 ///
-/// 一律用 `-s NAME --` 形式：procps-ng 4.0.4 的 `kill -KILL -<pgid>` 會把 `-<pgid>`
-/// 誤解析成 `-1` (送給使用者的所有處理程序)，等於 `kill -9 -1`，會把整個桌面登出。
+/// Always use the `-s NAME --` form: procps-ng 4.0.4's `kill -KILL -<pgid>` misparses
+/// `-<pgid>` as `-1` (all processes for the user), equivalent to `kill -9 -1`, which logs out the entire desktop.
 fn kill_args(sig: &str, target: String) -> [String; 4] {
     let name = sig.trim_start_matches('-').trim_start_matches("SIG");
     ["-s".into(), name.into(), "--".into(), target]
@@ -183,18 +183,18 @@ fn run_kill(args: [String; 4]) -> Result<()> {
     Ok(())
 }
 
-/// 對指定 PID 送出 Unix 訊號 (例如 `-STOP` / `-CONT`)。
+/// Sends a Unix signal (e.g. `-STOP` / `-CONT`) to a specific PID.
 pub fn signal_pid(pid: u32, sig: &str) -> Result<()> {
-    // 0 / 1 會變成「自己的群組」或 init，絕不送。
+    // Never send to 0 / 1 as they refer to "own group" or init.
     if pid <= 1 {
         bail!("{}", tr!("拒絕對 PID {pid} 送訊號", pid = pid));
     }
     run_kill(kill_args(sig, pid.to_string()))
 }
 
-/// 對指定處理程序群組 (PGID) 送出 Unix 訊號 (例如 `-STOP` / `-CONT` / `-KILL`)。
+/// Sends a Unix signal (e.g. `-STOP` / `-CONT` / `-KILL`) to a specific process group (PGID).
 pub fn signal_pgid(pgid: u32, sig: &str) -> Result<()> {
-    // `-0` 是自己的群組、`-1` 是所有處理程序，絕不送。
+    // Never send to `-0` (own group) or `-1` (all processes).
     if pgid <= 1 {
         bail!("{}", tr!("拒絕對 PID {pid} 送訊號", pid = pgid));
     }
@@ -240,7 +240,7 @@ mod signal_tests {
     }
 }
 
-/// 探測某個可執行程式是否存在，回傳絕對路徑。
+/// Probes whether an executable exists and returns its absolute path.
 pub fn which(prog: &str) -> Option<PathBuf> {
     if prog.contains('/') {
         let p = PathBuf::from(prog);
@@ -256,7 +256,7 @@ pub fn which(prog: &str) -> Option<PathBuf> {
     None
 }
 
-/// 找 agent 執行檔：先看環境變數覆寫 (測試與自訂安裝位置用)，否則在 PATH 找。
+/// Finds the agent executable: checks environment variable override first (for testing and custom installs), then searches PATH.
 pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
     match ertangle_core::env_var(env_var) {
         Some(p) if !p.is_empty() => which(&p),
@@ -264,15 +264,15 @@ pub fn agent_bin(prog: &str, env_var: &str) -> Option<PathBuf> {
     }
 }
 
-/// 推理強度的合法值。
+/// Valid reasoning effort levels.
 pub const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
-/// 啟動一個 session，回傳控制把手；事件會從 `tx` 流出。
+/// Starts a session and returns a control handle; events stream through `tx`.
 ///
-/// 依 `spec.transport` 決定用原生結構化協定還是 PTY 直通。
-/// `Auto` 會挑該 agent 最適合的原生協定；若原生協定啟動失敗則退回 PTY。
+/// Determines whether to use native structured protocols or PTY passthrough based on `spec.transport`.
+/// `Auto` chooses the best native protocol for the agent; falls back to PTY if native startup fails.
 pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
-    // 不支援的細部權限選項要明確報錯，不能靜默忽略。
+    // Explicitly reject unsupported granular permission options instead of silently ignoring them.
     let is_claude = matches!(spec.kind, AgentKind::ClaudeCode);
     if let Some(e) = &spec.effort {
         if !EFFORT_LEVELS.contains(&e.as_str()) {
@@ -308,7 +308,7 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     if spec.sandbox.is_some() && !is_codex {
         bail!("{}", tr!("sandbox 只適用於 codex"));
     }
-    // 接續只走原生協定；不能靜默開新對話。
+    // Resumption is only supported via native protocols; do not silently start a new conversation.
     if spec.resume.is_some() {
         if spec.transport == Transport::Pty {
             bail!("{}", tr!("PTY 模式無法接續對話"));
@@ -360,7 +360,7 @@ pub fn spawn(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     pty::start(spec, tx)
 }
 
-/// 這個 agent 是否有原生結構化協定可用。
+/// Whether this agent has a native structured protocol available.
 pub fn supports_structured(kind: &AgentKind) -> bool {
     match kind {
         AgentKind::OpenCode | AgentKind::Antigravity => kind.acp_command().is_some(),
@@ -370,7 +370,7 @@ pub fn supports_structured(kind: &AgentKind) -> bool {
     }
 }
 
-/// 檢查對應的結構化 agent 執行檔是否已安裝於本機 `$PATH`。
+/// Checks whether the corresponding structured agent binary is installed in local `$PATH`.
 pub fn is_installed(kind: &AgentKind) -> bool {
     match kind {
         AgentKind::ClaudeCode => agent_bin("claude", "ERTANGLE_CLAUDE_BIN").is_some(),
@@ -389,7 +389,7 @@ fn is_installed_with<F: Fn(&str) -> bool>(kind: &AgentKind, has_bin: F) -> bool 
     }
 }
 
-/// 依 agent 種類啟動對應的原生結構化 adapter。
+/// Starts the corresponding native structured adapter based on agent kind.
 fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentControl>> {
     match spec.kind {
         AgentKind::OpenCode | AgentKind::Antigravity => {
@@ -412,7 +412,7 @@ fn structured_start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn
         AgentKind::ClaudeCode => {
             let target = spec.bin.as_deref().unwrap_or("claude");
             if spec.bin.is_none() && ertangle_core::env_var_os("ERTANGLE_CLAUDE_BIN").is_some() {
-                // 由 claude::start 透過 ERTANGLE_CLAUDE_BIN 處理
+                // Handled by claude::start via ERTANGLE_CLAUDE_BIN
             } else if which(target).is_none() {
                 bail!(
                     "{}",
