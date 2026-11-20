@@ -37,6 +37,8 @@ enum PendingAcpQuestion {
         multi_select: bool,
         total: usize,
         answers: ElicitationAnswers,
+        /// Maps a displayed option label back to the value required by the agent schema.
+        option_values: HashMap<String, String>,
     },
     ToolCall {
         total: usize,
@@ -386,6 +388,11 @@ impl Conn {
             let mut answers = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
             answers.insert(key.clone(), (q.multi_select, Vec::new()));
             drop(answers);
+            let option_values = q
+                .options
+                .iter()
+                .filter_map(|opt| opt.value.clone().map(|value| (opt.label.clone(), value)))
+                .collect();
             q_map.insert(
                 q.id.clone(),
                 PendingAcpQuestion::Elicitation {
@@ -394,6 +401,7 @@ impl Conn {
                     multi_select: q.multi_select,
                     total,
                     answers: Arc::clone(&shared_answers),
+                    option_values,
                 },
             );
             let _ = self.tx.send(AgentEvent::Question(q));
@@ -416,12 +424,22 @@ impl Conn {
                 multi_select,
                 total,
                 answers: shared_answers,
+                option_values,
             } => {
                 // An empty answer means the human skipped this field, which is normal for
                 // companion fields such as "Other". Keep it as an omitted field instead of
                 // declining the whole form; a real selection in another field still wins.
+                let submitted: Vec<String> = answers
+                    .iter()
+                    .map(|answer| {
+                        option_values
+                            .get(answer)
+                            .cloned()
+                            .unwrap_or_else(|| answer.clone())
+                    })
+                    .collect();
                 let mut map = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
-                map.insert(key, (multi_select, answers.to_vec()));
+                map.insert(key, (multi_select, submitted));
                 if map.len() < total {
                     return Ok(());
                 }

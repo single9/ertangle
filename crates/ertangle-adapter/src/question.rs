@@ -248,7 +248,15 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
                             .get("description")
                             .and_then(|value| value.as_str())
                             .map(str::to_string);
-                        options.push(QuestionOption::new(label, description.as_deref()));
+                        // ACP forms may use an opaque const as the submitted value while the
+                        // title is the human-readable label (Antigravity uses "1"/"2").
+                        let const_value = variant.get("const").and_then(|v| v.as_str());
+                        options.push(match const_value {
+                            Some(value) if value != label => {
+                                QuestionOption::with_value(label, description.as_deref(), value)
+                            }
+                            _ => QuestionOption::new(label, description.as_deref()),
+                        });
                     }
                 }
             } else if let Some(opts) = v.get("options") {
@@ -462,6 +470,30 @@ mod tests {
         let labels: Vec<_> = list[0].0.options.iter().map(|o| o.label.as_str()).collect();
         assert_eq!(labels, vec!["React", "Vue"]);
         assert_eq!(list[0].0.options[0].description.as_deref(), Some("Mature"));
+    }
+
+    #[test]
+    fn parses_acp_one_of_const_values_as_submission_values() {
+        let params = json!({
+            "requestedSchema": {
+                "type": "object",
+                "properties": {
+                    "q1": {
+                        "type": "string",
+                        "title": "Which database should we use?",
+                        "oneOf": [
+                            {"const": "1", "title": "Postgres"},
+                            {"const": "2", "title": "Redis"}
+                        ]
+                    }
+                }
+            }
+        });
+        let list = parse_acp_elicitations("ses_1", &params);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].0.options[0].label, "Postgres");
+        assert_eq!(list[0].0.options[0].value.as_deref(), Some("1"));
+        assert_eq!(list[0].0.options[1].value.as_deref(), Some("2"));
     }
 
     #[test]

@@ -716,6 +716,9 @@ pub struct QuestionOption {
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Value submitted to the agent when this option is selected. Defaults to `label`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
 }
 
 impl QuestionOption {
@@ -723,6 +726,7 @@ impl QuestionOption {
         Self {
             label: label.into(),
             description: description.map(str::to_string),
+            value: None,
         }
     }
 
@@ -730,6 +734,20 @@ impl QuestionOption {
         Self {
             label: label.into(),
             description: None,
+            value: None,
+        }
+    }
+
+    /// Builds an option whose submitted value differs from its display label.
+    pub fn with_value(
+        label: impl Into<String>,
+        description: Option<&str>,
+        value: impl Into<String>,
+    ) -> Self {
+        Self {
+            label: label.into(),
+            description: description.map(str::to_string),
+            value: Some(value.into()),
         }
     }
 }
