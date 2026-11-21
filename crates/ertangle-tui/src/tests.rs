@@ -5635,3 +5635,107 @@ fn directory_items_put_use_current_folder_first() {
     assert!(items.iter().any(|(_, v)| v == "sub"));
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+fn open_browser_at(app: &mut App, w: &mut HostRouter, dir: &std::path::Path) {
+    app.active_project = dir.to_path_buf();
+    crate::commands::execute_command(app, w, "project browse").unwrap();
+}
+
+#[test]
+fn folder_browser_filters_subfolders_and_backspace_edits_filter() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_filter"));
+    for d in ["alpha", "beta", "alphabet"] {
+        std::fs::create_dir_all(tmp.join(d)).unwrap();
+    }
+    open_browser_at(&mut app, &mut w, &tmp);
+
+    for c in "alph".chars() {
+        key(&mut app, &mut w, KeyCode::Char(c));
+    }
+    let visible: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .visible()
+        .iter()
+        .map(|(_, v)| v.clone())
+        .collect();
+    assert_eq!(
+        visible,
+        ["alpha", "alphabet"],
+        "只比對資料夾名稱，捷徑列隱藏"
+    );
+
+    // Backspace 刪過濾字，不是回上層。
+    key(&mut app, &mut w, KeyCode::Backspace);
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Directory { current } => assert_eq!(current, &tmp),
+        _ => panic!("expected directory stage"),
+    }
+    assert_eq!(app.picker.as_ref().unwrap().filter, "alp");
+
+    // Esc 先清過濾；過濾已空時 Esc 才關閉。
+    key(&mut app, &mut w, KeyCode::Esc);
+    assert!(app.picker.as_ref().unwrap().filter.is_empty());
+    assert!(
+        app.picker.as_ref().unwrap().visible().len() >= 5,
+        "捷徑列與子資料夾都回來"
+    );
+    key(&mut app, &mut w, KeyCode::Esc);
+    assert!(app.picker.is_none());
+
+    // Enter 進入過濾後的第一個資料夾。
+    open_browser_at(&mut app, &mut w, &tmp);
+    for c in "beta".chars() {
+        key(&mut app, &mut w, KeyCode::Char(c));
+    }
+    key(&mut app, &mut w, KeyCode::Enter);
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Directory { current } => assert_eq!(current, &tmp.join("beta")),
+        _ => panic!("expected directory stage"),
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn folder_browser_tilde_shortcut_jumps_to_home() {
+    let Some(home) = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|h| h.is_dir())
+    else {
+        return;
+    };
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_home"));
+    std::fs::create_dir_all(&tmp).unwrap();
+
+    // 捷徑列。
+    open_browser_at(&mut app, &mut w, &tmp);
+    let row = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .position(|(_, v)| v == crate::menu::HOME_VALUE)
+        .expect("應有家目錄捷徑列");
+    app.picker.as_mut().unwrap().cursor = row;
+    key(&mut app, &mut w, KeyCode::Enter);
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Directory { current } => assert_eq!(current, &home),
+        _ => panic!("expected directory stage"),
+    }
+
+    // 輸入 ~ 後 Enter。
+    open_browser_at(&mut app, &mut w, &tmp);
+    key(&mut app, &mut w, KeyCode::Char('~'));
+    key(&mut app, &mut w, KeyCode::Enter);
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Directory { current } => assert_eq!(current, &home),
+        _ => panic!("expected directory stage"),
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}

@@ -4018,7 +4018,11 @@ msgid "../  上層資料夾"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 取消)"
+msgid "~/  家目錄：{path}"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "選擇專案資料夾 (輸入過濾 · ~ 家目錄 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4119,6 +4123,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "已切換專案：{path}"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "找不到家目錄"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
