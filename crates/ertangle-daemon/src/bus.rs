@@ -3,6 +3,14 @@
 use super::*;
 use tr::tr;
 
+fn quota_exhausted(state: &ertangle_core::State, sid: &str) -> bool {
+    state
+        .sessions
+        .get(sid)
+        .and_then(|session| state.quotas.get(session.kind.id()))
+        .is_some_and(|quota| quota.reached || quota.max_used() >= 100.0)
+}
+
 // ---------------------------------------------------------------------------
 // 防呆：速率限制與迴圈偵測
 // ---------------------------------------------------------------------------
@@ -133,27 +141,38 @@ impl Shared {
         reply_to: Option<MsgId>,
     ) {
         // 已交接的收件者會改投給接手者 (T24)，超限判斷要看實際收件者 (T25)。
-        let over_budget_target = match &to {
+        let (over_budget_target, quota_blocked_target) = match &to {
             Target::Direct(t) => {
-                let sid = self.resolve_session(t);
                 let inner = lock(&self.inner);
-                let live = inner
+                let sid = inner
                     .state
-                    .sessions
-                    .get(&sid)
-                    .is_some_and(|s| s.status.is_live());
-                let actual = if live {
-                    sid
+                    .resolve_session_id(t)
+                    .unwrap_or_else(|| t.clone());
+                let usable =
+                    |id: &str| {
+                        inner.state.sessions.get(id).is_some_and(|s| {
+                            s.status.is_live() && !quota_exhausted(&inner.state, id)
+                        })
+                    };
+                let actual = if usable(&sid) {
+                    sid.clone()
                 } else {
-                    inner.state.successor_of(&sid)
+                    let successor = inner.state.successor_of(&sid);
+                    if successor != sid && usable(&successor) {
+                        successor
+                    } else {
+                        sid.clone()
+                    }
                 };
-                inner
+                let over_budget = inner
                     .state
                     .sessions
                     .get(&actual)
-                    .is_some_and(|s| s.over_budget)
+                    .is_some_and(|s| s.over_budget);
+                let quota_blocked = quota_exhausted(&inner.state, &actual);
+                (over_budget, quota_blocked)
             }
-            _ => false,
+            _ => (false, false),
         };
         match self.deliver_message_noted(from, to, kind, body, reply_to) {
             Ok((msg_id, route_notes)) => {
@@ -167,6 +186,12 @@ impl Shared {
                 };
                 for n in route_notes {
                     note.push_str(&tr!("({n})", n = n));
+                }
+                if quota_blocked_target && kind_wakes_recipient(kind) {
+                    note.push_str(&format!(
+                        "\n{}",
+                        tr!("{prefix}target quota is exhausted; message queued but the peer will not be woken", prefix = crate::handlers::task::WARNING_PREFIX)
+                    ));
                 }
                 let _ = reply.send(Frame::ok_note(note));
             }
@@ -225,12 +250,13 @@ impl Shared {
                         .state
                         .resolve_session_id(&t)
                         .unwrap_or_else(|| t.clone());
-                    let dead = |st: &ertangle_core::State, id: &str| {
+                    let unusable = |st: &ertangle_core::State, id: &str| {
                         st.sessions.get(id).is_some_and(|s| !s.status.is_live())
+                            || quota_exhausted(st, id)
                     };
-                    if dead(&inner.state, &sid) {
+                    if unusable(&inner.state, &sid) {
                         let succ = inner.state.successor_of(&sid);
-                        if succ != sid {
+                        if succ != sid && !unusable(&inner.state, &succ) {
                             let succ_label = inner
                                 .state
                                 .sessions
@@ -246,8 +272,16 @@ impl Shared {
                             ));
                             sid = succ;
                         }
-                        if dead(&inner.state, &sid) {
-                            route_notes.push(tr!("對方 {sid} 已結束，訊息不會被讀取", sid = sid));
+                        if unusable(&inner.state, &sid) {
+                            if quota_exhausted(&inner.state, &sid) {
+                                route_notes.push(tr!(
+                                    "目標 agent 額度已用完，訊息留在 mailbox，額度恢復前不會被讀取",
+                                    sid = sid
+                                ));
+                            } else {
+                                route_notes
+                                    .push(tr!("對方 {sid} 已結束，訊息不會被讀取", sid = sid));
+                            }
                         }
                     }
                     Target::Direct(sid)
@@ -301,6 +335,9 @@ impl Shared {
 
             if kind_wakes_recipient(kind) {
                 for s in state_clone.sessions.values() {
+                    if quota_exhausted(&state_clone, &s.id) {
+                        continue;
+                    }
                     if s.status == SessionStatus::Busy
                         && s.id != from_sid
                         && !s.over_budget

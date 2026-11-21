@@ -1281,8 +1281,16 @@ msgid "({n})"
 msgstr " ({n})"
 
 #: crates/ertangle-daemon/src/bus.rs
+msgid "{prefix}target quota is exhausted; message queued but the peer will not be woken"
+msgstr "{prefix}target quota is exhausted; message queued but the peer will not be woken"
+
+#: crates/ertangle-daemon/src/bus.rs
 msgid "收件者 {t} 已交接，訊息改投給接手的 {succ_label} ({succ})"
 msgstr "Recipient {t} was handed off; message redirected to its successor {succ_label} ({succ})"
+
+#: crates/ertangle-daemon/src/bus.rs
+msgid "目標 agent 額度已用完，訊息留在 mailbox，額度恢復前不會被讀取"
+msgstr "The target agent quota is exhausted; the message remains in the mailbox until quota recovers"
 
 #: crates/ertangle-daemon/src/bus.rs
 msgid "對方 {sid} 已結束，訊息不會被讀取"

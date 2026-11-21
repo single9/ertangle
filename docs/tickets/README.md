@@ -84,6 +84,7 @@
 | [T76](T76-tui-session-flow-dashboard.md) | TUI session flow dashboard: live session status and message flow | P3 | — |
 | [T77](T77-flow-animated-node-graph.md) | Animated node graph for the Flow view | P3 | T76 |
 | [T78](T78-command-autocomplete-and-project-folder-picker.md) | Subcommand autocomplete, local folder picker for projects, Space P shortcut | P2 | T59 |
+| [T80](T80-dead-peer-message-delivery.md) | Prevent silent delivery to quota-exhausted peers (已完成) | P1 | T24 |
 
 ## Language convention
 

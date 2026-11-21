@@ -614,6 +614,15 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .sessions_sorted()
                 .into_iter()
                 .map(|s| {
+                    let quota = state.quotas.get(s.kind.id());
+                    let quota_reached = quota.is_some_and(|q| q.reached || q.max_used() >= 100.0);
+                    let unavailable_reason = if quota_reached {
+                        Some("quota exhausted")
+                    } else if !s.status.is_live() {
+                        Some("session ended")
+                    } else {
+                        None
+                    };
                     json!({
                         "id": s.id,
                         "label": s.label,
@@ -624,6 +633,9 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                         "cwd": s.cwd,
                         "branch": s.branch,
                         "parent": s.parent,
+                        "quota_reached": quota_reached,
+                        "quota_used_percent": quota.map_or(0.0, |q| q.max_used()),
+                        "unavailable_reason": unavailable_reason,
                     })
                 })
                 .collect();
