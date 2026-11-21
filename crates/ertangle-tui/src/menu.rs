@@ -384,17 +384,11 @@ pub(crate) const HOME_VALUE: &str = "\u{0}home";
 pub(crate) fn directory_items(current: &Path) -> Vec<(String, String)> {
     // 「使用目前資料夾」放最上面，進到想要的資料夾後不用捲到底。
     let mut items = vec![
-        (
-            tr!("✓ 使用目前資料夾：{path}", path = current.display()),
-            SELECT_VALUE.to_string(),
-        ),
-        (tr!("../  上層資料夾"), PARENT_VALUE.to_string()),
+        (tr!("* 使用此資料夾"), SELECT_VALUE.to_string()),
+        (tr!("^ ../"), PARENT_VALUE.to_string()),
     ];
-    if let Some(home) = home_dir() {
-        items.push((
-            tr!("~/  家目錄：{path}", path = home.display()),
-            HOME_VALUE.to_string(),
-        ));
+    if home_dir().is_some() {
+        items.push((tr!("~ ~/"), HOME_VALUE.to_string()));
     }
     if let Ok(rd) = std::fs::read_dir(current) {
         let mut dirs: Vec<String> = rd
@@ -428,12 +422,14 @@ fn is_directory_shortcut(value: &str) -> bool {
 /// 進入 (或重新整理) 資料夾選擇器。
 fn start_directory_picker(app: &mut App, current: PathBuf) {
     let items = directory_items(&current);
+    let title = tr!(
+        "資料夾 {path}  (輸入過濾 · Enter 進入／選取 · Backspace 上層 · Esc 取消)",
+        path = current.display()
+    );
     app.picker = Some(Picker {
         stage: PickStage::Directory { current },
         resume_scope: ResumeScope::default(),
-        title: tr!(
-            "選擇專案資料夾 (輸入過濾 · ~ 家目錄 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
-        ),
+        title,
         items,
         filter: String::new(),
         cursor: 0,

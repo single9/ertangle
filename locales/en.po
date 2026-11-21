@@ -4024,20 +4024,20 @@ msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr "No `{c}` in this menu (Backspace back, Esc close)"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "✓ 使用目前資料夾：{path}"
-msgstr "✓ Use current folder: {path}"
+msgid "* 使用此資料夾"
+msgstr "* Use this folder"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "../  上層資料夾"
-msgstr "../  Parent folder"
+msgid "^ ../"
+msgstr "^ ../"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "~/  家目錄：{path}"
-msgstr "~/  Home folder: {path}"
+msgid "~ ~/"
+msgstr "~ ~/"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "選擇專案資料夾 (輸入過濾 · ~ 家目錄 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
-msgstr "Choose project folder (type to filter · ~ home · Enter open/select · Backspace up · Esc cancel)"
+msgid "資料夾 {path}  (輸入過濾 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
+msgstr "Folder {path}  (type to filter · Enter open/select · Backspace up · Esc cancel)"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "交接給哪個 agent"
@@ -4659,6 +4659,18 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "✓ 使用目前資料夾：{path}"
+#~ msgstr "✓ Use current folder: {path}"
+
+#~ msgid "../  上層資料夾"
+#~ msgstr "../  Parent folder"
+
+#~ msgid "~/  家目錄：{path}"
+#~ msgstr "~/  Home folder: {path}"
+
+#~ msgid "選擇專案資料夾 (輸入過濾 · ~ 家目錄 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
+#~ msgstr "Choose project folder (type to filter · ~ home · Enter open/select · Backspace up · Esc cancel)"
 
 #~ msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 取消)"
 #~ msgstr "Choose project folder (Enter open/select · Backspace up · Esc cancel)"

@@ -5739,3 +5739,24 @@ fn folder_browser_tilde_shortcut_jumps_to_home() {
     }
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn directory_items_share_a_two_column_gutter() {
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_align"));
+    std::fs::create_dir_all(tmp.join("sub")).unwrap();
+    for (label, _) in crate::menu::directory_items(&tmp) {
+        let mut chars = label.chars();
+        chars.next();
+        assert_eq!(
+            chars.next(),
+            Some(' '),
+            "第二欄必須是空白，名稱才對齊：{label:?}"
+        );
+        // 用 ASCII 圖示，避免東亞寬度模糊字元在 CJK 終端機佔兩格而錯位。
+        assert!(
+            label.chars().next().is_some_and(|c| c.is_ascii()),
+            "{label:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
