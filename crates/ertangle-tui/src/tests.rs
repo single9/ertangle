@@ -5550,7 +5550,7 @@ fn space_p_opens_project_picker() {
 }
 
 #[test]
-fn project_folder_picker_browses_and_selects_directory() {
+fn project_folder_browser_is_separate_from_project_list() {
     let mut app = test_app();
     let (mut w, _rx) = pair_writer();
     let tmp = std::env::temp_dir().join(ertangle_core::new_id("folder_pick"));
@@ -5558,20 +5558,27 @@ fn project_folder_picker_browses_and_selects_directory() {
     std::fs::create_dir_all(&child).unwrap();
     app.active_project = tmp.clone();
 
+    // 專案清單不再夾帶「瀏覽資料夾」列。
     crate::commands::execute_command(&mut app, &mut w, "project open").unwrap();
-    let browse = app
+    assert!(matches!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(crate::menu::PickStage::Project)
+    ));
+    assert!(app
         .picker
         .as_ref()
         .unwrap()
         .items
         .iter()
-        .position(|(_, v)| v == crate::menu::BROWSE_VALUE)
-        .unwrap();
-    app.picker.as_mut().unwrap().cursor = browse;
-    key(&mut app, &mut w, KeyCode::Enter);
+        .all(|(l, _)| !l.contains("瀏覽資料夾")));
+    key(&mut app, &mut w, KeyCode::Esc);
+
+    // Space p 直接開資料夾瀏覽器。
+    key(&mut app, &mut w, KeyCode::Char(' '));
+    key(&mut app, &mut w, KeyCode::Char('p'));
     assert!(matches!(
         &app.picker.as_ref().unwrap().stage,
-        crate::menu::PickStage::Directory { .. }
+        crate::menu::PickStage::Directory { current } if current == &tmp
     ));
 
     let target = app
@@ -5589,29 +5596,18 @@ fn project_folder_picker_browses_and_selects_directory() {
         _other => panic!("expected directory stage"),
     }
 
-    // Backspace goes one level up; Esc returns to the project list.
+    // Backspace 回上層；Esc 直接關閉選擇器。
     key(&mut app, &mut w, KeyCode::Backspace);
     match &app.picker.as_ref().unwrap().stage {
         crate::menu::PickStage::Directory { current } => assert_eq!(current, &tmp),
         _other => panic!("expected directory stage"),
     }
     key(&mut app, &mut w, KeyCode::Esc);
-    assert!(matches!(
-        app.picker.as_ref().map(|p| &p.stage),
-        Some(crate::menu::PickStage::Project)
-    ));
+    assert!(app.picker.is_none());
+    assert_eq!(app.mode, Mode::Normal);
 
-    // Re-enter the browser and select the current folder as the active project.
-    let browse = app
-        .picker
-        .as_ref()
-        .unwrap()
-        .items
-        .iter()
-        .position(|(_, v)| v == crate::menu::BROWSE_VALUE)
-        .unwrap();
-    app.picker.as_mut().unwrap().cursor = browse;
-    key(&mut app, &mut w, KeyCode::Enter);
+    // `:project browse` 同樣直接開瀏覽器，並可選取目前資料夾。
+    crate::commands::execute_command(&mut app, &mut w, "project browse").unwrap();
     let select = app
         .picker
         .as_ref()

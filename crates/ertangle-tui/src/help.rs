@@ -27,7 +27,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("Space w", tr_noop!("顯示 Web 版網址與 QR Code")),
             (
                 "Space P",
-                tr_noop!("開啟／切換專案；可瀏覽本機資料夾 (:project open)"),
+                tr_noop!("切換專案 (:project open)；Space p 或 :project browse 瀏覽資料夾開啟新專案"),
             ),
             ("q / Q", tr_noop!("離開 (保留 daemon)／關閉 daemon 並離開")),
         ],
@@ -145,7 +145,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ),
             (
                 ":project :scope",
-                tr_noop!("切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開選擇器)"),
+                tr_noop!("切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開專案清單)；:project browse 瀏覽資料夾"),
             ),
             (":rm :clean", tr_noop!("移除選取的 session／清除所有已結束的 session (含 worktree)")),
             (":copy [N]", tr_noop!("複製內容；Transcript 可指定第 N 則訊息 (預設最新)")),

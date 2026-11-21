@@ -88,13 +88,13 @@ pub(crate) fn menu_items(path: &[char]) -> Option<(&'static str, Vec<Item>)> {
                 ),
                 it(
                     'P',
-                    ertangle_core::tr_noop!("開啟／切換專案 (資料夾選擇器)"),
+                    ertangle_core::tr_noop!("切換專案 (已知專案清單)"),
                     Act::Cmd("project open"),
                 ),
                 it(
                     'p',
-                    ertangle_core::tr_noop!("開啟／切換專案 (同 P)"),
-                    Act::Cmd("project open"),
+                    ertangle_core::tr_noop!("瀏覽資料夾，開啟新專案"),
+                    Act::Cmd("project browse"),
                 ),
             ],
         ),
@@ -373,7 +373,6 @@ pub(crate) enum PickStage {
 }
 
 /// 專案選擇器裡「瀏覽本機資料夾」項目的值。用控制字元避免與真實路徑撞名。
-pub(crate) const BROWSE_VALUE: &str = "\u{0}browse";
 /// 資料夾選擇器裡「使用目前資料夾」項目的值。
 pub(crate) const SELECT_VALUE: &str = "\u{0}select";
 /// 資料夾選擇器裡「上層資料夾」項目的值。
@@ -400,13 +399,18 @@ fn directory_items(current: &Path) -> Vec<(String, String)> {
     items
 }
 
+/// `:project browse` / `Space p`：從目前專案所在位置瀏覽本機資料夾，選一個開成新專案。
+pub(crate) fn start_folder_browser(app: &mut App) {
+    start_directory_picker(app, PathBuf::from(&app.active_project));
+}
+
 /// 進入 (或重新整理) 資料夾選擇器。
 fn start_directory_picker(app: &mut App, current: PathBuf) {
     let items = directory_items(&current);
     app.picker = Some(Picker {
         stage: PickStage::Directory { current },
         resume_scope: ResumeScope::default(),
-        title: tr!("選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 返回)"),
+        title: tr!("選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 取消)"),
         items,
         filter: String::new(),
         cursor: 0,
@@ -1371,7 +1375,7 @@ pub(crate) fn start_project_picker(app: &mut App) {
     }
 
     let all_roots_refs: Vec<&str> = roots.iter().map(|s| s.as_str()).collect();
-    let mut items: Vec<(String, String)> = roots
+    let items: Vec<(String, String)> = roots
         .iter()
         .map(|r| {
             let pname = crate::app::project_name(r, &all_roots_refs);
@@ -1381,11 +1385,6 @@ pub(crate) fn start_project_picker(app: &mut App) {
             (label, r.clone())
         })
         .collect();
-    items.push((
-        tr!("[瀏覽資料夾]  從本機選擇資料夾"),
-        BROWSE_VALUE.to_string(),
-    ));
-
     let cursor = items
         .iter()
         .position(|(_, path)| path == &app.home_project)
@@ -1487,7 +1486,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
     if matches!(p.stage, PickStage::Question { .. }) {
         return handle_question_key(app, writer, key);
     }
-    // 資料夾選擇器：Esc 回到專案清單，Backspace 往上層資料夾 (而不是刪過濾字)。
+    // 資料夾選擇器：Esc 關閉，Backspace 往上層資料夾 (而不是刪過濾字)。
     if matches!(p.stage, PickStage::Directory { .. })
         && matches!(key.code, KeyCode::Esc | KeyCode::Backspace)
     {
@@ -1504,7 +1503,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
         let code = key.code;
         app.picker = None;
         if code == KeyCode::Esc {
-            start_project_picker(app);
+            app.mode = Mode::Normal;
         } else {
             start_directory_picker(app, parent.unwrap_or(current));
         }
@@ -1794,10 +1793,6 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         None
                     };
                     app.picker = None;
-                    if chosen_path.as_deref() == Some(BROWSE_VALUE) {
-                        start_directory_picker(app, PathBuf::from(&app.active_project));
-                        return Ok(());
-                    }
                     app.mode = Mode::Normal;
                     if let Some(target) = chosen_path {
                         if let Err(err) = app.set_active_project(std::path::Path::new(&target)) {

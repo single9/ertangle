@@ -2476,8 +2476,8 @@ msgid "[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)
 msgstr "[here|all]  Show this project only / all projects (sessions, Bus, tasks)"
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "[here|all|open <路徑>]  切換專案範圍或開啟專案 (open 省略路徑開選擇器)"
-msgstr "[here|all|open <path>]  Toggle project scope or open project (omit path to open picker)"
+msgid "[here|all|browse|open <路徑>]  切換專案範圍或開啟專案 (browse 瀏覽資料夾；open 省略路徑開專案清單)"
+msgstr "[here|all|browse|open <path>]  Switch project scope or open a project (browse = folder browser; open without a path = project list)"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "[install|uninstall|show] [claude|agents|codex] [global]  安裝 ertangle-ade skill"
@@ -2680,8 +2680,8 @@ msgid "已要求結束本專案 {n} 個執行中的 session"
 msgstr "Requested stop of {n} running sessions in this project"
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "用法：:project [here|all|open <路徑>]"
-msgstr "Usage: :project [here|all|open <path>]"
+msgid "用法：:project [here|all|browse|open <路徑>]"
+msgstr "Usage: :project [here|all|browse|open <path>]"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "已要求接續"
@@ -2843,9 +2843,13 @@ msgstr "This project only"
 msgid "顯示所有專案"
 msgstr "All projects"
 
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs
+msgid "瀏覽資料夾，開啟新專案"
+msgstr "Browse folders to open a new project"
+
 #: crates/ertangle-tui/src/commands.rs
-msgid "開啟或切換專案；省略路徑開資料夾選擇器"
-msgstr "Open or switch project; omit the path to open the folder picker"
+msgid "開啟或切換專案；省略路徑開專案清單"
+msgstr "Open or switch project; without a path, shows the project list"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "同 open"
@@ -3496,8 +3500,8 @@ msgid "顯示 Web 版網址與 QR Code"
 msgstr "Display Web version URL and QR Code"
 
 #: crates/ertangle-tui/src/help.rs
-msgid "開啟／切換專案；可瀏覽本機資料夾 (:project open)"
-msgstr "Open or switch project; browse a local folder (:project open)"
+msgid "切換專案 (:project open)；Space p 或 :project browse 瀏覽資料夾開啟新專案"
+msgstr "Switch project (:project open); Space p or :project browse browses folders to open a new project"
 
 #: crates/ertangle-tui/src/help.rs
 msgid "離開 (保留 daemon)／關閉 daemon 並離開"
@@ -3724,8 +3728,8 @@ msgid "接續已結束的 session (選擇器中 Tab 切換範圍)；可接 promp
 msgstr "Resume ended session (Tab in picker toggles scope); prompt optional"
 
 #: crates/ertangle-tui/src/help.rs
-msgid "切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開選擇器)"
-msgstr "Toggle project scope (here|all); :project open <path> opens project (omit path for picker)"
+msgid "切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開專案清單)；:project browse 瀏覽資料夾"
+msgstr "Switch project scope (here|all); :project open <path> opens a project (no path shows the list); :project browse browses folders"
 
 #: crates/ertangle-tui/src/help.rs
 msgid "移除選取的 session／清除所有已結束的 session (含 worktree)"
@@ -3908,12 +3912,8 @@ msgid "重啟共用 daemon (自動重連)"
 msgstr "Restart shared daemon (auto-reconnect)"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "開啟／切換專案 (資料夾選擇器)"
-msgstr "Open or switch project (folder picker)"
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "開啟／切換專案 (同 P)"
-msgstr "Open or switch project (same as P)"
+msgid "切換專案 (已知專案清單)"
+msgstr "Switch project (known project list)"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "新增 agent… (選 agent 與 model)"
@@ -4032,8 +4032,8 @@ msgid "✓ 使用目前資料夾：{path}"
 msgstr "✓ Use current folder: {path}"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 返回)"
-msgstr "Select project folder (Enter to open/select, Backspace for parent, Esc to go back)"
+msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 取消)"
+msgstr "Choose project folder (Enter open/select · Backspace up · Esc cancel)"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "交接給哪個 agent"
@@ -4086,10 +4086,6 @@ msgstr "Resume session (Tab toggles scope · Enter confirms · Esc cancels)"
 #: crates/ertangle-tui/src/menu.rs
 msgid "沒有可用的專案清單"
 msgstr "No projects available"
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "[瀏覽資料夾]  從本機選擇資料夾"
-msgstr "[Browse]  Choose a folder on this computer"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "選擇專案 (Enter 確認 · Esc 取消)"
@@ -4655,6 +4651,33 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "[here|all|open <路徑>]  切換專案範圍或開啟專案 (open 省略路徑開選擇器)"
+#~ msgstr "[here|all|open <path>]  Toggle project scope or open project (omit path to open picker)"
+
+#~ msgid "用法：:project [here|all|open <路徑>]"
+#~ msgstr "Usage: :project [here|all|open <path>]"
+
+#~ msgid "開啟或切換專案；省略路徑開資料夾選擇器"
+#~ msgstr "Open or switch project; omit the path to open the folder picker"
+
+#~ msgid "開啟／切換專案；可瀏覽本機資料夾 (:project open)"
+#~ msgstr "Open or switch project; browse a local folder (:project open)"
+
+#~ msgid "切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開選擇器)"
+#~ msgstr "Toggle project scope (here|all); :project open <path> opens project (omit path for picker)"
+
+#~ msgid "開啟／切換專案 (資料夾選擇器)"
+#~ msgstr "Open or switch project (folder picker)"
+
+#~ msgid "開啟／切換專案 (同 P)"
+#~ msgstr "Open or switch project (same as P)"
+
+#~ msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 返回)"
+#~ msgstr "Select project folder (Enter to open/select, Backspace for parent, Esc to go back)"
+
+#~ msgid "[瀏覽資料夾]  從本機選擇資料夾"
+#~ msgstr "[Browse]  Choose a folder on this computer"
 
 #~ msgid "選單 (s session、g git、v 檢視、m 訊息)"
 #~ msgstr "Menu (s session, g git, v view, m message)"

@@ -2462,7 +2462,7 @@ msgid "[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "[here|all|open <路徑>]  切換專案範圍或開啟專案 (open 省略路徑開選擇器)"
+msgid "[here|all|browse|open <路徑>]  切換專案範圍或開啟專案 (browse 瀏覽資料夾；open 省略路徑開專案清單)"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2666,7 +2666,7 @@ msgid "已要求結束本專案 {n} 個執行中的 session"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "用法：:project [here|all|open <路徑>]"
+msgid "用法：:project [here|all|browse|open <路徑>]"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2829,8 +2829,12 @@ msgstr ""
 msgid "顯示所有專案"
 msgstr ""
 
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs
+msgid "瀏覽資料夾，開啟新專案"
+msgstr ""
+
 #: crates/ertangle-tui/src/commands.rs
-msgid "開啟或切換專案；省略路徑開資料夾選擇器"
+msgid "開啟或切換專案；省略路徑開專案清單"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -3482,7 +3486,7 @@ msgid "顯示 Web 版網址與 QR Code"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
-msgid "開啟／切換專案；可瀏覽本機資料夾 (:project open)"
+msgid "切換專案 (:project open)；Space p 或 :project browse 瀏覽資料夾開啟新專案"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
@@ -3710,7 +3714,7 @@ msgid "接續已結束的 session (選擇器中 Tab 切換範圍)；可接 promp
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
-msgid "切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開選擇器)"
+msgid "切換專案範圍 (here|all)；:project open <路徑> 開啟專案 (省略開專案清單)；:project browse 瀏覽資料夾"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
@@ -3894,11 +3898,7 @@ msgid "重啟共用 daemon (自動重連)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "開啟／切換專案 (資料夾選擇器)"
-msgstr ""
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "開啟／切換專案 (同 P)"
+msgid "切換專案 (已知專案清單)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4018,7 +4018,7 @@ msgid "✓ 使用目前資料夾：{path}"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 返回)"
+msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 取消)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4071,10 +4071,6 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "沒有可用的專案清單"
-msgstr ""
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "[瀏覽資料夾]  從本機選擇資料夾"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

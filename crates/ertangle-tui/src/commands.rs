@@ -314,7 +314,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
     ("scope", ertangle_core::tr_noop!("[here|all]  只看本專案／顯示全部專案 (session、Bus、任務)")),
     (
         "project",
-        ertangle_core::tr_noop!("[here|all|open <路徑>]  切換專案範圍或開啟專案 (open 省略路徑開選擇器)"),
+        ertangle_core::tr_noop!("[here|all|browse|open <路徑>]  切換專案範圍或開啟專案 (browse 瀏覽資料夾；open 省略路徑開專案清單)"),
     ),
     (
         "skill",
@@ -951,10 +951,12 @@ fn project_command(app: &mut App, rest: &str) -> Result<()> {
         } else if let Err(err) = app.set_active_project(std::path::Path::new(path_str)) {
             app.status = err;
         }
+    } else if rest == "browse" || rest == "folder" {
+        crate::menu::start_folder_browser(app);
     } else if rest == "pick" || rest == "select" || rest == "list" {
         crate::menu::start_project_picker(app);
     } else {
-        app.status = tr!("用法：:project [here|all|open <路徑>]");
+        app.status = tr!("用法：:project [here|all|browse|open <路徑>]");
     }
     Ok(())
 }
@@ -1630,9 +1632,10 @@ const SUBCOMMANDS: &[(&str, &[(&str, &str)])] = &[
         &[
             ("here", ertangle_core::tr_noop!("只看本專案")),
             ("all", ertangle_core::tr_noop!("顯示所有專案")),
+            ("browse", ertangle_core::tr_noop!("瀏覽資料夾，開啟新專案")),
             (
                 "open",
-                ertangle_core::tr_noop!("開啟或切換專案；省略路徑開資料夾選擇器"),
+                ertangle_core::tr_noop!("開啟或切換專案；省略路徑開專案清單"),
             ),
             ("set", ertangle_core::tr_noop!("同 open")),
             ("pick", ertangle_core::tr_noop!("開啟專案選擇器")),
