@@ -1,6 +1,6 @@
 use super::*;
 use crate::git::*;
-use ertangle_core::{AgentKind, Cost, Decision, Role, TaskStatus};
+use ertangle_core::{AgentKind, Cost, Decision, Quota, QuotaWindow, Role, TaskStatus};
 
 // -----------------------------------------------------------------------
 // T05：遠端與 socket 安全
@@ -287,6 +287,172 @@ fn add_session(
             run: new_id("run"),
         },
     );
+}
+
+fn exhaust_session_quota(shared: &Arc<Shared>, agent: &str) {
+    lock(&shared.inner).state.quotas.insert(
+        agent.to_string(),
+        Quota {
+            agent: agent.to_string(),
+            windows: vec![QuotaWindow {
+                name: "5h".into(),
+                used_percent: 100.0,
+                resets_at_ms: None,
+            }],
+            reached: true,
+            warning: false,
+            updated_ms: now_millis(),
+        },
+    );
+}
+
+#[test]
+fn quota_exhausted_idle_peer_is_queued_without_wakeup_and_warns() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let target = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_quota",
+        "quota-peer",
+        SessionStatus::Idle,
+        target.as_ctl(),
+        &dir,
+    );
+    exhaust_session_quota(&shared, AgentKind::OpenCode.id());
+    let (tx, mut rx) = client_channel(None);
+
+    shared.handle_bus_send(
+        &tx,
+        Some("human".into()),
+        Target::Direct("quota-peer".into()),
+        MsgKind::Chat,
+        "queued".into(),
+        None,
+    );
+
+    let Frame::Ok { note: Some(note) } = rx.next().expect("send response") else {
+        panic!("expected OK note")
+    };
+    assert!(
+        note.contains(crate::handlers::task::WARNING_PREFIX),
+        "{note}"
+    );
+    assert!(
+        target.inputs().is_empty(),
+        "quota-exhausted peer must not be woken"
+    );
+    let inner = lock(&shared.inner);
+    assert_eq!(inner.state.inbox_for("ses_quota", None).len(), 1);
+    assert!(inner
+        .state
+        .messages
+        .last()
+        .is_some_and(|message| message.body == "queued"));
+}
+
+#[test]
+fn mcp_peers_exposes_quota_and_unavailability() {
+    use std::io::{BufRead, Write};
+    use std::os::unix::net::UnixListener;
+
+    let shared = test_shared();
+    let dir = temp_cwd();
+    add_session(
+        &shared,
+        "ses_peerquota",
+        "peer-quota",
+        SessionStatus::Idle,
+        MockCtl::default().as_ctl(),
+        &dir,
+    );
+    exhaust_session_quota(&shared, AgentKind::OpenCode.id());
+    let state = lock(&shared.inner).state.clone();
+    let socket = dir.join("mcp.sock");
+    let listener = UnixListener::bind(&socket).expect("bind test socket");
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept MCP request");
+        let mut reader = std::io::BufReader::new(stream.try_clone().expect("clone stream"));
+        let mut request = String::new();
+        reader.read_line(&mut request).expect("read MCP request");
+        let response = ertangle_protocol::encode_line(&Frame::Snapshot {
+            state: Box::new(state),
+        })
+        .expect("encode snapshot");
+        let mut stream = stream;
+        stream
+            .write_all(response.as_bytes())
+            .expect("write snapshot");
+    });
+    let old_socket = std::env::var_os("ERTANGLE_SOCKET");
+    std::env::set_var("ERTANGLE_SOCKET", &socket);
+
+    let peers = crate::mcp::call_tool("ses_requester", "ertangle_peers", &serde_json::json!({}))
+        .expect("peers call");
+
+    if let Some(value) = old_socket {
+        std::env::set_var("ERTANGLE_SOCKET", value);
+    } else {
+        std::env::remove_var("ERTANGLE_SOCKET");
+    }
+    server.join().expect("test socket server");
+    let peer = peers["peers"]
+        .as_array()
+        .and_then(|peers| peers.iter().find(|peer| peer["id"] == "ses_peerquota"))
+        .expect("peer JSON");
+    assert_eq!(peer["quota_reached"], true);
+    assert_eq!(peer["quota_used_percent"], 100.0);
+    assert_eq!(peer["unavailable_reason"], "quota exhausted");
+}
+
+#[test]
+fn quota_exhausted_direct_target_routes_to_usable_successor() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let original = MockCtl::default();
+    let successor = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_oldquota",
+        "quota-origin",
+        SessionStatus::Idle,
+        original.as_ctl(),
+        &dir,
+    );
+    add_session(
+        &shared,
+        "ses_newquota",
+        "quota-origin→new",
+        SessionStatus::Idle,
+        successor.as_ctl(),
+        &dir,
+    );
+    exhaust_session_quota(&shared, AgentKind::OpenCode.id());
+    // Both sessions use the same agent quota; make the successor usable with its own agent kind.
+    lock(&shared.inner)
+        .state
+        .sessions
+        .get_mut("ses_newquota")
+        .expect("successor")
+        .kind = AgentKind::ClaudeCode;
+    mark_handed_off(&shared, "ses_oldquota", "ses_newquota");
+
+    let (_, notes) = shared
+        .deliver_message_noted(
+            Some("human".into()),
+            Target::Direct("quota-origin".into()),
+            MsgKind::Chat,
+            "route".into(),
+            None,
+        )
+        .expect("delivery");
+
+    assert!(notes.iter().any(|note| note.contains("改投")), "{notes:?}");
+    assert_eq!(successor.inputs().len(), 1);
+    assert!(original.inputs().is_empty());
+    let inner = lock(&shared.inner);
+    assert_eq!(inner.state.inbox_for("ses_newquota", None).len(), 1);
+    assert!(inner.state.inbox_for("ses_oldquota", None).is_empty());
 }
 
 #[test]
