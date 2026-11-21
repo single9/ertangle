@@ -1,6 +1,41 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.1.0] - 2026-11-21
+
+### 🚀 Features
+
+- *(tui)* Add flow dashboard model contract and stubs (T76)
+- *(tui)* Implement pure flow model derivation (T76a)
+- *(tui)* Add Flow view renderer, key bindings and :flow command (T76b)
+- *(tui)* Wire flow model into Flow view, add i18n and integration test (T76)
+- *(tui)* Animated node graph for the Flow view (T77)
+- *(codex)* Offer Allow/Deny options for form-less MCP elicitation
+- *(tui)* W key jumps to the next session with a pending question or approval
+- *(tui)* Complete command subcommands and add project folder picker
+- *(tui)* Open folder browser as its own project action
+- *(tui)* List 'use current folder' first in the folder browser
+- *(tui)* Filter and ~ home shortcut in the folder browser
+- *(tui)* Simplify and align folder browser rows
+- *(tui)* Drop markers from parent and home rows in folder browser
+- *(tui)* List home before parent in folder browser
+- *(tui)* Make the picker filter a real text input with placeholder
+- *(tui)* Hide ~/ row in home and show folder browser hint bottom-right
+
+### 🐛 Bug Fixes
+
+- *(tui)* Omit zero counts in flow summary so it fits narrow panes (T76)
+- *(bus)* Do not mark earlier unread messages read on filtered wait
+- *(codex)* Auto-approve ertangle MCP tools via mcp_servers config key
+- *(spawn)* Honor worker order and quota
+- *(daemon)* Strip (deleted) suffix from exe path given to agent MCP servers
+- *(tui)* Always open the launch directory instead of the last switched project
+
+### 📚 Documentation
+
+- *(ticket)* Add T76 TUI session flow dashboard plan
+- *(ticket)* Refine T76 flow dashboard design with verified code facts
+
 ## [1.0.1] - 2026-11-20
 
 ### 🐛 Bug Fixes
