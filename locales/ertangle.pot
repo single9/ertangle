@@ -4014,11 +4014,11 @@ msgid "* 使用此資料夾"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "^ ../"
+msgid "  ../"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "~ ~/"
+msgid "  ~/"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

@@ -385,10 +385,10 @@ pub(crate) fn directory_items(current: &Path) -> Vec<(String, String)> {
     // 「使用目前資料夾」放最上面，進到想要的資料夾後不用捲到底。
     let mut items = vec![
         (tr!("* 使用此資料夾"), SELECT_VALUE.to_string()),
-        (tr!("^ ../"), PARENT_VALUE.to_string()),
+        (tr!("  ../"), PARENT_VALUE.to_string()),
     ];
     if home_dir().is_some() {
-        items.push((tr!("~ ~/"), HOME_VALUE.to_string()));
+        items.push((tr!("  ~/"), HOME_VALUE.to_string()));
     }
     if let Ok(rd) = std::fs::read_dir(current) {
         let mut dirs: Vec<String> = rd

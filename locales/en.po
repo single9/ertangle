@@ -4028,12 +4028,12 @@ msgid "* 使用此資料夾"
 msgstr "* Use this folder"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "^ ../"
-msgstr "^ ../"
+msgid "  ../"
+msgstr "  ../"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "~ ~/"
-msgstr "~ ~/"
+msgid "  ~/"
+msgstr "  ~/"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "資料夾 {path}  (輸入過濾 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
@@ -4659,6 +4659,12 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "^ ../"
+#~ msgstr "^ ../"
+
+#~ msgid "~ ~/"
+#~ msgstr "~ ~/"
 
 #~ msgid "✓ 使用目前資料夾：{path}"
 #~ msgstr "✓ Use current folder: {path}"
