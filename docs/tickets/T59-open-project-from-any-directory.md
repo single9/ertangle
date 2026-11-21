@@ -28,7 +28,7 @@ The daemon fixes `default_cwd` at startup, the TUI derives `home_project` from i
   3. A project picker listing roots observed from `Session::project_root()` plus a configured `tui.projects` list.
 - Path handling: canonicalize and require an existing directory; resolve the git toplevel with the existing `home_project()` helper (`app.rs:1249-1261`), falling back to the directory itself when it is not inside a repo. A missing path produces a clear status message and leaves state unchanged. Worktrees already resolve through `repo_root` (`crates/ertangle-core/src/lib.rs:359-363`).
 - State transition on switch: update `active_project` and `home_project`, set `scope_here = true`, reset `selection` and `md_cache`, and refresh the session list. Everything already keyed off `home_project` — `:stop`, the `:shutdown` warning, notifications, and the project panel title — follows automatically.
-- Persistence: store the last active project in the global config (`TuiCfg.last_project`) so a restart reopens it. Precedence is launch flag > persisted value > process cwd. Not confirmed: whether users want a persisted value to override the directory they launched from; verify this during review.
+- Persistence: store the last active project in the global config (`TuiCfg.last_project`) so a restart reopens it. Superseded: users confirmed a persisted value must not override the directory they launched from, so startup precedence is now launch flag > process cwd and `last_project` is no longer written or read.
 - Out of scope: web parity. The web UI already has its own project scope from T40; align the two in a follow-up ticket if needed.
 
 ## Implementation

@@ -362,21 +362,8 @@ impl App {
             .as_deref()
             .and_then(LayoutMode::parse)
             .unwrap_or(LayoutMode::Two);
-        let active_project = resolve_active_project(
-            initial_project.as_deref(),
-            cfg.tui.last_project.as_deref(),
-            &cwd,
-        );
+        let active_project = resolve_active_project(initial_project.as_deref(), &cwd);
         let home_proj = active_project.to_string_lossy().to_string();
-
-        if initial_project.is_some() {
-            let _ = ertangle_daemon::config::Config::set_value(
-                &global_dir.join("config.toml"),
-                &["tui"],
-                "last_project",
-                &home_proj,
-            );
-        }
 
         let mut hosts = BTreeMap::new();
         hosts.insert("local".into(), HostData::new("local"));
@@ -1180,14 +1167,6 @@ impl App {
         self.md_cache = None;
         self.rebuild_pending = true;
 
-        let global_dir = ertangle_daemon::config_dir();
-        let _ = ertangle_daemon::config::Config::set_value(
-            &global_dir.join("config.toml"),
-            &["tui"],
-            "last_project",
-            &root_str,
-        );
-
         self.status = tr!(
             "已切換專案：{project}",
             project = project_name(&self.home_project, &[])
@@ -1581,22 +1560,15 @@ pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
     };
 }
 
-/// Resolve the startup project with precedence: CLI flag > persisted last_project > process cwd.
+/// Resolve the startup project: CLI flag > the directory ertangle was launched from.
+///
+/// A previously switched-to project is deliberately not restored: reopening in a folder must
+/// show that folder, otherwise users get dropped into an unrelated project.
 pub(crate) fn resolve_active_project(
     flag: Option<&std::path::Path>,
-    persisted: Option<&str>,
     cwd: &std::path::Path,
 ) -> std::path::PathBuf {
     if let Some(p) = flag {
-        if p.is_dir() {
-            if let Ok(canon) = p.canonicalize() {
-                return std::path::PathBuf::from(home_project(&canon));
-            }
-            return std::path::PathBuf::from(home_project(p));
-        }
-    }
-    if let Some(last) = persisted {
-        let p = std::path::Path::new(last);
         if p.is_dir() {
             if let Ok(canon) = p.canonicalize() {
                 return std::path::PathBuf::from(home_project(&canon));

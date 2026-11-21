@@ -4046,47 +4046,30 @@ fn tool_folding_identical_for_show_tools_false() {
 fn test_resolve_active_project_precedence() {
     let tmp = std::env::temp_dir();
     let dir_flag = tmp.join(ertangle_core::new_id("flag"));
-    let dir_cfg = tmp.join(ertangle_core::new_id("cfg"));
     let dir_cwd = tmp.join(ertangle_core::new_id("cwd"));
     std::fs::create_dir_all(&dir_flag).unwrap();
-    std::fs::create_dir_all(&dir_cfg).unwrap();
     std::fs::create_dir_all(&dir_cwd).unwrap();
-
     let canon_flag = dir_flag.canonicalize().unwrap();
-    let canon_cfg = dir_cfg.canonicalize().unwrap();
     let canon_cwd = dir_cwd.canonicalize().unwrap();
 
-    // 1. Flag wins over config and cwd
-    let res1 = crate::app::resolve_active_project(
-        Some(&dir_flag),
-        Some(dir_cfg.to_str().unwrap()),
-        &dir_cwd,
+    // 1. 旗標優先於啟動目錄
+    assert_eq!(
+        crate::app::resolve_active_project(Some(&dir_flag), &dir_cwd),
+        canon_flag
     );
-    assert_eq!(res1, canon_flag);
-
-    // 2. Invalid/missing flag falls back to config
+    // 2. 旗標無效就用啟動目錄
     let bad_flag = tmp.join("nonexistent_flag_dir");
-    let res2 = crate::app::resolve_active_project(
-        Some(&bad_flag),
-        Some(dir_cfg.to_str().unwrap()),
-        &dir_cwd,
+    assert_eq!(
+        crate::app::resolve_active_project(Some(&bad_flag), &dir_cwd),
+        canon_cwd
     );
-    assert_eq!(res2, canon_cfg);
-
-    // 3. No flag: config wins over cwd
-    let res3 = crate::app::resolve_active_project(None, Some(dir_cfg.to_str().unwrap()), &dir_cwd);
-    assert_eq!(res3, canon_cfg);
-
-    // 4. No flag, invalid/missing config falls back to cwd
-    let res4 = crate::app::resolve_active_project(None, Some("/nonexistent/cfg/path"), &dir_cwd);
-    assert_eq!(res4, canon_cwd);
-
-    // 5. No flag, no config uses cwd
-    let res5 = crate::app::resolve_active_project(None, None, &dir_cwd);
-    assert_eq!(res5, canon_cwd);
+    // 3. 沒有旗標：用啟動目錄 (不會被先前切換過的專案蓋掉)
+    assert_eq!(
+        crate::app::resolve_active_project(None, &dir_cwd),
+        canon_cwd
+    );
 
     let _ = std::fs::remove_dir_all(&dir_flag);
-    let _ = std::fs::remove_dir_all(&dir_cfg);
     let _ = std::fs::remove_dir_all(&dir_cwd);
 }
 

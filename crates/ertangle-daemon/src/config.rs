@@ -184,7 +184,8 @@ pub struct TuiCfg {
     pub notify_min_turn_secs: Option<u64>,
     /// List of frequently used project roots (global config only).
     pub projects: Vec<String>,
-    /// Last active project root (global config only).
+    /// Last active project root (global config only). Deprecated: no longer written or used at
+    /// startup (the launch directory always wins); kept so existing config files still parse.
     pub last_project: Option<String>,
 }
 
