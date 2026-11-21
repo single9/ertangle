@@ -151,7 +151,7 @@ pub fn ensure_daemon() -> Result<()> {
             crate::server::ensure_private_dir(dir)?;
         }
     }
-    let exe = std::env::current_exe().with_context(|| tr!("取得自身執行檔路徑失敗"))?;
+    let exe = crate::current_exe_path().with_context(|| tr!("取得自身執行檔路徑失敗"))?;
     let log_dir = state_dir();
     let _ = fs::create_dir_all(&log_dir);
     let log_path = log_dir.join("daemon.log");

@@ -467,7 +467,8 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
         let inner = lock(&shared.inner);
         crate::collab::for_session(&inner.state, &id, &config_dir(), &cwd)
     };
-    let mcp_exe = std::env::current_exe().ok();
+    // 升級後舊 daemon 的 `current_exe()` 帶 ` (deleted)`，agent 的 MCP server 會因此啟動失敗。
+    let mcp_exe = crate::current_exe_path().ok();
     let mut env = vec![
         ("ERTANGLE_SESSION".to_string(), id.clone()),
         (

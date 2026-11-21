@@ -5049,3 +5049,9 @@ fn exec_truncates_long_output() {
     assert!(note.contains("\n200\n"), "{note}");
     assert!(!note.contains("\n250\n"), "{note}");
 }
+
+#[test]
+fn current_exe_path_never_carries_deleted_marker() {
+    let p = crate::current_exe_path().expect("current exe");
+    assert!(!p.to_string_lossy().ends_with(" (deleted)"));
+}

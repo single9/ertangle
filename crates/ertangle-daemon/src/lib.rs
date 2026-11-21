@@ -972,8 +972,8 @@ impl Shared {
     /// 新 daemon 帶 `ERTANGLE_RESTARTED=1`，啟動時會自動接續執行中的 session。
     pub(crate) fn restart(self: &Arc<Self>) {
         self.teardown();
-        let exe = match std::env::current_exe() {
-            Ok(p) => strip_deleted_suffix(&p),
+        let exe = match current_exe_path() {
+            Ok(p) => p,
             Err(e) => {
                 tracing::error!("重啟失敗：找不到執行檔 ({e})");
                 std::process::exit(1);
@@ -1125,6 +1125,12 @@ fn clear_auto_resumed_note(shared: &Shared, inner: &mut Inner, session: SessionI
 /// 且上次自動接續後有過進展 (避免 daemon 一再崩潰時無限接續)。
 /// 重啟時由舊 daemon 設給新 daemon 的環境變數。
 const RESTARTED_ENV: &str = "ERTANGLE_RESTARTED";
+
+/// 自己的執行檔路徑；執行檔被換掉 (升級) 後去掉 ` (deleted)` 後綴，讓子處理程序
+/// (agent 的 MCP server、背景 daemon) 仍找得到新檔。
+pub(crate) fn current_exe_path() -> std::io::Result<std::path::PathBuf> {
+    std::env::current_exe().map(|p| strip_deleted_suffix(&p))
+}
 
 /// Linux 上執行檔被換掉後，`current_exe()` 會帶 ` (deleted)` 後綴；去掉才找得到新檔。
 fn strip_deleted_suffix(p: &std::path::Path) -> std::path::PathBuf {
