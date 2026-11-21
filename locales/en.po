@@ -4037,8 +4037,8 @@ msgid "  ../"
 msgstr "  ../"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "資料夾 {path}  (Enter 進入／選取 · Esc 取消)"
-msgstr "Folder {path}  (Enter open/select · Esc cancel)"
+msgid "資料夾 {path}"
+msgstr "Folder {path}"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "輸入過濾資料夾，~ 回家目錄"
@@ -4051,6 +4051,10 @@ msgstr "Type to filter projects, or enter a path"
 #: crates/ertangle-tui/src/menu.rs
 msgid "輸入以過濾"
 msgstr "Type to filter"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "Enter 進入／選取 · Esc 取消"
+msgstr "Enter open/select · Esc cancel"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "交接給哪個 agent"
@@ -4672,6 +4676,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "資料夾 {path}  (Enter 進入／選取 · Esc 取消)"
+#~ msgstr "Folder {path}  (Enter open/select · Esc cancel)"
 
 #~ msgid "資料夾 {path}  (輸入過濾 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
 #~ msgstr "Folder {path}  (type to filter · Enter open/select · Backspace up · Esc cancel)"

@@ -5824,3 +5824,47 @@ fn picker_filter_is_a_text_input_with_cursor_and_placeholder() {
     assert_eq!(app.picker.as_ref().unwrap().filter, "x y");
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn folder_browser_hides_home_row_in_home_and_shows_hint_bottom_right() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_hint"));
+    std::fs::create_dir_all(&tmp).unwrap();
+
+    // 右下角的 Enter 提示：在邊框最後一列，靠右。
+    open_browser_at(&mut app, &mut w, &tmp);
+    let (term, text) = render_size(&mut app, 100, 30);
+    let hint = squash("Enter 進入／選取 · Esc 取消");
+    assert!(squash(&text).contains(&hint));
+    let buf = term.backend().buffer();
+    let bottom_row = (0..buf.area.height)
+        .map(|y| row_text(&term, y))
+        .find(|r| squash(r).contains(&hint))
+        .unwrap();
+    assert!(!bottom_row.trim_end().is_empty());
+    let hint_col = bottom_row.find("Enter").unwrap();
+    assert!(
+        hint_col > bottom_row.len() / 2,
+        "提示應在選擇器右半部：{bottom_row:?}"
+    );
+    assert!(!app.picker.as_ref().unwrap().title.contains("Enter"));
+    key(&mut app, &mut w, KeyCode::Esc);
+
+    // 家目錄裡不再列 `~/`。
+    let Some(home) = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|h| h.is_dir())
+    else {
+        return;
+    };
+    open_browser_at(&mut app, &mut w, &home);
+    assert!(app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .all(|(_, v)| v != crate::menu::HOME_VALUE));
+    let _ = std::fs::remove_dir_all(&tmp);
+}

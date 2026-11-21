@@ -384,7 +384,8 @@ pub(crate) const HOME_VALUE: &str = "\u{0}home";
 pub(crate) fn directory_items(current: &Path) -> Vec<(String, String)> {
     // 「使用此資料夾」放最上面，進到想要的資料夾後不用捲到底；其後依序是家目錄、上層。
     let mut items = vec![(tr!("* 使用此資料夾"), SELECT_VALUE.to_string())];
-    if home_dir().is_some() {
+    // 已經在家目錄時不用再列 `~/`。
+    if home_dir().is_some_and(|home| !same_dir(&home, current)) {
         items.push((tr!("  ~/"), HOME_VALUE.to_string()));
     }
     items.push((tr!("  ../"), PARENT_VALUE.to_string()));
@@ -400,6 +401,14 @@ pub(crate) fn directory_items(current: &Path) -> Vec<(String, String)> {
         }
     }
     items
+}
+
+/// 兩個路徑是否指向同一個資料夾 (連結與 `..` 先正規化)。
+fn same_dir(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
 }
 
 fn home_dir() -> Option<PathBuf> {
@@ -420,10 +429,7 @@ fn is_directory_shortcut(value: &str) -> bool {
 /// 進入 (或重新整理) 資料夾選擇器。
 fn start_directory_picker(app: &mut App, current: PathBuf) {
     let items = directory_items(&current);
-    let title = tr!(
-        "資料夾 {path}  (Enter 進入／選取 · Esc 取消)",
-        path = current.display()
-    );
+    let title = tr!("資料夾 {path}", path = current.display());
     app.picker = Some(Picker {
         stage: PickStage::Directory { current },
         resume_scope: ResumeScope::default(),
@@ -475,6 +481,12 @@ impl Picker {
             PickStage::Project => tr!("輸入過濾專案，或直接輸入路徑"),
             _ => tr!("輸入以過濾"),
         }
+    }
+
+    /// 顯示在選擇器右下角的按鍵提示 (目前只有資料夾瀏覽器用)。
+    pub(crate) fn hint(&self) -> Option<String> {
+        matches!(self.stage, PickStage::Directory { .. })
+            .then(|| tr!("Enter 進入／選取 · Esc 取消"))
     }
 
     /// 把背景查詢的結果併進清單 (每次繪製前呼叫)。

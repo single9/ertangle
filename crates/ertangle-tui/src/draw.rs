@@ -663,15 +663,16 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
         )));
     }
     f.render_widget(ratatui::widgets::Clear, area);
-    f.render_widget(
-        Paragraph::new(lines).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
-                .title(format!(" {} ", p.title)),
-        ),
-        area,
-    );
+    let mut block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(format!(" {} ", p.title));
+    if let Some(hint) = p.hint() {
+        block = block.title_bottom(
+            Line::styled(format!(" {hint} "), Style::default().fg(Color::DarkGray)).right_aligned(),
+        );
+    }
+    f.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 /// 依顯示寬度折行 (CJK 佔兩欄)；保留原有換行。
