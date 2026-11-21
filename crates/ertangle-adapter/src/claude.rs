@@ -33,6 +33,8 @@ struct Conn {
     stream: Mutex<StreamBuf>,
     /// Whether this message has already streamed via deltas (avoids duplicate output with the full assistant message).
     saw_delta: AtomicBool,
+    /// Set by `cancel()`: the next `error_during_execution` result is the user's interrupt, not a failure.
+    interrupted: AtomicBool,
     tx: Sender<AgentEvent>,
 }
 
@@ -240,7 +242,11 @@ impl Conn {
         if let Some(cost) = result_cost(msg) {
             let _ = self.tx.send(AgentEvent::Cost(cost));
         }
-        if msg["is_error"].as_bool().unwrap_or(false) {
+        let was_interrupted = self.interrupted.swap(false, Ordering::SeqCst);
+        if is_interrupt_result(msg, was_interrupted) {
+            // A user interrupt makes Claude report an errored result; the session itself is still healthy.
+            let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
+        } else if msg["is_error"].as_bool().unwrap_or(false) {
             let detail = msg["result"].as_str().unwrap_or("").to_string();
             if ertangle_core::looks_like_limit(&detail) {
                 let _ = self.tx.send(AgentEvent::Limited(detail));
@@ -254,6 +260,13 @@ impl Conn {
             let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
         }
     }
+}
+
+/// Whether `msg` is the errored `result` Claude emits after an interrupt we requested.
+fn is_interrupt_result(msg: &Value, interrupted: bool) -> bool {
+    interrupted
+        && msg["is_error"].as_bool().unwrap_or(false)
+        && msg["subtype"].as_str() == Some("error_during_execution")
 }
 
 /// Parses `rate_limit_event`: each window in `unifiedWindows` has `utilization` (0..1) and `resetsAt` (seconds).
@@ -352,6 +365,7 @@ impl AgentControl for ClaudeControl {
     /// Sends an interrupt control message (best-effort; Claude has no public cancellation API).
     fn cancel(&self) -> Result<()> {
         self.conn.flush_stream();
+        self.conn.interrupted.store(true, Ordering::SeqCst);
         self.conn.send_raw(&json!({
             "type": "control_request",
             "request_id": format!("ertangle-cancel-{}", std::process::id()),
@@ -550,6 +564,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let conn = Arc::new(Conn {
         stdin: Mutex::new(stdin),
         stream: Mutex::new(StreamBuf::default()),
+        interrupted: AtomicBool::new(false),
         saw_delta: AtomicBool::new(false),
         tx: tx.clone(),
     });
@@ -613,6 +628,17 @@ mod tests {
         assert_eq!(c.input_tokens, 15);
         assert_eq!(c.output_tokens, 20);
         assert!((c.usd - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn interrupt_result_is_not_a_failure() {
+        let err = json!({"type":"result","subtype":"error_during_execution","is_error":true});
+        assert!(is_interrupt_result(&err, true));
+        assert!(!is_interrupt_result(&err, false));
+        let ok = json!({"type":"result","subtype":"success","is_error":false});
+        assert!(!is_interrupt_result(&ok, true));
+        let other = json!({"type":"result","subtype":"error_max_turns","is_error":true});
+        assert!(!is_interrupt_result(&other, true));
     }
 
     fn spec_for_args() -> SessionSpec {
