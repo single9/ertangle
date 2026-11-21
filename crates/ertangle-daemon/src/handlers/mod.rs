@@ -123,6 +123,7 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
         Request::SessionRemove { session, force } => {
             session::handle_remove(shared, reply, session, force)
         }
+        Request::Clear { session, force } => session::handle_clear(shared, reply, session, force),
         Request::Sleep { session } => session::handle_sleep(shared, reply, session),
         Request::Wake { session } => session::handle_wake(shared, reply, session),
         Request::SessionConfig {

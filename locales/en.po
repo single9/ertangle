@@ -1660,6 +1660,30 @@ msgid "接續 {session} 失敗：{e}"
 msgstr "Failed to resume {session}: {e}"
 
 #: crates/ertangle-daemon/src/handlers/session.rs
+msgid "找不到執行中的 session {session}"
+msgstr "No running session {session}"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "{label} 正忙碌，請先中斷或使用 force"
+msgstr "{label} is busy; cancel first or use force"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "{label} 的工作目錄 {cwd} 已不存在"
+msgstr "Working directory {cwd} of {label} no longer exists"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "上下文已重設"
+msgstr "Context reset"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "已重設 {label} 的上下文"
+msgstr "Cleared context of {label}"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "重設 {session} 失敗：{e}"
+msgstr "Failed to clear {session}: {e}"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{session} 已結束；可用 :resume (或 `ertangle resume`)接續原對話"
 msgstr "{session} has ended; use :resume (or `ertangle resume`) to continue the conversation"
 
@@ -2380,6 +2404,10 @@ msgid "[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 
 msgstr "[prompt]  Without args open picker (Tab toggles scope); with prompt resume selected session"
 
 #: crates/ertangle-tui/src/commands.rs
+msgid "[force]  重設選取 session 的上下文 (同一個 id、worktree 與任務，agent 以全新對話重啟)"
+msgstr "[force]  Reset the selected session's context (same id, worktree and tasks; agent restarts with a fresh conversation)"
+
+#: crates/ertangle-tui/src/commands.rs
 msgid "[名稱]  切換選取 session 的 model (下一回合起生效)；不帶參數列出目前與可選項"
 msgstr "[name]  Switch the selected session's model (from the next turn); without arguments lists current and available"
 
@@ -2574,6 +2602,10 @@ msgstr "Enter the goal and press Enter to start playbook {name}"
 #: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "已送出結束"
 msgstr "Kill sent"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "已要求重設上下文"
+msgstr "Context reset requested"
 
 #: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "已送出中斷"

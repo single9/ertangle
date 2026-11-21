@@ -266,6 +266,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         ertangle_core::tr_noop!("[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 時接續選取的 session"),
     ),
     (
+        "clear",
+        ertangle_core::tr_noop!("[force]  重設選取 session 的上下文 (同一個 id、worktree 與任務，agent 以全新對話重啟)"),
+    ),
+    (
         "model",
         ertangle_core::tr_noop!("[名稱]  切換選取 session 的 model (下一回合起生效)；不帶參數列出目前與可選項"),
     ),
@@ -515,6 +519,15 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         }
         "resume" => {
             resume_command(app, writer, rest)?;
+        }
+        "clear" => {
+            if let Some(id) = app.selected_id() {
+                let force = rest.trim() == "force";
+                send(writer, &Request::Clear { session: id, force })?;
+                app.status = tr!("已要求重設上下文");
+            } else {
+                app.status = tr!("沒有選取的 session");
+            }
         }
         "cancel" => {
             if let Some(id) = app.selected_id() {

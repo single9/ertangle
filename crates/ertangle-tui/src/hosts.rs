@@ -126,6 +126,7 @@ impl HostRouter {
             | Request::Kill { session }
             | Request::KillBgProc { session, .. }
             | Request::Resume { session, .. }
+            | Request::Clear { session, .. }
             | Request::Sleep { session }
             | Request::Wake { session }
             | Request::SessionRemove { session, .. }

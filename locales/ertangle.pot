@@ -1648,6 +1648,30 @@ msgstr ""
 msgid "接續 {session} 失敗：{e}"
 msgstr ""
 
+#: crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs
+msgid "找不到執行中的 session {session}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "{label} 正忙碌，請先中斷或使用 force"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "{label} 的工作目錄 {cwd} 已不存在"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "上下文已重設"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "已重設 {label} 的上下文"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+msgid "重設 {session} 失敗：{e}"
+msgstr ""
+
 #: crates/ertangle-daemon/src/handlers/session.rs
 msgid "{session} 已結束；可用 :resume (或 `ertangle resume`)接續原對話"
 msgstr ""
@@ -2289,7 +2313,7 @@ msgstr ""
 msgid "已送出 prompt"
 msgstr ""
 
-#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr ""
 
@@ -2363,6 +2387,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 時接續選取的 session"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "[force]  重設選取 session 的上下文 (同一個 id、worktree 與任務，agent 以全新對話重啟)"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2559,6 +2587,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "已送出結束"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "已要求重設上下文"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs

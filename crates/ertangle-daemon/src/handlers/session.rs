@@ -721,6 +721,112 @@ pub(crate) fn handle_resume(
     }
 }
 
+/// 重設上下文：殺掉 agent 處理程序，以全新原生對話 (不帶 resume) 在同一個 ertangle session id 下重啟。
+/// 忙碌或等待核准時除非 `force` 否則拒絕；成功回傳 label。
+pub(crate) fn clear_session(
+    shared: &Arc<Shared>,
+    session: &str,
+    force: bool,
+) -> anyhow::Result<String> {
+    let Some((sid, ctl)) = shared.control(session) else {
+        bail!(
+            "{}",
+            tr!("找不到執行中的 session {session}", session = session)
+        );
+    };
+    let Some(s) = lock(&shared.inner).state.sessions.get(&sid).cloned() else {
+        bail!(
+            "{}",
+            tr!("找不到執行中的 session {session}", session = session)
+        );
+    };
+    if matches!(
+        s.status,
+        SessionStatus::Busy | SessionStatus::WaitingApproval | SessionStatus::Starting
+    ) && !force
+    {
+        bail!(
+            "{}",
+            tr!("{label} 正忙碌，請先中斷或使用 force", label = s.label)
+        );
+    }
+    let cwd = PathBuf::from(&s.cwd);
+    if !cwd.is_dir() {
+        bail!(
+            "{}",
+            tr!(
+                "{label} 的工作目錄 {cwd} 已不存在",
+                label = s.label,
+                cwd = s.cwd
+            )
+        );
+    }
+    shared.wake_if_sleeping(&sid, &ctl);
+    let _ = ctl.kill();
+    // 先拿掉控制把手：舊處理程序遲到的事件 (含 Exited)會被 launch_session 的 run 世代檢查擋掉。
+    lock(&shared.inner).sessions.remove(&sid);
+    shared.emit(Event::SessionCleared {
+        session: sid.clone(),
+    });
+    let resolved = config::Config::load(&config_dir(), &cwd).resolve(
+        &s.kind,
+        &s.role,
+        s.model.as_deref(),
+        None,
+        &[],
+        Some(s.permission),
+    );
+    let transport = if s.transport == "pty" {
+        ertangle_protocol::Transport::Pty
+    } else {
+        ertangle_protocol::Transport::Structured
+    };
+    let launch = Launch {
+        id: sid.clone(),
+        kind: s.kind.clone(),
+        cwd,
+        transport,
+        permission: s.permission,
+        resolved,
+        prompt: None,
+        prompt_from: None,
+        attachments: vec![],
+        resume: None,
+        cost_base: Default::default(),
+    };
+    if let Err(e) = launch_session(shared, launch) {
+        // 舊處理程序已死、新的起不來：標成結束，避免留下假的 live session。
+        shared.emit(Event::SessionExited {
+            session: sid,
+            code: None,
+        });
+        return Err(e);
+    }
+    shared.emit(Event::SessionNote {
+        session: sid,
+        note: tr!("上下文已重設"),
+    });
+    Ok(s.label)
+}
+
+pub(crate) fn handle_clear(shared: &Arc<Shared>, reply: &ClientTx, session: String, force: bool) {
+    match clear_session(shared, &session, force) {
+        Ok(label) => {
+            let _ = reply.send(Frame::ok_note(tr!(
+                "已重設 {label} 的上下文",
+                label = label
+            )));
+        }
+        Err(e) => {
+            let _ = reply.send(Frame::error(tr!(
+                "重設 {session} 失敗：{e}",
+                session = session,
+                e = e
+            )));
+        }
+    }
+}
+
 /// 實際送出一則 prompt 給目標 session (由 `handle_prompt` 與佇列自動送出共用)。
 pub(crate) fn send_prompt(
     shared: &Arc<Shared>,

@@ -2749,6 +2749,46 @@ done
     );
 }
 
+#[test]
+fn clear_refuses_busy_and_missing_sessions_without_changing_state() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_busy",
+        "worker/busy",
+        SessionStatus::Busy,
+        ctl.as_ctl(),
+        &dir,
+    );
+    let seq = lock(&shared.inner).seq;
+
+    let (tx, rx) = client_channel(None);
+    for id in ["ses_busy", "ses_missing"] {
+        shared.handle(
+            &tx,
+            Request::Clear {
+                session: id.into(),
+                force: false,
+            },
+        );
+    }
+    let errors: Vec<String> = rx
+        .try_iter()
+        .map(|f| match f {
+            Frame::Error { message } => message,
+            other => panic!("應回錯誤，得到 {other:?}"),
+        })
+        .collect();
+    assert_eq!(errors.len(), 2);
+    assert!(errors[0].contains("忙碌"), "{}", errors[0]);
+    assert!(errors[1].contains("找不到"), "{}", errors[1]);
+    let inner = lock(&shared.inner);
+    assert_eq!(inner.seq, seq, "拒絕時不該送出任何事件");
+    assert!(inner.sessions.contains_key("ses_busy"), "控制把手應保留");
+}
+
 // ---- T19：Prompt 排隊移至 daemon ----
 
 #[test]

@@ -216,6 +216,13 @@ pub enum Request {
         #[serde(default)]
         prompt: Option<String>,
     },
+    /// 重設上下文但不換身分：殺掉 agent 處理程序後以全新對話重啟 (ertangle session id、
+    /// label、父子關係、worktree、inbox 與任務都保留)。忙碌中預設拒絕，`force` 會先中斷。
+    Clear {
+        session: SessionId,
+        #[serde(default)]
+        force: bool,
+    },
     /// 暫停閒置 session 子處理程序 (SIGSTOP)。
     Sleep {
         session: SessionId,
@@ -514,6 +521,15 @@ mod tests {
         assert!(matches!(
             serde_json::from_str::<Request>(&json).unwrap(),
             Request::Restart
+        ));
+    }
+
+    #[test]
+    fn clear_request_serde_defaults_force_false() {
+        let req: Request = serde_json::from_str(r#"{"op":"clear","session":"ses_1"}"#).unwrap();
+        assert!(matches!(
+            req,
+            Request::Clear { ref session, force: false } if session == "ses_1"
         ));
     }
 

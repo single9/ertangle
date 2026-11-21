@@ -864,6 +864,11 @@ pub enum Event {
         session: SessionId,
         native_id: String,
     },
+    /// Context reset (`Request::Clear`): the agent restarts with a fresh native conversation
+    /// under the same ertangle session id. Drops native id, cost, context, transcript and live tool state.
+    SessionCleared {
+        session: SessionId,
+    },
     SessionLabel {
         session: SessionId,
         label: String,
@@ -1255,6 +1260,23 @@ impl State {
             Event::SessionNativeId { session, native_id } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.native_id = Some(native_id.clone());
+                }
+            }
+            Event::SessionCleared { session } => {
+                self.remove_session_questions(session);
+                self.pending_permissions
+                    .retain(|_, p| p.session != *session);
+                self.transcripts.remove(session);
+                if let Some(s) = self.sessions.get_mut(session) {
+                    s.native_id = None;
+                    s.cost = Cost::default();
+                    s.context = None;
+                    s.status_note = None;
+                    s.slash_commands.clear();
+                    s.active_tools.clear();
+                    s.bg_procs.clear();
+                    s.tool_calls = 0;
+                    s.over_budget = false;
                 }
             }
             Event::SessionLabel { session, label } => {
@@ -2558,6 +2580,53 @@ pub(crate) mod tests {
             },
         ));
         assert!(st.pending_questions.is_empty());
+    }
+
+    #[test]
+    fn session_cleared_resets_context_but_keeps_identity() {
+        let mut st = State::new();
+        let mut s = sample_session("s1");
+        s.native_id = Some("nat".into());
+        s.cost = Cost {
+            usd: 1.5,
+            input_tokens: 10,
+            output_tokens: 20,
+        };
+        s.context = Some(ContextUsage {
+            used: 5,
+            window: None,
+        });
+        s.status_note = Some("note".into());
+        s.tool_calls = 7;
+        let label = s.label.clone();
+        st.apply(&rec(1, Event::SessionStarted { session: s }));
+        st.transcripts
+            .entry("s1".into())
+            .or_default()
+            .push_back("❯ hi".into());
+        st.apply(&rec(
+            2,
+            Event::SessionCleared {
+                session: "s1".into(),
+            },
+        ));
+        let s = &st.sessions["s1"];
+        assert_eq!(s.native_id, None);
+        assert_eq!(s.cost, Cost::default());
+        assert_eq!(s.context, None);
+        assert_eq!(s.status_note, None);
+        assert_eq!(s.tool_calls, 0);
+        assert_eq!(s.label, label, "label 應保留");
+        assert!(!st.transcripts.contains_key("s1"));
+        // 清除後 agent 回報的新 native id 會被套用。
+        st.apply(&rec(
+            3,
+            Event::SessionNativeId {
+                session: "s1".into(),
+                native_id: "fresh".into(),
+            },
+        ));
+        assert_eq!(st.sessions["s1"].native_id.as_deref(), Some("fresh"));
     }
 
     #[test]
