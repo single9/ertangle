@@ -482,6 +482,7 @@ ertangle skill show
 ### 中斷復原與編譯資源
 
 - `[agent_spawn] auto_resume` (預設 `true`)：daemon 重啟時，自動接續當下正在執行回合的 session，並提示 agent 先用 `git status`／`git diff` 找回進度，不要重新探索整個專案。額度已滿、或上次自動接續後沒有任何進展的 session 不會再自動接續。
+- `[auto_compact] enabled` (預設 `true`)、`threshold_percent` (預設 `80`，限制在 10 到 95)：session 回到閒置且上下文用量達到門檻時，daemon 自動代送 `/compact`；僅對宣告支援 `compact` 斜線指令的 agent (如 Claude) 生效，只讀全域設定檔。也可在設定面板的「上下文」區調整。
 - `[agent_spawn] shared_cargo_target` (預設 `true`)：Cargo 專案裡，所有 worktree 的 agent 共用 `<repo>/.ertangle/target` 當 `CARGO_TARGET_DIR`。不用每個 worktree 各編一份，cargo 的目錄鎖也讓多個 worker 的編譯與測試自動排隊。已自行設定 `CARGO_TARGET_DIR` 時不覆寫。
 - 兩者都可在 `:settings` 切換。
 

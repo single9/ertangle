@@ -480,6 +480,32 @@ impl SessionsCfg {
     }
 }
 
+/// 自動 compact 設定 (`[auto_compact]`)；僅讀取全域設定檔。
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct AutoCompactCfg {
+    /// 是否在上下文用量超過門檻時自動對閒置 session 送 `/compact` (預設 true)。
+    pub enabled: Option<bool>,
+    /// 觸發門檻：上下文用量佔視窗的百分比 (預設 80，限制在 10..=95)。
+    pub threshold_percent: Option<u8>,
+}
+
+/// 自動 compact 的預設門檻 (百分比)。
+pub const AUTO_COMPACT_DEFAULT_PERCENT: u8 = 80;
+
+impl AutoCompactCfg {
+    pub fn enabled(&self) -> bool {
+        self.enabled.unwrap_or(true)
+    }
+
+    /// 有效門檻；超出範圍的值夾到 10..=95，避免每回合都 compact 或永遠不觸發。
+    pub fn threshold_percent(&self) -> u8 {
+        self.threshold_percent
+            .unwrap_or(AUTO_COMPACT_DEFAULT_PERCENT)
+            .clamp(10, 95)
+    }
+}
+
 /// Git 與 worktree 相關設定 ([git])。
 /// 為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫任意 shell 指令。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
@@ -513,6 +539,8 @@ pub struct Config {
     pub git: GitCfg,
     /// Session retention (`[sessions]`); global config only.
     pub sessions: SessionsCfg,
+    /// 自動 compact (`[auto_compact]`)；僅讀取全域設定檔。
+    pub auto_compact: AutoCompactCfg,
     /// Web 版支援設定；為安全起見僅讀取全域設定檔。
     pub web: WebCfg,
     /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。

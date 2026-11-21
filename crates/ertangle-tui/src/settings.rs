@@ -32,12 +32,14 @@ pub(crate) enum Item {
     CollabInstructions,
     InjectSkill,
     TokenHints,
+    AutoCompact,
+    AutoCompactThreshold,
     WebCompanion,
     WebPort,
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 22] = [
+pub(crate) const ITEMS: [Item; 24] = [
     Item::DefaultAgent,
     Item::DefaultRole,
     Item::DefaultPermission,
@@ -57,6 +59,8 @@ pub(crate) const ITEMS: [Item; 22] = [
     Item::CollabInstructions,
     Item::InjectSkill,
     Item::TokenHints,
+    Item::AutoCompact,
+    Item::AutoCompactThreshold,
     Item::WebCompanion,
     Item::WebPort,
     Item::Language,
@@ -161,6 +165,7 @@ impl Item {
             Item::SpawnWorktree => tr!("agent 自行建立 session 的防呆"),
             Item::MergeStrategy => tr!("Git 與 worktree"),
             Item::CollabInstructions => tr!("協作說明"),
+            Item::AutoCompact => tr!("上下文"),
             Item::WebCompanion => tr!("Web 版"),
             Item::Language => tr!("介面"),
             _ => return None,
@@ -202,6 +207,8 @@ impl Item {
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
             Item::InjectSkill => tr!("把 ertangle-ade skill 注入協作說明"),
             Item::TokenHints => tr!("把省 token 提示注入協作說明"),
+            Item::AutoCompact => tr!("上下文快滿時自動 compact"),
+            Item::AutoCompactThreshold => tr!("自動 compact 的觸發門檻 (上下文用量 %)"),
             Item::WebCompanion => tr!("Web 版支援 (Web UI)"),
             Item::WebPort => tr!("Web 版連接埠 (Web Port)"),
             Item::Language => tr!("介面語言"),
@@ -227,6 +234,8 @@ impl Item {
             Item::SpawnConfirm => c.agent_spawn.confirm().to_string(),
             Item::SpawnMaxEffort => c.agent_spawn.max_effort().to_string(),
             Item::AutoResume => on_off(c.agent_spawn.auto_resume()),
+            Item::AutoCompact => on_off(c.auto_compact.enabled()),
+            Item::AutoCompactThreshold => c.auto_compact.threshold_percent().to_string(),
             Item::SharedCargoTarget => on_off(c.agent_spawn.shared_cargo_target()),
             Item::MergeStrategy => c
                 .git
@@ -316,9 +325,14 @@ impl Item {
             | Item::InjectSkill
             | Item::TokenHints
             | Item::AutoResume
+            | Item::AutoCompact
             | Item::SharedCargoTarget => {
                 vec![pair("on", &tr!("開")), pair("off", &tr!("關"))]
             }
+            Item::AutoCompactThreshold => ["50", "60", "70", "80", "90"]
+                .iter()
+                .map(|p| pair(p, &format!("{p}%")))
+                .collect(),
             Item::SpawnConfirm => vec![
                 pair("costly", &tr!("超出範圍才問使用者")),
                 pair("always", &tr!("每次都問使用者")),
@@ -393,6 +407,7 @@ impl Item {
                 | Item::InjectSkill
                 | Item::TokenHints
                 | Item::AutoResume
+                | Item::AutoCompact
                 | Item::SharedCargoTarget
         )
     }
@@ -495,6 +510,20 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         }
         return;
     }
+    if item == Item::AutoCompactThreshold {
+        let val = value
+            .parse::<i64>()
+            .ok()
+            .map(ertangle_daemon::config::TomlValue::Integer);
+        app.status = match Config::set_toml(&path, &["auto_compact"], "threshold_percent", val) {
+            Ok(()) => {
+                s.cfg = Config::load_file(&path);
+                tr!("已儲存到 {path}", path = path.display())
+            }
+            Err(e) => tr!("寫入設定失敗：{e}", e = e),
+        };
+        return;
+    }
     if item == Item::WebPort {
         let port_val = if value.is_empty() {
             None
@@ -532,6 +561,8 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::InjectSkill => (&["collab"], "inject_skill"),
         Item::TokenHints => (&["collab"], "token_hints"),
         Item::AutoResume => (&["agent_spawn"], "auto_resume"),
+        Item::AutoCompact => (&["auto_compact"], "enabled"),
+        Item::AutoCompactThreshold => return,
         Item::SharedCargoTarget => (&["agent_spawn"], "shared_cargo_target"),
         Item::MergeStrategy => (&["git"], "merge_strategy"),
         Item::WebCompanion | Item::WebPort => return,

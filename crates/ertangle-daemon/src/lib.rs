@@ -10,6 +10,7 @@
 //! * 提供內建的 stdio MCP server ([`mcp`])。
 
 mod bus;
+mod compact;
 pub use bus::BusGuard;
 use bus::*;
 mod client;
@@ -283,6 +284,8 @@ pub(crate) struct Inner {
     pub(crate) sessions: HashMap<SessionId, SessionEntry>,
     /// 送達時收件者正忙、因此沒有喚醒的訊息 (T25)；回到 `Idle` 時合併提醒一次。
     pub(crate) pending_nudge: HashMap<SessionId, Vec<MsgId>>,
+    /// 已由 daemon 送出自動 `/compact`、尚未跑完的 session；該回合結束時移除，避免重複觸發。
+    pub(crate) auto_compacting: HashSet<SessionId>,
     pub(crate) waiters: Vec<Waiter>,
     /// 等待人類回覆的 MCP 核准請求：req id → 決定通道。
     pub(crate) approval_waiters: HashMap<String, Sender<Decision>>,
@@ -364,6 +367,7 @@ impl Shared {
                 backlog,
                 sessions: HashMap::new(),
                 pending_nudge: HashMap::new(),
+                auto_compacting: HashSet::new(),
                 waiters: Vec::new(),
                 approval_waiters: HashMap::new(),
                 question_waiters: HashMap::new(),
@@ -780,10 +784,18 @@ impl Shared {
             lock(&self.inner).sessions.remove(sid);
         }
         if ended {
-            lock(&self.inner).pending_nudge.remove(sid);
+            {
+                let mut inner = lock(&self.inner);
+                inner.pending_nudge.remove(sid);
+                inner.auto_compacting.remove(sid);
+            }
             self.clear_queue_for_ended(sid, false);
         } else if became_idle {
             self.scan_bg_procs_for_session(sid);
+            // 上下文快滿時先 compact (排隊的 prompt 留到 compact 結束後再送)。
+            if self.auto_compact_if_needed(sid) {
+                return;
+            }
             // 使用者排的 prompt 是明確指示，先送；佇列沒送出東西才補未讀訊息提醒 (T25)。
             if !self.flush_queue_if_idle(sid) {
                 self.nudge_unread_if_idle(sid);

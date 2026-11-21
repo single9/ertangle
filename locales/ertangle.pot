@@ -2849,7 +2849,7 @@ msgstr ""
 msgid "已將預設 {key} 設為 {value} ({path})，新建立的 session 起生效"
 msgstr ""
 
-#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs
 msgid "寫入設定失敗：{e}"
 msgstr ""
 
@@ -4420,6 +4420,10 @@ msgid "協作說明"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "上下文"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "Web 版"
 msgstr ""
 
@@ -4505,6 +4509,14 @@ msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "把省 token 提示注入協作說明"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "上下文快滿時自動 compact"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "自動 compact 的觸發門檻 (上下文用量 %)"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
@@ -4599,7 +4611,7 @@ msgstr ""
 msgid "已啟動 Web 版並儲存至 {path}"
 msgstr ""
 
-#: crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs
+#: crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs
 msgid "已儲存到 {path}"
 msgstr ""
 

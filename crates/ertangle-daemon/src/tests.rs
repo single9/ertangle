@@ -1426,7 +1426,7 @@ fn ertangle_status_line_matches_only_ertangle_dir() {
 
 // ---- 重啟還原 (T01)----
 
-fn restart_session(id: &str, status: SessionStatus) -> Session {
+pub(crate) fn restart_session(id: &str, status: SessionStatus) -> Session {
     Session {
         id: id.into(),
         kind: AgentKind::ClaudeCode,
@@ -2787,6 +2787,36 @@ fn clear_refuses_busy_and_missing_sessions_without_changing_state() {
     let inner = lock(&shared.inner);
     assert_eq!(inner.seq, seq, "拒絕時不該送出任何事件");
     assert!(inner.sessions.contains_key("ses_busy"), "控制把手應保留");
+}
+
+#[test]
+fn auto_compact_sends_once_when_idle_over_threshold_then_skips_its_own_turn() {
+    let shared = test_shared();
+    let dir = temp_cwd();
+    let ctl = MockCtl::default();
+    add_session(
+        &shared,
+        "ses_ac",
+        "worker/ac",
+        SessionStatus::Idle,
+        ctl.as_ctl(),
+        &dir,
+    );
+    shared.emit(Event::SessionCommands {
+        session: "ses_ac".into(),
+        commands: vec!["compact".into()],
+    });
+    shared.emit(Event::SessionContext {
+        session: "ses_ac".into(),
+        used: 90_000,
+        window: Some(100_000),
+    });
+
+    assert!(shared.auto_compact_if_needed(&"ses_ac".to_string()));
+    assert_eq!(ctl.inputs(), vec!["/compact".to_string()]);
+    // compact 回合結束 (再次 Idle)：只清旗標，不再重送。
+    assert!(!shared.auto_compact_if_needed(&"ses_ac".to_string()));
+    assert_eq!(ctl.inputs().len(), 1);
 }
 
 // ---- T19：Prompt 排隊移至 daemon ----

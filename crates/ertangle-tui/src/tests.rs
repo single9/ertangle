@@ -2721,6 +2721,23 @@ fn settings_panel_cycles_values_and_writes_config() {
     assert_eq!(cfg.web.resolved_port(), 8080);
     assert_eq!(cfg.web.resolved_addr(), "127.0.0.1:8080");
 
+    // 自動 compact：開關預設 on → off；門檻預設 80 → 右鍵切到 90
+    let cfg_path = dir.join("ertangle").join("config.toml");
+    let idx = |item| {
+        crate::settings::ITEMS
+            .iter()
+            .position(|i| *i == item)
+            .unwrap()
+    };
+    app.settings.as_mut().unwrap().cursor = idx(crate::settings::Item::AutoCompact);
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Char(' ')));
+    let cfg = ertangle_daemon::config::Config::load_file(&cfg_path);
+    assert!(!cfg.auto_compact.enabled());
+    app.settings.as_mut().unwrap().cursor = idx(crate::settings::Item::AutoCompactThreshold);
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Right));
+    let cfg = ertangle_daemon::config::Config::load_file(&cfg_path);
+    assert_eq!(cfg.auto_compact.threshold_percent(), 90);
+
     crate::settings::handle_key(&mut app, None, key(KeyCode::Esc));
     assert_eq!(app.mode, Mode::Normal);
     let _ = std::fs::remove_dir_all(&dir);
