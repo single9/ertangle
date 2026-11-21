@@ -17,11 +17,11 @@ const MAX_HANDOFF_DEPTH: usize = 3;
 
 /// 最吃緊的「尚未重置」視窗用量；全都已重置回傳 0。
 pub(crate) fn live_pressure(q: &Quota, now_ms: u64) -> f32 {
-    q.windows
-        .iter()
-        .filter(|w| w.resets_at_ms.is_none_or(|r| r > now_ms))
-        .map(|w| w.used_percent)
-        .fold(0.0, f32::max)
+    q.max_used_live(now_ms)
+}
+
+fn is_inactive_window(q: &Quota, name: &str) -> bool {
+    q.agent == "antigravity" && name.starts_with("3p-")
 }
 
 /// 送給 agent 的額度警告 (固定英文協定格式)。
@@ -107,6 +107,7 @@ pub(crate) fn check_spawn_quota(
     let window = q
         .windows
         .iter()
+        .filter(|w| !is_inactive_window(q, &w.name))
         .filter(|w| w.resets_at_ms.is_none_or(|r| r > now_ms))
         .max_by(|a, b| a.used_percent.total_cmp(&b.used_percent))
         .map(|w| w.name.clone());
@@ -124,6 +125,7 @@ pub(crate) fn check_spawn_quota(
     let reset = q
         .windows
         .iter()
+        .filter(|w| !is_inactive_window(q, &w.name))
         .filter_map(|w| w.resets_at_ms.filter(|r| *r > now_ms))
         .min()
         .map(|r| {
@@ -457,6 +459,22 @@ mod tests {
     fn pressure_ignores_reset_windows() {
         assert_eq!(live_pressure(&q("claude", 95.0, false, Some(5)), 10), 0.0);
         assert_eq!(live_pressure(&q("claude", 95.0, false, Some(50)), 10), 95.0);
+    }
+
+    #[test]
+    fn antigravity_third_party_pressure_does_not_block_spawn() {
+        let mut quota = q("antigravity", 61.0, false, None);
+        quota.windows.push(QuotaWindow {
+            name: "3p-7d".into(),
+            used_percent: 90.33,
+            resets_at_ms: Some(100),
+        });
+        let quotas = BTreeMap::from([("antigravity".into(), quota)]);
+
+        assert_eq!(
+            check_spawn_quota(&AgentKind::Antigravity, &quotas, &[], 90.0, 0),
+            SpawnQuota::Ok(Some("quota antigravity 61% (5h window)".into()))
+        );
     }
 
     #[test]

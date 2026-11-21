@@ -591,10 +591,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                     .map(|q| {
                         json!({
                             "agent": q.agent,
-                            "used_percent": q.windows.iter()
-                                .filter(|w| w.resets_at_ms.is_none_or(|r| r > now))
-                                .map(|w| w.used_percent)
-                                .fold(0.0_f32, f32::max),
+                            "used_percent": q.max_used_live(now),
                             "reached": q.reached,
                             "summary": q.summary(now),
                         })
