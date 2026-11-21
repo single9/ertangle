@@ -4024,12 +4024,12 @@ msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr "No `{c}` in this menu (Backspace back, Esc close)"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "../  上層資料夾"
-msgstr "../  Parent folder"
-
-#: crates/ertangle-tui/src/menu.rs
 msgid "✓ 使用目前資料夾：{path}"
 msgstr "✓ Use current folder: {path}"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "../  上層資料夾"
+msgstr "../  Parent folder"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "選擇專案資料夾 (Enter 進入／選取 · Backspace 上層 · Esc 取消)"

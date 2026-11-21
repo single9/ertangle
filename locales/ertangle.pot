@@ -4010,11 +4010,11 @@ msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "../  上層資料夾"
+msgid "✓ 使用目前資料夾：{path}"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "✓ 使用目前資料夾：{path}"
+msgid "../  上層資料夾"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

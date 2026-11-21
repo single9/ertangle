@@ -5624,3 +5624,14 @@ fn project_folder_browser_is_separate_from_project_list() {
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn directory_items_put_use_current_folder_first() {
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_items"));
+    std::fs::create_dir_all(tmp.join("sub")).unwrap();
+    let items = crate::menu::directory_items(&tmp);
+    assert_eq!(items[0].1, crate::menu::SELECT_VALUE);
+    assert_eq!(items[1].1, crate::menu::PARENT_VALUE);
+    assert!(items.iter().any(|(_, v)| v == "sub"));
+    let _ = std::fs::remove_dir_all(&tmp);
+}
