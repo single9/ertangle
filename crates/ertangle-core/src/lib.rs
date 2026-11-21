@@ -2146,6 +2146,11 @@ pub fn format_remaining(ms: u64) -> String {
 }
 
 impl Quota {
+    fn is_inactive_window(&self, window: &QuotaWindow) -> bool {
+        // Antigravity 3p windows cover third-party models only and must not drive agent-level quota decisions.
+        self.agent == "antigravity" && window.name.starts_with("3p-")
+    }
+
     /// One-line summary: `claude 5h 39% (reset 1h20m) 7d 22%`. Windows past reset time show `reset`.
     pub fn summary(&self, now_ms: u64) -> String {
         let parts: Vec<String> = self
@@ -2174,6 +2179,17 @@ impl Quota {
     pub fn max_used(&self) -> f32 {
         self.windows
             .iter()
+            .filter(|w| !self.is_inactive_window(w))
+            .map(|w| w.used_percent)
+            .fold(0.0, f32::max)
+    }
+
+    /// Tightest usage among windows that have not reset yet (percentage).
+    pub fn max_used_live(&self, now_ms: u64) -> f32 {
+        self.windows
+            .iter()
+            .filter(|w| !self.is_inactive_window(w))
+            .filter(|w| w.resets_at_ms.is_none_or(|reset| reset > now_ms))
             .map(|w| w.used_percent)
             .fold(0.0, f32::max)
     }
@@ -3190,6 +3206,55 @@ mod attachment_tests {
         assert_eq!(format_remaining(30_000), "<1m");
         assert_eq!(format_remaining(90 * 60_000), "1h30m");
         assert_eq!(format_remaining(50 * 3_600_000), "2d2h");
+    }
+
+    #[test]
+    fn quota_maxima_exclude_inactive_and_reset_windows() {
+        let q = Quota {
+            agent: "antigravity".into(),
+            windows: vec![
+                QuotaWindow {
+                    name: "3p-7d".into(),
+                    used_percent: 90.33,
+                    resets_at_ms: Some(300),
+                },
+                QuotaWindow {
+                    name: "7d".into(),
+                    used_percent: 61.0,
+                    resets_at_ms: Some(300),
+                },
+                QuotaWindow {
+                    name: "5h".into(),
+                    used_percent: 99.0,
+                    resets_at_ms: Some(100),
+                },
+            ],
+            reached: false,
+            warning: false,
+            updated_ms: 0,
+        };
+
+        assert_eq!(q.max_used(), 99.0);
+        assert_eq!(q.max_used_live(200), 61.0);
+        assert_eq!(q.max_used_live(300), 0.0);
+        assert!(q.summary(0).contains("3p-7d 90%"));
+    }
+
+    #[test]
+    fn third_party_windows_remain_active_for_other_agents() {
+        let q = Quota {
+            agent: "claude".into(),
+            windows: vec![QuotaWindow {
+                name: "3p-7d".into(),
+                used_percent: 90.0,
+                resets_at_ms: None,
+            }],
+            reached: false,
+            warning: false,
+            updated_ms: 0,
+        };
+        assert_eq!(q.max_used(), 90.0);
+        assert_eq!(q.max_used_live(0), 90.0);
     }
 
     #[test]

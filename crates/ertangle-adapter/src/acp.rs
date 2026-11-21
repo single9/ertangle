@@ -1416,14 +1416,14 @@ mod rate_limit_tests {
                         {
                             "name": "Gemini Models",
                             "buckets": [
-                                {"id": "gemini-weekly", "window": "weekly", "remaining_fraction": 0.75, "reset_time": "2026-11-25T13:49:39Z"},
+                                {"id": "gemini-weekly", "window": "weekly", "remaining_fraction": 0.39, "reset_time": "2026-11-25T13:49:39Z"},
                                 {"id": "gemini-5h", "window": "5h", "remaining_fraction": 0.93, "reset_time": "2026-11-19T15:43:56Z"}
                             ]
                         },
                         {
                             "name": "Claude and GPT models",
                             "buckets": [
-                                {"id": "3p-weekly", "window": "weekly", "remaining_fraction": 1, "reset_time": "2026-11-26T10:58:54Z"},
+                                {"id": "3p-weekly", "window": "weekly", "remaining_fraction": 0.10, "reset_time": "2026-11-26T10:58:54Z"},
                                 {"id": "3p-5h", "window": "5h", "remaining_fraction": 1, "reset_time": "2026-11-19T15:58:54Z"}
                             ]
                         },
@@ -1444,11 +1444,14 @@ mod rate_limit_tests {
         assert_eq!(q.windows[0].name, "5h");
         assert!((q.windows[0].used_percent - 7.0).abs() < 0.01);
         assert_eq!(q.windows[1].name, "7d");
-        assert!((q.windows[1].used_percent - 25.0).abs() < 0.01);
+        assert!((q.windows[1].used_percent - 61.0).abs() < 0.01);
         assert_eq!(q.windows[2].name, "argon-7d");
         assert_eq!(q.windows[3].name, "3p-5h");
         assert_eq!(q.windows[4].name, "3p-7d");
         assert_eq!(q.windows[0].resets_at_ms, Some(1_795_103_036_000));
+        assert_eq!(q.max_used(), 61.0);
+        assert_eq!(q.max_used_live(0), 61.0);
+        assert!(!q.reached);
     }
 
     #[test]

@@ -78,6 +78,7 @@
 | [T71](T71-web-review-question-stale.md) | Web: question card stays in Review after answering | P1 | — |
 | [T72](T72-tui-picker-remote-resolve-and-editing.md) | TUI picker: close on remote answer, editable custom answer | P1 | — |
 | [T73](T73-session-cleanup.md) | Session cleanup: auto-archive merged workers, retention, prune | P2 | — |
+| [T79](T79-antigravity-quota-pools.md) | Antigravity multi-model quota false positive | P1 | T51, T53 |
 | [T74](T74-shell-exec-and-web-commands.md) | Shell command execution in session cwd + web command palette | P2 | — |
 | [T75](T75-thinking-display-without-emoji.md) | Emoji-free animated thinking display with folded preview | P2 | — |
 | [T76](T76-tui-session-flow-dashboard.md) | TUI session flow dashboard: live session status and message flow | P3 | — |
