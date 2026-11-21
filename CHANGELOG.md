@@ -1,6 +1,22 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.0.1] - 2026-11-20
+
+### 🐛 Bug Fixes
+
+- *(tui)* Prevent thinking indicator from overwriting last line and update README
+
+### 📚 Documentation
+
+- Streamline README title and move name origin to appendix
+- Clarify terminal-native philosophy vs desktop GUI in README
+- *(ticket)* Record T64 live web verification
+
+### 🧪 Testing
+
+- *(tui)* Assert live thinking indicator renders strictly below prompt
+
 ## [1.0.0] - 2026-11-20
 
 ### 🚀 Features
