@@ -4023,7 +4023,19 @@ msgid "  ../"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "資料夾 {path}  (輸入過濾 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"
+msgid "資料夾 {path}  (Enter 進入／選取 · Esc 取消)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "輸入過濾資料夾，~ 回家目錄"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "輸入過濾專案，或直接輸入路徑"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "輸入以過濾"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

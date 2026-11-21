@@ -421,7 +421,7 @@ fn is_directory_shortcut(value: &str) -> bool {
 fn start_directory_picker(app: &mut App, current: PathBuf) {
     let items = directory_items(&current);
     let title = tr!(
-        "資料夾 {path}  (輸入過濾 · Enter 進入／選取 · Backspace 上層 · Esc 取消)",
+        "資料夾 {path}  (Enter 進入／選取 · Esc 取消)",
         path = current.display()
     );
     app.picker = Some(Picker {
@@ -430,6 +430,7 @@ fn start_directory_picker(app: &mut App, current: PathBuf) {
         title,
         items,
         filter: String::new(),
+        filter_cursor: 0,
         cursor: 0,
         pending: None,
         loading: false,
@@ -446,6 +447,8 @@ pub(crate) struct Picker {
     /// (顯示文字, 值)；值為空字串代表「預設」。
     pub items: Vec<(String, String)>,
     pub filter: String,
+    /// 過濾輸入框的游標位置 (字元索引)。
+    pub filter_cursor: usize,
     pub cursor: usize,
     /// 背景查詢 agent 可用 model 的結果 (查到後併入 `items`)。
     pub pending: Option<std::sync::mpsc::Receiver<Vec<(String, String)>>>,
@@ -465,6 +468,15 @@ pub(crate) fn split_effort_suffix(id: &str) -> Option<(&str, &str)> {
 }
 
 impl Picker {
+    /// 輸入框為空時顯示的提示。
+    pub(crate) fn placeholder(&self) -> String {
+        match self.stage {
+            PickStage::Directory { .. } => tr!("輸入過濾資料夾，~ 回家目錄"),
+            PickStage::Project => tr!("輸入過濾專案，或直接輸入路徑"),
+            _ => tr!("輸入以過濾"),
+        }
+    }
+
     /// 把背景查詢的結果併進清單 (每次繪製前呼叫)。
     pub(crate) fn poll_pending(&mut self) {
         let Some(rx) = &self.pending else { return };
@@ -630,6 +642,7 @@ pub(crate) fn start_question_picker(app: &mut App, q: &ertangle_core::UserQuesti
         title: String::new(),
         items: Vec::new(),
         filter: String::new(),
+        filter_cursor: 0,
         cursor: 0,
         pending: None,
         loading: false,
@@ -692,6 +705,7 @@ fn load_question(p: &mut Picker, index: usize) {
         tr!("問題")
     };
     p.filter.clear();
+    p.filter_cursor = 0;
     p.cursor = 0;
 }
 
@@ -995,6 +1009,18 @@ pub(crate) fn edit_line(text: &mut String, cur: &mut usize, key: &KeyEvent) -> b
     true
 }
 
+/// 過濾輸入框的編輯；文字有變動時游標列回到第一項。回傳是否吃掉這個按鍵。
+fn edit_line_filter(p: &mut Picker, key: &KeyEvent) -> bool {
+    let before = p.filter.clone();
+    if !edit_line(&mut p.filter, &mut p.filter_cursor, key) {
+        return false;
+    }
+    if p.filter != before {
+        p.cursor = 0;
+    }
+    true
+}
+
 /// Paste into the custom-answer row when it is active. Returns false if not.
 pub(crate) fn paste_custom(app: &mut App, text: &str) -> bool {
     let Some(Picker {
@@ -1008,7 +1034,17 @@ pub(crate) fn paste_custom(app: &mut App, text: &str) -> bool {
         ..
     }) = app.picker.as_mut()
     else {
-        return false;
+        // 一般選擇器：貼進過濾輸入框 (問題選擇器的選項模式不接受貼上)。
+        let Some(p) = app.picker.as_mut() else {
+            return false;
+        };
+        if matches!(p.stage, PickStage::Question { .. }) {
+            return false;
+        }
+        let flat = text.replace("\r\n", " ").replace(['\r', '\n'], " ");
+        insert_at(&mut p.filter, &mut p.filter_cursor, &flat);
+        p.cursor = 0;
+        return true;
     };
     let flat = text.replace("\r\n", " ").replace(['\r', '\n'], " ");
     insert_at(custom_text, custom_cursor, &flat);
@@ -1155,6 +1191,7 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
         title: tr!("選擇 agent"),
         items,
         filter: String::new(),
+        filter_cursor: 0,
         cursor: 0,
         pending: None,
         loading: false,
@@ -1183,6 +1220,7 @@ pub(crate) fn start_playbook_picker(app: &mut App) {
         title: tr!("選擇團隊範本 (選完輸入目標需求)"),
         items,
         filter: String::new(),
+        filter_cursor: 0,
         cursor: 0,
         pending: None,
         loading: false,
@@ -1354,6 +1392,7 @@ pub(crate) fn start_resume_picker(app: &mut App) {
         title: tr!("接續 session (Tab 切換專案範圍 · Enter 確認 · Esc 取消)"),
         items,
         filter: String::new(),
+        filter_cursor: 0,
         cursor,
         pending: None,
         loading: false,
@@ -1422,6 +1461,7 @@ pub(crate) fn start_project_picker(app: &mut App) {
         title: tr!("選擇專案 (Enter 確認 · Esc 取消)"),
         items,
         filter: String::new(),
+        filter_cursor: 0,
         cursor,
         pending: None,
         loading: false,
@@ -1512,22 +1552,18 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
     if matches!(p.stage, PickStage::Question { .. }) {
         return handle_question_key(app, writer, key);
     }
-    // 資料夾選擇器：Esc 關閉，Backspace 往上層資料夾 (而不是刪過濾字)。
+    // 資料夾選擇器：有過濾字時 Esc 先清掉過濾；過濾清空後 Esc 關閉、Backspace 往上層。
     if matches!(p.stage, PickStage::Directory { .. })
         && !p.filter.is_empty()
-        && matches!(key.code, KeyCode::Esc | KeyCode::Backspace)
+        && key.code == KeyCode::Esc
     {
-        // 有過濾字時，Backspace 刪一個字、Esc 清掉過濾；清空後才是上層／關閉。
-        if key.code == KeyCode::Esc {
-            p.filter.clear();
-        } else {
-            p.filter.pop();
-        }
+        p.filter.clear();
+        p.filter_cursor = 0;
         p.cursor = 0;
         return Ok(());
     }
     if matches!(p.stage, PickStage::Directory { .. })
-        && matches!(key.code, KeyCode::Esc | KeyCode::Backspace)
+        && (key.code == KeyCode::Esc || (key.code == KeyCode::Backspace && p.filter.is_empty()))
     {
         let (current, parent) = match &p.stage {
             PickStage::Directory { current } => (
@@ -1615,18 +1651,8 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                 p.cursor = (p.cursor + n - 1) % n;
             }
         }
-        KeyCode::Backspace => {
-            p.filter.pop();
-            p.cursor = 0;
-        }
-        KeyCode::Char(' ') if !ctrl => {
-            p.filter.push(' ');
-            p.cursor = 0;
-        }
-        KeyCode::Char(c) if !ctrl => {
-            p.filter.push(c);
-            p.cursor = 0;
-        }
+        // 過濾輸入框是一般文字輸入框：游標移動、刪字、Ctrl-A/E/U/W/K 都可用。
+        _ if edit_line_filter(p, &key) => {}
         KeyCode::Enter => {
             let chosen = p.visible().get(p.cursor).map(|(_, v)| v.clone());
             let custom = p.filter.trim().to_string();
@@ -1645,6 +1671,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                     );
                     p.items = model_choices(&kind);
                     p.filter.clear();
+                    p.filter_cursor = 0;
                     p.cursor = 0;
                     // 向 CLI 查詢可用 model (不阻塞介面)。
                     let (tx, rx) = std::sync::mpsc::channel();
@@ -1708,6 +1735,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         p.title = tr!("交接後的角色 (Enter 確認 · Esc 取消)");
                         p.items = items;
                         p.filter.clear();
+                        p.filter_cursor = 0;
                         p.cursor = default_idx;
                         p.pending = None;
                         p.loading = false;

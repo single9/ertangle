@@ -593,11 +593,22 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
             Span::styled(tr!(" (Tab 切換)"), Style::default().fg(Color::DarkGray)),
         ]));
     }
-    lines.push(Line::from(vec![
+    let cur = p.filter_cursor.min(p.filter.chars().count());
+    let before: String = p.filter.chars().take(cur).collect();
+    let after: String = p.filter.chars().skip(cur).collect();
+    let mut input_line = vec![
         Span::styled("> ", Style::default().fg(Color::Cyan)),
-        Span::raw(p.filter.clone()),
+        Span::raw(before),
         Span::styled("▏", Style::default().fg(Color::Cyan)),
-    ]));
+        Span::raw(after),
+    ];
+    if p.filter.is_empty() {
+        input_line.push(Span::styled(
+            p.placeholder(),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+    lines.push(Line::from(input_line));
     let header_lines = if is_resume { 2 } else { 1 };
     let room = h.saturating_sub(header_lines + 2) as usize;
     let start = p.cursor.saturating_sub(room.saturating_sub(1));

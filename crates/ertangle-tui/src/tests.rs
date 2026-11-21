@@ -1023,6 +1023,7 @@ fn picker_filters_and_offers_default_model() {
         title: "t".into(),
         items: choices,
         filter: "op".into(),
+        filter_cursor: 2,
         cursor: 0,
         pending: None,
         loading: false,
@@ -1112,6 +1113,7 @@ fn antigravity_models_are_grouped_by_base_name() {
         title: "t".into(),
         items: vec![],
         filter: String::new(),
+        filter_cursor: 0,
         cursor: 0,
         pending: Some(rx),
         loading: true,
@@ -5767,5 +5769,58 @@ fn directory_items_share_a_two_column_gutter() {
             "{label:?}"
         );
     }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn picker_filter_is_a_text_input_with_cursor_and_placeholder() {
+    let mut app = test_app();
+    let (mut w, _rx) = pair_writer();
+    let tmp = std::env::temp_dir().join(ertangle_core::new_id("pick_input"));
+    std::fs::create_dir_all(&tmp).unwrap();
+    open_browser_at(&mut app, &mut w, &tmp);
+
+    // 空輸入框顯示提示，標題不再夾帶「輸入過濾」。
+    let (_, text) = render_size(&mut app, 100, 30);
+    assert!(
+        squash(&text).contains(&squash("輸入過濾資料夾")),
+        "placeholder missing"
+    );
+    assert!(!app.picker.as_ref().unwrap().title.contains("輸入過濾"));
+
+    for c in "ac".chars() {
+        key(&mut app, &mut w, KeyCode::Char(c));
+    }
+    let (_, text) = render_size(&mut app, 100, 30);
+    assert!(
+        !squash(&text).contains(&squash("輸入過濾資料夾")),
+        "打字後提示要消失"
+    );
+
+    // 游標左移後在中間插入。
+    key(&mut app, &mut w, KeyCode::Left);
+    key(&mut app, &mut w, KeyCode::Char('b'));
+    assert_eq!(app.picker.as_ref().unwrap().filter, "abc");
+    // Home / Delete 刪第一個字；Backspace 在行首不會誤回上層。
+    key(&mut app, &mut w, KeyCode::Home);
+    key(&mut app, &mut w, KeyCode::Delete);
+    assert_eq!(app.picker.as_ref().unwrap().filter, "bc");
+    key(&mut app, &mut w, KeyCode::Backspace);
+    assert_eq!(app.picker.as_ref().unwrap().filter, "bc");
+    match &app.picker.as_ref().unwrap().stage {
+        crate::menu::PickStage::Directory { current } => assert_eq!(current, &tmp),
+        _ => panic!("expected directory stage"),
+    }
+    // Ctrl-U 清到行首；貼上插進輸入框。
+    key(&mut app, &mut w, KeyCode::End);
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert!(app.picker.as_ref().unwrap().filter.is_empty());
+    handle_paste(&mut app, "x\ny");
+    assert_eq!(app.picker.as_ref().unwrap().filter, "x y");
     let _ = std::fs::remove_dir_all(&tmp);
 }
