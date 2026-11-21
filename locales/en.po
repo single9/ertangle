@@ -4023,17 +4023,18 @@ msgstr "Shell command (run in the session working directory)"
 msgid "選單沒有 `{c}`(Backspace 返回、Esc 關閉)"
 msgstr "No `{c}` in this menu (Backspace back, Esc close)"
 
+#. 「使用此資料夾」放最上面，進到想要的資料夾後不用捲到底；其後依序是家目錄、上層。
 #: crates/ertangle-tui/src/menu.rs
 msgid "* 使用此資料夾"
 msgstr "* Use this folder"
 
 #: crates/ertangle-tui/src/menu.rs
-msgid "  ../"
-msgstr "  ../"
-
-#: crates/ertangle-tui/src/menu.rs
 msgid "  ~/"
 msgstr "  ~/"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "  ../"
+msgstr "  ../"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "資料夾 {path}  (輸入過濾 · Enter 進入／選取 · Backspace 上層 · Esc 取消)"

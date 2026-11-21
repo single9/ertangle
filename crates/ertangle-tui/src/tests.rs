@@ -5631,7 +5631,16 @@ fn directory_items_put_use_current_folder_first() {
     std::fs::create_dir_all(tmp.join("sub")).unwrap();
     let items = crate::menu::directory_items(&tmp);
     assert_eq!(items[0].1, crate::menu::SELECT_VALUE);
-    assert_eq!(items[1].1, crate::menu::PARENT_VALUE);
+    let parent = items
+        .iter()
+        .position(|(_, v)| v == crate::menu::PARENT_VALUE)
+        .unwrap();
+    if let Some(home) = items.iter().position(|(_, v)| v == crate::menu::HOME_VALUE) {
+        assert_eq!(home, 1, "家目錄緊接在選取列之後");
+        assert_eq!(parent, home + 1, "家目錄在上層之上");
+    } else {
+        assert_eq!(parent, 1);
+    }
     assert!(items.iter().any(|(_, v)| v == "sub"));
     let _ = std::fs::remove_dir_all(&tmp);
 }

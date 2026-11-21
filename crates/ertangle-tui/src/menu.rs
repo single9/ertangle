@@ -382,14 +382,12 @@ pub(crate) const HOME_VALUE: &str = "\u{0}home";
 
 /// 列出 `current` 底下的資料夾，加上上層與「使用目前資料夾」兩列。
 pub(crate) fn directory_items(current: &Path) -> Vec<(String, String)> {
-    // 「使用目前資料夾」放最上面，進到想要的資料夾後不用捲到底。
-    let mut items = vec![
-        (tr!("* 使用此資料夾"), SELECT_VALUE.to_string()),
-        (tr!("  ../"), PARENT_VALUE.to_string()),
-    ];
+    // 「使用此資料夾」放最上面，進到想要的資料夾後不用捲到底；其後依序是家目錄、上層。
+    let mut items = vec![(tr!("* 使用此資料夾"), SELECT_VALUE.to_string())];
     if home_dir().is_some() {
         items.push((tr!("  ~/"), HOME_VALUE.to_string()));
     }
+    items.push((tr!("  ../"), PARENT_VALUE.to_string()));
     if let Ok(rd) = std::fs::read_dir(current) {
         let mut dirs: Vec<String> = rd
             .filter_map(|entry| entry.ok())
