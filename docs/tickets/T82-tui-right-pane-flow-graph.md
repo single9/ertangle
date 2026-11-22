@@ -1,7 +1,5 @@
 # T82 — Replace right-pane Bus display with live Agent/Session Flow graph
 
-Status: ready-for-agent
-
 Priority: P2　Scope: `ertangle-tui`　Depends on: T77
 
 ## Problem

@@ -18,7 +18,7 @@ use super::{FlowEdgeKind, FlowEndpoint, FlowModel, FlowNode, FLOW_PACKET_MS};
 
 /// Node box height: border, label, badges, border.
 const BOX_H: u16 = 4;
-const MIN_BOX_W: u16 = 10;
+const MIN_BOX_W: u16 = 8;
 const MAX_BOX_W: u16 = 24;
 /// Rows between tree levels; links and packets travel through this gap.
 const MIN_GAP_ROWS: u16 = 1;
@@ -134,7 +134,17 @@ pub(crate) fn draw_flow_graph(
     model: &FlowModel,
     cursor: usize,
 ) -> bool {
-    let block = Block::default().borders(Borders::ALL).title("Flow");
+    draw_flow_graph_titled(f, area, model, cursor, "Flow")
+}
+
+pub(crate) fn draw_flow_graph_titled(
+    f: &mut TuiFrame,
+    area: Rect,
+    model: &FlowModel,
+    cursor: usize,
+    title: &str,
+) -> bool {
+    let block = Block::default().borders(Borders::ALL).title(title);
     let inner = block.inner(area);
     if inner.height < 2 || inner.width == 0 {
         return false;
