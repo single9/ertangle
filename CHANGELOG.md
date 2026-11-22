@@ -1,6 +1,24 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.2.0] - 2026-11-21
+
+### 🚀 Features
+
+- *(daemon)* Add /clear to reset agent context without changing session identity
+- *(daemon)* Auto-compact idle sessions when context usage exceeds a configurable threshold
+
+### 🐛 Bug Fixes
+
+- *(adapter)* Keep claude session alive after user interrupt
+- *(quota)* Ignore inactive Antigravity third-party windows
+- *(bus)* Avoid waking quota-exhausted peers
+
+### Merge
+
+- T79 antigravity quota pool fix
+- T80 quota-exhausted peer delivery fix
+
 ## [1.1.0] - 2026-11-21
 
 ### 🚀 Features
