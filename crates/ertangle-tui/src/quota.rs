@@ -107,7 +107,7 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
     )];
-    if q.reached {
+    if q.is_reached(now_ms) {
         head.push(Span::styled(
             format!("  {}", tr!("✗ 額度已滿")),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),

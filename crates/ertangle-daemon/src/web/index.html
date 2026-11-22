@@ -3810,7 +3810,21 @@
         const q = state.quotas[k];
         const card = document.createElement("div");
         card.className = "quota-card";
-        const badge = q.reached
+        const isInactive = (name) => (q.agent === "antigravity" || k === "antigravity") && (name || "").startsWith("3p-");
+        const windows = q.windows || [];
+        let isReached = !!q.reached;
+        if (windows.length > 0) {
+          const anyLiveExhausted = windows.some(w => !isInactive(w.name) && (w.resets_at_ms == null || w.resets_at_ms > now) && (w.used_percent || 0) >= 100);
+          if (anyLiveExhausted) {
+            isReached = true;
+          } else if (q.reached) {
+            const anyReset = windows.some(w => !isInactive(w.name) && w.resets_at_ms != null && w.resets_at_ms <= now);
+            isReached = !anyReset;
+          } else {
+            isReached = false;
+          }
+        }
+        const badge = isReached
           ? `<span style="color:var(--red);">✗ 額度已滿</span>`
           : q.warning
             ? `<span style="color:var(--yellow);">⚠ 接近上限</span>`

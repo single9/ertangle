@@ -4109,20 +4109,23 @@ fn auto_resume_only_for_busy_resumable_sessions_with_quota_and_progress() {
     let mut s = restart_session("ses-a", SessionStatus::Busy);
     let none = BTreeMap::new();
     assert!(
-        !crate::auto_resume_eligible(&s, &none),
+        !crate::auto_resume_eligible(&s, &none, 0),
         "沒有原生 id 不能接續"
     );
     s.native_id = Some("nat".into());
-    assert!(crate::auto_resume_eligible(&s, &none));
+    assert!(crate::auto_resume_eligible(&s, &none, 0));
     s.status = SessionStatus::Idle;
-    assert!(!crate::auto_resume_eligible(&s, &none), "閒置的不自動接續");
+    assert!(
+        !crate::auto_resume_eligible(&s, &none, 0),
+        "閒置的不自動接續"
+    );
     s.status = SessionStatus::WaitingApproval;
-    assert!(crate::auto_resume_eligible(&s, &none));
+    assert!(crate::auto_resume_eligible(&s, &none, 0));
     // 上次自動接續後沒有任何進展 (說明沒被覆寫) → 不再接續，避免崩潰迴圈。
     s.status_note = Some(crate::auto_resumed_note());
-    assert!(!crate::auto_resume_eligible(&s, &none));
+    assert!(!crate::auto_resume_eligible(&s, &none, 0));
     s.status_note = Some("running tests".into());
-    assert!(crate::auto_resume_eligible(&s, &none));
+    assert!(crate::auto_resume_eligible(&s, &none, 0));
     // 額度已滿不接續。
     let mut quotas = BTreeMap::new();
     quotas.insert(
@@ -4135,7 +4138,33 @@ fn auto_resume_only_for_busy_resumable_sessions_with_quota_and_progress() {
             updated_ms: 0,
         },
     );
-    assert!(!crate::auto_resume_eligible(&s, &quotas));
+    assert!(!crate::auto_resume_eligible(&s, &quotas, 0));
+
+    // 額度視窗重置後可接續。
+    let mut reset_quotas = BTreeMap::new();
+    reset_quotas.insert(
+        "claude".to_string(),
+        ertangle_core::Quota {
+            agent: "claude".into(),
+            windows: vec![
+                ertangle_core::QuotaWindow {
+                    name: "5h".into(),
+                    used_percent: 100.0,
+                    resets_at_ms: Some(50),
+                },
+                ertangle_core::QuotaWindow {
+                    name: "7d".into(),
+                    used_percent: 51.0,
+                    resets_at_ms: Some(200),
+                },
+            ],
+            reached: true,
+            warning: false,
+            updated_ms: 0,
+        },
+    );
+    assert!(!crate::auto_resume_eligible(&s, &reset_quotas, 10));
+    assert!(crate::auto_resume_eligible(&s, &reset_quotas, 100));
 }
 
 #[test]

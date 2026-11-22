@@ -115,7 +115,7 @@ pub(crate) fn check_spawn_quota(
         Some(w) => format!("quota {} {used:.0}% ({w} window)", q.agent),
         None => format!("quota {} {used:.0}%", q.agent),
     };
-    if !q.reached && used < warn_percent {
+    if !q.is_reached(now_ms) && used < warn_percent {
         return SpawnQuota::Ok(Some(summary));
     }
     if let Some((k, m)) = pick_fallback(fallback, kind, quotas, now_ms) {
@@ -159,7 +159,7 @@ pub(crate) fn pick_fallback(
         }
         let blocked = quotas
             .get(kind.id())
-            .is_some_and(|q| q.reached || live_pressure(q, now_ms) >= 100.0);
+            .is_some_and(|q| q.is_reached(now_ms) || live_pressure(q, now_ms) >= 100.0);
         (!blocked).then_some((kind, m))
     })
 }
@@ -308,7 +308,7 @@ impl Shared {
             .unwrap_or(DEFAULT_WARN_PERCENT);
         let used = live_pressure(quota, now);
         let notice_key = format!("{}:notice", quota.agent);
-        if used < threshold && !quota.reached {
+        if used < threshold && !quota.is_reached(now) {
             lock_set(&self.quota_warned).remove(&quota.agent);
             if !quota.warning {
                 lock_set(&self.quota_warned).remove(&notice_key);
@@ -497,6 +497,55 @@ mod tests {
         );
         assert!(pick_fallback(&["claude".to_string()], &src, &quotas, 0).is_none());
         assert!(pick_fallback(&["bogus".to_string()], &src, &quotas, 0).is_none());
+    }
+
+    #[test]
+    fn spawn_and_fallback_allow_agent_after_exhausted_window_resets() {
+        let claude = AgentKind::ClaudeCode;
+        let mut quotas = BTreeMap::new();
+        let quota = Quota {
+            agent: "claude".into(),
+            windows: vec![
+                QuotaWindow {
+                    name: "5h".into(),
+                    used_percent: 100.0,
+                    resets_at_ms: Some(100),
+                },
+                QuotaWindow {
+                    name: "7d".into(),
+                    used_percent: 51.0,
+                    resets_at_ms: Some(500),
+                },
+            ],
+            reached: true,
+            warning: false,
+            updated_ms: 0,
+        };
+        quotas.insert("claude".into(), quota.clone());
+
+        // At now_ms = 50: 5h not reset -> rejected or fallback triggered.
+        assert!(matches!(
+            check_spawn_quota(&claude, &quotas, &[], 90.0, 50),
+            SpawnQuota::Reject(_)
+        ));
+        assert!(pick_fallback(&["claude".to_string()], &AgentKind::Codex, &quotas, 50).is_none());
+
+        // At now_ms = 150: 5h has reset, 7d is 51% < 90% -> allowed.
+        assert!(matches!(
+            check_spawn_quota(&claude, &quotas, &[], 90.0, 150),
+            SpawnQuota::Ok(_)
+        ));
+        assert!(pick_fallback(&["claude".to_string()], &AgentKind::Codex, &quotas, 150).is_some());
+
+        // If 7d is 100%: still blocked even after 5h reset.
+        let mut quota_full = quota;
+        quota_full.windows[1].used_percent = 100.0;
+        quotas.insert("claude".into(), quota_full);
+        assert!(matches!(
+            check_spawn_quota(&claude, &quotas, &[], 90.0, 150),
+            SpawnQuota::Reject(_)
+        ));
+        assert!(pick_fallback(&["claude".to_string()], &AgentKind::Codex, &quotas, 150).is_none());
     }
 
     #[test]

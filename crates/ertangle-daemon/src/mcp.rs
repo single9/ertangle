@@ -592,7 +592,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                         json!({
                             "agent": q.agent,
                             "used_percent": q.max_used_live(now),
-                            "reached": q.reached,
+                            "reached": q.is_reached(now),
                             "summary": q.summary(now),
                         })
                     })
@@ -610,12 +610,14 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             let Frame::Snapshot { state } = roundtrip(&Request::Snapshot)? else {
                 bail!("failed to fetch state snapshot");
             };
+            let now = ertangle_core::now_millis();
             let peers: Vec<Value> = state
                 .sessions_sorted()
                 .into_iter()
                 .map(|s| {
                     let quota = state.quotas.get(s.kind.id());
-                    let quota_reached = quota.is_some_and(|q| q.reached || q.max_used() >= 100.0);
+                    let quota_reached =
+                        quota.is_some_and(|q| q.is_reached(now) || q.max_used_live(now) >= 100.0);
                     let unavailable_reason = if quota_reached {
                         Some("quota exhausted")
                     } else if !s.status.is_live() {
@@ -634,7 +636,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                         "branch": s.branch,
                         "parent": s.parent,
                         "quota_reached": quota_reached,
-                        "quota_used_percent": quota.map_or(0.0, |q| q.max_used()),
+                        "quota_used_percent": quota.map_or(0.0, |q| q.max_used_live(now)),
                         "unavailable_reason": unavailable_reason,
                     })
                 })

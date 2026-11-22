@@ -948,7 +948,12 @@ impl Config {
             .iter()
             .filter_map(|s| AgentKind::parse(s))
             .filter(|kind| installed(kind))
-            .filter(|kind| !quota.quotas.get(kind.id()).is_some_and(|q| q.reached))
+            .filter(|kind| {
+                !quota
+                    .quotas
+                    .get(kind.id())
+                    .is_some_and(|q| q.is_reached(quota.now_ms))
+            })
             .collect();
         let preferred = candidates.iter().find(|kind| {
             quota.quotas.get(kind.id()).is_none_or(|q| {

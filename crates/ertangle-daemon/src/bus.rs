@@ -4,11 +4,12 @@ use super::*;
 use tr::tr;
 
 fn quota_exhausted(state: &ertangle_core::State, sid: &str) -> bool {
+    let now = ertangle_core::now_millis();
     state
         .sessions
         .get(sid)
         .and_then(|session| state.quotas.get(session.kind.id()))
-        .is_some_and(|quota| quota.reached || quota.max_used() >= 100.0)
+        .is_some_and(|quota| quota.is_reached(now) || quota.max_used_live(now) >= 100.0)
 }
 
 // ---------------------------------------------------------------------------

@@ -3734,6 +3734,51 @@ fn quota_popup_renders_and_header_click_area_is_set() {
     }
 }
 
+#[test]
+fn quota_ui_clears_exhausted_after_window_resets() {
+    use ertangle_core::{Quota, QuotaWindow};
+    let now = 200;
+    let mut q = Quota {
+        agent: "claude".into(),
+        windows: vec![
+            QuotaWindow {
+                name: "5h".into(),
+                used_percent: 100.0,
+                resets_at_ms: Some(100), // reset in the past
+            },
+            QuotaWindow {
+                name: "7d".into(),
+                used_percent: 51.0,
+                resets_at_ms: Some(500), // still active
+            },
+        ],
+        reached: true,
+        warning: false,
+        updated_ms: 50,
+    };
+
+    let text = |lines: Vec<ratatui::text::Line>| {
+        lines
+            .into_iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // When 5h reset and 7d at 51%, agent_lines does not show "✗ 額度已滿"
+    let l = text(crate::quota::agent_lines("claude", Some(&q), now));
+    assert!(!l[0].contains("✗ 額度已滿"), "{:?}", l[0]);
+
+    // When 7d is 100%, agent_lines shows "✗ 額度已滿"
+    q.windows[1].used_percent = 100.0;
+    let l_full = text(crate::quota::agent_lines("claude", Some(&q), now));
+    assert!(l_full[0].contains("✗ 額度已滿"), "{:?}", l_full[0]);
+}
+
 fn generate_realistic_transcript(target_lines: usize) -> Vec<String> {
     let template = [
         "❯ Please implement the feature and check tests",

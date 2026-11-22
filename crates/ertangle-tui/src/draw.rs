@@ -1137,7 +1137,7 @@ fn quota_spans(app: &App) -> Vec<Span<'static>> {
             continue;
         };
         let rem = (100.0 - w.used_percent).clamp(0.0, 100.0);
-        let color = if q.reached || rem <= 10.0 {
+        let color = if q.is_reached(now) || rem <= 10.0 {
             Color::Red
         } else if rem <= 30.0 || q.warning {
             Color::Yellow

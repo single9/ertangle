@@ -1,7 +1,5 @@
 # T81 — Stale `Quota::reached` after rate-limit window resets
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-core`, `ertangle-daemon`, `ertangle-tui`, `web`　Depends on: —
 
 ## Problem

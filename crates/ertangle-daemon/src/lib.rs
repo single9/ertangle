@@ -412,6 +412,7 @@ impl Shared {
             // 先讀設定再上鎖：default_cwd() 本身也會鎖 inner。
             let cfg = config::Config::load(&config_dir(), &shared.default_cwd());
             let restarted = std::env::var_os(RESTARTED_ENV).is_some();
+            let now = ertangle_core::now_millis();
             let inner = lock(&shared.inner);
             inner
                 .state
@@ -420,7 +421,7 @@ impl Shared {
                 .filter(|s| s.status.is_live())
                 .map(|s| {
                     let auto = (restarted || cfg.agent_spawn.auto_resume())
-                        && auto_resume_eligible(s, &inner.state.quotas);
+                        && auto_resume_eligible(s, &inner.state.quotas, now);
                     (s.id.clone(), s.native_id.is_some(), auto)
                 })
                 .collect()
@@ -1158,11 +1159,14 @@ fn strip_deleted_suffix(p: &std::path::Path) -> std::path::PathBuf {
 pub(crate) fn auto_resume_eligible(
     s: &Session,
     quotas: &std::collections::BTreeMap<String, ertangle_core::Quota>,
+    now_ms: u64,
 ) -> bool {
     matches!(
         s.status,
         SessionStatus::Busy | SessionStatus::WaitingApproval | SessionStatus::Starting
     ) && s.native_id.is_some()
-        && !quotas.get(s.kind.id()).is_some_and(|q| q.reached)
+        && !quotas
+            .get(s.kind.id())
+            .is_some_and(|q| q.is_reached(now_ms))
         && s.status_note.as_deref() != Some(auto_resumed_note().as_str())
 }

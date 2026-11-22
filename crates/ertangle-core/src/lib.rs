@@ -2167,12 +2167,42 @@ impl Quota {
                 None => format!("{} {:.0}%", w.name, w.used_percent),
             })
             .collect();
-        let reached = if self.reached {
+        let reached = if self.is_reached(now_ms) {
             format!(" {}", tr!("✗額度已滿"))
         } else {
             String::new()
         };
         format!("{}{} {}", self.agent, reached, parts.join(" · "))
+    }
+
+    /// Whether this agent's quota is currently reached/exhausted at `now_ms`.
+    ///
+    /// If there are no windows (e.g. error-only rate limit without window timestamps),
+    /// falls back to `self.reached`. Otherwise, returns `true` if any active live window
+    /// has `used_percent >= 100.0`, OR if `self.reached` is `true` and no active window
+    /// has reset yet.
+    pub fn is_reached(&self, now_ms: u64) -> bool {
+        if self.windows.is_empty() {
+            return self.reached;
+        }
+        let any_live_exhausted = self
+            .windows
+            .iter()
+            .filter(|w| !self.is_inactive_window(w))
+            .filter(|w| w.resets_at_ms.is_none_or(|r| r > now_ms))
+            .any(|w| w.used_percent >= 100.0);
+        if any_live_exhausted {
+            return true;
+        }
+        if self.reached {
+            let any_reset = self.windows.iter().any(|w| {
+                !self.is_inactive_window(w) && w.resets_at_ms.is_some_and(|r| r <= now_ms)
+            });
+            if !any_reset {
+                return true;
+            }
+        }
+        false
     }
 
     /// Tightest window usage (percentage).
@@ -3238,6 +3268,63 @@ mod attachment_tests {
         assert_eq!(q.max_used_live(200), 61.0);
         assert_eq!(q.max_used_live(300), 0.0);
         assert!(q.summary(0).contains("3p-7d 90%"));
+    }
+
+    #[test]
+    fn quota_is_reached_clears_after_exhausted_window_resets() {
+        let mut q = Quota {
+            agent: "claude".into(),
+            windows: vec![
+                QuotaWindow {
+                    name: "5h".into(),
+                    used_percent: 100.0,
+                    resets_at_ms: Some(100),
+                },
+                QuotaWindow {
+                    name: "7d".into(),
+                    used_percent: 51.0,
+                    resets_at_ms: Some(500),
+                },
+            ],
+            reached: true,
+            warning: false,
+            updated_ms: 0,
+        };
+
+        // Before 5h reset: still reached, summary contains ✗額度已滿.
+        assert!(q.is_reached(50));
+        let sum_before = q.summary(50);
+        assert!(sum_before.contains("✗額度已滿"), "{sum_before}");
+
+        // After 5h reset: is_reached is false, summary no longer contains ✗額度已滿.
+        assert!(!q.is_reached(150));
+        let sum_after = q.summary(150);
+        assert!(!sum_after.contains("✗額度已滿"), "{sum_after}");
+        assert!(sum_after.contains("5h 已重置"), "{sum_after}");
+
+        // If another active live window is >= 100%: still reached.
+        q.windows[1].used_percent = 100.0;
+        assert!(q.is_reached(150));
+        assert!(q.summary(150).contains("✗額度已滿"));
+
+        // If windows is empty: falls back to self.reached.
+        let empty_reached = Quota {
+            agent: "claude".into(),
+            windows: vec![],
+            reached: true,
+            warning: false,
+            updated_ms: 0,
+        };
+        assert!(empty_reached.is_reached(150));
+
+        let empty_not_reached = Quota {
+            agent: "claude".into(),
+            windows: vec![],
+            reached: false,
+            warning: false,
+            updated_ms: 0,
+        };
+        assert!(!empty_not_reached.is_reached(150));
     }
 
     #[test]
