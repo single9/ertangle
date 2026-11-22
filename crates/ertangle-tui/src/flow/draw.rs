@@ -21,7 +21,17 @@ const SHORT_ROWS: u16 = 10;
 ///
 /// `cursor` is the selected index into `model.nodes` (already clamped by the caller).
 pub(crate) fn draw_flow(f: &mut TuiFrame, area: Rect, model: &FlowModel, cursor: usize) {
-    let block = Block::default().borders(Borders::ALL).title("Flow");
+    draw_flow_titled(f, area, model, cursor, "Flow");
+}
+
+pub(crate) fn draw_flow_titled(
+    f: &mut TuiFrame,
+    area: Rect,
+    model: &FlowModel,
+    cursor: usize,
+    title: &str,
+) {
+    let block = Block::default().borders(Borders::ALL).title(title);
     let inner = block.inner(area);
     f.render_widget(block, area);
     if inner.width == 0 || inner.height == 0 {

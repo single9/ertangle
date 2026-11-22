@@ -2178,11 +2178,11 @@ msgid "已跳到 {label}"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
-msgid "Bus：顯示 (b 或 Esc 關閉)"
+msgid "Flow：顯示 (b 或 Esc 關閉)"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
-msgid "Bus：隱藏"
+msgid "Flow：隱藏"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
@@ -3217,7 +3217,7 @@ msgstr ""
 msgid "(按 w 跳到該 session 回答)"
 msgstr ""
 
-#: crates/ertangle-tui/src/draw.rs crates/ertangle-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs
 msgid "提問"
 msgstr ""
 
@@ -3307,42 +3307,6 @@ msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "⏸ 提問 "
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "{header}：{question}"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "  [Enter] 回答問題  [w] 跳到下一個待處理"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "⏸ 核准 "
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "{title}：{detail}"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "  [a] 允許  [A] 一律允許  [d] 拒絕"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid "agent 之間的訊息與任務看板會出現在這裡。"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid " Bus / Tasks · 本專案 "
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3479,6 +3443,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/flow/draw.rs
 msgid "+{n} 筆更多"
+msgstr ""
+
+#: crates/ertangle-tui/src/flow/mod.rs
+msgid " Flow · 本專案 "
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs

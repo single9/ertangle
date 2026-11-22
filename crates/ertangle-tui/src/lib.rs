@@ -349,7 +349,7 @@ fn event_loop(
             .values()
             .any(|s| s.status == SessionStatus::Busy);
         // T77: a message packet is travelling across the Flow graph; animate it smoothly.
-        let flow_motion = app.view == crate::app::CenterView::Flow
+        let flow_motion = (app.view == crate::app::CenterView::Flow || app.bus_visible)
             && !app.flow_list
             && app.state.messages.last().is_some_and(|m| {
                 ertangle_core::now_millis().saturating_sub(m.ts) < crate::flow::FLOW_PACKET_MS

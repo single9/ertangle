@@ -12,6 +12,27 @@ pub(crate) use draw::draw_flow;
 pub(crate) use graph::draw_flow_graph;
 pub(crate) use model::build_flow_model;
 
+use ratatui::layout::Rect;
+use ratatui::Frame as TuiFrame;
+use tr::tr;
+
+/// Renders the Flow graph (with fallback to the node board) into a side pane or overlay.
+pub(crate) fn draw_flow_pane(f: &mut TuiFrame, area: Rect, app: &crate::app::App) {
+    let model = build_flow_model(app, ertangle_core::now_millis());
+    let cursor = app
+        .selected_id()
+        .and_then(|id| model.nodes.iter().position(|n| n.id == id))
+        .unwrap_or(0);
+    let title = if app.scope_here {
+        tr!(" Flow · 本專案 ")
+    } else {
+        " Flow ".to_string()
+    };
+    if app.flow_list || !graph::draw_flow_graph_titled(f, area, &model, cursor, &title) {
+        draw::draw_flow_titled(f, area, &model, cursor, &title);
+    }
+}
+
 use ertangle_core::{MsgKind, SessionId, SessionStatus, TaskId, TaskStatus};
 
 /// Only messages newer than this (relative to `now_ms`) become edges.

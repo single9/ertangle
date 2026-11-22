@@ -660,19 +660,20 @@ fn layout_modes_render_expected_panes() {
     app.layout = LayoutMode::Three;
     let (_, three) = render_size(&mut app, 120, 40);
     assert!(three.contains("Sessions") && three.contains("Project"));
-    assert!(!three.contains("Bus / Tasks"));
+    assert!(!three.contains("Flow"));
     app.right_bus = true;
     let (_, three_bus) = render_size(&mut app, 120, 40);
-    assert!(three_bus.contains("Bus / Tasks"));
+    assert!(three_bus.contains("Flow"));
+    assert!(three_bus.contains("worker"));
     app.right_bus = false;
 
     app.layout = LayoutMode::Two;
     let (_, two) = render_size(&mut app, 120, 40);
-    assert!(two.contains("Sessions") && !two.contains("Bus / Tasks"));
+    assert!(two.contains("Sessions") && !two.contains("Flow"));
 
     app.layout = LayoutMode::Tabs;
     let (term, tabs) = render_size(&mut app, 120, 40);
-    assert!(!tabs.contains("Sessions") && !tabs.contains("Bus / Tasks"));
+    assert!(!tabs.contains("Sessions") && !tabs.contains("Flow"));
     assert!(row_text(&term, 2).contains("worker"));
     // 中央區塊佔滿整個寬度。
     assert_eq!(app.transcript_area.width, 120);
@@ -796,7 +797,7 @@ fn three_degrades_on_narrow_terminal() {
     assert_eq!(effective_layout(LayoutMode::Tabs, 200), LayoutMode::Tabs);
     let mut app = sample_app(&["hi"]);
     let (_, text) = render_size(&mut app, 60, 30);
-    assert!(!text.contains("Bus / Tasks"));
+    assert!(!text.contains("Flow"));
     assert!(app.transcript_area.width >= 40);
 }
 
@@ -832,7 +833,7 @@ fn layout_key_command_and_unread_counter() {
     assert!(squash(&text).contains("1未讀"));
     app.bus_overlay = true;
     let (_, text) = render_size(&mut app, 120, 40);
-    assert!(text.contains("Bus / Tasks") && !squash(&text).contains("未讀"));
+    assert!(text.contains("Flow") && !squash(&text).contains("未讀"));
 }
 
 #[test]
@@ -5867,4 +5868,80 @@ fn folder_browser_hides_home_row_in_home_and_shows_hint_bottom_right() {
         .iter()
         .all(|(_, v)| v != crate::menu::HOME_VALUE));
     let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn right_pane_renders_flow_graph_and_scoped_title() {
+    let mut app = sample_app(&["echo 1"]);
+    app.layout = LayoutMode::Three;
+    app.right_bus = true;
+
+    // Default scope: "Flow" title and session label in right pane.
+    let (_, text) = render_size(&mut app, 140, 40);
+    assert!(text.contains("Flow"), "right pane contains Flow: {text}");
+    assert!(text.contains("worker"), "session node rendered: {text}");
+
+    // Project scope: title reflects project scope.
+    app.home_project = "/work/test".into();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = "/work/test".into();
+    }
+    app.scope_here = true;
+    let (_, scoped_text) = render_size(&mut app, 140, 40);
+    assert!(
+        squash(&scoped_text).contains(&squash("Flow · 本專案")),
+        "scoped title rendered: {scoped_text}"
+    );
+    assert!(scoped_text.contains("worker"));
+
+    // List mode toggle: flow_list falls back to node list.
+    app.flow_list = true;
+    let (_, list_text) = render_size(&mut app, 140, 40);
+    assert!(squash(&list_text).contains(&squash("Flow · 本專案")));
+    assert!(list_text.contains("worker"));
+}
+
+#[test]
+fn bus_overlay_and_pending_banner_with_flow_pane() {
+    let mut app = sample_app(&["echo 1"]);
+    app.layout = LayoutMode::Two;
+    app.bus_overlay = true;
+
+    // Bus overlay renders Flow pane.
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(text.contains("Flow"), "overlay contains Flow: {text}");
+    assert!(text.contains("worker"), "overlay contains session: {text}");
+
+    // Pending permissions / questions stay visible even when right_bus is on in Three mode.
+    app.layout = LayoutMode::Three;
+    app.right_bus = true;
+    app.state.pending_permissions.insert(
+        "p1".into(),
+        ertangle_core::PermissionRequest {
+            req: "p1".into(),
+            session: "ses_test".into(),
+            title: "Exec".into(),
+            detail: "cargo test".into(),
+        },
+    );
+    let (_, text_with_perm) = render_size(&mut app, 140, 40);
+    assert!(
+        text_with_perm.contains("Exec"),
+        "pending banner rendered with right_bus: {text_with_perm}"
+    );
+    assert!(
+        text_with_perm.contains("Flow"),
+        "Flow pane rendered alongside banner: {text_with_perm}"
+    );
+}
+
+#[test]
+fn toggle_bus_flow_status_messages() {
+    let mut app = sample_app(&[]);
+    app.toggle_bus();
+    assert_eq!(app.status, "Flow：顯示 (b 或 Esc 關閉)");
+    assert!(app.bus_overlay);
+    app.toggle_bus();
+    assert_eq!(app.status, "Flow：隱藏");
+    assert!(!app.bus_overlay);
 }

@@ -1058,9 +1058,9 @@ impl App {
         };
         self.bus_overlay = on;
         self.status = if on {
-            tr!("Bus：顯示 (b 或 Esc 關閉)")
+            tr!("Flow：顯示 (b 或 Esc 關閉)")
         } else {
-            tr!("Bus：隱藏")
+            tr!("Flow：隱藏")
         };
     }
 
