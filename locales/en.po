@@ -3284,16 +3284,16 @@ msgid "已結束 ({n})"
 msgstr "Ended ({n})"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Sessions "
-msgstr " Sessions "
+msgid "P 展開 · Space P 切換"
+msgstr "P expand · Space P switch"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Sessions · +{n} "
-msgstr " Sessions · +{n} "
+msgid " Projects & Sessions "
+msgstr " Projects & Sessions "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Sessions · 全部 "
-msgstr " Sessions · all "
+msgid " Projects & Sessions · 全部 "
+msgstr " Projects & Sessions · all "
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "思考中"
@@ -4696,6 +4696,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid " Sessions "
+#~ msgstr " Sessions "
+
+#~ msgid " Sessions · +{n} "
+#~ msgstr " Sessions · +{n} "
+
+#~ msgid " Sessions · 全部 "
+#~ msgstr " Sessions · all "
 
 #~ msgid "Bus：顯示 (b 或 Esc 關閉)"
 #~ msgstr "Bus: shown (b or Esc to close)"

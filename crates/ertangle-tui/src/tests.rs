@@ -658,22 +658,21 @@ fn layout_modes_render_expected_panes() {
     let mut app = sample_app(&["hi"]);
     assert_eq!(app.layout, LayoutMode::Two, "預設是兩欄 (不顯示 Bus)");
     app.layout = LayoutMode::Three;
-    let (_, three) = render_size(&mut app, 120, 40);
-    assert!(three.contains("Sessions") && three.contains("Project"));
-    assert!(!three.contains("Flow"));
-    app.right_bus = true;
     let (_, three_bus) = render_size(&mut app, 120, 40);
-    assert!(three_bus.contains("Flow"));
-    assert!(three_bus.contains("worker"));
+    assert!(three_bus.contains("Sessions") && three_bus.contains("worker"));
+    assert!(!three_bus.contains("Project ·"));
+
     app.right_bus = false;
+    let (_, three) = render_size(&mut app, 120, 40);
+    assert!(three.contains("Sessions") && three.contains("Project ·"));
 
     app.layout = LayoutMode::Two;
     let (_, two) = render_size(&mut app, 120, 40);
-    assert!(two.contains("Sessions") && !two.contains("Flow"));
+    assert!(two.contains("Sessions") && !two.contains("Project ·"));
 
     app.layout = LayoutMode::Tabs;
     let (term, tabs) = render_size(&mut app, 120, 40);
-    assert!(!tabs.contains("Sessions") && !tabs.contains("Flow"));
+    assert!(!tabs.contains("Sessions") && !tabs.contains("Project ·"));
     assert!(row_text(&term, 2).contains("worker"));
     // 中央區塊佔滿整個寬度。
     assert_eq!(app.transcript_area.width, 120);
@@ -2806,6 +2805,7 @@ fn multi_host_aggregated_sessions_and_filter_cycling() {
     app.hosts.insert("local".into(), local_data);
     app.hosts.insert("remote_box".into(), remote_data);
     app.state = app.hosts["local"].state.clone();
+    app.home_project = "/work/app".into();
     app.scope_here = false;
 
     assert!(app.has_multiple_hosts());
@@ -5989,4 +5989,132 @@ fn toggle_bus_flow_status_messages() {
     app.toggle_bus();
     assert_eq!(app.status, "Flow：隱藏");
     assert!(!app.bus_overlay);
+}
+
+#[test]
+fn quota_spans_ignores_3p_windows() {
+    let mut app = sample_app(&[]);
+    let q = ertangle_core::Quota {
+        agent: "antigravity".into(),
+        warning: false,
+        reached: false,
+        updated_ms: 0,
+        windows: vec![
+            ertangle_core::QuotaWindow {
+                name: "3p-7d".into(),
+                used_percent: 90.0,
+                resets_at_ms: None,
+            },
+            ertangle_core::QuotaWindow {
+                name: "5h".into(),
+                used_percent: 40.0,
+                resets_at_ms: None,
+            },
+        ],
+    };
+    app.state.quotas.insert("antigravity".into(), q);
+    let spans = crate::draw::quota_spans(&app);
+    let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+    assert!(!text.contains("3p-7d"), "3p window must be ignored: {text}");
+    assert!(text.contains("5h"), "normal window must be shown: {text}");
+}
+
+#[test]
+fn header_shows_flow_tab_and_highlights_when_active() {
+    let mut app = sample_app(&[]);
+    let text = render(&mut app);
+    assert!(text.contains("Flow (F)"), "header shows Flow (F): {text}");
+
+    app.view = CenterView::Flow;
+    let text_active = render(&mut app);
+    assert!(
+        text_active.contains("[Flow (F)]"),
+        "Flow (F) highlighted when active: {text_active}"
+    );
+}
+
+#[test]
+fn adaptive_three_column_expansion() {
+    let mut app = sample_app(&["echo 1"]);
+    app.scope_here = true;
+    app.home_project = "/work/app".into();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = "/work/app".into();
+    }
+    // Add a second live session so live count >= 2.
+    let mut s2 = app.state.sessions.get("ses_test").unwrap().clone();
+    s2.id = "ses_test2".into();
+    s2.cwd = "/work/app".into();
+    s2.label = "worker2".into();
+    s2.status = SessionStatus::Busy;
+    app.state.sessions.insert("ses_test2".into(), s2);
+
+    assert_eq!(app.layout, LayoutMode::Two);
+    assert!(!app.layout_pinned);
+
+    // >= 130 width with 2 live sessions adapts to Three (showing Flow).
+    let (_, wide) = render_size(&mut app, 130, 40);
+    assert!(
+        squash(&wide).contains(&squash("Flow ·")),
+        "wide terminal adapts to Three: {wide}"
+    );
+
+    // Narrow terminal (< 130) stays Two.
+    let (_, narrow) = render_size(&mut app, 129, 40);
+    assert!(
+        !squash(&narrow).contains(&squash("Flow ·")),
+        "narrow terminal stays Two: {narrow}"
+    );
+
+    // Only 1 live session stays Two even when wide.
+    app.state.sessions.get_mut("ses_test2").unwrap().status = SessionStatus::Exited;
+    let (_, single) = render_size(&mut app, 130, 40);
+    assert!(
+        !squash(&single).contains(&squash("Flow ·")),
+        "single live session stays Two: {single}"
+    );
+
+    // Pinned layout stays Two even when wide with >= 2 live sessions.
+    app.state.sessions.get_mut("ses_test2").unwrap().status = SessionStatus::Busy;
+    app.set_layout(LayoutMode::Two);
+    assert!(app.layout_pinned);
+    let (_, pinned) = render_size(&mut app, 130, 40);
+    assert!(
+        !squash(&pinned).contains(&squash("Flow ·")),
+        "pinned layout stays Two: {pinned}"
+    );
+}
+
+#[test]
+fn other_project_summary_rows_in_sidebar() {
+    let mut app = sample_app(&["echo 1"]);
+    app.home_project = "/work/alpha".into();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = "/work/alpha".into();
+    }
+    // Add a session in another project.
+    let mut s_other = app.state.sessions.get("ses_test").unwrap().clone();
+    s_other.id = "ses_other".into();
+    s_other.cwd = "/work/beta".into();
+    s_other.label = "other-worker".into();
+    s_other.status = SessionStatus::Busy;
+    app.state.sessions.insert("ses_other".into(), s_other);
+
+    app.scope_here = true;
+    let summaries = app.other_project_summaries();
+    assert_eq!(summaries, vec![("beta".to_string(), 1, 1)]);
+
+    let (_, text) = render_size(&mut app, 120, 40);
+    assert!(text.contains("Projects & Sessions"), "panel title: {text}");
+    assert!(text.contains("▸ beta (1 live / 1)"), "summary row: {text}");
+    assert!(
+        squash(&text).contains(&squash("P 展開 · Space P 切換")),
+        "hint row: {text}"
+    );
+    // Selection stays on the first session in the current project.
+    assert_eq!(app.selected, 0);
+
+    // When scope_here is false, other_project_summaries is empty.
+    app.scope_here = false;
+    assert!(app.other_project_summaries().is_empty());
 }

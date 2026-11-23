@@ -305,6 +305,8 @@ pub(crate) struct App {
     pub(crate) mouse_capture: bool,
     /// 使用者選擇的版面模式 (僅執行期；T11 的 config.toml 完成後再持久化)。
     pub(crate) layout: LayoutMode,
+    /// 版面是否被明確固定 (配置或使用者切換，T85)。
+    pub(crate) layout_pinned: bool,
     /// Bus 欄被隱藏時，是否以浮層暫時顯示。
     pub(crate) bus_overlay: bool,
     /// 三欄版面的右欄顯示 Bus (否則顯示 Project)。
@@ -356,6 +358,7 @@ impl App {
         let global_dir = ertangle_daemon::config_dir();
         let cwd = std::env::current_dir().unwrap_or_default();
         let cfg = ertangle_daemon::config::Config::load(&global_dir, &cwd);
+        let layout_pinned = cfg.tui.layout.is_some();
         let layout = cfg
             .tui
             .layout
@@ -442,8 +445,9 @@ impl App {
             selection: None,
             mouse_capture: true,
             layout,
+            layout_pinned,
             bus_overlay: false,
-            right_bus: false,
+            right_bus: true,
             bus_visible: true,
             bus_seen: 0,
             bus_baselined: false,
@@ -545,6 +549,29 @@ impl App {
             .filter(|(name, _)| self.host_filter.as_ref().is_none_or(|f| f == *name))
             .map(|(_, h)| count(&h.state))
             .sum()
+    }
+
+    /// Summary of other projects on the active host: `(project_name, live_count, total_count)`.
+    /// Returns empty when `!self.scope_here`.
+    pub(crate) fn other_project_summaries(&self) -> Vec<(String, usize, usize)> {
+        if !self.scope_here {
+            return Vec::new();
+        }
+        let mut map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+        for s in self.state.sessions.values() {
+            let root = s.project_root();
+            if root == self.home_project {
+                continue;
+            }
+            let entry = map.entry(root).or_default();
+            if s.status.is_live() {
+                entry.0 += 1;
+            }
+            entry.1 += 1;
+        }
+        map.into_iter()
+            .map(|(root, (live, total))| (project_name(root, &[]), live, total))
+            .collect()
     }
 
     /// 依專案/建立順序做樹狀排序：子 session 緊跟在父 session 後，方便顯示階層。
@@ -1069,6 +1096,7 @@ impl App {
     }
 
     pub(crate) fn set_layout(&mut self, mode: LayoutMode) {
+        self.layout_pinned = true;
         self.layout = mode;
         self.selection = None;
         self.status = tr!("版面：{layout}", layout = mode.id());

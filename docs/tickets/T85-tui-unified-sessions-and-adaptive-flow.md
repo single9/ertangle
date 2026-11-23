@@ -1,7 +1,5 @@
 # T85 — TUI: unified `Projects & Sessions` sidebar and adaptive 3-column Flow
 
-Status: ready-for-agent
-
 Priority: P2　Scope: `ertangle-tui`　Depends on: T82, T84
 
 ## Problem
