@@ -97,6 +97,8 @@
 | [T90](T90-sast-web-cors-ws-origin-and-artifact-scope.md) | SAST: restrict CORS, enforce WebSocket Origin check, and tighten artifact file scope (已完成) | P1 | T83 |
 | [T91](T91-sast-exec-pgid-timeout-and-secrets-redaction.md) | SAST: kill process group on `handle_exec` timeout and expand `redact_secrets` (已完成) | P1 | T74 |
 | [T92](T92-perf-web-markdown-cache-and-tui-flow-allocs.md) | Perf & safety: Web Markdown turn cache (`$` fix) and stack-allocated Flow elbows (已完成) | P2 | T89 |
+| [T93](T93-version-display-with-commit-hash.md) | Include git commit hash in `ertangle` / `ert` version display | P3 | — |
+| [T94](T94-tui-macos-shortcuts-and-shift-enter-newline.md) | TUI input box: macOS Option/Cmd shortcuts and native `Shift+Enter` newline | P1 | — |
 
 ## Language convention
 
