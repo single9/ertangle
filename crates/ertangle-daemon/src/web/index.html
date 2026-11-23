@@ -3032,7 +3032,26 @@
       // 3. HTML 特殊符號轉義
       let safe = escapeHtml(src);
 
-      // 4. 解析 Markdown 連結 [label](url)
+      // 4. 解析 Markdown 圖片 ![alt](url) 與 連結 [label](url)
+      // 注意：必須先解析圖片語法 (![alt](url))，避免被一般連結語法攔截。
+      safe = safe.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+        const trimmedUrl = url.trim();
+        if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+          return `<img src="${trimmedUrl}" alt="${escapeHtml(alt)}" style="max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; cursor:pointer; display:block; margin:6px 0;" onclick="window.open('${escapeHtml(trimmedUrl)}', '_blank', 'noopener')">`;
+        } else if (trimmedUrl.startsWith("file://") || !/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(trimmedUrl)) {
+          let cleanUrl = trimmedUrl;
+          if (cleanUrl.startsWith("file://")) {
+            cleanUrl = cleanUrl.replace(/^file:\/\//, "");
+          }
+          const rawPath = cleanUrl.split("#")[0];
+          const fileUrl = `/api/file?path=${encodeURIComponent(rawPath)}${activeSession ? "&session=" + encodeURIComponent(activeSession) : ""}${typeof token === "string" && token ? "&token=" + encodeURIComponent(token) : ""}`;
+          const fallbackHtml = `<span class=\\'chat-file-pill\\' onclick=\\'openFileActionSheet("${escapeHtml(rawPath).replace(/'/g, "\\'")}", "${escapeHtml(alt || rawPath).replace(/'/g, "\\'")}")\\'><svg class=\\'file-icon\\' viewBox=\\'0 0 24 24\\'><path d=\\'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\\\'></path><polyline points=\\'14 2 14 8 20 8\\\'></polyline></svg><span>${escapeHtml(alt || rawPath).replace(/'/g, "\\'")} (圖片載入失敗)</span></span>`;
+          return `<img src="${fileUrl}" alt="${escapeHtml(alt)}" style="max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; cursor:pointer; display:block; margin:6px 0;" onclick="openFileActionSheet('${escapeHtml(rawPath)}', '${escapeHtml(alt || rawPath)}')" onerror="this.onerror=null; this.outerHTML='${fallbackHtml}';">`;
+        } else {
+          return match;
+        }
+      });
+
       safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, url) => {
         const trimmedUrl = url.trim();
         if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {

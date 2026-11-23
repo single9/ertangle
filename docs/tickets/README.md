@@ -87,7 +87,7 @@
 | [T80](T80-dead-peer-message-delivery.md) | Prevent silent delivery to quota-exhausted peers (已完成) | P1 | T24 |
 | [T81](T81-quota-reached-reset-stale.md) | Stale `Quota::reached` after rate-limit window resets (已完成) | P1 | — |
 | [T82](T82-tui-right-pane-flow-graph.md) | Replace right-pane Bus display with live Agent/Session Flow graph (已完成) | P2 | T77 |
-| [T83](T83-web-image-and-artifact-preview.md) | Web UI: Markdown image syntax and agent artifact file preview | P1 | — |
+| [T83](T83-web-image-and-artifact-preview.md) | Web UI: Markdown image syntax and agent artifact file preview (已完成) | P1 | — |
 | [T84](T84-tui-header-flow-tab-and-quota-filter.md) | TUI header: add `Flow (F)` tab and filter `3p-*` quota windows | P2 | T79 |
 | [T85](T85-tui-unified-sessions-and-adaptive-flow.md) | TUI: unified `Projects & Sessions` sidebar and adaptive 3-column Flow | P2 | T82, T84 |
 

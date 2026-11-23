@@ -1,7 +1,5 @@
 # T83 — Web UI: Markdown image syntax and agent artifact file preview
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-daemon` (`web.rs`, `web/index.html`)　Depends on: —
 
 ## Problem

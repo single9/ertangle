@@ -439,6 +439,25 @@ fn serve_file(
         }
     }
 
+    // T83: Also allow known agent artifact/state directories under $HOME
+    if let Ok(home) = std::env::var("HOME") {
+        let home_path = Path::new(&home);
+        let agent_subdirs = [
+            ".gemini/antigravity-cli/brain",
+            ".ertangle",
+            ".claude",
+            ".codex",
+        ];
+        for rel in &agent_subdirs {
+            let dir = home_path.join(rel);
+            if dir.is_dir() {
+                if let Ok(c) = dir.canonicalize() {
+                    allowed_roots.push(c);
+                }
+            }
+        }
+    }
+
     let resolved_path = match resolved_path.canonicalize() {
         Ok(c) => c,
         Err(_) => {
@@ -1007,6 +1026,32 @@ mod tests {
             .unwrap();
         let render_end = INDEX_HTML.find("function toolCallParts(").unwrap();
         assert!(!INDEX_HTML[render_start..render_end].contains("💭"));
+    }
+
+    /// T83: Web UI Markdown image preview syntax and allowed roots for agent artifact dirs.
+    #[test]
+    fn web_markdown_image_syntax_and_artifact_preview() {
+        assert!(INDEX_HTML.contains("/!\\[([^\\]]*)\\]\\(([^)]+)\\)/g"));
+        assert!(INDEX_HTML.contains("openFileActionSheet"));
+        assert!(INDEX_HTML.contains("chat-file-pill"));
+        assert!(INDEX_HTML.contains("圖片載入失敗"));
+
+        // Verify path validation for artifact dirs
+        let tmp = std::env::temp_dir()
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from("/tmp"));
+        let artifact_dir = tmp.join("ertangle_test_brain");
+        let _ = std::fs::create_dir_all(&artifact_dir);
+        let canonical_artifact = artifact_dir.canonicalize().unwrap();
+
+        let allowed = vec![canonical_artifact.clone()];
+        let inside = canonical_artifact.join("shot.png");
+        assert!(is_path_allowed(&inside, &allowed));
+
+        // System paths and traversal outside allowed roots are blocked
+        assert!(!is_path_allowed(Path::new("/etc/passwd"), &allowed));
+        assert!(!is_path_allowed(&tmp, &allowed));
+        let _ = std::fs::remove_dir_all(&artifact_dir);
     }
 
     mod hex {
