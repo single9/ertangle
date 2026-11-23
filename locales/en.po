@@ -3362,8 +3362,8 @@ msgid " Bus / Tasks · 本專案 "
 msgstr " Bus / Tasks · This project "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
-msgstr " Bus / Tasks · This project ({n} elsewhere, P to show) "
+msgid " Bus / Tasks · +{n} "
+msgstr " Bus / Tasks · +{n} "
 
 #: crates/ertangle-tui/src/draw.rs
 msgid " 請先按 {keys} 才能輸入 "
@@ -4786,6 +4786,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
+#~ msgstr " Bus / Tasks · This project ({n} elsewhere, P to show) "
 
 #~ msgid "用法：/layout three|two|tabs"
 #~ msgstr "Usage: /layout three|two|tabs"

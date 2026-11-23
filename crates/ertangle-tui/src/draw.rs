@@ -2253,11 +2253,14 @@ pub(crate) fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
 }
 
 pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
+    let inner_w = area.width.saturating_sub(2) as usize;
+    let inner_h = area.height.saturating_sub(2) as usize;
     let mut lines: Vec<Line> = Vec::new();
 
     for q in app.state.pending_questions.values() {
         let default_header = tr!("提問");
         let header_str = q.header.as_deref().unwrap_or(&default_header);
+        let q_budget = inner_w.saturating_sub(10).max(12);
         lines.push(Line::from(vec![
             Span::styled(
                 tr!("⏸ 提問 "),
@@ -2265,21 +2268,25 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(tr!(
-                "{header}：{question}",
-                header = header_str,
-                question = truncate(&q.question, 40)
+            Span::raw(truncate_width(
+                &tr!(
+                    "{header}：{question}",
+                    header = header_str,
+                    question = q.question
+                ),
+                q_budget,
             )),
         ]));
     }
     if !app.state.pending_questions.is_empty() {
         lines.push(Line::styled(
-            tr!("  [Enter] 回答問題  [w] 跳到下一個待處理"),
+            truncate_width(&tr!("  [Enter] 回答問題  [w] 跳到下一個待處理"), inner_w),
             Style::default().fg(Color::DarkGray),
         ));
     }
 
     for p in app.state.pending_permissions.values() {
+        let p_budget = inner_w.saturating_sub(10).max(12);
         lines.push(Line::from(vec![
             Span::styled(
                 tr!("⏸ 核准 "),
@@ -2287,23 +2294,27 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(tr!(
-                "{title}：{detail}",
-                title = p.title,
-                detail = truncate(&p.detail, 40)
+            Span::raw(truncate_width(
+                &tr!("{title}：{detail}", title = p.title, detail = p.detail),
+                p_budget,
             )),
         ]));
     }
     if !app.state.pending_permissions.is_empty() {
         lines.push(Line::styled(
-            tr!("  [a] 允許  [A] 一律允許  [d] 拒絕"),
+            truncate_width(&tr!("  [a] 允許  [A] 一律允許  [d] 拒絕"), inner_w),
             Style::default().fg(Color::DarkGray),
         ));
     }
 
     let task_ids = crate::tasks::visible_task_ids(app);
-    if !task_ids.is_empty() {
+    if !task_ids.is_empty() && inner_h > lines.len() + 1 {
+        let max_tasks = (inner_h / 2).max(2);
+        let mut shown = 0usize;
         for id in &task_ids {
+            if shown >= max_tasks {
+                break;
+            }
             let Some(t) = app.state.tasks.get(id) else {
                 continue;
             };
@@ -2313,34 +2324,53 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
                 ertangle_core::TaskStatus::Blocked => Color::Red,
                 ertangle_core::TaskStatus::Todo => Color::Gray,
             };
+            let tag = format!("[{}] ", t.status.id());
+            let title_w = inner_w
+                .saturating_sub(UnicodeWidthStr::width(tag.as_str()))
+                .max(8);
             lines.push(Line::from(vec![
-                Span::styled(format!("[{}] ", t.status.id()), Style::default().fg(color)),
-                Span::raw(truncate(&t.title, 26)),
+                Span::styled(tag, Style::default().fg(color)),
+                Span::raw(truncate_width(&t.title, title_w)),
             ]));
+            shown += 1;
         }
-        lines.push(Line::styled(
-            "────────────────────────",
-            Style::default().fg(Color::DarkGray),
-        ));
+        let hidden_tasks = task_ids.len().saturating_sub(shown);
+        let div = if hidden_tasks > 0 {
+            let note = format!("─ +{hidden_tasks} ");
+            let note_w = UnicodeWidthStr::width(note.as_str());
+            format!("{note}{}", "─".repeat(inner_w.saturating_sub(note_w)))
+        } else {
+            "─".repeat(inner_w.max(1))
+        };
+        lines.push(Line::styled(div, Style::default().fg(Color::DarkGray)));
     }
 
-    let h = area.height.saturating_sub(2 + lines.len() as u16) as usize;
+    let h = inner_h.saturating_sub(lines.len());
     let total_msgs = app.state.messages.len();
     let msgs = app.visible_messages();
     let hidden_msgs = total_msgs.saturating_sub(msgs.len());
     let start = msgs.len().saturating_sub(h);
+    let label_of = |sid: &str| {
+        app.state
+            .sessions
+            .get(sid)
+            .map(|s| s.label.clone())
+            .unwrap_or_else(|| short(sid))
+    };
     for m in msgs.iter().skip(start) {
+        let from = truncate_width(&label_of(&m.from), 12);
         let to = match &m.to {
-            Target::Direct(s) => format!("@{s}"),
+            Target::Direct(s) => format!("@{}", truncate_width(&label_of(s), 12)),
             Target::Channel(c) => format!("#{c}"),
             Target::Broadcast => "*".into(),
         };
+        let prefix = format!("{from}→{to} ");
+        let body_w = inner_w
+            .saturating_sub(UnicodeWidthStr::width(prefix.as_str()))
+            .max(8);
         lines.push(Line::from(vec![
-            Span::styled(
-                format!("{}→{} ", short(&m.from), short(&to)),
-                Style::default().fg(Color::Magenta),
-            ),
-            Span::raw(truncate(&m.body, 60)),
+            Span::styled(prefix, Style::default().fg(Color::Magenta)),
+            Span::raw(truncate_width(m.body.lines().next().unwrap_or(""), body_w)),
         ]));
     }
     if lines.is_empty() {
@@ -2353,7 +2383,7 @@ pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
     let title = if app.scope_here {
         match hidden_msgs {
             0 => tr!(" Bus / Tasks · 本專案 "),
-            n => tr!(" Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) ", n = n),
+            n => tr!(" Bus / Tasks · +{n} ", n = n),
         }
     } else {
         " Bus / Tasks ".to_string()

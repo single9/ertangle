@@ -3346,7 +3346,7 @@ msgid " Bus / Tasks · 本專案 "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
+msgid " Bus / Tasks · +{n} "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
