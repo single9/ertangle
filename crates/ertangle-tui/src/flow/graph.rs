@@ -261,15 +261,68 @@ fn lerp(a: (f64, f64), b: (f64, f64), t: f64) -> (f64, f64) {
     (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t)
 }
 
-pub(super) fn elbow_points(a: (f64, f64), b: (f64, f64)) -> Vec<(f64, f64)> {
+/// Stack-allocated polyline for orthogonal elbows, holding up to 4 points.
+///
+/// Avoids heap allocations in per-frame rendering of tree links, edges, and packets.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Elbow {
+    pub(super) pts: [(f64, f64); 4],
+    pub(super) len: usize,
+}
+
+impl Elbow {
+    #[inline]
+    pub(super) fn as_slice(&self) -> &[(f64, f64)] {
+        &self.pts[..self.len]
+    }
+}
+
+impl std::ops::Deref for Elbow {
+    type Target = [(f64, f64)];
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl AsRef<[(f64, f64)]> for Elbow {
+    #[inline]
+    fn as_ref(&self) -> &[(f64, f64)] {
+        self.as_slice()
+    }
+}
+
+impl PartialEq<[(f64, f64)]> for Elbow {
+    fn eq(&self, other: &[(f64, f64)]) -> bool {
+        self.as_slice() == other
+    }
+}
+
+impl PartialEq<Vec<(f64, f64)>> for Elbow {
+    fn eq(&self, other: &Vec<(f64, f64)>) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+pub(super) fn elbow_points(a: (f64, f64), b: (f64, f64)) -> Elbow {
     if (a.0 - b.0).abs() < 0.01 || (a.1 - b.1).abs() < 0.01 {
-        vec![a, b]
+        Elbow {
+            pts: [a, b, (0.0, 0.0), (0.0, 0.0)],
+            len: 2,
+        }
     } else if (b.1 - a.1).abs() >= (b.0 - a.0).abs() {
         let mid_y = (a.1 + b.1) / 2.0;
-        vec![a, (a.0, mid_y), (b.0, mid_y), b]
+        Elbow {
+            pts: [a, (a.0, mid_y), (b.0, mid_y), b],
+            len: 4,
+        }
     } else {
         let mid_x = (a.0 + b.0) / 2.0;
-        vec![a, (mid_x, a.1), (mid_x, b.1), b]
+        Elbow {
+            pts: [a, (mid_x, a.1), (mid_x, b.1), b],
+            len: 4,
+        }
     }
 }
 
@@ -650,23 +703,27 @@ mod tests {
     fn elbow_points_and_point_along_polyline() {
         // Axis-aligned cases
         let p_h = elbow_points((10.0, 5.0), (20.0, 5.0));
-        assert_eq!(p_h, vec![(10.0, 5.0), (20.0, 5.0)]);
+        assert_eq!(p_h.as_slice(), &[(10.0, 5.0), (20.0, 5.0)]);
+        assert_eq!(p_h.len, 2);
         let p_v = elbow_points((10.0, 5.0), (10.0, 25.0));
-        assert_eq!(p_v, vec![(10.0, 5.0), (10.0, 25.0)]);
+        assert_eq!(p_v.as_slice(), &[(10.0, 5.0), (10.0, 25.0)]);
+        assert_eq!(p_v.len, 2);
 
         // Vertical dominant: dy >= dx -> mid_y
         let p_v_dom = elbow_points((10.0, 0.0), (20.0, 20.0));
         assert_eq!(
-            p_v_dom,
-            vec![(10.0, 0.0), (10.0, 10.0), (20.0, 10.0), (20.0, 20.0)]
+            p_v_dom.as_slice(),
+            &[(10.0, 0.0), (10.0, 10.0), (20.0, 10.0), (20.0, 20.0)]
         );
+        assert_eq!(p_v_dom.len, 4);
 
         // Horizontal dominant: dx > dy -> mid_x
         let p_h_dom = elbow_points((0.0, 10.0), (30.0, 20.0));
         assert_eq!(
-            p_h_dom,
-            vec![(0.0, 10.0), (15.0, 10.0), (15.0, 20.0), (30.0, 20.0)]
+            p_h_dom.as_slice(),
+            &[(0.0, 10.0), (15.0, 10.0), (15.0, 20.0), (30.0, 20.0)]
         );
+        assert_eq!(p_h_dom.len, 4);
 
         // point_along_polyline edge cases
         assert_eq!(point_along_polyline(&[], 0.5), (0.0, 0.0));

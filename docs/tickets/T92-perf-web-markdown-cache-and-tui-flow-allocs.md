@@ -1,7 +1,5 @@
 # T92 — Perf & safety: Web Markdown turn cache (`$` fix) and stack-allocated Flow elbows
 
-Status: ready-for-agent
-
 Priority: P2　Scope: `ertangle-daemon` (`web/index.html`), `ertangle-tui` (`flow/graph.rs`)　Depends on: T89
 
 ## Problem

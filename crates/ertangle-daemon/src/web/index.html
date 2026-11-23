@@ -2977,9 +2977,21 @@
         `<div class="collapse-content tool-run-list">${items}</div></details>`;
     }
 
+    const mdRenderCache = new Map();
+    const MD_RENDER_CACHE_MAX = 400;
+
     function renderMarkdown(text) {
       if (!text) return "";
-      let src = String(text);
+      const rawText = String(text);
+      const cacheKey = `${activeSession}\0${rawText}`;
+      const cached = mdRenderCache.get(cacheKey);
+      if (cached !== undefined) {
+        mdRenderCache.delete(cacheKey);
+        mdRenderCache.set(cacheKey, cached);
+        return cached;
+      }
+
+      let src = rawText;
 
       const codeBlocks = [];
       const inlineCodes = [];
@@ -3120,7 +3132,7 @@
 
       // 11. 還原行內程式碼
       inlineCodes.forEach((code, i) => {
-        safe = safe.replace(`%%%INLINE_CODE_${i}%%%`, `<code class="inline-code">${escapeHtml(code)}</code>`);
+        safe = safe.replace(`%%%INLINE_CODE_${i}%%%`, () => `<code class="inline-code">${escapeHtml(code)}</code>`);
       });
 
       // 12. 還原圍籬程式碼區塊
@@ -3134,20 +3146,26 @@
             <pre><code>${escapeHtml(b.code)}</code></pre>
           </div>
         `;
-        safe = safe.replace(`%%%CODE_BLOCK_${i}%%%`, blockHtml);
+        safe = safe.replace(`%%%CODE_BLOCK_${i}%%%`, () => blockHtml);
       });
 
       // 13. 還原表格 (連同前後的換行一起替換，避免多出空白行)
       tables.forEach((html, i) => {
-        safe = safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), html);
+        safe = safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), () => html);
       });
 
       // 14. 還原圖片與連結
       mediaPlaceholders.forEach((html, i) => {
-        safe = safe.replace(`%%%MD_MEDIA_${i}%%%`, html);
+        safe = safe.replace(`%%%MD_MEDIA_${i}%%%`, () => html);
       });
 
-      return `<p>${safe}</p>`;
+      const result = `<p>${safe}</p>`;
+      if (mdRenderCache.size >= MD_RENDER_CACHE_MAX) {
+        const firstKey = mdRenderCache.keys().next().value;
+        mdRenderCache.delete(firstKey);
+      }
+      mdRenderCache.set(cacheKey, result);
+      return result;
     }
 
     function handleMdImgError(img) {

@@ -1056,6 +1056,17 @@ mod tests {
         let _ = std::fs::remove_dir_all(&artifact_dir);
     }
 
+    /// T92: Web Markdown uses bounded `mdRenderCache` and function replacers to prevent `$` expansion.
+    #[test]
+    fn web_markdown_cache_and_safe_replacers() {
+        assert!(INDEX_HTML.contains("const mdRenderCache = new Map();"));
+        assert!(INDEX_HTML.contains("const MD_RENDER_CACHE_MAX = 400;"));
+        assert!(INDEX_HTML.contains("safe.replace(`%%%CODE_BLOCK_${i}%%%`, () => blockHtml)"));
+        assert!(INDEX_HTML
+            .contains("safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), () => html)"));
+        assert!(INDEX_HTML.contains("safe.replace(`%%%MD_MEDIA_${i}%%%`, () => html)"));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()
