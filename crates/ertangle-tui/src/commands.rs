@@ -345,7 +345,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "find",
         ertangle_core::tr_noop!("[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容 (同 f)"),
     ),
-    ("layout", ertangle_core::tr_noop!("[three|two|tabs]  切換版面")),
+    ("layout", ertangle_core::tr_noop!("[three|two|tabs|auto]  切換版面")),
     ("raw", ertangle_core::tr_noop!("原始文字／Markdown 切換")),
     ("thoughts", ertangle_core::tr_noop!("顯示／隱藏思考")),
     ("tools", ertangle_core::tr_noop!("展開／摺疊工具呼叫")),
@@ -1706,6 +1706,7 @@ const SUBCOMMANDS: &[(&str, &[(&str, &str)])] = &[
             ),
             ("two", ertangle_core::tr_noop!("兩欄")),
             ("tabs", ertangle_core::tr_noop!("分頁")),
+            ("auto", ertangle_core::tr_noop!("依終端機寬度自動調整")),
         ],
     ),
     (

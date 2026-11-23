@@ -5565,6 +5565,7 @@ fn subcommand_candidates_complete_via_tab_and_hints() {
         (":project op", "open"),
         (":scope a", "all"),
         (":layout t", "tabs"),
+        (":layout a", "auto"),
         (":notify o", "on"),
         (":web st", "status"),
         (":ended sh", "show"),

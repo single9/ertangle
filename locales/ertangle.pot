@@ -2518,7 +2518,7 @@ msgid "[文字]  在逐字稿或 diff 裡搜尋畫面上顯示的內容 (同 f)"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "[three|two|tabs]  切換版面"
+msgid "[three|two|tabs|auto]  切換版面"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2935,6 +2935,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "分頁"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "依終端機寬度自動調整"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
