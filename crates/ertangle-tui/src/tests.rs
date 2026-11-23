@@ -6700,3 +6700,265 @@ fn resuming_ended_session_keeps_selection_and_shows_user_prompt() {
         "transcript should display the resumed prompt: {rendered}"
     );
 }
+
+#[test]
+fn t94_shift_enter_and_ctrl_enter_newline() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "hello".into();
+    app.input_cursor = 5;
+
+    // Shift+Enter inserts newline in multiline mode (Prompt)
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "hello\n");
+    assert_eq!(app.input_cursor, 6);
+
+    // Ctrl+Enter also inserts newline
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "hello\n\n");
+    assert_eq!(app.input_cursor, 7);
+
+    // Ctrl+J fallback inserts newline
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input, "hello\n\n\n");
+    assert_eq!(app.input_cursor, 8);
+}
+
+#[test]
+fn t94_option_left_right_and_b_f() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "hello world 你好 測試".into();
+    app.input_cursor = 0;
+
+    // Option+Right word forward
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 5); // after "hello"
+
+    // Alt+f word forward
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 11); // after "world"
+
+    // Ctrl+Right word forward
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 14); // after "你好"
+
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 17); // after "測試"
+
+    // Option+Left word backward
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Left, KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 15); // before "測試"
+
+    // Alt+b word backward
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 12); // before "你好"
+
+    // Ctrl+Left word backward
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 6); // before "world"
+
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 0); // before "hello"
+
+    // Ensure Alt+b/f did not insert literal characters
+    assert_eq!(app.input, "hello world 你好 測試");
+}
+
+#[test]
+fn t94_option_backspace_ctrl_w_and_option_delete_d() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "first second third".into();
+    app.input_cursor = 18;
+
+    // Option+Backspace deletes previous word
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Backspace, KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input, "first second ");
+    assert_eq!(app.input_cursor, 13);
+
+    // Ctrl+W deletes previous word
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input, "first ");
+    assert_eq!(app.input_cursor, 6);
+
+    // Ctrl+Backspace deletes previous word
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Backspace, KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input, "");
+    assert_eq!(app.input_cursor, 0);
+
+    // Forward deletion: Option+Delete and Option+d
+    app.input = "alpha beta gamma".into();
+    app.input_cursor = 0;
+
+    // Option+Delete deletes forward word
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Delete, KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input, " beta gamma");
+    assert_eq!(app.input_cursor, 0);
+
+    // Alt+d deletes forward word
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT),
+    )
+    .unwrap();
+    assert_eq!(app.input, " gamma");
+    assert_eq!(app.input_cursor, 0);
+
+    // Ctrl+Delete deletes forward word
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Delete, KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input, "");
+    assert_eq!(app.input_cursor, 0);
+}
+
+#[test]
+fn t94_ctrl_k_delete_to_line_end() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "hello world\nsecond line".into();
+    app.input_cursor = 5;
+
+    // Ctrl+K deletes from cursor to line end
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input, "hello\nsecond line");
+    assert_eq!(app.input_cursor, 5);
+
+    // Ctrl+K at line end deletes newline (joins lines)
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert_eq!(app.input, "hellosecond line");
+    assert_eq!(app.input_cursor, 5);
+}
+
+#[test]
+fn t94_cmd_shortcuts_super_modifier() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "line 1\nsecond line here\nline 3".into();
+    app.input_cursor = 19;
+
+    // Cmd+Left moves to line start
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Left, KeyModifiers::SUPER),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 7); // start of "second line here"
+
+    // Cmd+Right moves to line end
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Right, KeyModifiers::SUPER),
+    )
+    .unwrap();
+    assert_eq!(app.input_cursor, 23); // end of "second line here"
+
+    // Cmd+Backspace deletes to line start
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Backspace, KeyModifiers::SUPER),
+    )
+    .unwrap();
+    assert_eq!(app.input, "line 1\n\nline 3");
+    assert_eq!(app.input_cursor, 7);
+}

@@ -493,14 +493,9 @@ pub(crate) fn handle_input_mode(
             app.spawn_effort = None;
             app.spawn_variants.clear();
         }
-        KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.spawn_worktree = !app.spawn_worktree;
-            app.status = format!(
-                "worktree = {}",
-                if app.spawn_worktree { "on" } else { "off" }
-            );
-        }
-        KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+        KeyCode::Char('e')
+            if key.modifiers.contains(KeyModifiers::CONTROL) && app.mode == Mode::Spawn =>
+        {
             app.spawn_permission = match app.spawn_permission {
                 None => Some(PermissionPolicy::Ask),
                 Some(PermissionPolicy::Ask) => Some(PermissionPolicy::Auto),
@@ -580,7 +575,9 @@ pub(crate) fn handle_input_mode(
             }
         }
         KeyCode::Enter
-            if is_multiline(app.mode) && (key.modifiers.contains(KeyModifiers::SHIFT)) =>
+            if is_multiline(app.mode)
+                && (key.modifiers.contains(KeyModifiers::SHIFT)
+                    || key.modifiers.contains(KeyModifiers::CONTROL)) =>
         {
             insert_input(app, '\n');
         }
@@ -595,9 +592,42 @@ pub(crate) fn handle_input_mode(
         {
             recall_history(app, c == 'p');
         }
+        KeyCode::Backspace if key.modifiers.contains(KeyModifiers::SUPER) => {
+            delete_to_line_start(app);
+        }
+        KeyCode::Backspace
+            if key.modifiers.contains(KeyModifiers::ALT)
+                || key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            delete_word_back(app);
+        }
         KeyCode::Backspace => backspace_input(app),
+        KeyCode::Delete
+            if key.modifiers.contains(KeyModifiers::ALT)
+                || key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            delete_word_forward(app);
+        }
         KeyCode::Delete => delete_input(app),
+        KeyCode::Left if key.modifiers.contains(KeyModifiers::SUPER) => {
+            app.input_cursor = crate::inputbox::line_bounds(&app.input, app.input_cursor).0;
+        }
+        KeyCode::Left
+            if key.modifiers.contains(KeyModifiers::ALT)
+                || key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            move_word_left(app);
+        }
         KeyCode::Left => app.input_cursor = app.input_cursor.saturating_sub(1),
+        KeyCode::Right if key.modifiers.contains(KeyModifiers::SUPER) => {
+            app.input_cursor = crate::inputbox::line_bounds(&app.input, app.input_cursor).1;
+        }
+        KeyCode::Right
+            if key.modifiers.contains(KeyModifiers::ALT)
+                || key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            move_word_right(app);
+        }
         KeyCode::Right => {
             let n = app.input.chars().count();
             app.input_cursor = (app.input_cursor + 1).min(n);
@@ -614,12 +644,29 @@ pub(crate) fn handle_input_mode(
         KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.input_cursor = crate::inputbox::line_bounds(&app.input, app.input_cursor).1;
         }
-        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            let b = byte_index(&app.input, app.input_cursor);
-            app.input.truncate(b);
-            app.input_cursor = app.input.chars().count();
+        KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::ALT) => {
+            move_word_left(app);
         }
-        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+        KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::ALT) => {
+            move_word_right(app);
+        }
+        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::ALT) => {
+            delete_word_forward(app);
+        }
+        KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            delete_word_back(app);
+        }
+        KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            delete_to_line_end(app);
+        }
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            delete_to_line_start(app);
+        }
+        KeyCode::Char(c)
+            if !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER) =>
+        {
             insert_input(app, c);
         }
         KeyCode::Enter => {
@@ -862,6 +909,85 @@ pub(crate) fn delete_input(app: &mut App) {
     }
     let b = byte_index(&app.input, app.input_cursor);
     app.input.remove(b);
+}
+
+/// Previous word boundary (char index) before `cur`: skip spaces/newlines, then the word.
+fn prev_word_start(chars: &[char], cur: usize) -> usize {
+    let mut i = cur.min(chars.len());
+    while i > 0 && chars[i - 1].is_whitespace() {
+        i -= 1;
+    }
+    while i > 0 && !chars[i - 1].is_whitespace() {
+        i -= 1;
+    }
+    i
+}
+
+/// Next word boundary (char index) after `cur`: skip spaces/newlines, then the word.
+fn next_word_end(chars: &[char], cur: usize) -> usize {
+    let mut i = cur.min(chars.len());
+    while i < chars.len() && chars[i].is_whitespace() {
+        i += 1;
+    }
+    while i < chars.len() && !chars[i].is_whitespace() {
+        i += 1;
+    }
+    i
+}
+
+pub(crate) fn move_word_left(app: &mut App) {
+    let chars: Vec<char> = app.input.chars().collect();
+    app.input_cursor = prev_word_start(&chars, app.input_cursor);
+}
+
+pub(crate) fn move_word_right(app: &mut App) {
+    let chars: Vec<char> = app.input.chars().collect();
+    app.input_cursor = next_word_end(&chars, app.input_cursor);
+}
+
+pub(crate) fn delete_word_back(app: &mut App) {
+    let chars: Vec<char> = app.input.chars().collect();
+    let start = prev_word_start(&chars, app.input_cursor);
+    if app.input_cursor > start {
+        let b_start = byte_index(&app.input, start);
+        let b_end = byte_index(&app.input, app.input_cursor);
+        app.input.drain(b_start..b_end);
+        app.input_cursor = start;
+    }
+}
+
+pub(crate) fn delete_word_forward(app: &mut App) {
+    let chars: Vec<char> = app.input.chars().collect();
+    let end = next_word_end(&chars, app.input_cursor);
+    if end > app.input_cursor {
+        let b_start = byte_index(&app.input, app.input_cursor);
+        let b_end = byte_index(&app.input, end);
+        app.input.drain(b_start..b_end);
+    }
+}
+
+pub(crate) fn delete_to_line_start(app: &mut App) {
+    let (start, _) = crate::inputbox::line_bounds(&app.input, app.input_cursor);
+    if app.input_cursor > start {
+        let b_start = byte_index(&app.input, start);
+        let b_end = byte_index(&app.input, app.input_cursor);
+        app.input.drain(b_start..b_end);
+        app.input_cursor = start;
+    }
+}
+
+pub(crate) fn delete_to_line_end(app: &mut App) {
+    let (_, end) = crate::inputbox::line_bounds(&app.input, app.input_cursor);
+    if end > app.input_cursor {
+        let b_start = byte_index(&app.input, app.input_cursor);
+        let b_end = byte_index(&app.input, end);
+        app.input.drain(b_start..b_end);
+    } else {
+        let total = app.input.chars().count();
+        if app.input_cursor < total {
+            delete_input(app);
+        }
+    }
 }
 
 /// 貼上 (bracketed paste)：只插入目前輸入框；換行轉成空白以維持單行輸入。

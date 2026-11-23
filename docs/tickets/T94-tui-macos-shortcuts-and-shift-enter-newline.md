@@ -1,7 +1,5 @@
 # T94 — TUI input box: macOS Option/Cmd shortcuts and native `Shift+Enter` newline
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-tui`　Depends on: —
 
 ## Problem

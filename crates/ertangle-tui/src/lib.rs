@@ -73,7 +73,8 @@ pub(crate) use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use anyhow::Result;
 use crossterm::event::{
     self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
-    EnableFocusChange, EnableMouseCapture, Event as CtEvent,
+    EnableFocusChange, EnableMouseCapture, Event as CtEvent, KeyboardEnhancementFlags,
+    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -162,10 +163,10 @@ pub fn run(initial_project: Option<std::path::PathBuf>) -> Result<()> {
         );
     }
 
-    let mut terminal = setup_terminal()?;
+    let (mut terminal, enhanced) = setup_terminal()?;
     let result = event_loop(&mut terminal, &mut router, rx, host_sync, initial_project);
     running.store(false, Ordering::Relaxed);
-    restore_terminal(&mut terminal)?;
+    restore_terminal(&mut terminal, enhanced)?;
     result
 }
 
@@ -203,39 +204,66 @@ fn status_prefix(app: &App) -> &'static str {
     }
 }
 
-fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+fn setup_terminal() -> Result<(Terminal<CrosstermBackend<io::Stdout>>, bool)> {
+    let enhanced = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     // 預設擷取滑鼠：應用內可拖曳選取中央區塊並用 OSC 52 複製，滾輪也能捲動。
     // 需要終端機原生選取時按 `F2` 關閉擷取 (Shift+拖曳在多數終端機也可直接繞過)。
     // 另外保留 DECSET 1007：關閉擷取後滾輪仍會變成 Up/Down 來捲動逐字稿。
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-        EnableBracketedPaste,
-        EnableMouseCapture,
-        // 焦點回報：有焦點且正在看的 session 不必通知。
-        EnableFocusChange
-    )?;
+    if enhanced {
+        execute!(
+            stdout,
+            EnterAlternateScreen,
+            EnableBracketedPaste,
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES),
+            EnableMouseCapture,
+            // 焦點回報：有焦點且正在看的 session 不必通知。
+            EnableFocusChange
+        )?;
+    } else {
+        execute!(
+            stdout,
+            EnterAlternateScreen,
+            EnableBracketedPaste,
+            EnableMouseCapture,
+            // 焦點回報：有焦點且正在看的 session 不必通知。
+            EnableFocusChange
+        )?;
+    }
     write!(stdout, "\x1b[?1007h")?;
     // 視窗標題帶上專案名，在有 window manager 的環境可辨識是哪個專案。
     // 先 push (XTWINOPS 22) 原標題，離開時 pop 還原。
     write!(stdout, "\x1b[22;0t\x1b]0;ertangle\x07")?;
     stdout.flush()?;
     let backend = CrosstermBackend::new(stdout);
-    Ok(Terminal::new(backend)?)
+    Ok((Terminal::new(backend)?, enhanced))
 }
 
-fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+fn restore_terminal(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    enhanced: bool,
+) -> Result<()> {
     let backend = terminal.backend_mut();
     write!(backend, "\x1b[?1007l\x1b[23;0t")?;
-    execute!(
-        backend,
-        DisableBracketedPaste,
-        DisableMouseCapture,
-        DisableFocusChange,
-        LeaveAlternateScreen
-    )?;
+    if enhanced {
+        execute!(
+            backend,
+            PopKeyboardEnhancementFlags,
+            DisableBracketedPaste,
+            DisableMouseCapture,
+            DisableFocusChange,
+            LeaveAlternateScreen
+        )?;
+    } else {
+        execute!(
+            backend,
+            DisableBracketedPaste,
+            DisableMouseCapture,
+            DisableFocusChange,
+            LeaveAlternateScreen
+        )?;
+    }
     disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
