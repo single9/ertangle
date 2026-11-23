@@ -547,12 +547,21 @@ impl Picker {
                             Some(n) => format!("{base}  ({n})"),
                             None => base.clone(),
                         };
-                        if !self.items.iter().any(|(_, v)| *v == base) {
+                        if let Some(existing) = self.items.iter_mut().find(|(_, v)| *v == base) {
+                            if existing.0 == existing.1 {
+                                existing.0 = label;
+                            }
+                        } else {
                             self.items.push((label, base));
                         }
                     } else {
                         for (label, value) in members {
-                            if !self.items.iter().any(|(_, v)| *v == value) {
+                            if let Some(existing) = self.items.iter_mut().find(|(_, v)| *v == value)
+                            {
+                                if existing.0 == existing.1 {
+                                    existing.0 = label;
+                                }
+                            } else {
                                 self.items.push((label, value));
                             }
                         }
@@ -1779,7 +1788,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         AgentKind::OpenCode | AgentKind::Antigravity | AgentKind::Codex
                     ) {
                         std::thread::spawn(move || {
-                            let _ = tx.send(query_models(&k));
+                            let _ = tx.send(ertangle_adapter::models::query_raw_models(&k));
                         });
                         p.pending = Some(rx);
                         p.loading = true;

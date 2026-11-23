@@ -69,9 +69,9 @@ fn capture_stdout(bin: &str, args: &[&str], timeout: std::time::Duration) -> Opt
     reader.and_then(|rx| rx.recv_timeout(std::time::Duration::from_secs(1)).ok())
 }
 
-/// 向 agent 的 CLI 查詢可用 model (`opencode models`、`agy models`)，最多等 8 秒。
-/// 輸出每行第一欄是 model id，後面 (以 tab 分隔)是顯示名稱。
-pub fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
+/// 向 agent 的 CLI 查詢原始可用 model 清單 (`opencode models`、`agy models`、`codex debug models`)，最多等 8 秒。
+/// 不會合併 `antigravity` 的 effort 變體，供需要依變體建立 effort 選項的呼叫端使用。
+pub fn query_raw_models(kind: &AgentKind) -> Vec<(String, String)> {
     let (bin, args): (&str, &[&str]) = match kind {
         AgentKind::OpenCode => ("opencode", &["models"]),
         AgentKind::Antigravity => ("agy", &["models"]),
@@ -83,9 +83,18 @@ pub fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
     };
     match kind {
         AgentKind::Codex => parse_codex_models(&out),
-        // agy 的清單把 effort 寫進 model id (`xxx-high`)，但 ACP 的 model 與 effort 是分開的選項。
-        AgentKind::Antigravity => split_effort_variants(parse_models(&out)),
         _ => parse_models(&out),
+    }
+}
+
+/// 向 agent 的 CLI 查詢可用 model (`opencode models`、`agy models`)，最多等 8 秒。
+/// 輸出每行第一欄是 model id，後面 (以 tab 分隔)是顯示名稱。
+pub fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
+    let raw = query_raw_models(kind);
+    match kind {
+        // agy 的清單把 effort 寫進 model id (`xxx-high`)，但 ACP 的 model 與 effort 是分開的選項。
+        AgentKind::Antigravity => split_effort_variants(raw),
+        _ => raw,
     }
 }
 
