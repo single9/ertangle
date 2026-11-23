@@ -679,6 +679,8 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      min-width: 0;
+      overflow: hidden;
       user-select: none;
     }
     .turn-collapse summary:hover { color: var(--text); }
@@ -717,7 +719,9 @@
 
     /* 工具呼叫聚合清單：每筆一行「狀態 + 工具名 + 精簡目標」，點開才看完整指令與結果。 */
     .tool-run-list { padding: 4px 8px; }
-    .tool-sum-counts { color: var(--text-dim); font-weight: 400; opacity: 0.8; }
+    .tool-sum-label { flex-shrink: 0; white-space: nowrap; }
+    .tool-sum-counts { color: var(--text-dim); font-weight: 400; opacity: 0.8; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tool-sum-arrow { flex-shrink: 0; }
     .tool-item { border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
     .tool-item:last-child { border-bottom: none; }
     .tool-item > summary {
@@ -2932,19 +2936,21 @@
     // 把 `Name: args` 形式的工具呼叫拆成精簡的工具名與目標，讓手機上一行讀得完：
     // 路徑只留最後兩層、Bash 只留第一行並去掉開頭的 `cd … &&`、MCP 工具去掉 `mcp__伺服器__` 前綴。
     function toolCallParts(call) {
-      const s = String(call || "");
+      const s = String(call || "").trim();
       const i = s.indexOf(":");
-      let name = (i > 0 ? s.slice(0, i) : s).trim();
-      let args = (i > 0 ? s.slice(i + 1) : "").trim();
+      const ws = s.search(/\s/);
+      const splitAt = i > 0 ? i : (ws > 0 ? ws : -1);
+      let name = (splitAt > 0 ? s.slice(0, splitAt) : s).trim();
+      let args = (splitAt > 0 ? s.slice(splitAt + 1) : "").trim();
       const mcp = name.match(/^mcp__[^_]+(?:_[^_]+)*?__(.+)$/);
       if (mcp) name = mcp[1];
       let target = args.split("\n")[0];
-      if (/^(\/|~\/)[^\s]*$/.test(target)) {
+      if (/^(\/|~\/|\.\.\/)[^\s]*$/.test(target)) {
         target = target.split("/").filter(Boolean).slice(-2).join("/");
       } else if (/^bash$/i.test(name)) {
         target = target.replace(/^cd\s+\S+\s*&&\s*/, "");
       }
-      return { name: name || "tool", target, full: args };
+      return { name: name || "tool", target, full: args || s };
     }
 
     function renderToolList(tools) {
@@ -2963,8 +2969,8 @@
           `<span class="tool-target">${escapeHtml(p.target)}</span></summary>` +
           `<div class="tool-detail"><div class="tool-full">${escapeHtml(p.full || p.name)}</div>${out}</div></details>`;
       }).join("");
-      return `<details class="turn-collapse"><summary>工具呼叫 (${tools.length} 次) ` +
-        `<span class="tool-sum-counts">${escapeHtml(countText)}</span> ▾</summary>` +
+      return `<details class="turn-collapse"><summary><span class="tool-sum-label">工具呼叫 (${tools.length} 次)</span> ` +
+        `<span class="tool-sum-counts">${escapeHtml(countText)}</span> <span class="tool-sum-arrow">▾</span></summary>` +
         `<div class="collapse-content tool-run-list">${items}</div></details>`;
     }
 
