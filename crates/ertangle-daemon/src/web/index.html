@@ -2404,7 +2404,7 @@
         prev.resolve(false);
       }
 
-      const prevFocus = (activeConfirmDialog && activeConfirmDialog.prevFocus) || document.activeElement;
+      const prevFocus = document.activeElement;
       const backdrop = document.getElementById("confirm-dialog-backdrop");
       const titleEl = document.getElementById("confirm-dialog-title");
       const msgEl = document.getElementById("confirm-dialog-message");
@@ -2462,7 +2462,9 @@
           }
         }
 
-        document.addEventListener("keydown", onKeyDown);
+        // 延到下一輪再監聽：從 Enter 的 keydown 處理中開啟時，同一個事件還會冒泡到 document，
+        // 立刻註冊會被當成「確定」。
+        setTimeout(() => { if (!closed) document.addEventListener("keydown", onKeyDown); }, 0);
 
         activeConfirmDialog = {
           resolve,

@@ -1141,6 +1141,8 @@ mod tests {
             !INDEX_HTML.contains(" confirm(\""),
             "no native confirm(\"...\") calls allowed in index.html"
         );
+        // Opening from an Enter keydown must not let the same event confirm the dialog.
+        assert!(INDEX_HTML.contains("setTimeout(() => { if (!closed) document.addEventListener(\"keydown\", onKeyDown); }, 0);"));
     }
 
     /// T73c: Sessions tab has a collapsed archived list with tap-to-transcript and resume.
