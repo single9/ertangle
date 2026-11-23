@@ -289,7 +289,7 @@ Every structured agent session is automatically injected with a stdio MCP server
   - **Live Thinking Animation**: Active reasoning blocks display an animated pulse indicator (`⋯ 思考中`) with the latest thought preview, completely emoji-free.
   - **Slash Command Palette & Shell Execution**: Type `/` to open the command palette; type `!<cmd>` or `/sh <cmd>` to run shell commands in the session's workspace.
   - **Folded Ended Sessions & Pruning**: Automatically folds ended sessions at the bottom of the sidebar, with a "Prune Ended" button and archived session drawer.
-  - **Full Markdown & Code Copy**: Clean typography for headers, quotes, lists, and formatted code blocks with a one-tap copy button.
+  - **Full Markdown & Inline Image Previews**: Clean typography for `h1`–`h6` headings, preserved ordered list numbering, indented bullets, quotes, code blocks with a one-tap copy button, and `![alt](url)` inline image previews with strict origin/path validation.
   - **Text & Image File Previews**: Tap interactive file pills to preview text/code files (with line jumping and highlights) or view images directly.
   - **Git Diff Review & One-Tap Merge**: Review branch diffs and merge back to main directly from your phone.
 
@@ -299,12 +299,14 @@ Every structured agent session is automatically injected with a stdio MCP server
 
 ### 1. Layouts and Views
 
-- **Layout Modes**: Press `L` to cycle through "Two-pane" (Sessions + Center), "Tabs" (Top Session Tabs + Center), and "Three-pane" (Sessions + Center + Bus monitor).
-- **Center Views**: Press `Tab` to cycle across the 4 main views:
+- **Layout Modes**: On wide terminals (`>= 130` cols), automatically expands to a "Three-pane" layout (`Projects & Sessions` on the left + Center + right split with `Flow` graph on top and `Bus / Tasks` below). Press `L` to pin and cycle through "Two-pane", "Tabs" (Top Session Tabs + Center), and "Three-pane"; run `:layout auto` to restore adaptive sizing, and press `b` to toggle the right pane between `Flow + Bus` and `Project`.
+- **Center Views**: Press `Tab` (or `F` for Flow) to cycle across the main views:
   1. **Overview**: Real-time streaming transcript with Markdown rendering (headers, lists, tables, code blocks).
   2. **Diff**: Real-time colored Git Diff view with inline review support.
   3. **Worktrees**: List of all managed Git Worktree paths and disk states.
   4. **Tasks**: Collaborative task board grouped by status (doing, review, todo, blocked, done) with dependency markers (`⧗`). Press `Enter` to jump to the assignee's session.
+  5. **Flow**: Orthogonal 90-degree node graph with packet animation showing real-time Coordinator/Worker topology and message flow.
+- **Version Identification**: Both `ert --version` and the TUI status bar display `v<semver>+<short_hash>` for easy build identification.
 
 ### 2. Keybindings Cheat Sheet
 
@@ -317,7 +319,8 @@ Every structured agent session is automatically injected with a stdio MCP server
 | `!` | Enter **Shell Command mode** (run shell commands directly in the selected session's workspace `!<cmd>`) |
 | `n` | Create new session (select Agent, Model, input Prompt; supports `Ctrl-R` for Role, `Ctrl-W` for Worktree, `Ctrl-F` for Effort) |
 | `i` / `Enter` | Focus input box to send prompt (supports `@peer` and `#channel` routing) |
-| `j` / `k` or `↑` / `↓` | Select previous/next session; move line cursor in Diff; select task in Tasks view |
+| `j` / `k` or `↑` / `↓` | Select sessions and collapsible groups in `Projects & Sessions`; move line cursor in Diff; select task in Tasks view |
+| `l` / `→` / `h` / `←` / `Space` | Expand (`l` / `→`) or collapse (`h` / `←`) ended (`▸ Ended (N)`) and other-project rows in the sidebar (`Space` toggles) |
 | `[` / `]` | Jump to previous / next session |
 | `Ctrl-K` | **Jump-Anywhere**: Fuzzy search and jump to any session |
 | `Space ,` (or `:settings`) | Open **Settings panel** (toggle default Agent, Model, Effort, Worktree, Web version support, etc.) |
@@ -347,7 +350,9 @@ Every structured agent session is automatically injected with a stdio MCP server
 | `@filename` | **Fuzzy file attachment**: Type `@` to fuzzy search repo files; auto-attaches text (up to 256 KB) or images (up to 5 MB) |
 | `Ctrl-V` | Paste image from system clipboard (requires `wl-paste` or `xclip` on Linux) |
 | Drag & Drop | Drag files from file manager into terminal to auto-insert `@path` |
-| `Ctrl-J` / `Shift-Enter` | Newline in prompt input (expands up to 8 lines) |
+| `Shift-Enter` / `Ctrl-Enter` / `Ctrl-J` | Native newline in prompt input (via Kitty keyboard enhancement with `Ctrl-J` fallback; expands up to 8 lines) |
+| `Option` / `Cmd` editing shortcuts | Supports macOS / readline cursor & delete shortcuts (`Option+Left/Right`, `Option+Backspace` / `Ctrl-W`, `Option+Delete`, `Cmd+Left/Right/Backspace`, `Ctrl-K`) |
+| Stopped-session send prompt | Confirms before sending a prompt to an exited, failed, or sleeping session, automatically resuming/waking it (preserving draft on cancel) |
 | `Alt-Enter` | **Queue prompt**: If session is busy, queues in daemon to send automatically when idle |
 | `↑` / `↓` | Cycle command and prompt input history (persisted across restarts) |
 

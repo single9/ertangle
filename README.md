@@ -291,7 +291,7 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
   - **即時思考動畫**：思考中的對話區塊具備動態呼吸指示器 (`⋯ 思考中`) 與最新思考片段預覽，完全無 emoji。
   - **斜線命令面板與 Shell 執行**：輸入 `/` 即可喚出命令選單；輸入 `!<命令>` 或 `/sh <命令>` 可直接在該 session 工作目錄執行指令。
   - **已結束 Session 收合與封存**：自動將已結束的對話摺疊至側欄底部，提供「清理已結束」按鈕與抽屜式封存列表隨時調閱。
-  - **對話 Markdown 與程式碼區塊**：完整渲染標題、清單、引言，程式碼區塊附帶一鍵「複製」按鈕。
+  - **對話 Markdown 與行內圖片預覽**：完整渲染 `h1`–`h6` 標題、保留編號的有序清單、縮排項目符號與引言，程式碼區塊附帶一鍵「複製」按鈕，並支援 `![alt](url)` 行內圖片預覽與嚴格來源 / 路徑安全驗證。
   - **文字與圖片檔案即時預覽**：點擊對話中的檔案膠囊，直接在面板中即時預覽文字與程式碼內容 (含行號跳轉與高亮)，或直接檢視渲染圖片。
   - **即時 Diff 審查與一鍵 Merge**：在手機端審視 Git 變更，確認無誤後單鍵完成合併。
 
@@ -301,12 +301,14 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 
 ### 1. 版面與檢視
 
-- **版面模式**：按 `L` 循環切換「兩欄」 (Sessions + 中央)、「分頁」 (頂部 Tabs + 中央) 與「三欄」 (Sessions + 中央 + Bus 訊息監控)。
-- **中央視圖**：按 `Tab` 依序切換四大視圖：
+- **版面模式**：寬螢幕 (`>= 130` 欄) 下預設自適應展開為「三欄」 (左側 `Projects & Sessions` + 中央 + 右側上下分割的 `Flow` 節點拓撲圖與 `Bus / Tasks`)；按 `L` 可手動鎖定並循環切換「兩欄」、「分頁」 (頂部 Tabs + 中央) 與「三欄」，輸入 `:layout auto` 可恢復自適應，按 `b` 可切換右側面板於 `Flow + Bus` 與 `Project` 之間。
+- **中央視圖**：按 `Tab` (或按 `F` 直達 Flow) 依序切換主要視圖：
   1. **Overview**：即時串流逐字稿，支援 Markdown 渲染 (標題、清單、表格、程式碼區塊等)。
   2. **Diff**：即時彩色 Git Diff 視圖，支援行級審查註解。
   3. **Worktrees**：檢視目前所有由 ertangle 建立的 Git Worktree 狀態與磁碟路徑。
   4. **Tasks**：協作看板視圖，任務依狀態 (doing、review、todo、blocked、done) 分組，顯示前置任務相依性 (`⧗`)。按 `Enter` 直達負責人 Session。
+  5. **Flow**：90 度正交節點拓撲圖與封包動畫，即時呈現 Coordinator 與 Worker 間的協作拓撲與訊息流向。
+- **版本識別**：`ert --version` 與 TUI 狀態列皆會顯示 `v<semver>+<short_hash>`，方便開發時辨識目前建置版本。
 
 ### 2. 快速鍵速查表
 
@@ -319,7 +321,8 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 | `!` | 進入 **Shell 命令模式** (在選取 Session 的工作目錄直接執行命令 `!<命令>`) |
 | `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；支援 `Ctrl-R` 切換角色、`Ctrl-W` 切換 Worktree、`Ctrl-F` 切換 Effort) |
 | `i` / `Enter` | 聚焦輸入框，對選取的 Session 發送 prompt (亦支援 `@peer` 或 `#channel` 傳訊) |
-| `j` / `k` 或 `↑` / `↓` | 移動選取 Session；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
+| `j` / `k` 或 `↑` / `↓` | 在左側 `Projects & Sessions` 移動選取 Session 與摺疊列；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
+| `l` / `→` / `h` / `←` / `Space` | 在左側欄展開 (`l` / `→`) 或收合 (`h` / `←`) 已結束 (`▸ 已結束 (N)`) 與其他專案摺疊列 (`Space` 切換) |
 | `[` / `]` | 快速跳至上一個 / 下一個 Session |
 | `Ctrl-K` | **Jump-Anywhere**：依關鍵字模糊搜尋並跳轉 Session |
 | `Space ,` (或 `:settings`) | 開啟**設定面板** (即時切換預設 Agent、Model、Effort、Worktree、Web 版支援等) |
@@ -349,7 +352,9 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 | `@檔名` | **檔案附件模糊搜尋**：輸入 `@` 片段，自動在專案內搜尋檔案並補齊，送出時自動內嵌文字 (上限 256 KB) 或圖片 (上限 5 MB) |
 | `Ctrl-V` | 貼上系統剪貼簿內的圖片 (Linux 需安裝 `wl-paste` 或 `xclip`) |
 | 拖曳檔案 | 直接將檔案從檔案總管拖進終端機，自動轉換為 `@路徑` 語法 |
-| `Ctrl-J` / `Shift-Enter` | 輸入框換行 (輸入框隨行數自動伸展，最多 8 行) |
+| `Shift-Enter` / `Ctrl-Enter` / `Ctrl-J` | 輸入框原生換行 (透過 Kitty 鍵盤增強協定支援，並保留 `Ctrl-J` 相容；輸入框隨行數自動伸展，最多 8 行) |
+| `Option` / `Cmd` 編輯快速鍵 | 支援 macOS / readline 游標與刪除操作 (`Option+←/→`、`Option+Backspace` / `Ctrl-W`、`Option+Delete`、`Cmd+←/→/Backspace`、`Ctrl-K`) |
+| 停止 Session 提示確認 | 對已結束、失敗或休眠中的 Session 送出提示詞時，彈出確認視窗後自動喚醒或恢復執行 (取消則保留草稿) |
 | `Alt-Enter` | **將 Prompt 排入佇列** (Session 忙碌時排入 Daemon 佇列，閒置時依序自動送出) |
 | `↑` / `↓` | 在空輸入框時切換歷史輸入指令 (持久化儲存於本機) |
 
