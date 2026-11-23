@@ -5924,6 +5924,10 @@ fn right_pane_renders_flow_graph_and_scoped_title() {
     // Default scope: "Flow" title and session label in right pane.
     let (_, text) = render_size(&mut app, 140, 40);
     assert!(text.contains("Flow"), "right pane contains Flow: {text}");
+    assert!(
+        text.contains("Bus / Tasks"),
+        "right pane contains Bus / Tasks: {text}"
+    );
     assert!(text.contains("worker"), "session node rendered: {text}");
 
     // Project scope: title reflects project scope.
@@ -5955,6 +5959,10 @@ fn bus_overlay_and_pending_banner_with_flow_pane() {
     // Bus overlay renders Flow pane.
     let (_, text) = render_size(&mut app, 120, 40);
     assert!(text.contains("Flow"), "overlay contains Flow: {text}");
+    assert!(
+        text.contains("Bus / Tasks"),
+        "overlay contains Bus / Tasks: {text}"
+    );
     assert!(text.contains("worker"), "overlay contains session: {text}");
 
     // Pending permissions / questions stay visible even when right_bus is on in Three mode.
@@ -5978,6 +5986,27 @@ fn bus_overlay_and_pending_banner_with_flow_pane() {
         text_with_perm.contains("Flow"),
         "Flow pane rendered alongside banner: {text_with_perm}"
     );
+    assert!(
+        text_with_perm.contains("Bus / Tasks"),
+        "Bus pane rendered alongside banner: {text_with_perm}"
+    );
+}
+
+#[test]
+fn right_pane_split_flow_and_bus_under_threshold() {
+    let mut app = sample_app(&["echo 1"]);
+    app.layout = LayoutMode::Three;
+    app.right_bus = true;
+
+    // Height < 16 for right pane area (total terminal height 20 -> chunks[1].height is 14)
+    let (_, short_text) = render_size(&mut app, 140, 20);
+    assert!(short_text.contains("Flow"));
+    assert!(!short_text.contains("Bus / Tasks"));
+
+    // Height >= 16 for right pane area (total terminal height 24 -> chunks[1].height is 18)
+    let (_, tall_text) = render_size(&mut app, 140, 24);
+    assert!(tall_text.contains("Flow"));
+    assert!(tall_text.contains("Bus / Tasks"));
 }
 
 #[test]

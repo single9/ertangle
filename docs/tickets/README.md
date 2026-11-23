@@ -93,7 +93,7 @@
 | [T86](T86-tui-layout-cycling-and-auto-sync.md) | TUI: sync layout cycling (`L` / `b` / `:layout`) with adaptive 3-column Flow (已完成) | P1 | T85 |
 | [T87](T87-tui-sidebar-keyboard-navigation.md) | TUI: keyboard navigation and expand/switch for collapsed `Projects & Sessions` (已完成) | P1 | T85 |
 | [T88](T88-tui-confirm-resume-on-stopped-prompt.md) | TUI: confirm before resuming and sending prompt to ended/stopped session (已完成) | P1 | — |
-| [T89](T89-tui-split-flow-bus-and-orthogonal-links.md) | TUI: vertical split for Flow + Bus in right pane and orthogonal Flow graph links | P2 | T82 |
+| [T89](T89-tui-split-flow-bus-and-orthogonal-links.md) | TUI: vertical split for Flow + Bus in right pane and orthogonal Flow graph links (已完成) | P2 | T82 |
 
 ## Language convention
 

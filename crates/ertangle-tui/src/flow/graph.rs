@@ -261,6 +261,50 @@ fn lerp(a: (f64, f64), b: (f64, f64), t: f64) -> (f64, f64) {
     (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t)
 }
 
+pub(super) fn elbow_points(a: (f64, f64), b: (f64, f64)) -> Vec<(f64, f64)> {
+    if (a.0 - b.0).abs() < 0.01 || (a.1 - b.1).abs() < 0.01 {
+        vec![a, b]
+    } else if (b.1 - a.1).abs() >= (b.0 - a.0).abs() {
+        let mid_y = (a.1 + b.1) / 2.0;
+        vec![a, (a.0, mid_y), (b.0, mid_y), b]
+    } else {
+        let mid_x = (a.0 + b.0) / 2.0;
+        vec![a, (mid_x, a.1), (mid_x, b.1), b]
+    }
+}
+
+pub(super) fn point_along_polyline(pts: &[(f64, f64)], t: f64) -> (f64, f64) {
+    if pts.is_empty() {
+        return (0.0, 0.0);
+    }
+    if pts.len() == 1 {
+        return pts[0];
+    }
+    let t = t.clamp(0.0, 1.0);
+    let mut total_len = 0.0;
+    for w in pts.windows(2) {
+        total_len += ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt();
+    }
+    if total_len <= 0.0001 {
+        return pts[0];
+    }
+    let target = total_len * t;
+    let mut accum = 0.0;
+    for w in pts.windows(2) {
+        let seg_len = ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt();
+        if accum + seg_len >= target || (target - (accum + seg_len)).abs() < 1e-9 {
+            let seg_t = if seg_len > 0.0001 {
+                ((target - accum) / seg_len).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            return lerp(w[0], w[1], seg_t);
+        }
+        accum += seg_len;
+    }
+    *pts.last().unwrap_or(&pts[0])
+}
+
 fn line(ctx: &mut Context<'_>, a: (f64, f64), b: (f64, f64), color: Color) {
     ctx.draw(&CanvasLine::new(a.0, a.1, b.0, b.1, color));
 }
@@ -277,6 +321,26 @@ fn dashed(ctx: &mut Context<'_>, a: (f64, f64), b: (f64, f64), color: Color) {
         coords: &coords,
         color,
     });
+}
+
+fn draw_orthogonal(
+    ctx: &mut Context<'_>,
+    area: Rect,
+    a: (f64, f64),
+    b: (f64, f64),
+    color: Color,
+    is_dashed: bool,
+) {
+    let pts = elbow_points(a, b);
+    for w in pts.windows(2) {
+        let p0 = to_canvas(area, w[0]);
+        let p1 = to_canvas(area, w[1]);
+        if is_dashed {
+            dashed(ctx, p0, p1, color);
+        } else {
+            line(ctx, p0, p1, color);
+        }
+    }
 }
 
 /// Packets in flight: `(from_anchor, to_anchor, progress 0..1, color)` in cell space.
@@ -328,7 +392,7 @@ fn draw_links(f: &mut TuiFrame, area: Rect, model: &FlowModel, laid: &GraphLayou
                     continue;
                 };
                 let (a, b) = anchors(*p, *c);
-                line(ctx, to_canvas(area, a), to_canvas(area, b), Color::DarkGray);
+                draw_orthogonal(ctx, area, a, b, Color::DarkGray, false);
             }
             for e in &model.edges {
                 let Some(from) = index(&e.from).and_then(|i| laid.rects.get(i)) else {
@@ -344,29 +408,31 @@ fn draw_links(f: &mut TuiFrame, area: Rect, model: &FlowModel, laid: &GraphLayou
                     continue;
                 }
                 let (a, b) = anchors(*from, *to);
-                let (a, b) = (to_canvas(area, a), to_canvas(area, b));
                 match e.kind {
-                    FlowEdgeKind::BlockedBy { .. } => dashed(ctx, a, b, Color::Red),
+                    FlowEdgeKind::BlockedBy { .. } => {
+                        draw_orthogonal(ctx, area, a, b, Color::Red, true);
+                    }
                     FlowEdgeKind::Message(kind) => {
                         let hot = model.now_ms.saturating_sub(e.last_ts) < HOT_EDGE_MS;
                         if hot {
-                            line(ctx, a, b, kind_color(kind));
+                            draw_orthogonal(ctx, area, a, b, kind_color(kind), false);
                         }
                     }
                 }
             }
             ctx.layer();
             for (a, b, t, color) in &in_flight {
+                let pts = elbow_points(*a, *b);
                 let trail: Vec<(f64, f64)> = [0.06, 0.12, 0.18]
                     .iter()
                     .filter(|d| *t > **d)
-                    .map(|d| to_canvas(area, lerp(*a, *b, t - d)))
+                    .map(|d| to_canvas(area, point_along_polyline(&pts, t - d)))
                     .collect();
                 ctx.draw(&Points {
                     coords: &trail,
                     color: *color,
                 });
-                let (x, y) = to_canvas(area, lerp(*a, *b, *t));
+                let (x, y) = to_canvas(area, point_along_polyline(&pts, *t));
                 ctx.print(
                     x,
                     y,
@@ -578,5 +644,45 @@ mod tests {
         for (w, h) in [(1, 1), (5, 3), (20, 5), (200, 60)] {
             let _ = render(&model(tree(), Vec::new(), 0), w, h);
         }
+    }
+
+    #[test]
+    fn elbow_points_and_point_along_polyline() {
+        // Axis-aligned cases
+        let p_h = elbow_points((10.0, 5.0), (20.0, 5.0));
+        assert_eq!(p_h, vec![(10.0, 5.0), (20.0, 5.0)]);
+        let p_v = elbow_points((10.0, 5.0), (10.0, 25.0));
+        assert_eq!(p_v, vec![(10.0, 5.0), (10.0, 25.0)]);
+
+        // Vertical dominant: dy >= dx -> mid_y
+        let p_v_dom = elbow_points((10.0, 0.0), (20.0, 20.0));
+        assert_eq!(
+            p_v_dom,
+            vec![(10.0, 0.0), (10.0, 10.0), (20.0, 10.0), (20.0, 20.0)]
+        );
+
+        // Horizontal dominant: dx > dy -> mid_x
+        let p_h_dom = elbow_points((0.0, 10.0), (30.0, 20.0));
+        assert_eq!(
+            p_h_dom,
+            vec![(0.0, 10.0), (15.0, 10.0), (15.0, 20.0), (30.0, 20.0)]
+        );
+
+        // point_along_polyline edge cases
+        assert_eq!(point_along_polyline(&[], 0.5), (0.0, 0.0));
+        assert_eq!(point_along_polyline(&[(5.0, 5.0)], 0.5), (5.0, 5.0));
+
+        // Along p_v_dom: total len is 10 + 10 + 10 = 30
+        let pt0 = point_along_polyline(&p_v_dom, 0.0);
+        assert!((pt0.0 - 10.0).abs() < 1e-6 && (pt0.1 - 0.0).abs() < 1e-6);
+
+        let pt_one_third = point_along_polyline(&p_v_dom, 1.0 / 3.0);
+        assert!((pt_one_third.0 - 10.0).abs() < 1e-6 && (pt_one_third.1 - 10.0).abs() < 1e-6);
+
+        let pt_half = point_along_polyline(&p_v_dom, 0.5);
+        assert!((pt_half.0 - 15.0).abs() < 1e-6 && (pt_half.1 - 10.0).abs() < 1e-6);
+
+        let pt1 = point_along_polyline(&p_v_dom, 1.0);
+        assert!((pt1.0 - 20.0).abs() < 1e-6 && (pt1.1 - 20.0).abs() < 1e-6);
     }
 }

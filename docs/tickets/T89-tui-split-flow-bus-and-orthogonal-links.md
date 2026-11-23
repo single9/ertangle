@@ -1,7 +1,5 @@
 # T89 — TUI: vertical split for Flow + Bus in right pane and orthogonal Flow graph links
 
-Status: ready-for-agent
-
 Priority: P2　Scope: `ertangle-tui`　Depends on: T82
 
 ## Problem

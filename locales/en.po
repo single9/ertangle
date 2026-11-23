@@ -3330,6 +3330,42 @@ msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按
 msgstr "(no separate worktrees; use --worktree or Ctrl-W when creating a session)"
 
 #: crates/ertangle-tui/src/draw.rs
+msgid "⏸ 提問 "
+msgstr "⏸ Question "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "{header}：{question}"
+msgstr "{header}: {question}"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "  [Enter] 回答問題  [w] 跳到下一個待處理"
+msgstr "  [Enter] answer  [w] jump to next pending"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "⏸ 核准 "
+msgstr "⏸ Approval "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "{title}：{detail}"
+msgstr "{title}: {detail}"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "  [a] 允許  [A] 一律允許  [d] 拒絕"
+msgstr "  [a] allow  [A] always allow  [d] deny"
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "agent 之間的訊息與任務看板會出現在這裡。"
+msgstr "Messages between agents and the task board appear here."
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " Bus / Tasks · 本專案 "
+msgstr " Bus / Tasks · This project "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
+msgstr " Bus / Tasks · This project ({n} elsewhere, P to show) "
+
+#: crates/ertangle-tui/src/draw.rs
 msgid " 請先按 {keys} 才能輸入 "
 msgstr " Press {keys} to type "
 
@@ -4768,33 +4804,6 @@ msgstr "Connection lost, reconnecting; please wait"
 
 #~ msgid "Bus：隱藏"
 #~ msgstr "Bus: hidden"
-
-#~ msgid "⏸ 提問 "
-#~ msgstr "⏸ Question "
-
-#~ msgid "{header}：{question}"
-#~ msgstr "{header}: {question}"
-
-#~ msgid "  [Enter] 回答問題  [w] 跳到下一個待處理"
-#~ msgstr "  [Enter] answer  [w] jump to next pending"
-
-#~ msgid "⏸ 核准 "
-#~ msgstr "⏸ Approval "
-
-#~ msgid "{title}：{detail}"
-#~ msgstr "{title}: {detail}"
-
-#~ msgid "  [a] 允許  [A] 一律允許  [d] 拒絕"
-#~ msgstr "  [a] allow  [A] always allow  [d] deny"
-
-#~ msgid "agent 之間的訊息與任務看板會出現在這裡。"
-#~ msgstr "Messages between agents and the task board appear here."
-
-#~ msgid " Bus / Tasks · 本專案 "
-#~ msgstr " Bus / Tasks · This project "
-
-#~ msgid " Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) "
-#~ msgstr " Bus / Tasks · This project ({n} elsewhere, P to show) "
 
 #~ msgid "資料夾 {path}  (Enter 進入／選取 · Esc 取消)"
 #~ msgstr "Folder {path}  (Enter open/select · Esc cancel)"

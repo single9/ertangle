@@ -121,7 +121,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     }
     if let Some(a) = bus_area {
         if right_bus {
-            crate::flow::draw_flow_pane(f, a, app);
+            draw_right_flow_and_bus(f, a, app);
         } else {
             crate::project::draw_project(f, a, app);
         }
@@ -129,7 +129,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         let ow = (main.width * 2 / 5).max(30).min(main.width);
         let r = Rect::new(main.x + main.width - ow, main.y, ow, main.height);
         f.render_widget(Clear, r);
-        crate::flow::draw_flow_pane(f, r, app);
+        draw_right_flow_and_bus(f, r, app);
     }
     draw_input(f, chunks[2], app);
     draw_status(f, chunks[3], app);
@@ -2250,6 +2250,131 @@ pub(crate) fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
         .block(Block::default().borders(Borders::ALL).title(" Worktrees "))
         .wrap(Wrap { trim: false });
     f.render_widget(para, area);
+}
+
+pub(crate) fn draw_bus(f: &mut TuiFrame, area: Rect, app: &App) {
+    let mut lines: Vec<Line> = Vec::new();
+
+    for q in app.state.pending_questions.values() {
+        let default_header = tr!("提問");
+        let header_str = q.header.as_deref().unwrap_or(&default_header);
+        lines.push(Line::from(vec![
+            Span::styled(
+                tr!("⏸ 提問 "),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(tr!(
+                "{header}：{question}",
+                header = header_str,
+                question = truncate(&q.question, 40)
+            )),
+        ]));
+    }
+    if !app.state.pending_questions.is_empty() {
+        lines.push(Line::styled(
+            tr!("  [Enter] 回答問題  [w] 跳到下一個待處理"),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+
+    for p in app.state.pending_permissions.values() {
+        lines.push(Line::from(vec![
+            Span::styled(
+                tr!("⏸ 核准 "),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(tr!(
+                "{title}：{detail}",
+                title = p.title,
+                detail = truncate(&p.detail, 40)
+            )),
+        ]));
+    }
+    if !app.state.pending_permissions.is_empty() {
+        lines.push(Line::styled(
+            tr!("  [a] 允許  [A] 一律允許  [d] 拒絕"),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+
+    let task_ids = crate::tasks::visible_task_ids(app);
+    if !task_ids.is_empty() {
+        for id in &task_ids {
+            let Some(t) = app.state.tasks.get(id) else {
+                continue;
+            };
+            let color = match t.status {
+                ertangle_core::TaskStatus::Done => Color::Green,
+                ertangle_core::TaskStatus::Doing | ertangle_core::TaskStatus::Review => Color::Cyan,
+                ertangle_core::TaskStatus::Blocked => Color::Red,
+                ertangle_core::TaskStatus::Todo => Color::Gray,
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("[{}] ", t.status.id()), Style::default().fg(color)),
+                Span::raw(truncate(&t.title, 26)),
+            ]));
+        }
+        lines.push(Line::styled(
+            "────────────────────────",
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+
+    let h = area.height.saturating_sub(2 + lines.len() as u16) as usize;
+    let total_msgs = app.state.messages.len();
+    let msgs = app.visible_messages();
+    let hidden_msgs = total_msgs.saturating_sub(msgs.len());
+    let start = msgs.len().saturating_sub(h);
+    for m in msgs.iter().skip(start) {
+        let to = match &m.to {
+            Target::Direct(s) => format!("@{s}"),
+            Target::Channel(c) => format!("#{c}"),
+            Target::Broadcast => "*".into(),
+        };
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{}→{} ", short(&m.from), short(&to)),
+                Style::default().fg(Color::Magenta),
+            ),
+            Span::raw(truncate(&m.body, 60)),
+        ]));
+    }
+    if lines.is_empty() {
+        lines.push(Line::styled(
+            tr!("agent 之間的訊息與任務看板會出現在這裡。"),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+
+    let title = if app.scope_here {
+        match hidden_msgs {
+            0 => tr!(" Bus / Tasks · 本專案 "),
+            n => tr!(" Bus / Tasks · 本專案 (另 {n} 則在別處，P 顯示) ", n = n),
+        }
+    } else {
+        " Bus / Tasks ".to_string()
+    };
+    let para = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .wrap(Wrap { trim: false });
+    f.render_widget(para, area);
+}
+
+fn draw_right_flow_and_bus(f: &mut TuiFrame, area: Rect, app: &App) {
+    if area.height >= 16 {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+            .split(area);
+        crate::flow::draw_flow_pane(f, chunks[0], app);
+        draw_bus(f, chunks[1], app);
+    } else {
+        crate::flow::draw_flow_pane(f, area, app);
+    }
 }
 
 pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &mut App) {
