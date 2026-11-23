@@ -2190,6 +2190,22 @@ msgid "版面：{layout}"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
+msgid "版面：自動"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs
+msgid "已展開已結束的 session，E 摺疊"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs
+msgid "已摺疊已結束的 session ({n})，E 展開"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs
+msgid "已切換專案：{project}"
+msgstr ""
+
+#: crates/ertangle-tui/src/app.rs
 msgid "目前是命令模式：按 {keys} 才能輸入文字"
 msgstr ""
 
@@ -2207,10 +2223,6 @@ msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
 msgid "無法解析路徑"
-msgstr ""
-
-#: crates/ertangle-tui/src/app.rs
-msgid "已切換專案：{project}"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs
@@ -2247,14 +2259,6 @@ msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
 msgid "逐字稿：第 {next} 行 (End 回到最新)"
-msgstr ""
-
-#: crates/ertangle-tui/src/app.rs
-msgid "已展開已結束的 session，E 摺疊"
-msgstr ""
-
-#: crates/ertangle-tui/src/app.rs
-msgid "已摺疊已結束的 session ({n})，E 展開"
 msgstr ""
 
 #: crates/ertangle-tui/src/app.rs
@@ -2678,7 +2682,7 @@ msgid "未知的主機：{target}，可用主機：{avail}"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "用法：/layout three|two|tabs"
+msgid "用法：/layout three|two|tabs|auto"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs

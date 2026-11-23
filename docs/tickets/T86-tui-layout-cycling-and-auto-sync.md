@@ -1,7 +1,5 @@
 # T86 — TUI: sync layout cycling (`L` / `b` / `:layout`) with adaptive 3-column Flow
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-tui`　Depends on: T85
 
 ## Problem

@@ -845,10 +845,12 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         "layout" => {
             if rest.is_empty() {
                 app.cycle_layout();
+            } else if rest.trim().eq_ignore_ascii_case("auto") {
+                app.set_layout_auto();
             } else if let Some(mode) = LayoutMode::parse(rest) {
                 app.set_layout(mode);
             } else {
-                app.status = tr!("用法：/layout three|two|tabs");
+                app.status = tr!("用法：/layout three|two|tabs|auto");
             }
         }
         "prune" => {

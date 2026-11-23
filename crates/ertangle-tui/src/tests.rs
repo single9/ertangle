@@ -6394,3 +6394,196 @@ fn t88_non_resumable_exited_session_only_allows_cancel() {
     assert_eq!(app.input, "text for failed non-resumable");
     assert!(app.picker.is_none());
 }
+
+#[test]
+fn t86_layout_cycling_and_auto_sync() {
+    let mut app = sample_app(&["echo 1"]);
+    let (mut w, _peer) = pair_writer();
+
+    // On wide terminal (>= 130), adaptive layout renders Three while desired layout was Two.
+    assert_eq!(app.layout, LayoutMode::Two);
+    assert!(!app.layout_pinned);
+    let _ = render_size(&mut app, 130, 40);
+    assert_eq!(app.rendered_layout, LayoutMode::Three);
+
+    // Pressing 'b' in adaptive 3-column mode toggles right_bus (not bus_overlay).
+    assert!(app.right_bus);
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('b'))).unwrap();
+    assert!(!app.right_bus);
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('b'))).unwrap();
+    assert!(app.right_bus);
+
+    // Pressing 'L' cycles from rendered_layout (Three): Three.next() == Two.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('L'))).unwrap();
+    assert_eq!(app.layout, LayoutMode::Two);
+    assert!(app.layout_pinned);
+
+    // Next 'L': Two.next() == Tabs.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('L'))).unwrap();
+    assert_eq!(app.layout, LayoutMode::Tabs);
+
+    // Next 'L': Tabs.next() == Three.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('L'))).unwrap();
+    assert_eq!(app.layout, LayoutMode::Three);
+
+    // :layout auto unpins layout and resets to Two.
+    execute_command(&mut app, &mut w, "/layout auto").unwrap();
+    assert!(!app.layout_pinned);
+    assert_eq!(app.layout, LayoutMode::Two);
+
+    // Re-rendering at wide width adapts to Three again.
+    let _ = render_size(&mut app, 130, 40);
+    assert_eq!(app.rendered_layout, LayoutMode::Three);
+}
+
+#[test]
+fn t87_sidebar_keyboard_navigation_and_focus() {
+    let mut app = sample_app(&["echo 1"]);
+    let (mut w, _peer) = pair_writer();
+    app.home_project = "/work/alpha".into();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = "/work/alpha".into();
+    }
+    // Add an ended session in /work/alpha.
+    let mut s_ended = app.state.sessions.get("ses_test").unwrap().clone();
+    s_ended.id = "ses_ended".into();
+    s_ended.cwd = "/work/alpha".into();
+    s_ended.label = "ended-worker".into();
+    s_ended.status = SessionStatus::Exited;
+    app.state.sessions.insert("ses_ended".into(), s_ended);
+
+    // Add a session in another project /work/beta.
+    let mut s_other = app.state.sessions.get("ses_test").unwrap().clone();
+    s_other.id = "ses_other".into();
+    s_other.cwd = "/work/beta".into();
+    s_other.label = "other-worker".into();
+    s_other.status = SessionStatus::Busy;
+    app.state.sessions.insert("ses_other".into(), s_other);
+
+    app.scope_here = true;
+    app.show_ended = false;
+    assert_eq!(app.visible_sessions().len(), 1);
+    assert_eq!(app.ended_count(), 1);
+    assert_eq!(app.other_project_roots().len(), 1);
+
+    // Initially at session 0, sidebar_focus is None.
+    assert_eq!(app.selected, 0);
+    assert_eq!(app.sidebar_focus, None);
+
+    // Moving up at top stays at session 0.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.selected, 0);
+    assert_eq!(app.sidebar_focus, None);
+
+    // Moving down past the last visible session enters EndedFold.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
+
+    // Moving down from EndedFold enters OtherProject(0).
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
+
+    // Moving down past the last other project stays at OtherProject(0).
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
+
+    // Moving up returns to EndedFold.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
+
+    // Moving up from EndedFold returns to last visible session.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.sidebar_focus, None);
+    assert_eq!(app.selected, 0);
+
+    // Esc clears sidebar_focus if active.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
+    handle_key(&mut app, &mut w, kev(KeyCode::Esc)).unwrap();
+    assert_eq!(app.sidebar_focus, None);
+}
+
+#[test]
+fn t87_sidebar_activation_and_project_switch() {
+    let mut app = sample_app(&["echo 1"]);
+    let (mut w, _peer) = pair_writer();
+    app.home_project = "/work/alpha".into();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = "/work/alpha".into();
+    }
+    let mut s_ended = app.state.sessions.get("ses_test").unwrap().clone();
+    s_ended.id = "ses_ended".into();
+    s_ended.cwd = "/work/alpha".into();
+    s_ended.label = "ended-worker".into();
+    s_ended.status = SessionStatus::Exited;
+    app.state.sessions.insert("ses_ended".into(), s_ended);
+
+    let mut s_other = app.state.sessions.get("ses_test").unwrap().clone();
+    s_other.id = "ses_other".into();
+    s_other.cwd = "/work/beta".into();
+    s_other.label = "other-worker".into();
+    s_other.status = SessionStatus::Busy;
+    app.state.sessions.insert("ses_other".into(), s_other);
+
+    app.scope_here = true;
+    app.show_ended = false;
+
+    // Navigate to EndedFold and activate with 'l' / Enter.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('l'))).unwrap();
+    assert!(app.show_ended);
+    assert_eq!(app.sidebar_focus, None);
+    assert_eq!(app.selected, 1, "focuses the first ended session");
+
+    // Navigate down onto EndedFold again and collapse with 'h'.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('h'))).unwrap();
+    assert!(!app.show_ended);
+
+    // Navigate to OtherProject(0) and activate with Enter.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
+    handle_key(&mut app, &mut w, kev(KeyCode::Enter)).unwrap();
+    assert_eq!(app.home_project, "/work/beta");
+    assert_eq!(app.sidebar_focus, None);
+    assert_eq!(app.selected, 0);
+    assert_eq!(app.selected_id().as_deref(), Some("ses_other"));
+}
+
+#[test]
+fn t87_sidebar_zero_live_sessions_navigation() {
+    let mut app = sample_app(&["echo 1"]);
+    let (mut w, _peer) = pair_writer();
+    app.home_project = "/work/alpha".into();
+    // Mark the only session in /work/alpha as Exited so live sessions count is 0.
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = "/work/alpha".into();
+        s.status = SessionStatus::Exited;
+    }
+    // Add another project session.
+    let mut s_other = app.state.sessions.get("ses_test").unwrap().clone();
+    s_other.id = "ses_other".into();
+    s_other.cwd = "/work/beta".into();
+    s_other.label = "beta-worker".into();
+    s_other.status = SessionStatus::Busy;
+    app.state.sessions.insert("ses_other".into(), s_other);
+
+    app.scope_here = true;
+    app.show_ended = false;
+    assert_eq!(app.visible_sessions().len(), 0);
+
+    // Down or j navigates onto EndedFold even when live sessions is 0.
+    handle_key(&mut app, &mut w, kev(KeyCode::Down)).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
+
+    handle_key(&mut app, &mut w, kev(KeyCode::Down)).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
+
+    // Activating switches project to /work/beta.
+    handle_key(&mut app, &mut w, kev(KeyCode::Enter)).unwrap();
+    assert_eq!(app.home_project, "/work/beta");
+    assert_eq!(app.sidebar_focus, None);
+    assert_eq!(app.selected, 0);
+}
