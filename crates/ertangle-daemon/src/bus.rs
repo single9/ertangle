@@ -432,7 +432,7 @@ impl Shared {
                 .map(|m| format!("id={} 來自 {} ({})", m.id, m.from, m.kind.id()))
                 .collect();
             let text = format!(
-                "[ertangle 未讀訊息提醒] 你忙碌時收到 {} 則訊息：{}。\n請呼叫 ertangle_inbox 查看並用 ertangle_send 回覆。",
+                "[ertangle 未讀訊息提醒] 你忙碌時收到 {} 則訊息：{}。\n請呼叫 ertangle_inbox 查看 (僅在需要時以 ertangle_send 回覆；收到 ACK / ANSWER / TASK_DONE 不需回覆，亦不需向使用者重複說明規則)。",
                 unread.len(),
                 list.join("；"),
             );

@@ -27,7 +27,7 @@ All inter-agent messages sent via `ertangle send` / `ertangle_send` or `ertangle
 2. **Zero Pleasantries Policy & Terminal State**:
    - Strictly forbid pleasantries, courtesy ping-pong, and polite sign-offs (e.g. `"Thank you"`, `"You're welcome"`, `"Goodbye"`, `"辛苦了"`, `"合作愉快"`, `"祝一切順利"`).
    - Every message sent to another session wakes that agent for a full turn and re-injects its entire conversation context. Never reply merely to say thanks or goodbye.
-   - **Terminal State**: Once a worker sends `TASK_DONE`, it **MUST** terminate its turn immediately. Once a coordinator receives `TASK_DONE`, it should proceed directly with verification, merging, or task board updates without sending a courtesy reply.
+   - **Terminal State**: Once a worker sends `TASK_DONE`, it **MUST** terminate its turn immediately. Once a coordinator receives `TASK_DONE`, `ACK`, or `ANSWER`, it should proceed directly without sending a courtesy reply, and without echoing or explaining this policy to the user (simply report what was read or done).
 
 ## Pre-commit Verification Checklist (Commit 前檢查清單)
 

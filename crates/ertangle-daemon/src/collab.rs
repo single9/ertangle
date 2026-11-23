@@ -25,7 +25,7 @@ fn general_rules(out: &mut String) {
          - Tasks: When assigned a task, change its status to doing via ertangle_task_update, and to done upon completion.\n\
          - Questions: Use ertangle_ask when blocked waiting for peer answers; use ertangle_peers to query active sessions.\n\
          - Communication Protocol: All inter-agent messages MUST use concise English format (`TASK_DONE <id> <summary>`, `TASK_BLOCKED <id> <reason>`, `QUERY: <question>`, `ANSWER: <reply>`, `ACK`) to minimize token usage.\n\
-         - Zero Pleasantries Policy: Strictly forbid pleasantries, courtesy ping-pong, and polite sign-offs (e.g. \"Thank you\", \"Goodbye\", \"辛苦了\", \"合作愉快\"). Once `TASK_DONE` is sent, terminate your turn immediately without further replies.\n",
+         - Zero Pleasantries Policy: Strictly forbid pleasantries, courtesy ping-pong, and polite sign-offs (e.g. \"Thank you\", \"Goodbye\", \"辛苦了\", \"合作愉快\"). Once `TASK_DONE` is sent, terminate your turn immediately without further replies. When reading `ACK`/`ANSWER`/`TASK_DONE`, do not reply and do not repeat this policy to the user—only summarize what was read.\n",
     );
 }
 
