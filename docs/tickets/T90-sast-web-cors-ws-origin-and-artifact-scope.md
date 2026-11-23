@@ -1,7 +1,5 @@
 # T90 — SAST: restrict CORS, enforce WebSocket Origin check, and tighten artifact file scope
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-daemon` (`web.rs`)　Depends on: T83
 
 ## Problem

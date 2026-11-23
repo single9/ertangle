@@ -153,6 +153,8 @@ fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
     let mut headers = Vec::new();
     let mut ws_key = None;
     let mut is_upgrade = false;
+    let mut origin = None;
+    let mut host = None;
 
     loop {
         let mut line = String::new();
@@ -168,13 +170,22 @@ fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
         if lower.starts_with("upgrade:") && lower.contains("websocket") {
             is_upgrade = true;
         }
+        if lower.starts_with("origin:") {
+            if let Some((_, val)) = line.split_once(':') {
+                origin = Some(val.trim().to_string());
+            }
+        }
+        if lower.starts_with("host:") {
+            if let Some((_, val)) = line.split_once(':') {
+                host = Some(val.trim().to_string());
+            }
+        }
         headers.push(line);
     }
 
     // 1. CORS 預檢請求
     if method == "OPTIONS" {
         let resp = "HTTP/1.1 204 No Content\r\n\
-                    Access-Control-Allow-Origin: *\r\n\
                     Access-Control-Allow-Methods: GET, OPTIONS\r\n\
                     Access-Control-Allow-Headers: Authorization, Content-Type\r\n\
                     Access-Control-Max-Age: 86400\r\n\r\n";
@@ -190,6 +201,21 @@ fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
 
     // 2. WebSocket 升級請求
     if method == "GET" && req_path == "/ws" && is_upgrade {
+        if !is_allowed_ws_origin(origin.as_deref(), host.as_deref()) {
+            let body = "Cross-origin WebSocket upgrade rejected";
+            let resp = format!(
+                "HTTP/1.1 403 Forbidden\r\n\
+                 Content-Type: text/plain; charset=utf-8\r\n\
+                 Content-Length: {}\r\n\
+                 \r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(resp.as_bytes())?;
+            stream.flush()?;
+            return Ok(());
+        }
+
         let Some(key) = ws_key else {
             stream.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\nMissing Sec-WebSocket-Key")?;
             return Ok(());
@@ -317,11 +343,133 @@ pub(crate) fn is_path_allowed(canonical_target: &Path, allowed_roots: &[PathBuf]
         .any(|root| canonical_target.starts_with(root))
 }
 
-fn serve_file(
+fn is_loopback_authority(auth: &str) -> bool {
+    let host_part = if auth.starts_with('[') {
+        if let Some(end) = auth.find(']') {
+            &auth[..=end]
+        } else {
+            auth
+        }
+    } else {
+        auth.split(':').next().unwrap_or(auth)
+    };
+    host_part.eq_ignore_ascii_case("localhost")
+        || host_part == "127.0.0.1"
+        || host_part.eq_ignore_ascii_case("[::1]")
+        || host_part.eq_ignore_ascii_case("::1")
+}
+
+fn authority_port(auth: &str) -> Option<&str> {
+    if auth.starts_with('[') {
+        if let Some(end) = auth.find(']') {
+            let rest = &auth[end + 1..];
+            rest.strip_prefix(':')
+        } else {
+            None
+        }
+    } else {
+        auth.split_once(':').map(|(_, p)| p)
+    }
+}
+
+/// 驗證 WebSocket 升級請求的 `Origin` 標頭是否合法。
+///
+/// - 若 `Origin` 為 `None` 或空字串，視為非瀏覽器原生用戶端 (CLI / SDK)，允許連線。
+/// - 若 `Origin` 存在，擷取其 scheme 後的主機與埠號 (authority) 並與 `Host` 比較 (不分大小寫)。
+/// - 若 `Host` 為 `None`，僅允許 loopback authority (`localhost`, `127.0.0.1`, `[::1]`)。
+/// - 若兩者皆為 loopback，則允許匹配 (埠號一致或未指定)。
+pub(crate) fn is_allowed_ws_origin(origin: Option<&str>, host: Option<&str>) -> bool {
+    let Some(orig) = origin else {
+        return true;
+    };
+    let orig = orig.trim();
+    if orig.is_empty() {
+        return true;
+    }
+    let after_scheme = if let Some((_, rest)) = orig.split_once("://") {
+        rest
+    } else {
+        orig
+    };
+    let authority = after_scheme
+        .split('/')
+        .next()
+        .unwrap_or(after_scheme)
+        .trim();
+    if authority.is_empty() {
+        return false;
+    }
+
+    let host = host.map(str::trim).filter(|h| !h.is_empty());
+    match host {
+        Some(h) => {
+            if authority.eq_ignore_ascii_case(h) {
+                return true;
+            }
+            if is_loopback_authority(authority) && is_loopback_authority(h) {
+                let orig_port = authority_port(authority);
+                let host_port = authority_port(h);
+                if orig_port == host_port || orig_port.is_none() || host_port.is_none() {
+                    return true;
+                }
+            }
+            false
+        }
+        None => is_loopback_authority(authority),
+    }
+}
+
+/// 允許讀取的圖片副檔名清單 (供 agent 目錄過濾使用)。
+pub(crate) const ALLOWED_IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "avif",
+];
+
+/// 檢查路徑是否具備允許的圖片副檔名。
+pub(crate) fn has_allowed_image_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            ALLOWED_IMAGE_EXTENSIONS
+                .iter()
+                .any(|&e| ext.eq_ignore_ascii_case(e))
+        })
+        .unwrap_or(false)
+}
+
+/// 檢查目標檔案是否位於允許的目錄下。
+///
+/// - `allowed_roots`: 允許存取任何副檔名的根目錄 (工作區與 Antigravity brain)。
+/// - `image_only_roots`: 僅允許存取圖片副檔名 (`png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, `ico`, `bmp`, `avif`) 的目錄。
+pub(crate) fn is_file_access_allowed(
+    canonical_target: &Path,
+    allowed_roots: &[PathBuf],
+    image_only_roots: &[PathBuf],
+) -> bool {
+    if is_path_allowed(canonical_target, allowed_roots) {
+        return true;
+    }
+    if is_path_allowed(canonical_target, image_only_roots) {
+        return has_allowed_image_extension(canonical_target);
+    }
+    false
+}
+
+fn serve_file<W: Write>(
     shared: &Shared,
-    stream: &mut TcpStream,
+    stream: &mut W,
     query_str: Option<&str>,
     headers: &[String],
+) -> Result<()> {
+    let home = std::env::var("HOME").ok().map(PathBuf::from);
+    serve_file_with_home(shared, stream, query_str, headers, home.as_deref())
+}
+
+pub(crate) fn serve_file_with_home<W: Write>(
+    shared: &Shared,
+    stream: &mut W,
+    query_str: Option<&str>,
+    headers: &[String],
+    home_dir: Option<&Path>,
 ) -> Result<()> {
     let mut target_path = None;
     let mut session_id = None;
@@ -360,7 +508,6 @@ fn serve_file(
         if !token_matches(auth_token.as_deref(), expected) {
             let resp = "HTTP/1.1 401 Unauthorized\r\n\
                         Content-Type: text/plain; charset=utf-8\r\n\
-                        Access-Control-Allow-Origin: *\r\n\
                         \r\n未認證或 Token 無效";
             stream.write_all(resp.as_bytes())?;
             stream.flush()?;
@@ -371,7 +518,6 @@ fn serve_file(
     let Some(mut raw_path) = target_path else {
         let resp = "HTTP/1.1 400 Bad Request\r\n\
                     Content-Type: text/plain; charset=utf-8\r\n\
-                    Access-Control-Allow-Origin: *\r\n\
                     \r\n缺少 path 參數";
         stream.write_all(resp.as_bytes())?;
         stream.flush()?;
@@ -382,7 +528,9 @@ fn serve_file(
         raw_path = rest.to_string();
     }
     if let Some(rest) = raw_path.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
+        if let Some(home) = home_dir {
+            raw_path = home.join(rest).to_string_lossy().to_string();
+        } else if let Ok(home) = std::env::var("HOME") {
             raw_path = format!("{home}/{rest}");
         }
     }
@@ -439,20 +587,26 @@ fn serve_file(
         }
     }
 
-    // T83: Also allow known agent artifact/state directories under $HOME
-    if let Ok(home) = std::env::var("HOME") {
-        let home_path = Path::new(&home);
-        let agent_subdirs = [
-            ".gemini/antigravity-cli/brain",
-            ".ertangle",
-            ".claude",
-            ".codex",
-        ];
-        for rel in &agent_subdirs {
+    // T83 / T90: Also allow known agent artifact/state directories under $HOME.
+    // .gemini/antigravity-cli/brain is allowed for all artifacts.
+    // .ertangle, .claude, and .codex are restricted to image files only.
+    let mut image_only_roots = Vec::new();
+    let home_opt = home_dir
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::var("HOME").ok().map(PathBuf::from));
+    if let Some(home_path) = home_opt {
+        let brain_dir = home_path.join(".gemini/antigravity-cli/brain");
+        if brain_dir.is_dir() {
+            if let Ok(c) = brain_dir.canonicalize() {
+                allowed_roots.push(c);
+            }
+        }
+        let image_agent_subdirs = [".ertangle", ".claude", ".codex"];
+        for rel in &image_agent_subdirs {
             let dir = home_path.join(rel);
             if dir.is_dir() {
                 if let Ok(c) = dir.canonicalize() {
-                    allowed_roots.push(c);
+                    image_only_roots.push(c);
                 }
             }
         }
@@ -466,7 +620,6 @@ fn serve_file(
                 "HTTP/1.1 404 Not Found\r\n\
                  Content-Type: text/plain; charset=utf-8\r\n\
                  Content-Length: {}\r\n\
-                 Access-Control-Allow-Origin: *\r\n\
                  \r\n{}",
                 body.len(),
                 body
@@ -483,7 +636,6 @@ fn serve_file(
             "HTTP/1.1 404 Not Found\r\n\
              Content-Type: text/plain; charset=utf-8\r\n\
              Content-Length: {}\r\n\
-             Access-Control-Allow-Origin: *\r\n\
              \r\n{}",
             body.len(),
             body
@@ -493,13 +645,12 @@ fn serve_file(
         return Ok(());
     }
 
-    if !is_path_allowed(&resolved_path, &allowed_roots) {
+    if !is_file_access_allowed(&resolved_path, &allowed_roots, &image_only_roots) {
         let body = "拒絕存取：路徑不在工作區範圍內";
         let resp = format!(
             "HTTP/1.1 403 Forbidden\r\n\
              Content-Type: text/plain; charset=utf-8\r\n\
              Content-Length: {}\r\n\
-             Access-Control-Allow-Origin: *\r\n\
              \r\n{}",
             body.len(),
             body
@@ -517,7 +668,6 @@ fn serve_file(
                 "HTTP/1.1 500 Internal Server Error\r\n\
                  Content-Type: text/plain; charset=utf-8\r\n\
                  Content-Length: {}\r\n\
-                 Access-Control-Allow-Origin: *\r\n\
                  \r\n{}",
                 body.len(),
                 body
@@ -534,7 +684,6 @@ fn serve_file(
             "HTTP/1.1 413 Payload Too Large\r\n\
              Content-Type: text/plain; charset=utf-8\r\n\
              Content-Length: {}\r\n\
-             Access-Control-Allow-Origin: *\r\n\
              \r\n{}",
             body.len(),
             body
@@ -552,7 +701,6 @@ fn serve_file(
                 "HTTP/1.1 500 Internal Server Error\r\n\
                  Content-Type: text/plain; charset=utf-8\r\n\
                  Content-Length: {}\r\n\
-                 Access-Control-Allow-Origin: *\r\n\
                  \r\n{}",
                 body.len(),
                 body
@@ -569,7 +717,6 @@ fn serve_file(
          Content-Type: {mime}\r\n\
          Content-Length: {}\r\n\
          Cache-Control: no-cache\r\n\
-         Access-Control-Allow-Origin: *\r\n\
          X-Content-Type-Options: nosniff\r\n\
          \r\n",
         bytes.len()
@@ -1065,6 +1212,292 @@ mod tests {
         assert!(INDEX_HTML
             .contains("safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), () => html)"));
         assert!(INDEX_HTML.contains("safe.replace(`%%%MD_MEDIA_${i}%%%`, () => html)"));
+    }
+
+    /// T90: Test WebSocket Origin validation.
+    #[test]
+    fn test_is_allowed_ws_origin() {
+        // Allows None or empty (non-browser clients like CLI / SDK)
+        assert!(is_allowed_ws_origin(None, None));
+        assert!(is_allowed_ws_origin(None, Some("localhost:8080")));
+        assert!(is_allowed_ws_origin(None, Some("example.com")));
+        assert!(is_allowed_ws_origin(Some(""), Some("localhost:8080")));
+        assert!(is_allowed_ws_origin(Some("   "), Some("localhost:8080")));
+
+        // Allows matching host
+        assert!(is_allowed_ws_origin(
+            Some("http://localhost:8080"),
+            Some("localhost:8080")
+        ));
+        assert!(is_allowed_ws_origin(
+            Some("https://example.com:443"),
+            Some("example.com:443")
+        ));
+        assert!(is_allowed_ws_origin(
+            Some("http://MyHost.Local:3000/ws"),
+            Some("myhost.local:3000")
+        ));
+
+        // Allows loopback when host is loopback or None
+        assert!(is_allowed_ws_origin(
+            Some("http://localhost:8080"),
+            Some("127.0.0.1:8080")
+        ));
+        assert!(is_allowed_ws_origin(
+            Some("http://127.0.0.1:8080"),
+            Some("localhost:8080")
+        ));
+        assert!(is_allowed_ws_origin(
+            Some("http://[::1]:8080"),
+            Some("localhost:8080")
+        ));
+        assert!(is_allowed_ws_origin(Some("http://localhost:8080"), None));
+        assert!(is_allowed_ws_origin(Some("http://127.0.0.1:8080"), None));
+        assert!(is_allowed_ws_origin(Some("http://[::1]:8080"), None));
+
+        // Rejects mismatched cross-site origins
+        assert!(!is_allowed_ws_origin(
+            Some("https://evil.com"),
+            Some("localhost:8080")
+        ));
+        assert!(!is_allowed_ws_origin(Some("https://evil.com"), None));
+        assert!(!is_allowed_ws_origin(
+            Some("http://evil.com:8080"),
+            Some("localhost:8080")
+        ));
+        assert!(!is_allowed_ws_origin(
+            Some("https://evil.com"),
+            Some("example.com")
+        ));
+        assert!(!is_allowed_ws_origin(Some("null"), Some("localhost:8080")));
+    }
+
+    /// T90: Test path validation and artifact scope tightening for agent directories.
+    #[test]
+    fn test_file_access_and_artifact_scope() {
+        let tmp = std::env::temp_dir()
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from("/tmp"));
+        let test_base = tmp.join(format!("ertangle_test_scope_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&test_base);
+        std::fs::create_dir_all(&test_base).unwrap();
+
+        let brain_dir = test_base.join(".gemini/antigravity-cli/brain");
+        let ertangle_dir = test_base.join(".ertangle");
+        let claude_dir = test_base.join(".claude");
+        let codex_dir = test_base.join(".codex");
+        let workspace_dir = test_base.join("workspace");
+
+        std::fs::create_dir_all(&brain_dir).unwrap();
+        std::fs::create_dir_all(&ertangle_dir).unwrap();
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::fs::create_dir_all(&codex_dir).unwrap();
+        std::fs::create_dir_all(&workspace_dir).unwrap();
+
+        // Brain files: markdown and image
+        let brain_md = brain_dir.join("report.md");
+        let brain_png = brain_dir.join("diagram.png");
+        std::fs::write(&brain_md, b"markdown").unwrap();
+        std::fs::write(&brain_png, b"png").unwrap();
+
+        // Agent dirs: config/creds and images
+        let ertangle_config = ertangle_dir.join("config.toml");
+        let ertangle_png = ertangle_dir.join("screen.png");
+        let claude_creds = claude_dir.join("credentials.json");
+        let claude_jpg = claude_dir.join("photo.jpg");
+        let codex_state = codex_dir.join("state.db");
+        let codex_webp = codex_dir.join("anim.webp");
+
+        std::fs::write(&ertangle_config, b"[config]").unwrap();
+        std::fs::write(&ertangle_png, b"png").unwrap();
+        std::fs::write(&claude_creds, b"{\"token\":\"secret\"}").unwrap();
+        std::fs::write(&claude_jpg, b"jpg").unwrap();
+        std::fs::write(&codex_state, b"db").unwrap();
+        std::fs::write(&codex_webp, b"webp").unwrap();
+
+        // Workspace files
+        let ws_file = workspace_dir.join("code.rs");
+        std::fs::write(&ws_file, b"fn main() {}").unwrap();
+
+        let canonical_brain = brain_dir.canonicalize().unwrap();
+        let canonical_ws = workspace_dir.canonicalize().unwrap();
+        let canonical_ert = ertangle_dir.canonicalize().unwrap();
+        let canonical_claude = claude_dir.canonicalize().unwrap();
+        let canonical_codex = codex_dir.canonicalize().unwrap();
+
+        let allowed_roots = vec![canonical_ws, canonical_brain];
+        let image_only_roots = vec![canonical_ert, canonical_claude, canonical_codex];
+
+        // Workspace allows everything
+        assert!(is_file_access_allowed(
+            &ws_file.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+
+        // Brain allows both non-image and image files
+        assert!(is_file_access_allowed(
+            &brain_md.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+        assert!(is_file_access_allowed(
+            &brain_png.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+
+        // .ertangle, .claude, .codex reject sensitive/config files
+        assert!(!is_file_access_allowed(
+            &ertangle_config.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+        assert!(!is_file_access_allowed(
+            &claude_creds.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+        assert!(!is_file_access_allowed(
+            &codex_state.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+
+        // .ertangle, .claude, .codex allow image files
+        assert!(is_file_access_allowed(
+            &ertangle_png.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+        assert!(is_file_access_allowed(
+            &claude_jpg.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+        assert!(is_file_access_allowed(
+            &codex_webp.canonicalize().unwrap(),
+            &allowed_roots,
+            &image_only_roots
+        ));
+
+        // External paths rejected
+        assert!(!is_file_access_allowed(
+            Path::new("/etc/passwd"),
+            &allowed_roots,
+            &image_only_roots
+        ));
+
+        let _ = std::fs::remove_dir_all(&test_base);
+    }
+
+    /// T90: Test serve_file strips CORS headers and rejects sensitive ~/.ertangle/config.toml.
+    #[test]
+    fn test_serve_file_no_cors_and_blocks_sensitive_file() {
+        let tmp = std::env::temp_dir()
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from("/tmp"));
+        let test_base = tmp.join(format!("ertangle_test_serve_file_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&test_base);
+        std::fs::create_dir_all(&test_base).unwrap();
+
+        let fake_home = test_base.join("home");
+        let fake_ws = test_base.join("ws");
+        let ertangle_dir = fake_home.join(".ertangle");
+        let brain_dir = fake_home.join(".gemini/antigravity-cli/brain");
+
+        std::fs::create_dir_all(&fake_ws).unwrap();
+        std::fs::create_dir_all(&ertangle_dir).unwrap();
+        std::fs::create_dir_all(&brain_dir).unwrap();
+
+        let config_file = ertangle_dir.join("config.toml");
+        std::fs::write(&config_file, b"secret_config_data").unwrap();
+
+        let png_file = ertangle_dir.join("artifact.png");
+        std::fs::write(&png_file, b"\x89PNG\r\n\x1a\nfake_image").unwrap();
+
+        let brain_file = brain_dir.join("note.txt");
+        std::fs::write(&brain_file, b"brain_note").unwrap();
+
+        let ws_file = fake_ws.join("hello.txt");
+        std::fs::write(&ws_file, b"hello_workspace").unwrap();
+
+        let log_file = test_base.join("events.log");
+        let shared = crate::Shared::restore(
+            &log_file,
+            crate::PolicyEngine::default(),
+            fake_ws.clone(),
+            None,
+        )
+        .unwrap();
+
+        // 1. Missing path parameter -> 400 Bad Request, no CORS header
+        let mut buf = Vec::new();
+        serve_file_with_home(&shared, &mut buf, None, &[], Some(&fake_home)).unwrap();
+        let resp = String::from_utf8_lossy(&buf);
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(!resp.contains("Access-Control-Allow-Origin"));
+
+        // 2. Accessing valid workspace file -> 200 OK, no CORS header
+        buf.clear();
+        serve_file_with_home(
+            &shared,
+            &mut buf,
+            Some("path=hello.txt"),
+            &[],
+            Some(&fake_home),
+        )
+        .unwrap();
+        let resp = String::from_utf8_lossy(&buf);
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("hello_workspace"));
+        assert!(!resp.contains("Access-Control-Allow-Origin"));
+
+        // 3. Accessing ~/.ertangle/config.toml -> 403 Forbidden, no CORS header
+        buf.clear();
+        serve_file_with_home(
+            &shared,
+            &mut buf,
+            Some("path=~/.ertangle/config.toml"),
+            &[],
+            Some(&fake_home),
+        )
+        .unwrap();
+        let resp = String::from_utf8_lossy(&buf);
+        assert!(resp.starts_with("HTTP/1.1 403 Forbidden"));
+        assert!(!resp.contains("Access-Control-Allow-Origin"));
+
+        // 4. Accessing ~/.ertangle/artifact.png -> 200 OK, no CORS header
+        buf.clear();
+        serve_file_with_home(
+            &shared,
+            &mut buf,
+            Some("path=~/.ertangle/artifact.png"),
+            &[],
+            Some(&fake_home),
+        )
+        .unwrap();
+        let resp = String::from_utf8_lossy(&buf);
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("Content-Type: image/png"));
+        assert!(!resp.contains("Access-Control-Allow-Origin"));
+
+        // 5. Accessing brain file -> 200 OK, no CORS header
+        buf.clear();
+        serve_file_with_home(
+            &shared,
+            &mut buf,
+            Some("path=~/.gemini/antigravity-cli/brain/note.txt"),
+            &[],
+            Some(&fake_home),
+        )
+        .unwrap();
+        let resp = String::from_utf8_lossy(&buf);
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+        assert!(resp.contains("brain_note"));
+        assert!(!resp.contains("Access-Control-Allow-Origin"));
+
+        let _ = std::fs::remove_dir_all(&test_base);
     }
 
     mod hex {
