@@ -9,6 +9,9 @@
 
 pub mod i18n;
 
+/// Package version with short git commit hash when available.
+pub const VERSION_WITH_HASH: &str = env!("ERTANGLE_VERSION_WITH_HASH");
+
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -3732,5 +3735,10 @@ mod archive_retention_tests {
         ));
         assert!(st.archived_sessions.is_empty());
         assert!(!st.transcripts.contains_key("x"));
+    }
+
+    #[test]
+    fn version_with_hash_starts_with_pkg_version() {
+        assert!(VERSION_WITH_HASH.starts_with(env!("CARGO_PKG_VERSION")));
     }
 }

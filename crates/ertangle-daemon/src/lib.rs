@@ -62,7 +62,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 use tr::tr;
 
-pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub(crate) const VERSION: &str = ertangle_core::VERSION_WITH_HASH;
 /// 記憶體內保留的事件上限 (供新 client 補齊；超過則靠快照)。
 const BACKLOG_CAP: usize = 20_000;
 /// `BusWait` 最長等待上限 (5 分鐘，避免永久阻塞)。

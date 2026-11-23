@@ -21,7 +21,7 @@ use cmd::{
 #[derive(Parser)]
 #[command(
     name = "ertangle",
-    version,
+    version = ertangle_core::VERSION_WITH_HASH,
     about = "ertangle — 終端機原生的多 agent 開發環境"
 )]
 struct Cli {

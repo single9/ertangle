@@ -1,7 +1,5 @@
 # T93 — Include git commit hash in `ertangle` / `ert` version display
 
-Status: ready-for-agent
-
 Priority: P3　Scope: `ertangle-core`, `ertangle-daemon`, `ertangle` CLI　Depends on: —
 
 ## Problem
