@@ -29,6 +29,7 @@ mod quota;
 mod search;
 mod settings;
 mod tasks;
+mod term_reply;
 
 #[allow(unused_imports)]
 pub(crate) use app::*;
@@ -375,34 +376,50 @@ fn event_loop(
 
         if event::poll(Duration::from_millis(60))? {
             dirty = true;
-            match event::read()? {
-                CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
-                    if let Err(e) = handle_key(&mut app, writer, key) {
-                        // 連線已斷時，送出請求失敗不該讓整個 TUI 崩掉。
-                        if app.disconnected {
-                            app.status = tr!("連線中斷中，正在重連；請稍候");
-                        } else {
-                            return Err(e);
-                        }
-                    }
+            // 把同一次讀取已到的事件一起拿出來，才能辨識並丟掉漏進來的終端機回應。
+            let mut batch = vec![event::read()?];
+            while batch.len() < 256 && event::poll(Duration::ZERO)? {
+                batch.push(event::read()?);
+            }
+            for ev in term_reply::strip_terminal_replies(batch) {
+                handle_event(&mut app, writer, ev)?;
+                if app.should_quit {
+                    break;
                 }
-                CtEvent::Mouse(mouse) => {
-                    if let Err(e) = handle_mouse(&mut app, writer, mouse) {
-                        if !app.disconnected {
-                            return Err(e);
-                        }
-                    }
-                }
-                CtEvent::Paste(text) => handle_paste(&mut app, &text),
-                CtEvent::FocusGained => app.notify.focused = true,
-                CtEvent::FocusLost => app.notify.focused = false,
-                _ => {}
             }
         }
 
         if app.should_quit {
             break;
         }
+    }
+    Ok(())
+}
+
+/// 處理一個 crossterm 事件。
+fn handle_event(app: &mut App, writer: &mut HostRouter, ev: CtEvent) -> Result<()> {
+    match ev {
+        CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
+            if let Err(e) = handle_key(app, writer, key) {
+                // 連線已斷時，送出請求失敗不該讓整個 TUI 崩掉。
+                if app.disconnected {
+                    app.status = tr!("連線中斷中，正在重連；請稍候");
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+        CtEvent::Mouse(mouse) => {
+            if let Err(e) = handle_mouse(app, writer, mouse) {
+                if !app.disconnected {
+                    return Err(e);
+                }
+            }
+        }
+        CtEvent::Paste(text) => handle_paste(app, &text),
+        CtEvent::FocusGained => app.notify.focused = true,
+        CtEvent::FocusLost => app.notify.focused = false,
+        _ => {}
     }
     Ok(())
 }
