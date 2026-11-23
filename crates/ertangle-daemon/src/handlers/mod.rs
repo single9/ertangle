@@ -286,9 +286,11 @@ fn list_models(shared: &Arc<Shared>, reply: &ClientTx, kind: String) {
     let reply = reply.clone();
     let cwd = shared.default_cwd();
     std::thread::spawn(move || {
+        let (models, problem) = model_list(&agent, &cwd);
         let _ = reply.send(Frame::Models {
             kind,
-            models: model_list(&agent, &cwd),
+            models,
+            problem,
         });
     });
 }
@@ -296,12 +298,13 @@ fn list_models(shared: &Arc<Shared>, reply: &ClientTx, kind: String) {
 pub(crate) fn model_list(
     agent: &ertangle_core::AgentKind,
     cwd: &std::path::Path,
-) -> Vec<ertangle_protocol::ModelInfo> {
+) -> (Vec<ertangle_protocol::ModelInfo>, Option<String>) {
     use ertangle_protocol::ModelInfo;
     let mut out = vec![ModelInfo {
         id: String::new(),
         label: tr!("預設 (依 config.toml)"),
     }];
+    let mut problem = None;
     if matches!(agent, ertangle_core::AgentKind::ClaudeCode) {
         out.extend(
             ertangle_adapter::models::CLAUDE_MODELS
@@ -312,8 +315,11 @@ pub(crate) fn model_list(
                 }),
         );
     } else {
+        let query = ertangle_adapter::models::query_models_detailed(agent);
+        problem = query.problem;
         out.extend(
-            ertangle_adapter::models::query_models(agent)
+            query
+                .models
                 .into_iter()
                 .map(|(label, id)| ModelInfo { id, label }),
         );
@@ -329,5 +335,5 @@ pub(crate) fn model_list(
             }
         }
     }
-    out
+    (out, problem)
 }

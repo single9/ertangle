@@ -472,6 +472,9 @@ pub enum Frame {
     Models {
         kind: String,
         models: Vec<ModelInfo>,
+        /// 查詢 CLI 時遇到的問題 (例如尚未登入)；有值時清單可能不完整。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        problem: Option<String>,
     },
 }
 

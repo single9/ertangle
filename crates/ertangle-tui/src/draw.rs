@@ -652,6 +652,12 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
             Style::default().fg(Color::DarkGray),
         )));
     }
+    if let Some(err) = p.load_error.as_deref().filter(|_| !loading) {
+        lines.push(Line::from(Span::styled(
+            format!("  ⚠ {err}"),
+            Style::default().fg(Color::Yellow),
+        )));
+    }
     if vis.is_empty() && !loading {
         let empty_msg =
             if is_resume && p.resume_scope == crate::menu::ResumeScope::Here && p.filter.is_empty()

@@ -1,6 +1,7 @@
 //! 各 agent 可選的 model 清單：Claude 內建，其他 agent 向各自 CLI 查詢。TUI 與 daemon (網頁版) 共用。
 
 use ertangle_core::AgentKind;
+use tr::tr;
 
 /// Claude Code 可用的 model。`claude` CLI 沒有列出 model 的子命令，只能內建：
 /// 前段是別名 (永遠指向該系列最新版)，後段是完整 id (固定版本)。新模型推出時要更新這裡，
@@ -25,77 +26,231 @@ pub const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-haiku-4-5", "Claude Haiku 4.5"),
 ];
 
-/// 在 `timeout` 內執行指令並取回 stdout，逾時或啟動失敗回 `None`。
-/// 必須一邊等行程一邊把 stdout 讀走：`codex debug models` 的輸出可達數百 KB，
-/// 若等行程結束才讀，pipe 被填滿後行程會卡住，直到逾時被殺掉而得到空清單。
-fn capture_stdout(bin: &str, args: &[&str], timeout: std::time::Duration) -> Option<String> {
+/// 查詢 model 清單所需的時間上限。
+const QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
+
+/// 子處理程序執行完畢後收集到的輸出。
+#[derive(Debug, Default)]
+struct Captured {
+    stdout: String,
+    stderr: String,
+    /// 結束碼；被訊號終止時為 `None`。
+    code: Option<i32>,
+}
+
+/// 執行失敗的原因。
+#[derive(Debug)]
+enum CaptureError {
+    Spawn(std::io::Error),
+    Timeout,
+}
+
+/// 背景把整條 pipe 讀完，避免輸出塞滿 pipe 讓子處理程序卡住。
+fn drain<R: std::io::Read + Send + 'static>(pipe: Option<R>) -> std::sync::mpsc::Receiver<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    if let Some(mut pipe) = pipe {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = pipe.read_to_end(&mut bytes);
+            let _ = tx.send(String::from_utf8_lossy(&bytes).into_owned());
+        });
+    }
+    rx
+}
+
+/// 在 `timeout` 內執行指令並取回 stdout、stderr 與結束碼。
+/// 必須一邊等處理程序一邊把輸出讀走：`codex debug models` 的輸出可達數百 KB，
+/// 若等處理程序結束才讀，pipe 被填滿後處理程序會卡住，直到逾時被殺掉而得到空清單。
+fn capture(
+    bin: &str,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<Captured, CaptureError> {
     use std::process::Stdio;
 
     let mut child = std::process::Command::new(bin)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
-        .ok()?;
-    let reader = child.stdout.take().map(|so| {
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            use std::io::Read;
-            let mut so = so;
-            let mut bytes = Vec::new();
-            let ok = so.read_to_end(&mut bytes).is_ok();
-            let _ = tx.send(if ok {
-                String::from_utf8_lossy(&bytes).into_owned()
-            } else {
-                String::new()
-            });
-        });
-        rx
-    });
+        .map_err(CaptureError::Spawn)?;
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
     let deadline = std::time::Instant::now() + timeout;
-    loop {
+    let status = loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
+            Ok(Some(status)) => break status,
             Ok(None) if std::time::Instant::now() < deadline => {
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
             _ => {
                 let _ = child.kill();
-                return None;
+                let _ = child.wait();
+                return Err(CaptureError::Timeout);
             }
         }
+    };
+    let grace = std::time::Duration::from_secs(1);
+    Ok(Captured {
+        stdout: stdout.recv_timeout(grace).unwrap_or_default(),
+        stderr: stderr.recv_timeout(grace).unwrap_or_default(),
+        code: status.code(),
+    })
+}
+
+/// 從 stderr 挑出最能說明問題的一行：跳過 glog 的 INFO 行 (`I1123 …`)、進度動畫與空行，
+/// 優先取含有錯誤字樣的行，否則取最後一行。
+fn stderr_summary(stderr: &str) -> Option<String> {
+    let lines: Vec<&str> = stderr
+        .split(['\n', '\r'])
+        .map(|l| l.trim_matches(|c: char| c.is_whitespace() || c == '\x1b'))
+        .map(|l| l.strip_prefix("[K").unwrap_or(l).trim())
+        .filter(|l| !l.is_empty())
+        .filter(|l| !is_glog_info(l))
+        .filter(|l| !l.contains("Fetching available models"))
+        .collect();
+    let pick = lines
+        .iter()
+        .rev()
+        .find(|l| looks_like_error(l))
+        .or_else(|| lines.last())?;
+    let short: String = pick.chars().take(200).collect();
+    Some(short)
+}
+
+/// glog 的 INFO 行，例如 `I1123 14:35:36.832595 155 http_helpers.go:760] …`。
+fn is_glog_info(line: &str) -> bool {
+    let mut chars = line.chars();
+    chars.next() == Some('I') && chars.take(4).all(|c| c.is_ascii_digit())
+}
+
+/// 看起來像錯誤或登入問題的行。
+fn looks_like_error(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    let glog_error = matches!(line.chars().next(), Some('E' | 'F'))
+        && line.chars().skip(1).take(4).all(|c| c.is_ascii_digit());
+    glog_error
+        || [
+            "error",
+            "fail",
+            "auth",
+            "login",
+            "log in",
+            "sign in",
+            "credential",
+            "token",
+            "permission denied",
+            "401",
+            "403",
+        ]
+        .iter()
+        .any(|k| lower.contains(k))
+}
+
+/// 查詢 model 清單的結果：`problem` 有值時清單可能不完整 (例如尚未登入或登入過期)，應提示使用者。
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ModelQuery {
+    /// ` (顯示文字, id)`。
+    pub models: Vec<(String, String)>,
+    /// 給使用者看的問題說明。
+    pub problem: Option<String>,
+}
+
+/// 依查詢結果組出問題說明；沒有問題時回 `None`。
+fn diagnose(
+    bin: &str,
+    cmd: &str,
+    result: &Result<Captured, CaptureError>,
+    parsed: usize,
+) -> Option<String> {
+    let login_hint = tr!(
+        "若尚未登入或登入已過期，請先在終端機執行 `{bin}` 重新登入",
+        bin = bin
+    );
+    match result {
+        Err(CaptureError::Spawn(e)) => Some(tr!("無法執行 `{cmd}`：{err}", cmd = cmd, err = e)),
+        Err(CaptureError::Timeout) => Some(tr!(
+            "`{cmd}` 超過 {secs} 秒沒有回應；{hint}",
+            cmd = cmd,
+            secs = QUERY_TIMEOUT.as_secs(),
+            hint = login_hint
+        )),
+        Ok(c) => {
+            let detail = stderr_summary(&c.stderr);
+            let failed = c.code != Some(0);
+            let suspicious = detail.as_deref().is_some_and(looks_like_error);
+            if !failed && parsed > 0 && !suspicious {
+                return None;
+            }
+            let head = if failed {
+                match c.code {
+                    Some(code) => tr!("`{cmd}` 失敗 (結束碼 {code})", cmd = cmd, code = code),
+                    None => tr!("`{cmd}` 被中斷", cmd = cmd),
+                }
+            } else if parsed == 0 {
+                tr!("`{cmd}` 沒有列出任何 model", cmd = cmd)
+            } else {
+                tr!("`{cmd}` 回報錯誤，清單可能不完整", cmd = cmd)
+            };
+            Some(match detail {
+                Some(d) => tr!(
+                    "{head}：{detail}；{hint}",
+                    head = head,
+                    detail = d,
+                    hint = login_hint
+                ),
+                None => tr!("{head}；{hint}", head = head, hint = login_hint),
+            })
+        }
     }
-    reader.and_then(|rx| rx.recv_timeout(std::time::Duration::from_secs(1)).ok())
 }
 
 /// 向 agent 的 CLI 查詢原始可用 model 清單 (`opencode models`、`agy models`、`codex debug models`)，最多等 8 秒。
-/// 不會合併 `antigravity` 的 effort 變體，供需要依變體建立 effort 選項的呼叫端使用。
-pub fn query_raw_models(kind: &AgentKind) -> Vec<(String, String)> {
+/// 不會合併 `antigravity` 的 effort 變體；查詢失敗或 CLI 回報錯誤時附上說明。
+pub fn query_raw_models_detailed(kind: &AgentKind) -> ModelQuery {
     let (bin, args): (&str, &[&str]) = match kind {
         AgentKind::OpenCode => ("opencode", &["models"]),
         AgentKind::Antigravity => ("agy", &["models"]),
         AgentKind::Codex => ("codex", &["debug", "models"]),
-        _ => return Vec::new(),
+        _ => return ModelQuery::default(),
     };
-    let Some(out) = capture_stdout(bin, args, std::time::Duration::from_secs(8)) else {
-        return Vec::new();
+    let cmd = std::iter::once(bin)
+        .chain(args.iter().copied())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let result = capture(bin, args, QUERY_TIMEOUT);
+    let models = match (&result, kind) {
+        (Ok(c), AgentKind::Codex) => parse_codex_models(&c.stdout),
+        (Ok(c), _) => parse_models(&c.stdout),
+        (Err(_), _) => Vec::new(),
     };
+    let problem = diagnose(bin, &cmd, &result, models.len());
+    ModelQuery { models, problem }
+}
+
+/// 同 [`query_raw_models_detailed`]，只取清單。
+pub fn query_raw_models(kind: &AgentKind) -> Vec<(String, String)> {
+    query_raw_models_detailed(kind).models
+}
+
+/// 同 [`query_models`]，但附上查詢問題說明。
+pub fn query_models_detailed(kind: &AgentKind) -> ModelQuery {
+    let q = query_raw_models_detailed(kind);
     match kind {
-        AgentKind::Codex => parse_codex_models(&out),
-        _ => parse_models(&out),
+        AgentKind::Antigravity => ModelQuery {
+            models: split_effort_variants(q.models),
+            problem: q.problem,
+        },
+        _ => q,
     }
 }
 
 /// 向 agent 的 CLI 查詢可用 model (`opencode models`、`agy models`)，最多等 8 秒。
 /// 輸出每行第一欄是 model id，後面 (以 tab 分隔)是顯示名稱。
+/// agy 的清單把 effort 寫進 model id (`xxx-high`)，但 ACP 的 model 與 effort 是分開的選項，這裡會合併。
 pub fn query_models(kind: &AgentKind) -> Vec<(String, String)> {
-    let raw = query_raw_models(kind);
-    match kind {
-        // agy 的清單把 effort 寫進 model id (`xxx-high`)，但 ACP 的 model 與 effort 是分開的選項。
-        AgentKind::Antigravity => split_effort_variants(raw),
-        _ => raw,
-    }
+    query_models_detailed(kind).models
 }
 
 /// 把 `base-low／-medium／-high／-xhigh／-max` 這類「model + effort 合在一起」的 id 合併成 `base`
@@ -184,17 +339,101 @@ pub fn parse_models(out: &str) -> Vec<(String, String)> {
 mod tests {
     use super::*;
 
-    /// `codex debug models` 的輸出遠大於 pipe buffer；若等行程結束才讀，
-    /// 行程會卡在寫入而永遠不結束，最後回傳空清單。
+    /// `codex debug models` 的輸出遠大於 pipe buffer；若等處理程序結束才讀，
+    /// 處理程序會卡在寫入而永遠不結束，最後回傳空清單。
     #[cfg(unix)]
     #[test]
-    fn capture_stdout_drains_large_output() {
-        let out = capture_stdout(
+    fn capture_drains_large_output() {
+        let out = capture(
             "sh",
-            &["-c", "yes x | head -c 200000"],
+            &["-c", "yes x | head -c 200000; yes y | head -c 200000 >&2"],
             std::time::Duration::from_secs(8),
         )
         .expect("命令應成功執行");
-        assert!(out.len() >= 200_000, "只讀到 {} bytes", out.len());
+        assert!(
+            out.stdout.len() >= 200_000,
+            "只讀到 {} bytes",
+            out.stdout.len()
+        );
+        assert!(
+            out.stderr.len() >= 200_000,
+            "只讀到 {} bytes",
+            out.stderr.len()
+        );
+        assert_eq!(out.code, Some(0));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn capture_reports_timeout() {
+        let r = capture("sleep", &["5"], std::time::Duration::from_millis(200));
+        assert!(matches!(r, Err(CaptureError::Timeout)));
+    }
+
+    #[test]
+    fn capture_reports_missing_binary() {
+        let r = capture(
+            "ertangle-no-such-binary",
+            &[],
+            std::time::Duration::from_secs(1),
+        );
+        assert!(matches!(r, Err(CaptureError::Spawn(_))));
+    }
+
+    fn ok(stdout: &str, stderr: &str, code: i32) -> Result<Captured, CaptureError> {
+        Ok(Captured {
+            stdout: stdout.into(),
+            stderr: stderr.into(),
+            code: Some(code),
+        })
+    }
+
+    #[test]
+    fn stderr_summary_skips_info_and_spinner() {
+        let err = "\r⠦ Fetching available models...\rI1123 14:35:36.832595 155 http_helpers.go:760] URL: x\n\r\x1b[K";
+        assert_eq!(stderr_summary(err), None);
+        let err = "I1123 a] ok\nE1123 14:35:36 auth.go:12] token expired\nI1123 b] bye\n";
+        assert_eq!(
+            stderr_summary(err).as_deref(),
+            Some("E1123 14:35:36 auth.go:12] token expired")
+        );
+    }
+
+    #[test]
+    fn diagnose_accepts_clean_success() {
+        let r = ok(
+            "m1\tModel 1\n",
+            "\r⠦ Fetching available models...\r\x1b[K",
+            0,
+        );
+        assert_eq!(diagnose("agy", "agy models", &r, 1), None);
+    }
+
+    #[test]
+    fn diagnose_flags_failure_and_empty_and_auth_errors() {
+        let failed = diagnose("agy", "agy models", &ok("", "Error: not logged in\n", 1), 0)
+            .expect("非零結束碼應回報");
+        assert!(failed.contains("not logged in"), "{failed}");
+        assert!(failed.contains("`agy`"), "{failed}");
+
+        let empty = diagnose("agy", "agy models", &ok("", "", 0), 0).expect("空清單應回報");
+        assert!(empty.contains("agy models"), "{empty}");
+
+        let partial = diagnose(
+            "agy",
+            "agy models",
+            &ok(
+                "m1\tModel 1\n",
+                "E1123 x] unauthenticated: please sign in\n",
+                0,
+            ),
+            1,
+        )
+        .expect("有錯誤訊息時即使有清單也應回報");
+        assert!(partial.contains("please sign in"), "{partial}");
+
+        let timeout =
+            diagnose("agy", "agy models", &Err(CaptureError::Timeout), 0).expect("逾時應回報");
+        assert!(timeout.contains("agy models"), "{timeout}");
     }
 }

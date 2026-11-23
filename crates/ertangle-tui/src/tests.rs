@@ -1029,6 +1029,7 @@ fn picker_filters_and_offers_default_model() {
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     };
     let vis = p.visible();
     assert!(vis
@@ -1095,17 +1096,20 @@ fn effort_suffix_is_split_from_model_id() {
 #[test]
 fn antigravity_models_are_grouped_by_base_name() {
     let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(vec![
-        (
-            "gemini-4-argon-medium  (Gemini 4 Argon (Medium))".to_string(),
-            "gemini-4-argon-medium".to_string(),
-        ),
-        (
-            "gemini-4-argon-high  (Gemini 4 Argon (High))".to_string(),
-            "gemini-4-argon-high".to_string(),
-        ),
-        ("plain".to_string(), "plain".to_string()),
-    ])
+    tx.send(ertangle_adapter::models::ModelQuery {
+        models: vec![
+            (
+                "gemini-4-argon-medium  (Gemini 4 Argon (Medium))".to_string(),
+                "gemini-4-argon-medium".to_string(),
+            ),
+            (
+                "gemini-4-argon-high  (Gemini 4 Argon (High))".to_string(),
+                "gemini-4-argon-high".to_string(),
+            ),
+            ("plain".to_string(), "plain".to_string()),
+        ],
+        problem: None,
+    })
     .unwrap();
     let mut p = crate::menu::Picker {
         stage: crate::menu::PickStage::Agent,
@@ -1119,12 +1123,47 @@ fn antigravity_models_are_grouped_by_base_name() {
         loading: true,
         group_effort: true,
         variants: Default::default(),
+        load_error: None,
     };
     p.poll_pending();
     let values: Vec<_> = p.items.iter().map(|(_, v)| v.as_str()).collect();
     assert_eq!(values, vec!["gemini-4-argon", "plain"]);
     assert_eq!(p.variants["gemini-4-argon"], vec!["medium", "high"]);
     assert_eq!(p.items[0].0, "gemini-4-argon  (Gemini 4 Argon)");
+    assert_eq!(p.load_error, None);
+}
+
+#[test]
+fn model_query_problem_is_shown_in_picker() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(ertangle_adapter::models::ModelQuery {
+        models: vec![],
+        problem: Some("`agy models` failed".into()),
+    })
+    .unwrap();
+    let mut app = App::new();
+    app.picker = Some(crate::menu::Picker {
+        stage: crate::menu::PickStage::Model(AgentKind::Antigravity),
+        resume_scope: Default::default(),
+        title: "t".into(),
+        items: vec![("default".into(), String::new())],
+        filter: String::new(),
+        filter_cursor: 0,
+        cursor: 0,
+        pending: Some(rx),
+        loading: true,
+        group_effort: true,
+        variants: Default::default(),
+        load_error: None,
+    });
+    app.mode = Mode::Pick;
+    if let Some(p) = app.picker.as_mut() {
+        p.poll_pending();
+        assert!(!p.loading);
+        assert!(p.load_error.is_some());
+    }
+    let screen = render(&mut app);
+    assert!(screen.contains("agy models"), "畫面沒有顯示查詢問題");
 }
 
 // ---- 附件 (@檔案／圖片)----

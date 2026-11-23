@@ -4783,6 +4783,8 @@
 
     function onModelsFrame(frame) {
       modelCache[frame.kind] = frame.models || [];
+      // 查詢 CLI 有問題 (例如 agy 尚未登入) 時提示使用者：清單可能不完整。
+      if (frame.problem) showToast(frame.problem, true);
       delete modelRequested[frame.kind];
       for (const id in lastModelRender) {
         const r = lastModelRender[id];

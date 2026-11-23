@@ -1031,6 +1031,42 @@ msgstr "latest Sonnet"
 msgid "最新 Haiku"
 msgstr "latest Haiku"
 
+#: crates/ertangle-adapter/src/models.rs
+msgid "若尚未登入或登入已過期，請先在終端機執行 `{bin}` 重新登入"
+msgstr "if you are not logged in or your login has expired, run `{bin}` in a terminal to log in again"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "無法執行 `{cmd}`：{err}"
+msgstr "Cannot run `{cmd}`: {err}"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "`{cmd}` 超過 {secs} 秒沒有回應；{hint}"
+msgstr "`{cmd}` did not respond within {secs} seconds; {hint}"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "`{cmd}` 失敗 (結束碼 {code})"
+msgstr "`{cmd}` failed (exit code {code})"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "`{cmd}` 被中斷"
+msgstr "`{cmd}` was interrupted"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "`{cmd}` 沒有列出任何 model"
+msgstr "`{cmd}` listed no models"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "`{cmd}` 回報錯誤，清單可能不完整"
+msgstr "`{cmd}` reported an error; the list may be incomplete"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "{head}：{detail}；{hint}"
+msgstr "{head}: {detail}; {hint}"
+
+#: crates/ertangle-adapter/src/models.rs
+msgid "{head}；{hint}"
+msgstr "{head}; {hint}"
+
 #: crates/ertangle-adapter/src/pty.rs
 msgid "openpty 失敗"
 msgstr "openpty failed"

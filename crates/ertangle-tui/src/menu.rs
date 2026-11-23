@@ -452,6 +452,7 @@ fn start_directory_picker(app: &mut App, current: PathBuf) {
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     });
     app.mode = Mode::Pick;
 }
@@ -467,8 +468,10 @@ pub(crate) struct Picker {
     pub filter_cursor: usize,
     pub cursor: usize,
     /// 背景查詢 agent 可用 model 的結果 (查到後併入 `items`)。
-    pub pending: Option<std::sync::mpsc::Receiver<Vec<(String, String)>>>,
+    pub pending: Option<std::sync::mpsc::Receiver<ertangle_adapter::models::ModelQuery>>,
     pub loading: bool,
+    /// 背景查詢 model 時遇到的問題 (例如 agy 尚未登入)，顯示在清單下方。
+    pub load_error: Option<String>,
     /// Antigravity 的 model id 把 effort 寫在尾巴 (`-low`／`-medium`…)：清單只列基底名稱，
     /// 這裡記錄每個基底有哪些 effort 變體。
     pub group_effort: bool,
@@ -507,7 +510,9 @@ impl Picker {
     pub(crate) fn poll_pending(&mut self) {
         let Some(rx) = &self.pending else { return };
         match rx.try_recv() {
-            Ok(found) => {
+            Ok(query) => {
+                self.load_error = query.problem;
+                let found = query.models;
                 // 先依基底名稱分組，再決定要不要合併：只有出現兩個以上 effort 變體才視為
                 // 「同一個 model 的不同 effort」(ACP 的 model 選項不含 effort 尾巴)。
                 let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
@@ -683,6 +688,7 @@ pub(crate) fn start_question_picker(app: &mut App, q: &ertangle_core::UserQuesti
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     };
     load_question(&mut picker, index);
     app.mode = Mode::Pick;
@@ -1232,6 +1238,7 @@ pub(crate) fn start_spawn_picker(app: &mut App) {
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     });
     app.mode = Mode::Pick;
 }
@@ -1261,6 +1268,7 @@ pub(crate) fn start_playbook_picker(app: &mut App) {
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     });
     app.mode = Mode::Pick;
 }
@@ -1433,6 +1441,7 @@ pub(crate) fn start_resume_picker(app: &mut App) {
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     });
     app.mode = Mode::Pick;
 }
@@ -1490,6 +1499,7 @@ pub(crate) fn start_confirm_resume_prompt(
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     });
     app.mode = Mode::Pick;
 }
@@ -1559,6 +1569,7 @@ pub(crate) fn start_project_picker(app: &mut App) {
         loading: false,
         group_effort: false,
         variants: Default::default(),
+        load_error: None,
     });
     app.mode = Mode::Pick;
 }
@@ -1780,6 +1791,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                     p.filter.clear();
                     p.filter_cursor = 0;
                     p.cursor = 0;
+                    p.load_error = None;
                     // 向 CLI 查詢可用 model (不阻塞介面)。
                     let (tx, rx) = std::sync::mpsc::channel();
                     let k = kind.clone();
@@ -1788,7 +1800,8 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         AgentKind::OpenCode | AgentKind::Antigravity | AgentKind::Codex
                     ) {
                         std::thread::spawn(move || {
-                            let _ = tx.send(ertangle_adapter::models::query_raw_models(&k));
+                            let _ =
+                                tx.send(ertangle_adapter::models::query_raw_models_detailed(&k));
                         });
                         p.pending = Some(rx);
                         p.loading = true;
@@ -1846,6 +1859,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         p.cursor = default_idx;
                         p.pending = None;
                         p.loading = false;
+                        p.load_error = None;
                         p.group_effort = false;
                         p.stage = PickStage::HandoffRole { kind, model };
                         return Ok(());

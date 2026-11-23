@@ -282,7 +282,10 @@ fn test_web_companion_http_and_websocket() {
         let mut models = None;
         for _ in 0..10 {
             if let Ok(resp_raw) = read_ws_server_text_frame(&mut reader) {
-                if let Ok(Frame::Models { kind, models: m }) = decode_line::<Frame>(&resp_raw) {
+                if let Ok(Frame::Models {
+                    kind, models: m, ..
+                }) = decode_line::<Frame>(&resp_raw)
+                {
                     assert_eq!(kind, "claude");
                     models = Some(m);
                     break;
