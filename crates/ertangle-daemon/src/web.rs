@@ -1126,7 +1126,21 @@ mod tests {
         assert!(INDEX_HTML.contains("清理已結束"));
         assert!(INDEX_HTML.contains("pruneSessions()"));
         assert!(INDEX_HTML.contains("op: \"prune\""));
-        assert!(INDEX_HTML.contains("confirm("));
+        assert!(INDEX_HTML.contains("showConfirm("));
+    }
+
+    /// T95: Web UI uses a styled confirm dialog instead of native window.confirm.
+    #[test]
+    fn web_ui_uses_styled_confirm_dialog() {
+        assert!(INDEX_HTML.contains("function showConfirm("));
+        assert!(
+            !INDEX_HTML.contains("window.confirm("),
+            "no window.confirm() calls allowed in index.html"
+        );
+        assert!(
+            !INDEX_HTML.contains(" confirm(\""),
+            "no native confirm(\"...\") calls allowed in index.html"
+        );
     }
 
     /// T73c: Sessions tab has a collapsed archived list with tap-to-transcript and resume.

@@ -1,7 +1,7 @@
 # T95 — Web UI: replace native `window.confirm` with a styled in-app confirm dialog
 
 Priority: P2　Scope: `ertangle-daemon` (web UI only)　Depends on: —
-Status: ready-for-agent
+Status: done
 
 ## Problem
 

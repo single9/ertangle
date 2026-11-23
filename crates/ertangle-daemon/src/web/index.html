@@ -1549,6 +1549,73 @@
       color: var(--red);
     }
 
+    /* 核心確認對話框 (Styled Confirm Dialog) */
+    .confirm-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .confirm-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    .confirm-card {
+      background: #141620;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transform: scale(0.95);
+      transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .confirm-backdrop.open .confirm-card {
+      transform: scale(1);
+    }
+    .confirm-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .confirm-message {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .confirm-btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    @media (max-width: 480px) {
+      .confirm-btn-row {
+        flex-direction: column-reverse;
+      }
+      .confirm-btn-row .btn-action {
+        width: 100%;
+        flex: none;
+      }
+    }
+
     /* 浮層 Toast */
     #toast {
       position: fixed;
@@ -2185,6 +2252,18 @@
         </div>
       </div>
     </div>
+
+    <!-- 確認對話框 (Styled Confirm Dialog) -->
+    <div id="confirm-dialog-backdrop" class="confirm-backdrop" onclick="closeConfirmOnBackdrop(event)">
+      <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message">
+        <div id="confirm-dialog-title" class="confirm-title"></div>
+        <div id="confirm-dialog-message" class="confirm-message"></div>
+        <div class="confirm-btn-row">
+          <button id="confirm-btn-cancel" type="button" class="btn-action btn-secondary" onclick="resolveConfirm(false)">取消</button>
+          <button id="confirm-btn-ok" type="button" class="btn-action" onclick="resolveConfirm(true)">確定</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -2312,6 +2391,98 @@
       t.innerText = msg;
       t.className = `show ${isError ? "error" : ""}`;
       setTimeout(() => { t.className = ""; }, 2500);
+    }
+
+    // 核心確認對話框 (Styled Confirm Dialog)
+    let activeConfirmDialog = null;
+
+    function showConfirm({ title = "", message = "", confirmText = "確定", cancelText = "取消", danger = false } = {}) {
+      if (activeConfirmDialog) {
+        const prev = activeConfirmDialog;
+        activeConfirmDialog = null;
+        prev.cleanup();
+        prev.resolve(false);
+      }
+
+      const prevFocus = (activeConfirmDialog && activeConfirmDialog.prevFocus) || document.activeElement;
+      const backdrop = document.getElementById("confirm-dialog-backdrop");
+      const titleEl = document.getElementById("confirm-dialog-title");
+      const msgEl = document.getElementById("confirm-dialog-message");
+      const cancelBtn = document.getElementById("confirm-btn-cancel");
+      const okBtn = document.getElementById("confirm-btn-ok");
+
+      titleEl.textContent = title || "";
+      titleEl.style.display = title ? "" : "none";
+      msgEl.textContent = message || "";
+      cancelBtn.textContent = cancelText;
+      okBtn.textContent = confirmText;
+
+      if (danger) {
+        okBtn.className = "btn-action btn-danger-outline";
+      } else {
+        okBtn.className = "btn-action";
+      }
+
+      backdrop.classList.add("open");
+      try { okBtn.focus(); } catch (_) {}
+
+      return new Promise((resolve) => {
+        let closed = false;
+
+        function cleanup() {
+          if (closed) return;
+          closed = true;
+          document.removeEventListener("keydown", onKeyDown);
+          backdrop.classList.remove("open");
+        }
+
+        function close(result) {
+          if (closed) return;
+          cleanup();
+          activeConfirmDialog = null;
+          if (prevFocus && typeof prevFocus.focus === "function") {
+            try { prevFocus.focus(); } catch (_) {}
+          }
+          resolve(result);
+        }
+
+        function onKeyDown(e) {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            close(false);
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            if (document.activeElement === cancelBtn) {
+              close(false);
+            } else {
+              close(true);
+            }
+          }
+        }
+
+        document.addEventListener("keydown", onKeyDown);
+
+        activeConfirmDialog = {
+          resolve,
+          cleanup,
+          close,
+          prevFocus,
+        };
+      });
+    }
+
+    function closeConfirmOnBackdrop(e) {
+      if (e.target === e.currentTarget && activeConfirmDialog) {
+        activeConfirmDialog.close(false);
+      }
+    }
+
+    function resolveConfirm(val) {
+      if (activeConfirmDialog) {
+        activeConfirmDialog.close(val);
+      }
     }
 
     // 專案識別 = 專案根目錄完整路徑 (repo_root ?? cwd)；顯示用 basename，重名時加上層目錄
@@ -3978,8 +4149,13 @@
       openSheet("sheet-archived-transcript");
     }
 
-    function pruneSessions() {
-      if (!confirm("確定要清理已結束且已合併的 Session 嗎？")) return;
+    async function pruneSessions() {
+      const ok = await showConfirm({
+        title: "清理 Session",
+        message: "確定要清理已結束且已合併的 Session 嗎？",
+        danger: true,
+      });
+      if (!ok) return;
       if (!ws) return;
       const req = { op: "prune" };
       const scope = curScope();
@@ -4542,24 +4718,31 @@
         showToast(`「${label}」${statusText}，沒有可接續的對話 id；已保留草稿，請改用交接 (handoff)`, true);
         return true;
       }
-      if (!window.confirm(`Session「${label}」已停止 (${statusText})，是否接續並送出 prompt？`)) {
-        showToast("已保留草稿並取消");
-        return true;
-      }
-      if (sleeping) {
-        ws.send(JSON.stringify({ op: "wake", session: sid }));
-        ws.send(JSON.stringify({ op: "prompt", session: sid, text, attachments, queue: false }));
-        showToast("已喚醒並送出 prompt");
-      } else if (!attachments.length) {
-        ws.send(JSON.stringify({ op: "resume", session: sid, prompt: text }));
-        showToast("已接續並送出 prompt");
-      } else {
-        // resume 請求不帶附件：先接續，再以一般 prompt 送出附件。
-        ws.send(JSON.stringify({ op: "resume", session: sid, prompt: null }));
-        ws.send(JSON.stringify({ op: "prompt", session: sid, text, attachments, queue: false }));
-        showToast(`已接續並送出 prompt (含 ${attachments.length} 個附件)`);
-      }
-      clearPromptComposer();
+      (async () => {
+        const ok = await showConfirm({
+          title: "接續 Session",
+          message: `Session「${label}」已停止 (${statusText})，是否接續並送出 prompt？`,
+          danger: false,
+        });
+        if (!ok) {
+          showToast("已保留草稿並取消");
+          return;
+        }
+        if (sleeping) {
+          ws.send(JSON.stringify({ op: "wake", session: sid }));
+          ws.send(JSON.stringify({ op: "prompt", session: sid, text, attachments, queue: false }));
+          showToast("已喚醒並送出 prompt");
+        } else if (!attachments.length) {
+          ws.send(JSON.stringify({ op: "resume", session: sid, prompt: text }));
+          showToast("已接續並送出 prompt");
+        } else {
+          // resume 請求不帶附件：先接續，再以一般 prompt 送出附件。
+          ws.send(JSON.stringify({ op: "resume", session: sid, prompt: null }));
+          ws.send(JSON.stringify({ op: "prompt", session: sid, text, attachments, queue: false }));
+          showToast(`已接續並送出 prompt (含 ${attachments.length} 個附件)`);
+        }
+        clearPromptComposer();
+      })();
       return true;
     }
 
@@ -4751,10 +4934,16 @@
       });
     }
 
-    function confirmMerge() {
+    async function confirmMerge() {
       if (!activeSession || !ws) return;
-      if (window.confirm("確定合併此 Session 的變更到主分支？")) {
-        ws.send(JSON.stringify({ op: "worktree_merge", session: activeSession, message: null }));
+      const sid = activeSession;
+      const ok = await showConfirm({
+        title: "合併變更",
+        message: "確定合併此 Session 的變更到主分支？",
+        danger: false,
+      });
+      if (ok && ws) {
+        ws.send(JSON.stringify({ op: "worktree_merge", session: sid, message: null }));
         showToast("已送出 Worktree 合併請求");
       }
     }
@@ -5043,28 +5232,45 @@
       closeSheet("sheet-session-manage");
     }
 
-    function killCurrentSession() {
+    async function killCurrentSession() {
       if (!targetManageSessionId || !ws) return;
-      if (window.confirm("確定強制結束此 Agent 子處理程序 (Kill)？")) {
-        ws.send(JSON.stringify({ op: "kill", session: targetManageSessionId }));
+      const sid = targetManageSessionId;
+      const ok = await showConfirm({
+        title: "強制結束",
+        message: "確定強制結束此 Agent 子處理程序 (Kill)？",
+        danger: true,
+      });
+      if (ok && ws) {
+        ws.send(JSON.stringify({ op: "kill", session: sid }));
         closeSheet("sheet-session-manage");
         showToast("已發送強制結束訊號");
       }
     }
 
-    function restartDaemon() {
+    async function restartDaemon() {
       if (!ws) return;
-      if (window.confirm("確定重啟共用的 daemon？執行中的回合會被中斷並自動接續，頁面會自動重連。")) {
+      const ok = await showConfirm({
+        title: "重啟 daemon",
+        message: "確定重啟共用的 daemon？執行中的回合會被中斷並自動接續，頁面會自動重連。",
+        danger: true,
+      });
+      if (ok && ws) {
         ws.send(JSON.stringify({ op: "restart" }));
         closeSheet("sheet-session-manage");
         showToast("已要求 daemon 重啟，等待重連…");
       }
     }
 
-    function removeCurrentSession() {
+    async function removeCurrentSession() {
       if (!targetManageSessionId || !ws) return;
-      if (window.confirm("確定從清單中移除此 Session？")) {
-        ws.send(JSON.stringify({ op: "session_remove", session: targetManageSessionId, force: true }));
+      const sid = targetManageSessionId;
+      const ok = await showConfirm({
+        title: "移除 Session",
+        message: "確定從清單中移除此 Session？",
+        danger: true,
+      });
+      if (ok && ws) {
+        ws.send(JSON.stringify({ op: "session_remove", session: sid, force: true }));
         closeSheet("sheet-session-manage");
         showToast("已送出移除請求");
       }
