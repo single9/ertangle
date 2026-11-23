@@ -3270,15 +3270,15 @@ msgid "已結束 ({n})"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Sessions "
+msgid "P 展開 · Space P 切換"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs crates/ertangle-tui/src/draw.rs
+msgid " Projects & Sessions "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Sessions · +{n} "
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs
-msgid " Sessions · 全部 "
+msgid " Projects & Sessions · 全部 "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs

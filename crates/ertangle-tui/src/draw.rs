@@ -28,7 +28,16 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
 
     // 依終端機寬度調整三欄比例：寬螢幕給側欄多一點，窄螢幕留給中央。
     let w = f.area().width;
-    let layout = effective_layout(app.layout, w);
+    let desired_layout = if !app.layout_pinned
+        && app.layout == LayoutMode::Two
+        && w >= 130
+        && app.state.live_sessions().count() >= 2
+    {
+        LayoutMode::Three
+    } else {
+        app.layout
+    };
+    let layout = effective_layout(desired_layout, w);
     let right_bus = layout == LayoutMode::Three && app.right_bus;
     app.bus_visible = right_bus || app.bus_overlay;
     if app.bus_visible {
@@ -1117,14 +1126,15 @@ pub(crate) fn tab(label: &str, active: bool) -> Span<'static> {
 }
 
 /// 標題列的額度摘要：每個 agent 各自依剩餘額度上色，剩餘 ≤30% 變黃、≤10% 或已滿變紅。
-fn quota_spans(app: &App) -> Vec<Span<'static>> {
+pub(crate) fn quota_spans(app: &App) -> Vec<Span<'static>> {
     let now = ertangle_core::now_millis();
     let mut spans = Vec::new();
     for q in app.state.quotas.values() {
-        // 已過重置時間的視窗不再算數。
+        // 已過重置時間的視窗不再算數。Antigravity 的 3p-* 視窗不計入。
         let live: Vec<_> = q
             .windows
             .iter()
+            .filter(|w| !(q.agent == "antigravity" && w.name.starts_with("3p-")))
             .filter(|w| w.resets_at_ms.is_none_or(|r| r > now))
             .collect();
         if live.is_empty() {
@@ -1179,6 +1189,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
         tab("Diff (g)", app.view == CenterView::Diff),
         tab("Worktrees", app.view == CenterView::Worktrees),
         tab("Tasks", app.view == CenterView::Tasks),
+        tab("Flow (F)", app.view == CenterView::Flow),
         Span::raw("   "),
         Span::styled(
             format!("{live}/{} live", app.state.sessions.len()),
@@ -1191,7 +1202,7 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
     ];
 
     if app.view == CenterView::Grid {
-        tab_spans.insert(5, tab("Grid", true));
+        tab_spans.insert(7, tab("Grid", true));
     }
 
     if app.has_multiple_hosts() {
@@ -1326,12 +1337,6 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     };
     let multi_project = roots.len() > 1;
     let show_project = multi_project || !app.scope_here;
-    let total_sessions = if multi_host {
-        app.hosts.values().map(|h| h.state.sessions.len()).sum()
-    } else {
-        app.state.sessions.len()
-    };
-    let hidden = total_sessions.saturating_sub(sessions.len());
     // 邊框佔 2 欄，`▸ ` 選取符號另外佔 2 欄。
     let inner_w = area.width.saturating_sub(4) as usize;
 
@@ -1447,6 +1452,32 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         ))));
     }
 
+    if app.scope_here {
+        let others = app.other_project_summaries();
+        if !others.is_empty() {
+            let div_len = inner_w.max(1);
+            items.push(ListItem::new(Line::from(Span::styled(
+                "─".repeat(div_len),
+                Style::default().fg(Color::DarkGray),
+            ))));
+            for (name, live, total) in others {
+                let text = if live > 0 {
+                    format!("▸ {name} ({live} live / {total})")
+                } else {
+                    format!("▸ {name} ({total})")
+                };
+                items.push(ListItem::new(Line::from(Span::styled(
+                    text,
+                    Style::default().fg(Color::DarkGray),
+                ))));
+            }
+            items.push(ListItem::new(Line::from(Span::styled(
+                tr!("P 展開 · Space P 切換"),
+                Style::default().fg(Color::DarkGray),
+            ))));
+        }
+    }
+
     let mut list_state = ListState::default();
     if !sessions.is_empty() {
         list_state.select(Some(app.selected.min(sessions.len() - 1)));
@@ -1457,14 +1488,11 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(if app.scope_here {
-                    match hidden {
-                        0 => tr!(" Sessions "),
-                        n => tr!(" Sessions · +{n} ", n = n),
-                    }
+                    tr!(" Projects & Sessions ")
                 } else if show_project {
-                    tr!(" Sessions · 全部 ")
+                    tr!(" Projects & Sessions · 全部 ")
                 } else {
-                    " Sessions ".to_string()
+                    tr!(" Projects & Sessions ")
                 }),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))

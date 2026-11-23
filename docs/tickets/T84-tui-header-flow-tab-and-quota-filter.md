@@ -1,7 +1,5 @@
 # T84 — TUI header: add `Flow (F)` tab and filter `3p-*` quota windows
 
-Status: ready-for-agent
-
 Priority: P2　Scope: `ertangle-tui`　Depends on: T79
 
 ## Problem
