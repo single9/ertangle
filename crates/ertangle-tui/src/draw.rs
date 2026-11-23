@@ -566,8 +566,16 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let max_w = if is_wide { 96 } else { 72 };
     let w = max_w.min(f.area().width.saturating_sub(2));
     let extra_h: u16 = if is_resume { 5 } else { 4 };
-    let h = (vis.len() as u16 + extra_h)
-        .clamp(6, 18)
+    // model 查詢的問題 (例如 agy 尚未登入) 放在輸入框下方並折行，清單再長也看得到。
+    let warn_lines: Vec<String> = p
+        .load_error
+        .as_deref()
+        .filter(|_| !loading)
+        .map(|err| wrap_display(&format!("⚠ {err}"), w.saturating_sub(4) as usize))
+        .unwrap_or_default();
+    let warn_h = warn_lines.len() as u16;
+    let h = (vis.len() as u16 + extra_h + warn_h)
+        .clamp(6, 18 + warn_h)
         .min(f.area().height);
     let area = Rect::new(
         f.area().x + (f.area().width.saturating_sub(w)) / 2,
@@ -617,7 +625,13 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
         ));
     }
     lines.push(Line::from(input_line));
-    let header_lines = if is_resume { 2 } else { 1 };
+    for l in warn_lines {
+        lines.push(Line::from(Span::styled(
+            format!(" {l}"),
+            Style::default().fg(Color::Yellow),
+        )));
+    }
+    let header_lines = if is_resume { 2 } else { 1 } + warn_h;
     let room = h.saturating_sub(header_lines + 2) as usize;
     let start = p.cursor.saturating_sub(room.saturating_sub(1));
     for (i, (label, value)) in vis.iter().enumerate().skip(start).take(room) {
@@ -650,12 +664,6 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
         lines.push(Line::from(Span::styled(
             tr!("  載入可用 model 中…"),
             Style::default().fg(Color::DarkGray),
-        )));
-    }
-    if let Some(err) = p.load_error.as_deref().filter(|_| !loading) {
-        lines.push(Line::from(Span::styled(
-            format!("  ⚠ {err}"),
-            Style::default().fg(Color::Yellow),
         )));
     }
     if vis.is_empty() && !loading {
