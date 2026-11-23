@@ -549,9 +549,14 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
             },
         );
     }
+    let has_initial_prompt = prompt.as_deref().is_some_and(|p| !p.trim().is_empty());
     shared.emit(Event::SessionStatus {
         session: id.clone(),
-        status: SessionStatus::Idle,
+        status: if has_initial_prompt {
+            SessionStatus::Busy
+        } else {
+            SessionStatus::Idle
+        },
     });
     if transport != "pty" {
         if let Some(prompt) = prompt.as_deref().filter(|p| !p.trim().is_empty()) {

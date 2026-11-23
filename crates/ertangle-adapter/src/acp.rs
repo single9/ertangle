@@ -165,6 +165,9 @@ impl Conn {
             bail!("{}", tr!("session 尚未就緒"));
         }
         let effective = take_effective_prompt(&self.prepend_once, text);
+        // Any session/update arriving before the first session/prompt on a resumed session is
+        // asynchronous history replay from session/load; stop discarding only once we prompt.
+        self.loading.store(false, Ordering::SeqCst);
         let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
         let res = self.call(
             "session/prompt",
@@ -629,9 +632,6 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
                 }
             }
         } else if let Some(id) = msg.get("id").and_then(|v| v.as_i64()) {
-            // The only request awaited during loading is `session/load`; clearing flag on the same reader thread
-            // ensures subsequent updates are not mistakenly dropped.
-            conn.loading.store(false, Ordering::SeqCst);
             if let Some(s) = conn
                 .pending
                 .lock()
@@ -1018,8 +1018,8 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 json!({ "sessionId": id, "cwd": spec.cwd.to_string_lossy(), "mcpServers": mcp_servers }),
                 LOAD_TIMEOUT,
             );
-            conn.loading.store(false, Ordering::SeqCst);
-            // Part of the replayed chunks might have entered the stream buffer; discard.
+            // Keep `conn.loading = true` until `conn.prompt` sends `session/prompt`:
+            // some ACP agents (e.g. agy) stream `session/load` replay updates after returning the response.
             let _ = conn
                 .stream
                 .lock()
@@ -1065,7 +1065,15 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         )
         .with_context(|| tr!("設定 effort `{value}` 失敗", value = value))?;
     }
-    let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
+    let has_initial_prompt = spec
+        .initial_prompt
+        .as_deref()
+        .is_some_and(|p| !p.trim().is_empty());
+    let _ = tx.send(AgentEvent::Status(if has_initial_prompt {
+        SessionStatus::Busy
+    } else {
+        SessionStatus::Idle
+    }));
     conn.refresh_quota_async();
 
     let control = AcpControl {
