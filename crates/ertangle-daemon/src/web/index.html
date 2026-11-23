@@ -3032,21 +3032,30 @@
       // 3. HTML 特殊符號轉義
       let safe = escapeHtml(src);
 
-      // 4. 解析 Markdown 圖片 ![alt](url) 與 連結 [label](url)
-      // 注意：必須先解析圖片語法 (![alt](url))，避免被一般連結語法攔截。
+      // 4. 解析 Markdown 圖片 ![alt](url) 與 連結 [label](url)，先抽離成佔位符避免步驟 5 誤改屬性內的網址
+      const mediaPlaceholders = [];
+      const pushMedia = (html) => {
+        const idx = mediaPlaceholders.length;
+        mediaPlaceholders.push(html);
+        return `%%%MD_MEDIA_${idx}%%%`;
+      };
+
       safe = safe.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
         const trimmedUrl = url.trim();
         if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
-          return `<img src="${trimmedUrl}" alt="${escapeHtml(alt)}" style="max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; cursor:pointer; display:block; margin:6px 0;" onclick="window.open('${escapeHtml(trimmedUrl)}', '_blank', 'noopener')">`;
+          return pushMedia(
+            `<img src="${trimmedUrl}" alt="${escapeHtml(alt)}" style="max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; cursor:pointer; display:block; margin:6px 0;" data-ext-url="${trimmedUrl}" onclick="window.open(this.dataset.extUrl, '_blank', 'noopener')">`
+          );
         } else if (trimmedUrl.startsWith("file://") || !/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(trimmedUrl)) {
           let cleanUrl = trimmedUrl;
           if (cleanUrl.startsWith("file://")) {
             cleanUrl = cleanUrl.replace(/^file:\/\//, "");
           }
           const rawPath = cleanUrl.split("#")[0];
-          const fileUrl = `/api/file?path=${encodeURIComponent(rawPath)}${activeSession ? "&session=" + encodeURIComponent(activeSession) : ""}${typeof token === "string" && token ? "&token=" + encodeURIComponent(token) : ""}`;
-          const fallbackHtml = `<span class=\\'chat-file-pill\\' onclick=\\'openFileActionSheet("${escapeHtml(rawPath).replace(/'/g, "\\'")}", "${escapeHtml(alt || rawPath).replace(/'/g, "\\'")}")\\'><svg class=\\'file-icon\\' viewBox=\\'0 0 24 24\\'><path d=\\'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\\\'></path><polyline points=\\'14 2 14 8 20 8\\\'></polyline></svg><span>${escapeHtml(alt || rawPath).replace(/'/g, "\\'")} (圖片載入失敗)</span></span>`;
-          return `<img src="${fileUrl}" alt="${escapeHtml(alt)}" style="max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; cursor:pointer; display:block; margin:6px 0;" onclick="openFileActionSheet('${escapeHtml(rawPath)}', '${escapeHtml(alt || rawPath)}')" onerror="this.onerror=null; this.outerHTML='${fallbackHtml}';">`;
+          const fileUrl = `/file?path=${encodeURIComponent(rawPath)}${activeSession ? "&session=" + encodeURIComponent(activeSession) : ""}${typeof token === "string" && token ? "&token=" + encodeURIComponent(token) : ""}`;
+          return pushMedia(
+            `<img src="${fileUrl}" alt="${escapeHtml(alt)}" data-raw-path="${escapeHtml(rawPath)}" data-alt="${escapeHtml(alt || rawPath)}" style="max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; cursor:pointer; display:block; margin:6px 0;" onclick="openFileActionSheet(this.dataset.rawPath, this.dataset.alt)" onerror="handleMdImgError(this)">`
+          );
         } else {
           return match;
         }
@@ -3055,14 +3064,16 @@
       safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, url) => {
         const trimmedUrl = url.trim();
         if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
-          return `<a href="${trimmedUrl}" target="_blank" rel="noopener" class="chat-web-link">${label} ↗</a>`;
+          return pushMedia(`<a href="${trimmedUrl}" target="_blank" rel="noopener" class="chat-web-link">${label} ↗</a>`);
         } else if (trimmedUrl.startsWith("file://")) {
           const rawPath = trimmedUrl.replace(/^file:\/\//, "");
-          return `<span class="chat-file-pill" onclick="openFileActionSheet('${escapeHtml(rawPath)}', '${escapeHtml(label)}')"><svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>${label}</span></span>`;
+          return pushMedia(
+            `<span class="chat-file-pill" data-raw-path="${escapeHtml(rawPath)}" data-label="${escapeHtml(label)}" onclick="openFileActionSheet(this.dataset.rawPath, this.dataset.label)"><svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>${label}</span></span>`
+          );
         } else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(trimmedUrl)) {
           return label;
         } else {
-          return `<a href="${trimmedUrl}" class="chat-web-link">${label}</a>`;
+          return pushMedia(`<a href="${trimmedUrl}" class="chat-web-link">${label}</a>`);
         }
       });
 
@@ -3120,7 +3131,23 @@
         safe = safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), html);
       });
 
+      // 14. 還原圖片與連結
+      mediaPlaceholders.forEach((html, i) => {
+        safe = safe.replace(`%%%MD_MEDIA_${i}%%%`, html);
+      });
+
       return `<p>${safe}</p>`;
+    }
+
+    function handleMdImgError(img) {
+      img.onerror = null;
+      const rawPath = img.dataset.rawPath || "";
+      const alt = img.dataset.alt || rawPath;
+      const pill = document.createElement("span");
+      pill.className = "chat-file-pill";
+      pill.onclick = () => openFileActionSheet(rawPath, alt);
+      pill.innerHTML = `<svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>${escapeHtml(alt)} (圖片載入失敗)</span>`;
+      img.replaceWith(pill);
     }
 
     // 表格儲存格：只處理行內語法 (程式碼、連結、粗斜體、刪除線)。

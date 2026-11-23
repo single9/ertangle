@@ -6066,12 +6066,12 @@ fn adaptive_three_column_expansion() {
         "narrow terminal stays Two: {narrow}"
     );
 
-    // Only 1 live session stays Two even when wide.
+    // Wide terminal (>= 130) adapts to Three even with 1 live session unless pinned.
     app.state.sessions.get_mut("ses_test2").unwrap().status = SessionStatus::Exited;
     let (_, single) = render_size(&mut app, 130, 40);
     assert!(
-        !squash(&single).contains(&squash("Flow ·")),
-        "single live session stays Two: {single}"
+        squash(&single).contains(&squash("Flow ·")),
+        "wide terminal with 1 live session adapts to Three: {single}"
     );
 
     // Pinned layout stays Two even when wide with >= 2 live sessions.

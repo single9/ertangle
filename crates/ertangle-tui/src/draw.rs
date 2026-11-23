@@ -28,11 +28,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
 
     // 依終端機寬度調整三欄比例：寬螢幕給側欄多一點，窄螢幕留給中央。
     let w = f.area().width;
-    let desired_layout = if !app.layout_pinned
-        && app.layout == LayoutMode::Two
-        && w >= 130
-        && app.state.live_sessions().count() >= 2
-    {
+    let desired_layout = if !app.layout_pinned && app.layout == LayoutMode::Two && w >= 130 {
         LayoutMode::Three
     } else {
         app.layout
@@ -1455,9 +1451,10 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     if app.scope_here {
         let others = app.other_project_summaries();
         if !others.is_empty() {
-            let div_len = inner_w.max(1);
+            // `List` prepends 2 columns for `highlight_symbol`, so subtract 2 to stay inside `inner_w`.
+            let max_w = inner_w.saturating_sub(2).max(1);
             items.push(ListItem::new(Line::from(Span::styled(
-                "─".repeat(div_len),
+                "─".repeat(max_w),
                 Style::default().fg(Color::DarkGray),
             ))));
             for (name, live, total) in others {
@@ -1467,12 +1464,12 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     format!("▸ {name} ({total})")
                 };
                 items.push(ListItem::new(Line::from(Span::styled(
-                    text,
+                    truncate_width(&text, max_w),
                     Style::default().fg(Color::DarkGray),
                 ))));
             }
             items.push(ListItem::new(Line::from(Span::styled(
-                tr!("P 展開 · Space P 切換"),
+                truncate_width(&tr!("P 展開 · Space P 切換"), max_w),
                 Style::default().fg(Color::DarkGray),
             ))));
         }
