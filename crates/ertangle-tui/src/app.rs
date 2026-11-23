@@ -830,6 +830,11 @@ impl App {
                     entry.state.apply(&record);
                 }
                 if is_active {
+                    let prev_id = if self.sidebar_focus.is_none() {
+                        self.selected_id()
+                    } else {
+                        None
+                    };
                     let before = self.state.messages.len();
                     self.state.apply(&record);
                     // bus 訊息滿額時會從前端丟棄；已看過的索引要跟著前移，
@@ -838,16 +843,38 @@ impl App {
                         let dropped = (before + 1).saturating_sub(self.state.messages.len());
                         self.bus_seen = self.bus_seen.saturating_sub(dropped);
                     }
-                    if let ertangle_core::Event::SessionStarted { session } = &record.event {
-                        if self.pending_select.as_deref() == Some(session.id.as_str()) {
-                            if self.scope_here && session.project_root() != self.home_project {
+                    let started_or_resumed = match &record.event {
+                        ertangle_core::Event::SessionStarted { session } => {
+                            Some((session.id.as_str(), session.project_root()))
+                        }
+                        ertangle_core::Event::SessionStatus { session, status }
+                            if status.is_live() =>
+                        {
+                            self.state
+                                .sessions
+                                .get(session)
+                                .map(|s| (session.as_str(), s.project_root()))
+                        }
+                        _ => None,
+                    };
+                    if let Some((sid, root)) = started_or_resumed {
+                        if self.pending_select.as_deref() == Some(sid) {
+                            if self.scope_here && root != self.home_project {
                                 self.scope_here = false;
                             }
                             let vis = self.visible_sessions();
-                            if let Some(idx) = vis.iter().position(|(_, id)| id == &session.id) {
+                            if let Some(idx) = vis.iter().position(|(_, id)| id == sid) {
                                 self.selected = idx;
                             }
                             self.pending_select = None;
+                        }
+                    }
+                    if self.pending_select.is_none() {
+                        if let Some(id) = prev_id {
+                            let vis = self.visible_sessions();
+                            if let Some(idx) = vis.iter().position(|(_, vid)| vid == &id) {
+                                self.selected = idx;
+                            }
                         }
                     }
                     self.clamp_selection();

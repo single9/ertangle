@@ -6616,3 +6616,87 @@ fn t87_sidebar_zero_live_sessions_navigation() {
     assert_eq!(app.sidebar_focus, None);
     assert_eq!(app.selected, 0);
 }
+
+#[test]
+fn resuming_ended_session_keeps_selection_and_shows_user_prompt() {
+    let mut app = sample_app(&[]);
+    app.show_ended = true;
+    // Add an exited session ("ses_end_1") and another exited session ("ses_end_2") sorted before it.
+    let mut s1 = ertangle_core::Session {
+        id: "ses_end_1".into(),
+        label: "ended-one".into(),
+        kind: AgentKind::ClaudeCode,
+        role: Role::Worker,
+        parent: None,
+        cwd: app.home_project.clone(),
+        repo_root: None,
+        branch: None,
+        transport: "structured".into(),
+        permission: PermissionPolicy::Auto,
+        model: None,
+        effort: None,
+        status: SessionStatus::Exited,
+        status_note: None,
+        cost: ertangle_core::Cost::default(),
+        context: None,
+        budget_usd: None,
+        over_budget: false,
+        native_id: Some("nat_1".into()),
+        handed_off_to: None,
+        slash_commands: Vec::new(),
+        active_tools: Vec::new(),
+        bg_procs: Vec::new(),
+        tool_calls: 0,
+        created_ms: 1,
+        ended_ms: Some(2),
+    };
+    let mut s2 = s1.clone();
+    s2.id = "ses_end_2".into();
+    s2.label = "ended-two".into();
+    s2.created_ms = 2;
+    s1.created_ms = 3;
+    app.state.sessions.insert(s1.id.clone(), s1);
+    app.state.sessions.insert(s2.id.clone(), s2);
+
+    // Select `ses_end_1` (which is at the ended section).
+    app.select_or_pend("ses_end_1");
+    assert_eq!(app.selected_id().as_deref(), Some("ses_end_1"));
+
+    // Simulate daemon emitting SessionStatus(Idle) + UserPrompt when resumed.
+    let host = app.active_host().to_string();
+    app.apply_host_frame(
+        &host,
+        ertangle_protocol::Frame::Record {
+            record: Box::new(ertangle_core::Record {
+                seq: 10,
+                ts: 100,
+                event: ertangle_core::Event::SessionStatus {
+                    session: "ses_end_1".into(),
+                    status: SessionStatus::Idle,
+                },
+            }),
+        },
+    );
+    app.apply_host_frame(
+        &host,
+        ertangle_protocol::Frame::Record {
+            record: Box::new(ertangle_core::Record {
+                seq: 11,
+                ts: 101,
+                event: ertangle_core::Event::UserPrompt {
+                    session: "ses_end_1".into(),
+                    text: "resumed prompt text".into(),
+                    from: None,
+                },
+            }),
+        },
+    );
+
+    // Selection must remain on `ses_end_1` even after it moved from ended to live section.
+    assert_eq!(app.selected_id().as_deref(), Some("ses_end_1"));
+    let (_, rendered) = render_size(&mut app, 100, 30);
+    assert!(
+        rendered.contains("resumed prompt text"),
+        "transcript should display the resumed prompt: {rendered}"
+    );
+}
