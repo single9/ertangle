@@ -4482,11 +4482,13 @@
 
       if (text.startsWith("/")) {
         if (text.startsWith("//")) {
+          const atts = pendingImages.map(a => ({ name: a.name, mime: a.mime, path: null, data: a.data, text: null, size: a.size }));
+          if (confirmResumeBeforePrompt(text.slice(1), atts)) return;
           ws.send(JSON.stringify({
             op: "prompt",
             session: activeSession,
             text: text.slice(1),
-            attachments: pendingImages.map(a => ({ name: a.name, mime: a.mime, path: null, data: a.data, text: null, size: a.size })),
+            attachments: atts,
             queue: queueMode
           }));
           clearPromptComposer();
@@ -4513,14 +4515,52 @@
         return;
       }
 
+      const atts = pendingImages.map(a => ({ name: a.name, mime: a.mime, path: null, data: a.data, text: null, size: a.size }));
+      if (confirmResumeBeforePrompt(text, atts)) return;
       ws.send(JSON.stringify({
         op: "prompt",
         session: activeSession,
         text: text,
-        attachments: pendingImages.map(a => ({ name: a.name, mime: a.mime, path: null, data: a.data, text: null, size: a.size })),
+        attachments: atts,
         queue: queueMode
       }));
       clearPromptComposer();
+    }
+
+    /**
+     * 送 prompt 給已停止 (已結束／失敗／休眠) 的 session 前先確認是否接續，行為與 TUI 相同。
+     * 回傳 true 表示已處理 (已接續並送出，或取消並保留草稿)，呼叫端不必再送 prompt。
+     */
+    function confirmResumeBeforePrompt(text, attachments) {
+      const sid = activeSession;
+      const s = (state.sessions || {})[sid] || (state.archived_sessions || {})[sid];
+      const statusText = { exited: "已結束", failed: "失敗", sleeping: "休眠中" }[s && s.status];
+      if (!statusText) return false;
+      const label = s.label || sid;
+      const sleeping = s.status === "sleeping";
+      if (!sleeping && !s.native_id) {
+        showToast(`「${label}」${statusText}，沒有可接續的對話 id；已保留草稿，請改用交接 (handoff)`, true);
+        return true;
+      }
+      if (!window.confirm(`Session「${label}」已停止 (${statusText})，是否接續並送出 prompt？`)) {
+        showToast("已保留草稿並取消");
+        return true;
+      }
+      if (sleeping) {
+        ws.send(JSON.stringify({ op: "wake", session: sid }));
+        ws.send(JSON.stringify({ op: "prompt", session: sid, text, attachments, queue: false }));
+        showToast("已喚醒並送出 prompt");
+      } else if (!attachments.length) {
+        ws.send(JSON.stringify({ op: "resume", session: sid, prompt: text }));
+        showToast("已接續並送出 prompt");
+      } else {
+        // resume 請求不帶附件：先接續，再以一般 prompt 送出附件。
+        ws.send(JSON.stringify({ op: "resume", session: sid, prompt: null }));
+        ws.send(JSON.stringify({ op: "prompt", session: sid, text, attachments, queue: false }));
+        showToast(`已接續並送出 prompt (含 ${attachments.length} 個附件)`);
+      }
+      clearPromptComposer();
+      return true;
     }
 
     function toggleQueue() {

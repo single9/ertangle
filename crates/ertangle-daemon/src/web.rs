@@ -1080,8 +1080,25 @@ mod tests {
         // base64 payload has the data: prefix stripped and images may be sent without text.
         assert!(INDEX_HTML.contains(".replace(/^data:[^;]*;base64,/, \"\")"));
         assert!(INDEX_HTML.contains("(!text && !pendingImages.length)"));
-        assert!(INDEX_HTML.contains("attachments: pendingImages.map("));
+        assert!(INDEX_HTML.contains("const atts = pendingImages.map("));
+        assert!(INDEX_HTML.contains("attachments: atts,"));
         assert!(!INDEX_HTML.contains("attachments: [],\n        queue: queueMode"));
+    }
+
+    /// Prompting a stopped session asks to resume first, like the TUI (T88).
+    #[test]
+    fn composer_confirms_resume_for_stopped_sessions() {
+        assert!(INDEX_HTML.contains("function confirmResumeBeforePrompt(text, attachments)"));
+        assert_eq!(
+            INDEX_HTML.matches("if (confirmResumeBeforePrompt(").count(),
+            2,
+            "both the normal and `//` prompt paths must confirm resume"
+        );
+        assert!(
+            INDEX_HTML.contains("{ exited: \"已結束\", failed: \"失敗\", sleeping: \"休眠中\" }")
+        );
+        assert!(INDEX_HTML.contains("op: \"resume\", session: sid, prompt: text"));
+        assert!(INDEX_HTML.contains("op: \"wake\", session: sid"));
     }
 
     /// T71: `updateAllViews` throws a swallowed ReferenceError when an identifier it uses is
