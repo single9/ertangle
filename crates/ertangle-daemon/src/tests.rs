@@ -5320,3 +5320,41 @@ fn current_exe_path_never_carries_deleted_marker() {
     let p = crate::current_exe_path().expect("current exe");
     assert!(!p.to_string_lossy().ends_with(" (deleted)"));
 }
+
+#[test]
+#[cfg(unix)]
+fn exec_timeout_kills_process_group() {
+    let dir = temp_cwd();
+    let marker_pid_file = dir.join("child.pid");
+    let cmd = format!(
+        "sleep 30 & bg=$!; echo \"$bg\" > \"{}\"; wait",
+        marker_pid_file.display()
+    );
+    let outcome = crate::handlers::session::run_shell_in_timeout(
+        &dir.to_string_lossy(),
+        "ses_timeout",
+        &cmd,
+        Duration::from_millis(200),
+    );
+    assert!(outcome.timed_out);
+    assert_eq!(outcome.code, "timeout");
+
+    // Read child PID and verify it was killed by signal_pgid.
+    let child_pid_str = std::fs::read_to_string(&marker_pid_file)
+        .expect("child pid file created")
+        .trim()
+        .to_string();
+    let child_pid: u32 = child_pid_str.parse().expect("valid child pid");
+    assert!(child_pid > 1);
+
+    // Give kernel a moment to handle SIGKILL and reap
+    let mut dead = false;
+    for _ in 0..20 {
+        if ertangle_adapter::signal_pid(child_pid, "-0").is_err() {
+            dead = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(dead, "background child {child_pid} should have been killed");
+}
