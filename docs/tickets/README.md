@@ -99,6 +99,7 @@
 | [T92](T92-perf-web-markdown-cache-and-tui-flow-allocs.md) | Perf & safety: Web Markdown turn cache (`$` fix) and stack-allocated Flow elbows (已完成) | P2 | T89 |
 | [T93](T93-version-display-with-commit-hash.md) | Include git commit hash in `ertangle` / `ert` version display (已完成) | P3 | — |
 | [T94](T94-tui-macos-shortcuts-and-shift-enter-newline.md) | TUI input box: macOS Option/Cmd shortcuts and native `Shift+Enter` newline (已完成) | P1 | — |
+| [T95](T95-web-styled-confirm-dialog.md) | Web UI: replace native `window.confirm` with a styled in-app confirm dialog | P2 | — |
 
 ## Language convention
 
