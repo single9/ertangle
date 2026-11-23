@@ -753,7 +753,7 @@ msgstr ""
 msgid "已移除"
 msgstr ""
 
-#: src/cmd/session.rs crates/ertangle-core/src/lib.rs
+#: src/cmd/session.rs crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/menu.rs
 msgid "已結束"
 msgstr ""
 
@@ -1127,7 +1127,7 @@ msgstr ""
 msgid " …(+{extra} 行)"
 msgstr ""
 
-#: crates/ertangle-core/src/lib.rs crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/notify.rs
+#: crates/ertangle-core/src/lib.rs crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/notify.rs
 msgid "失敗"
 msgstr ""
 
@@ -4043,11 +4043,19 @@ msgid "輸入過濾專案，或直接輸入路徑"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "選擇以確認或取消"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "輸入以過濾"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "Enter 進入／選取 · Esc 取消"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "Enter 選擇 · Esc 取消"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4099,6 +4107,26 @@ msgid "接續 session (Tab 切換專案範圍 · Enter 確認 · Esc 取消)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "是，接續並送出"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "否，保留草稿並取消"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "保留草稿並取消 (此 session 無可接續的對話 id)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "休眠中"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "Session \"{label}\" 已停止 ({status})，是否接續並送出 prompt？"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有可用的專案清單"
 msgstr ""
 
@@ -4112,6 +4140,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/menu.rs
+msgid "已保留草稿並取消"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4144,6 +4176,22 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已喚醒並送出 prompt (含 {n} 個附件)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已喚醒並送出 prompt"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt (含 {n} 個附件)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs

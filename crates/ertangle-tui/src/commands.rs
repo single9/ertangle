@@ -60,6 +60,40 @@ pub(crate) fn submit_prompt_or_route(
                     return Ok(());
                 }
             };
+        let session_opt = app
+            .state
+            .sessions
+            .get(&id)
+            .or_else(|| app.state.archived_sessions.get(&id))
+            .or_else(|| {
+                app.hosts.get(&app.selected_host()).and_then(|h| {
+                    h.state
+                        .sessions
+                        .get(&id)
+                        .or_else(|| h.state.archived_sessions.get(&id))
+                })
+            })
+            .cloned();
+        if let Some(s) = session_opt {
+            if matches!(
+                s.status,
+                ertangle_core::SessionStatus::Exited
+                    | ertangle_core::SessionStatus::Failed
+                    | ertangle_core::SessionStatus::Sleeping
+            ) {
+                let resumable = s.native_id.is_some();
+                crate::menu::start_confirm_resume_prompt(
+                    app,
+                    id,
+                    s.label,
+                    s.status,
+                    resumable,
+                    body,
+                    attachments,
+                );
+                return Ok(());
+            }
+        }
         let n = attachments.len();
         send(
             writer,

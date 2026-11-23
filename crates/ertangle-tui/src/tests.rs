@@ -6118,3 +6118,279 @@ fn other_project_summary_rows_in_sidebar() {
     app.scope_here = false;
     assert!(app.other_project_summaries().is_empty());
 }
+
+#[test]
+fn t88_submitting_prompt_to_exited_session_opens_confirm_picker() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    app.show_ended = true;
+    let (mut w, mut peer) = pair_writer();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Exited;
+        s.native_id = Some("native_conv_1".into());
+    }
+    app.mode = Mode::Prompt;
+    app.input = "hello world".into();
+    app.input_cursor = "hello world".chars().count();
+
+    // Submit prompt by pressing Enter
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+
+    // Verify no Request::Prompt was sent to peer directly
+    let mut byte = [0u8; 1];
+    assert!(matches!(
+        peer.read(&mut byte),
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
+    ));
+
+    // Verify picker is open with ConfirmResumePrompt
+    assert_eq!(app.mode, Mode::Pick);
+    let p = app.picker.as_ref().expect("picker must be open");
+    assert!(matches!(
+        &p.stage,
+        crate::menu::PickStage::ConfirmResumePrompt {
+            session,
+            status: SessionStatus::Exited,
+            resumable: true,
+            text,
+            ..
+        } if session == "ses_test" && text == "hello world"
+    ));
+    assert_eq!(p.items.len(), 2);
+    assert_eq!(p.items[0].1, "confirm");
+    assert_eq!(p.items[1].1, "cancel");
+}
+
+#[test]
+fn t88_confirming_resume_sends_resume_request() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    app.show_ended = true;
+    let (mut w, mut peer) = pair_writer();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Exited;
+        s.native_id = Some("native_conv_1".into());
+    }
+    app.mode = Mode::Prompt;
+    app.input = "resume with this prompt".into();
+    app.input_cursor = app.input.chars().count();
+
+    // Press Enter to open confirmation picker
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+
+    // Press Enter on the first option ("confirm")
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.picker.is_none());
+
+    let mut buf = [0u8; 1024];
+    let n = peer.read(&mut buf).unwrap();
+    let msg = String::from_utf8_lossy(&buf[..n]);
+    assert!(msg.contains("\"resume\""), "got: {msg}");
+    assert!(msg.contains("resume with this prompt"), "got: {msg}");
+    assert!(msg.contains("ses_test"), "got: {msg}");
+}
+
+#[test]
+fn t88_confirming_resume_with_attachments_sends_resume_then_prompt() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    app.show_ended = true;
+    let (mut w, mut peer) = pair_writer();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Exited;
+        s.native_id = Some("native_conv_1".into());
+    }
+
+    // Directly invoke start_confirm_resume_prompt with an attachment
+    let att = ertangle_core::Attachment {
+        name: "test.txt".into(),
+        mime: "text/plain".into(),
+        text: Some("hello attachment".into()),
+        ..Default::default()
+    };
+    crate::menu::start_confirm_resume_prompt(
+        &mut app,
+        "ses_test".into(),
+        "worker".into(),
+        SessionStatus::Exited,
+        true,
+        "prompt text".into(),
+        vec![att],
+    );
+    assert_eq!(app.mode, Mode::Pick);
+
+    // Confirm
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.picker.is_none());
+
+    let mut buf = [0u8; 2048];
+    let n = peer.read(&mut buf).unwrap();
+    let msg = String::from_utf8_lossy(&buf[..n]);
+    // Should have Resume with prompt: None, followed by Prompt with attachments
+    assert!(msg.contains("\"resume\""), "got: {msg}");
+    assert!(msg.contains("\"prompt\""), "got: {msg}");
+    assert!(msg.contains("prompt text"), "got: {msg}");
+    assert!(msg.contains("test.txt"), "got: {msg}");
+}
+
+#[test]
+fn t88_confirming_sleeping_sends_wake_and_prompt() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    let (mut w, mut peer) = pair_writer();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Sleeping;
+    }
+    app.mode = Mode::Prompt;
+    app.input = "wake up agent".into();
+    app.input_cursor = app.input.chars().count();
+
+    // Press Enter to open confirmation picker
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+
+    // Confirm
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+
+    let mut buf = [0u8; 1024];
+    let n = peer.read(&mut buf).unwrap();
+    let msg = String::from_utf8_lossy(&buf[..n]);
+    assert!(msg.contains("\"wake\""), "got: {msg}");
+    assert!(msg.contains("\"prompt\""), "got: {msg}");
+    assert!(msg.contains("wake up agent"), "got: {msg}");
+}
+
+#[test]
+fn t88_cancelling_confirm_picker_restores_draft_and_prompt_mode() {
+    let mut app = sample_app(&[]);
+    app.show_ended = true;
+    let (mut w, _peer) = pair_writer();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Exited;
+        s.native_id = Some("native_conv_1".into());
+    }
+    app.mode = Mode::Prompt;
+    app.input = "important draft text".into();
+    app.input_cursor = app.input.chars().count();
+
+    // Enter to open picker
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+    assert!(app.input.is_empty(), "input was cleared when submitted");
+
+    // Press Esc to cancel
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "important draft text");
+    assert_eq!(app.input_cursor, "important draft text".chars().count());
+    assert!(app.picker.is_none());
+
+    // Enter again to open picker
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+
+    // Select second option ("cancel") via Down arrow then Enter
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+    )
+    .unwrap();
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "important draft text");
+    assert_eq!(app.input_cursor, "important draft text".chars().count());
+    assert!(app.picker.is_none());
+}
+
+#[test]
+fn t88_non_resumable_exited_session_only_allows_cancel() {
+    let mut app = sample_app(&[]);
+    app.show_ended = true;
+    let (mut w, _peer) = pair_writer();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.status = SessionStatus::Failed;
+        s.native_id = None;
+    }
+    app.mode = Mode::Prompt;
+    app.input = "text for failed non-resumable".into();
+    app.input_cursor = app.input.chars().count();
+
+    // Enter to open picker
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Pick);
+
+    let p = app.picker.as_ref().unwrap();
+    assert_eq!(p.items.len(), 1);
+    assert_eq!(p.items[0].1, "cancel");
+
+    // Enter on the only option cancels and restores draft
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "text for failed non-resumable");
+    assert!(app.picker.is_none());
+}

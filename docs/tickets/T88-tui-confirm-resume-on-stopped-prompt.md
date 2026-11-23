@@ -1,7 +1,5 @@
 # T88 — TUI: confirm before resuming and sending prompt to ended/stopped session
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-tui`　Depends on: —
 
 ## Problem

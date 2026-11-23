@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ertangle_core::{AgentKind, Role};
+use ertangle_core::{AgentKind, Attachment, Role, SessionId, SessionStatus};
 use std::path::{Path, PathBuf};
 use tr::tr;
 
@@ -370,6 +370,16 @@ pub(crate) enum PickStage {
     Directory {
         current: PathBuf,
     },
+    /// Confirm resuming and sending prompt to an ended or sleeping session (T88).
+    #[allow(dead_code)]
+    ConfirmResumePrompt {
+        session: SessionId,
+        label: String,
+        status: SessionStatus,
+        resumable: bool,
+        text: String,
+        attachments: Vec<Attachment>,
+    },
 }
 
 /// 專案選擇器裡「瀏覽本機資料夾」項目的值。用控制字元避免與真實路徑撞名。
@@ -479,14 +489,18 @@ impl Picker {
         match self.stage {
             PickStage::Directory { .. } => tr!("輸入過濾資料夾，~ 回家目錄"),
             PickStage::Project => tr!("輸入過濾專案，或直接輸入路徑"),
+            PickStage::ConfirmResumePrompt { .. } => tr!("選擇以確認或取消"),
             _ => tr!("輸入以過濾"),
         }
     }
 
     /// 顯示在選擇器右下角的按鍵提示 (目前只有資料夾瀏覽器用)。
     pub(crate) fn hint(&self) -> Option<String> {
-        matches!(self.stage, PickStage::Directory { .. })
-            .then(|| tr!("Enter 進入／選取 · Esc 取消"))
+        match &self.stage {
+            PickStage::Directory { .. } => Some(tr!("Enter 進入／選取 · Esc 取消")),
+            PickStage::ConfirmResumePrompt { .. } => Some(tr!("Enter 選擇 · Esc 取消")),
+            _ => None,
+        }
     }
 
     /// 把背景查詢的結果併進清單 (每次繪製前呼叫)。
@@ -1414,6 +1428,63 @@ pub(crate) fn start_resume_picker(app: &mut App) {
     app.mode = Mode::Pick;
 }
 
+/// 開啟接續已停止／休眠 session 並送出 prompt 的確認選擇器 (T88)。
+pub(crate) fn start_confirm_resume_prompt(
+    app: &mut App,
+    session: SessionId,
+    label: String,
+    status: SessionStatus,
+    resumable: bool,
+    text: String,
+    attachments: Vec<Attachment>,
+) {
+    let items = if status == SessionStatus::Sleeping || resumable {
+        vec![
+            (tr!("是，接續並送出"), "confirm".to_string()),
+            (tr!("否，保留草稿並取消"), "cancel".to_string()),
+        ]
+    } else {
+        vec![(
+            tr!("保留草稿並取消 (此 session 無可接續的對話 id)"),
+            "cancel".to_string(),
+        )]
+    };
+
+    let status_str = match status {
+        SessionStatus::Sleeping => tr!("休眠中"),
+        SessionStatus::Exited => tr!("已結束"),
+        SessionStatus::Failed => tr!("失敗"),
+        _ => format!("{status:?}"),
+    };
+    let title = tr!(
+        "Session \"{label}\" 已停止 ({status})，是否接續並送出 prompt？",
+        label = label,
+        status = status_str
+    );
+
+    app.picker = Some(Picker {
+        stage: PickStage::ConfirmResumePrompt {
+            session,
+            label,
+            status,
+            resumable,
+            text,
+            attachments,
+        },
+        resume_scope: ResumeScope::Here,
+        title,
+        items,
+        filter: String::new(),
+        filter_cursor: 0,
+        cursor: 0,
+        pending: None,
+        loading: false,
+        group_effort: false,
+        variants: Default::default(),
+    });
+    app.mode = Mode::Pick;
+}
+
 /// `:project` / `:project open`: list configured and observed project roots, then switch to the chosen one.
 pub(crate) fn start_project_picker(app: &mut App) {
     let global_dir = ertangle_daemon::config_dir();
@@ -1552,6 +1623,21 @@ fn finish_picker(
 }
 
 pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
+    if matches!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(PickStage::ConfirmResumePrompt { .. })
+    ) && key.code == KeyCode::Esc
+    {
+        if let Some(p) = app.picker.take() {
+            if let PickStage::ConfirmResumePrompt { text, .. } = p.stage {
+                app.input = text;
+                app.input_cursor = app.input.chars().count();
+                app.mode = Mode::Prompt;
+                app.status = tr!("已保留草稿並取消");
+            }
+        }
+        return Ok(());
+    }
     let Some(p) = app.picker.as_mut() else {
         app.mode = Mode::Normal;
         return Ok(());
@@ -1863,6 +1949,79 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                 }
                 // 問題選擇器由 `handle_question_key` 處理。
                 PickStage::Question { .. } => {}
+                PickStage::ConfirmResumePrompt {
+                    session,
+                    status,
+                    resumable: _,
+                    text,
+                    attachments,
+                    ..
+                } => {
+                    let action = chosen.as_deref().unwrap_or("cancel");
+                    app.picker = None;
+                    if action == "confirm" {
+                        app.mode = Mode::Normal;
+                        if status == SessionStatus::Sleeping {
+                            crate::send(
+                                writer,
+                                &ertangle_protocol::Request::Wake {
+                                    session: session.clone(),
+                                },
+                            )?;
+                            let n = attachments.len();
+                            crate::send(
+                                writer,
+                                &ertangle_protocol::Request::Prompt {
+                                    session,
+                                    text,
+                                    attachments,
+                                    queue: false,
+                                },
+                            )?;
+                            app.status = if n > 0 {
+                                tr!("已喚醒並送出 prompt (含 {n} 個附件)", n = n)
+                            } else {
+                                tr!("已喚醒並送出 prompt")
+                            };
+                        } else {
+                            app.select_or_pend(&session);
+                            if attachments.is_empty() {
+                                crate::send(
+                                    writer,
+                                    &ertangle_protocol::Request::Resume {
+                                        session,
+                                        prompt: Some(text),
+                                    },
+                                )?;
+                                app.status = tr!("已接續並送出 prompt");
+                            } else {
+                                let n = attachments.len();
+                                crate::send(
+                                    writer,
+                                    &ertangle_protocol::Request::Resume {
+                                        session: session.clone(),
+                                        prompt: None,
+                                    },
+                                )?;
+                                crate::send(
+                                    writer,
+                                    &ertangle_protocol::Request::Prompt {
+                                        session,
+                                        text,
+                                        attachments,
+                                        queue: false,
+                                    },
+                                )?;
+                                app.status = tr!("已接續並送出 prompt (含 {n} 個附件)", n = n);
+                            }
+                        }
+                    } else {
+                        app.input = text;
+                        app.input_cursor = app.input.chars().count();
+                        app.mode = Mode::Prompt;
+                        app.status = tr!("已保留草稿並取消");
+                    }
+                }
                 PickStage::Project => {
                     let chosen_path = if chosen.is_some() {
                         chosen

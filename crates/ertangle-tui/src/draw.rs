@@ -560,7 +560,9 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let p = &*p;
     let vis = p.visible();
     let is_resume = matches!(p.stage, crate::menu::PickStage::Resume);
-    let max_w = if is_resume { 96 } else { 72 };
+    let is_wide =
+        is_resume || matches!(p.stage, crate::menu::PickStage::ConfirmResumePrompt { .. });
+    let max_w = if is_wide { 96 } else { 72 };
     let w = max_w.min(f.area().width.saturating_sub(2));
     let extra_h: u16 = if is_resume { 5 } else { 4 };
     let h = (vis.len() as u16 + extra_h)

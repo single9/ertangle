@@ -749,6 +749,7 @@ msgid "已移除"
 msgstr "Removed"
 
 #: src/cmd/session.rs crates/ertangle-core/src/lib.rs
+#: crates/ertangle-tui/src/menu.rs
 msgid "已結束"
 msgstr "Exited"
 
@@ -1126,7 +1127,8 @@ msgstr "Quota exhausted: {d} (use handoff to hand off)"
 msgid " …(+{extra} 行)"
 msgstr " …(+{extra} lines)"
 
-#: crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/notify.rs
+#: crates/ertangle-core/src/lib.rs crates/ertangle-tui/src/menu.rs
+#: crates/ertangle-tui/src/notify.rs
 msgid "失敗"
 msgstr "failed"
 
@@ -4057,12 +4059,20 @@ msgid "輸入過濾專案，或直接輸入路徑"
 msgstr "Type to filter projects, or enter a path"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "選擇以確認或取消"
+msgstr "Select to confirm or cancel"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "輸入以過濾"
 msgstr "Type to filter"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "Enter 進入／選取 · Esc 取消"
 msgstr "Enter open/select · Esc cancel"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "Enter 選擇 · Esc 取消"
+msgstr "Enter select · Esc cancel"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "交接給哪個 agent"
@@ -4113,6 +4123,26 @@ msgid "接續 session (Tab 切換專案範圍 · Enter 確認 · Esc 取消)"
 msgstr "Resume session (Tab toggles scope · Enter confirms · Esc cancels)"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "是，接續並送出"
+msgstr "Yes, resume and send"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "否，保留草稿並取消"
+msgstr "No, keep draft and cancel"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "保留草稿並取消 (此 session 無可接續的對話 id)"
+msgstr "Keep draft and cancel (session has no conversation id to resume)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "休眠中"
+msgstr "Sleeping"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "Session \"{label}\" 已停止 ({status})，是否接續並送出 prompt？"
+msgstr "Session \"{label}\" is stopped ({status}), resume and send prompt?"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有可用的專案清單"
 msgstr "No projects available"
 
@@ -4127,6 +4157,10 @@ msgstr "Handoff to {target} requested (the old session stops; the new agent uses
 #: crates/ertangle-tui/src/menu.rs
 msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort"
 msgstr "spawn → {target}: type a prompt and press Enter (may be empty), Ctrl-R to cycle role, Ctrl-F to cycle effort"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已保留草稿並取消"
+msgstr "Draft kept and cancelled"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "沒有符合的 agent"
@@ -4159,6 +4193,22 @@ msgstr "Resume requested for {label}"
 #: crates/ertangle-tui/src/menu.rs
 msgid "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)"
 msgstr "{label} has no resumable conversation id (PTY, older log, or agent exited without reporting)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已喚醒並送出 prompt (含 {n} 個附件)"
+msgstr "Woken and prompt sent (with {n} attachments)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已喚醒並送出 prompt"
+msgstr "Woken and prompt sent"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt"
+msgstr "Resumed and prompt sent"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt (含 {n} 個附件)"
+msgstr "Resumed and prompt sent (with {n} attachments)"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "已切換專案：{path}"
