@@ -94,6 +94,9 @@
 | [T87](T87-tui-sidebar-keyboard-navigation.md) | TUI: keyboard navigation and expand/switch for collapsed `Projects & Sessions` (已完成) | P1 | T85 |
 | [T88](T88-tui-confirm-resume-on-stopped-prompt.md) | TUI: confirm before resuming and sending prompt to ended/stopped session (已完成) | P1 | — |
 | [T89](T89-tui-split-flow-bus-and-orthogonal-links.md) | TUI: vertical split for Flow + Bus in right pane and orthogonal Flow graph links (已完成) | P2 | T82 |
+| [T90](T90-sast-web-cors-ws-origin-and-artifact-scope.md) | SAST: restrict CORS, enforce WebSocket Origin check, and tighten artifact file scope | P1 | T83 |
+| [T91](T91-sast-exec-pgid-timeout-and-secrets-redaction.md) | SAST: kill process group on `handle_exec` timeout and expand `redact_secrets` | P1 | T74 |
+| [T92](T92-perf-web-markdown-cache-and-tui-flow-allocs.md) | Perf & safety: Web Markdown turn cache (`$` fix) and stack-allocated Flow elbows | P2 | T89 |
 
 ## Language convention
 
