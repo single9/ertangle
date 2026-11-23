@@ -90,6 +90,9 @@
 | [T83](T83-web-image-and-artifact-preview.md) | Web UI: Markdown image syntax and agent artifact file preview (已完成) | P1 | — |
 | [T84](T84-tui-header-flow-tab-and-quota-filter.md) | TUI header: add `Flow (F)` tab and filter `3p-*` quota windows (已完成) | P2 | T79 |
 | [T85](T85-tui-unified-sessions-and-adaptive-flow.md) | TUI: unified `Projects & Sessions` sidebar and adaptive 3-column Flow (已完成) | P2 | T82, T84 |
+| [T86](T86-tui-layout-cycling-and-auto-sync.md) | TUI: sync layout cycling (`L` / `b` / `:layout`) with adaptive 3-column Flow | P1 | T85 |
+| [T87](T87-tui-sidebar-keyboard-navigation.md) | TUI: keyboard navigation and expand/switch for collapsed `Projects & Sessions` | P1 | T85 |
+| [T88](T88-tui-confirm-resume-on-stopped-prompt.md) | TUI: confirm before resuming and sending prompt to ended/stopped session | P1 | — |
 
 ## Language convention
 
