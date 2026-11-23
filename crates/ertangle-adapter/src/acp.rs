@@ -25,6 +25,11 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(3600);
 /// `session/load` must wait for the agent to replay the entire history, which takes longer than a normal call for long conversations.
 const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
+/// Some ACP agents (e.g. agy) keep streaming `session/load` history replay after the load response.
+/// The replay is considered finished once no `session/update` has arrived for this long.
+const REPLAY_QUIET: Duration = Duration::from_millis(800);
+/// Upper bound on waiting for the post-load replay to go quiet.
+const REPLAY_MAX_WAIT: Duration = Duration::from_secs(20);
 
 /// Collected answers for a multi-field elicitation: field key -> (multi-select, answers).
 type ElicitationAnswers = Arc<Mutex<HashMap<String, (bool, Vec<String>)>>>;
@@ -108,8 +113,11 @@ struct Conn {
     /// Agent declared image block support during initialize (`promptCapabilities.image`).
     image_ok: std::sync::atomic::AtomicBool,
     /// `session/load` in progress: the agent replays history via `session/update`; updates during this period are discarded,
-    /// otherwise the transcript would duplicate. Cleared by the reader upon receiving the load response (replays always precede the response).
+    /// otherwise the transcript would duplicate. Cleared once the replay has gone quiet after the load response
+    /// (see [`wait_until_quiet`]), or at the latest when the next `session/prompt` is sent.
     loading: std::sync::atomic::AtomicBool,
+    /// When the last `session/update` arrived (including discarded replay updates).
+    last_update: Mutex<std::time::Instant>,
     /// Permission policy: directly auto-approved by adapter when `Auto` / `Bypass`.
     tx: Sender<AgentEvent>,
 }
@@ -629,11 +637,14 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
                         conn.respond_error(&id, -32601, "not supported");
                     }
                 },
-                None => {
-                    if method == "session/update" && !conn.loading.load(Ordering::SeqCst) {
+                None if method == "session/update" => {
+                    *conn.last_update.lock().unwrap_or_else(|e| e.into_inner()) =
+                        std::time::Instant::now();
+                    if !conn.loading.load(Ordering::SeqCst) {
                         conn.on_update(&msg);
                     }
                 }
+                None => {}
             }
         } else if let Some(id) = msg.get("id").and_then(|v| v.as_i64()) {
             if let Some(s) = conn
@@ -935,6 +946,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         prepend_once: Mutex::new(spec.system_append.clone().filter(|s| !s.trim().is_empty())),
         image_ok: std::sync::atomic::AtomicBool::new(false),
         loading: std::sync::atomic::AtomicBool::new(false),
+        last_update: Mutex::new(std::time::Instant::now()),
         tx: tx.clone(),
     });
 
@@ -1046,8 +1058,16 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 json!({ "sessionId": id, "cwd": spec.cwd.to_string_lossy(), "mcpServers": mcp_servers }),
                 LOAD_TIMEOUT,
             );
-            // Keep `conn.loading = true` until `conn.prompt` sends `session/prompt`:
-            // some ACP agents (e.g. agy) stream `session/load` replay updates after returning the response.
+            // Some ACP agents (e.g. agy) stream `session/load` replay updates after returning the response.
+            // Keep discarding until the replay goes quiet; otherwise it lands after the initial prompt
+            // and buries the user's message under the old conversation.
+            *conn.last_update.lock().unwrap_or_else(|e| e.into_inner()) = std::time::Instant::now();
+            wait_until_quiet(
+                || *conn.last_update.lock().unwrap_or_else(|e| e.into_inner()),
+                REPLAY_QUIET,
+                REPLAY_MAX_WAIT,
+            );
+            conn.loading.store(false, Ordering::SeqCst);
             let _ = conn
                 .stream
                 .lock()
@@ -1115,6 +1135,74 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     }
 
     Ok(Box::new(control))
+}
+
+/// Blocks until `last_activity()` is at least `quiet` old, or `max` has elapsed in total.
+fn wait_until_quiet(
+    last_activity: impl Fn() -> std::time::Instant,
+    quiet: Duration,
+    max: Duration,
+) {
+    let start = std::time::Instant::now();
+    loop {
+        let idle = last_activity().elapsed();
+        let waited = start.elapsed();
+        if idle >= quiet || waited >= max {
+            return;
+        }
+        std::thread::sleep((quiet - idle).min(max - waited));
+    }
+}
+
+#[cfg(test)]
+mod replay_wait_tests {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn returns_once_activity_goes_quiet() {
+        let start = Instant::now();
+        // Activity keeps arriving for the first 150ms, then stops.
+        let last = || {
+            let now = Instant::now();
+            if now.duration_since(start) < Duration::from_millis(150) {
+                now
+            } else {
+                start + Duration::from_millis(150)
+            }
+        };
+        wait_until_quiet(last, Duration::from_millis(100), Duration::from_secs(5));
+        let took = start.elapsed();
+        assert!(
+            took >= Duration::from_millis(250),
+            "returned too early: {took:?}"
+        );
+        assert!(took < Duration::from_secs(2), "waited too long: {took:?}");
+    }
+
+    #[test]
+    fn gives_up_after_max_wait_when_activity_never_stops() {
+        let start = Instant::now();
+        wait_until_quiet(
+            Instant::now,
+            Duration::from_millis(100),
+            Duration::from_millis(200),
+        );
+        let took = start.elapsed();
+        assert!(
+            took >= Duration::from_millis(200),
+            "returned too early: {took:?}"
+        );
+        assert!(took < Duration::from_secs(2), "waited too long: {took:?}");
+    }
+
+    #[test]
+    fn returns_immediately_when_already_quiet() {
+        let past = Instant::now() - Duration::from_secs(1);
+        let start = Instant::now();
+        wait_until_quiet(|| past, Duration::from_millis(100), Duration::from_secs(5));
+        assert!(start.elapsed() < Duration::from_millis(50));
+    }
 }
 
 #[cfg(test)]
