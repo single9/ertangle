@@ -163,10 +163,10 @@ pub fn run(initial_project: Option<std::path::PathBuf>) -> Result<()> {
         );
     }
 
-    let (mut terminal, enhanced) = setup_terminal()?;
+    let mut terminal = setup_terminal()?;
     let result = event_loop(&mut terminal, &mut router, rx, host_sync, initial_project);
     running.store(false, Ordering::Relaxed);
-    restore_terminal(&mut terminal, enhanced)?;
+    restore_terminal(&mut terminal)?;
     result
 }
 
@@ -204,66 +204,44 @@ fn status_prefix(app: &App) -> &'static str {
     }
 }
 
-fn setup_terminal() -> Result<(Terminal<CrosstermBackend<io::Stdout>>, bool)> {
-    let enhanced = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
+fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     // 預設擷取滑鼠：應用內可拖曳選取中央區塊並用 OSC 52 複製，滾輪也能捲動。
     // 需要終端機原生選取時按 `F2` 關閉擷取 (Shift+拖曳在多數終端機也可直接繞過)。
     // 另外保留 DECSET 1007：關閉擷取後滾輪仍會變成 Up/Down 來捲動逐字稿。
-    if enhanced {
-        execute!(
-            stdout,
-            EnterAlternateScreen,
-            EnableBracketedPaste,
-            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES),
-            EnableMouseCapture,
-            // 焦點回報：有焦點且正在看的 session 不必通知。
-            EnableFocusChange
-        )?;
-    } else {
-        execute!(
-            stdout,
-            EnterAlternateScreen,
-            EnableBracketedPaste,
-            EnableMouseCapture,
-            // 焦點回報：有焦點且正在看的 session 不必通知。
-            EnableFocusChange
-        )?;
-    }
+    // 直接送出 Kitty keyboard enhancement (`\x1b[>1u`) 而不先查詢 `supports_keyboard_enhancement()`：
+    // 不支援的終端機會靜默忽略該 CSI 序列；查詢反而會在 SSH / tmux 等環境因延遲回傳
+    // Device Attributes (`\x1b[>64;...c`) 並漏進輸入框。
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        EnableBracketedPaste,
+        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES),
+        EnableMouseCapture,
+        // 焦點回報：有焦點且正在看的 session 不必通知。
+        EnableFocusChange
+    )?;
     write!(stdout, "\x1b[?1007h")?;
     // 視窗標題帶上專案名，在有 window manager 的環境可辨識是哪個專案。
     // 先 push (XTWINOPS 22) 原標題，離開時 pop 還原。
     write!(stdout, "\x1b[22;0t\x1b]0;ertangle\x07")?;
     stdout.flush()?;
     let backend = CrosstermBackend::new(stdout);
-    Ok((Terminal::new(backend)?, enhanced))
+    Ok(Terminal::new(backend)?)
 }
 
-fn restore_terminal(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    enhanced: bool,
-) -> Result<()> {
+fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let backend = terminal.backend_mut();
     write!(backend, "\x1b[?1007l\x1b[23;0t")?;
-    if enhanced {
-        execute!(
-            backend,
-            PopKeyboardEnhancementFlags,
-            DisableBracketedPaste,
-            DisableMouseCapture,
-            DisableFocusChange,
-            LeaveAlternateScreen
-        )?;
-    } else {
-        execute!(
-            backend,
-            DisableBracketedPaste,
-            DisableMouseCapture,
-            DisableFocusChange,
-            LeaveAlternateScreen
-        )?;
-    }
+    execute!(
+        backend,
+        PopKeyboardEnhancementFlags,
+        DisableBracketedPaste,
+        DisableMouseCapture,
+        DisableFocusChange,
+        LeaveAlternateScreen
+    )?;
     disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
