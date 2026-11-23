@@ -101,6 +101,8 @@ struct Conn {
     questions: Mutex<HashMap<String, PendingAcpQuestion>>,
     /// Line buffer for streaming output (combines token-level chunks into complete lines).
     stream: Mutex<StreamBuf>,
+    /// Notifies the idle-flush thread whenever a streaming chunk is buffered.
+    stream_poke: Sender<()>,
     /// Collaboration instructions prepended to the first prompt (cleared once taken).
     prepend_once: Mutex<Option<String>>,
     /// Agent declared image block support during initialize (`promptCapabilities.image`).
@@ -258,6 +260,7 @@ impl Conn {
                     if !text.is_empty() {
                         let _ = self.tx.send(AgentEvent::Output(text));
                     }
+                    let _ = self.stream_poke.send(());
                 }
             }
             "agent_thought_chunk" => {
@@ -270,6 +273,7 @@ impl Conn {
                     if !text.is_empty() {
                         let _ = self.tx.send(AgentEvent::Output(text));
                     }
+                    let _ = self.stream_poke.send(());
                 }
             }
             "tool_call" => {
@@ -913,6 +917,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         None
     };
 
+    let (stream_poke, stream_rx) = mpsc::channel();
     let conn = Arc::new(Conn {
         agent: spec.kind.id().to_string(),
         limited: std::sync::atomic::AtomicBool::new(false),
@@ -926,11 +931,34 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         perms: Mutex::new(HashMap::new()),
         questions: Mutex::new(HashMap::new()),
         stream: Mutex::new(StreamBuf::default()),
+        stream_poke,
         prepend_once: Mutex::new(spec.system_append.clone().filter(|s| !s.trim().is_empty())),
         image_ok: std::sync::atomic::AtomicBool::new(false),
         loading: std::sync::atomic::AtomicBool::new(false),
         tx: tx.clone(),
     });
+
+    {
+        let weak = Arc::downgrade(&conn);
+        std::thread::spawn(move || {
+            // Flush trailing partial lines after 250ms of stream silence so internal
+            // background-task turns without `conn.prompt()` don't leak into the next prompt.
+            while stream_rx.recv().is_ok() {
+                loop {
+                    match stream_rx.recv_timeout(Duration::from_millis(250)) {
+                        Ok(()) => continue,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            if let Some(c) = weak.upgrade() {
+                                c.flush_stream();
+                            }
+                            break;
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                    }
+                }
+            }
+        });
+    }
 
     {
         let conn = conn.clone();
