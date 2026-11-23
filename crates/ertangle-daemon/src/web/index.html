@@ -646,6 +646,7 @@
     .chat-h1 { font-size: 16px; font-weight: 700; margin: 12px 0 6px 0; color: var(--text); }
     .chat-h2 { font-size: 15px; font-weight: 700; margin: 10px 0 5px 0; color: var(--text); }
     .chat-h3 { font-size: 14px; font-weight: 600; margin: 8px 0 4px 0; color: var(--text); }
+    .chat-h4 { font-size: 13px; font-weight: 600; margin: 6px 0 3px 0; color: var(--text-dim); }
     .chat-quote {
       border-left: 3px solid var(--cyan);
       padding-left: 10px;
@@ -3080,10 +3081,11 @@
       // 5. 自動識別獨立網址
       safe = safe.replace(/(^|[^"=])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener" class="chat-web-link">$2 ↗</a>');
 
-      // 6. 標題與分隔線
-      safe = safe.replace(/^### (.*)$/gm, '<h3 class="chat-h3">$1</h3>');
-      safe = safe.replace(/^## (.*)$/gm, '<h2 class="chat-h2">$1</h2>');
-      safe = safe.replace(/^# (.*)$/gm, '<h1 class="chat-h1">$1</h1>');
+      // 6. 標題與分隔線 (支援 h1..h6)
+      safe = safe.replace(/^(#{1,6})\s+(.*)$/gm, (_, hashes, title) => {
+        const level = hashes.length;
+        return `<h${level} class="chat-h${Math.min(level, 4)}">${title}</h${level}>`;
+      });
       safe = safe.replace(/^---+$/gm, '<hr class="chat-hr">');
 
       // 7. 引言
@@ -3094,13 +3096,13 @@
       safe = safe.replace(/\*([^*]+)\*/g, '<em>$1</em>');
       safe = safe.replace(/~~([^~]+)~~/g, '<del>$1</del>');
 
-      // 9. 清單
-      safe = safe.replace(/^[\*\-] (.*)$/gm, '<li class="chat-li-bullet">$1</li>');
+      // 9. 清單 (支援縮排子項目與保留原始編號)
+      safe = safe.replace(/^\s*[\*\-]\s+(.*)$/gm, '<li class="chat-li-bullet">$1</li>');
       safe = safe.replace(/(<li class="chat-li-bullet">[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
       safe = safe.replace(/<\/ul>\s*<ul>/g, '');
 
-      safe = safe.replace(/^\d+\. (.*)$/gm, '<li class="chat-li-num">$1</li>');
-      safe = safe.replace(/(<li class="chat-li-num">[\s\S]*?<\/li>)/g, '<ol>$1</ol>');
+      safe = safe.replace(/^\s*(\d+)\.\s+(.*)$/gm, '<li class="chat-li-num" value="$1">$2</li>');
+      safe = safe.replace(/(<li class="chat-li-num"[^>]*>[\s\S]*?<\/li>)/g, '<ol>$1</ol>');
       safe = safe.replace(/<\/ol>\s*<ol>/g, '');
 
       // 10. 段落與換行
@@ -4248,6 +4250,18 @@
           <span class="attach-meta"><span class="attach-name">${escapeHtml(a.name)}</span><span class="attach-size">${formatBytes(a.size)}</span></span>
           <button class="attach-remove" onclick="removeAttachment(${i})" title="移除">×</button>
         </div>`).join("");
+      const inp = document.getElementById("prompt-textarea");
+      if (inp && document.activeElement === inp) {
+        requestAnimationFrame(() => {
+          if (document.activeElement === inp) {
+            const s = inp.selectionStart;
+            const e = inp.selectionEnd;
+            inp.blur();
+            inp.focus({ preventScroll: true });
+            if (s != null && e != null) inp.setSelectionRange(s, e);
+          }
+        });
+      }
     }
 
     // T74: built-in web commands, merged with the active session's native slash commands.

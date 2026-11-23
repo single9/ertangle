@@ -1035,6 +1035,8 @@ mod tests {
         assert!(INDEX_HTML.contains("openFileActionSheet"));
         assert!(INDEX_HTML.contains("chat-file-pill"));
         assert!(INDEX_HTML.contains("圖片載入失敗"));
+        assert!(INDEX_HTML.contains("#{1,6}"));
+        assert!(INDEX_HTML.contains(r#"value="$1""#));
 
         // Verify path validation for artifact dirs
         let tmp = std::env::temp_dir()
