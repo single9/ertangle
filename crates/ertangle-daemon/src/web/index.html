@@ -685,9 +685,9 @@
     }
     .turn-collapse summary:hover { color: var(--text); }
     /* T75: animated, emoji-free thinking indicator and latest-thought preview. */
-    .think-ind { color: var(--text-dim); font-weight: 600; }
+    .think-ind { color: var(--text-dim); font-weight: 600; flex-shrink: 0; }
     .think-ind.active { color: var(--cyan); animation: think-pulse 1.2s ease-in-out infinite; }
-    .think-preview { color: var(--text-dim); font-weight: 400; opacity: 0.9; }
+    .think-preview { color: var(--text-dim); font-weight: 400; opacity: 0.9; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     @keyframes think-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
     .chat-thinking-live {
       color: var(--cyan);
@@ -973,6 +973,7 @@
       display: flex;
       gap: 6px;
       overflow-x: auto;
+      flex-shrink: 0;
       padding-bottom: 2px;
       scrollbar-width: none;
     }
@@ -1060,6 +1061,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
       margin-bottom: 2px;
     }
     .sessions-page-title {
@@ -1741,11 +1744,11 @@
           <div id="quota-container" style="display:none;"></div>
 
           <div class="sessions-top-bar">
-            <div>
+            <div style="min-width:0;">
               <div class="sessions-page-title">Agent Sessions</div>
               <div id="sessions-count-sub" class="sessions-page-sub">共 0 個 Session</div>
             </div>
-            <div style="display:flex; gap:8px; align-items:center;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <button class="btn-pill" style="flex:none; padding:6px 12px; font-size:12px; background:var(--bg-card); color:var(--text); border:1px solid var(--border);" onclick="pruneSessions()" title="清理已結束且已合併的 Session">清理已結束</button>
               <button class="btn-pill btn-allow" style="flex:none; padding:6px 14px; font-size:12px;" onclick="openNewSessionSheet()">+ 建立新 Session</button>
             </div>
@@ -2896,7 +2899,7 @@
             const summaryLabel = thinkActive ? "思考中" : "思考過程";
             html += `
               <details class="turn-collapse">
-                <summary><span class="think-ind ${thinkActive ? "active" : ""}">⋯</span> ${summaryLabel} (${turn.thoughts.length} 行)${preview ? ` <span class="think-preview">· ${escapeHtml(preview)}</span>` : ""} ▾</summary>
+                <summary><span class="think-ind ${thinkActive ? "active" : ""}">⋯</span> <span class="tool-sum-label">${summaryLabel} (${turn.thoughts.length} 行)</span>${preview ? ` <span class="think-preview">· ${escapeHtml(preview)}</span>` : ""} <span class="tool-sum-arrow">▾</span></summary>
                 <div class="collapse-content">${escapeHtml(turn.thoughts.join("\n"))}</div>
               </details>
             `;
