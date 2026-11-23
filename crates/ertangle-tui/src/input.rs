@@ -130,6 +130,24 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
     if app.view == CenterView::Flow && handle_flow_key(app, key) {
         return Ok(());
     }
+    if app.sidebar_focus.is_some() {
+        match key.code {
+            KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => {
+                app.activate_sidebar_focus();
+                app.sync_active_host_from_selection();
+                writer.set_active(&app.active_host);
+                if app.view == CenterView::Diff {
+                    request_selected_diff(app, writer)?;
+                }
+                return Ok(());
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                app.collapse_sidebar_focus();
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
     match key.code {
         KeyCode::Char('q') => {
             app.should_quit = true;
@@ -163,26 +181,42 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
                 request_selected_diff(app, writer)?;
             }
         }
-        KeyCode::Down => match app.view {
-            CenterView::Diff => {
-                app.diff_discard_armed = None;
-                if app.diff_cursor + 1 < app.diff_lines.len() {
-                    app.diff_cursor += 1;
+        KeyCode::Down => {
+            if app.sidebar_focus.is_some() || app.session_ids().is_empty() {
+                app.move_selection(1);
+                app.sync_active_host_from_selection();
+                writer.set_active(&app.active_host);
+            } else {
+                match app.view {
+                    CenterView::Diff => {
+                        app.diff_discard_armed = None;
+                        if app.diff_cursor + 1 < app.diff_lines.len() {
+                            app.diff_cursor += 1;
+                        }
+                    }
+                    CenterView::Transcript => scroll_transcript_lines(app, 1),
+                    CenterView::Tasks => crate::tasks::move_task_cursor(app, 1),
+                    CenterView::Worktrees | CenterView::Grid | CenterView::Flow => {}
                 }
             }
-            CenterView::Transcript => scroll_transcript_lines(app, 1),
-            CenterView::Tasks => crate::tasks::move_task_cursor(app, 1),
-            CenterView::Worktrees | CenterView::Grid | CenterView::Flow => {}
-        },
-        KeyCode::Up => match app.view {
-            CenterView::Diff => {
-                app.diff_discard_armed = None;
-                app.diff_cursor = app.diff_cursor.saturating_sub(1);
+        }
+        KeyCode::Up => {
+            if app.sidebar_focus.is_some() || app.session_ids().is_empty() {
+                app.move_selection(-1);
+                app.sync_active_host_from_selection();
+                writer.set_active(&app.active_host);
+            } else {
+                match app.view {
+                    CenterView::Diff => {
+                        app.diff_discard_armed = None;
+                        app.diff_cursor = app.diff_cursor.saturating_sub(1);
+                    }
+                    CenterView::Transcript => scroll_transcript_lines(app, -1),
+                    CenterView::Tasks => crate::tasks::move_task_cursor(app, -1),
+                    CenterView::Worktrees | CenterView::Grid | CenterView::Flow => {}
+                }
             }
-            CenterView::Transcript => scroll_transcript_lines(app, -1),
-            CenterView::Tasks => crate::tasks::move_task_cursor(app, -1),
-            CenterView::Worktrees | CenterView::Grid | CenterView::Flow => {}
-        },
+        }
         KeyCode::Char('j') => {
             if app.view == CenterView::Diff {
                 app.diff_discard_armed = None;
@@ -191,8 +225,8 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
                 }
             } else if app.view == CenterView::Tasks {
                 crate::tasks::move_task_cursor(app, 1);
-            } else if app.selected + 1 < app.session_ids().len() {
-                app.selected += 1;
+            } else {
+                app.move_selection(1);
                 app.sync_active_host_from_selection();
                 writer.set_active(&app.active_host);
             }
@@ -204,7 +238,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             } else if app.view == CenterView::Tasks {
                 crate::tasks::move_task_cursor(app, -1);
             } else {
-                app.selected = app.selected.saturating_sub(1);
+                app.move_selection(-1);
                 app.sync_active_host_from_selection();
                 writer.set_active(&app.active_host);
             }
@@ -361,6 +395,7 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
         KeyCode::Char('V') => crate::project::toggle_grid(app),
         KeyCode::Esc => {
             app.selection = None;
+            app.sidebar_focus = None;
             app.bus_overlay = false;
             app.diff_discard_armed = None;
             app.status = tr!("已清除選取");

@@ -72,6 +72,15 @@ pub(crate) enum CenterView {
     Flow,
 }
 
+/// 側欄折疊列的鍵盤焦點目標。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum SidebarFocus {
+    /// 「▸ 已結束 (N)」折疊列。
+    EndedFold,
+    /// 「▸ <project> (...)」其他專案折疊列，數值為清單索引。
+    OtherProject(usize),
+}
+
 /// 主區版面模式。
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum LayoutMode {
@@ -305,8 +314,12 @@ pub(crate) struct App {
     pub(crate) mouse_capture: bool,
     /// 使用者選擇的版面模式 (僅執行期；T11 的 config.toml 完成後再持久化)。
     pub(crate) layout: LayoutMode,
+    /// 最近一次繪製時實際套用的版面 (可能因自適應或終端機寬度而不同於 `layout`)。
+    pub(crate) rendered_layout: LayoutMode,
     /// 版面是否被明確固定 (配置或使用者切換，T85)。
     pub(crate) layout_pinned: bool,
+    /// 側欄折疊列的鍵盤焦點 (`None` 表示一般 session 選取)。
+    pub(crate) sidebar_focus: Option<SidebarFocus>,
     /// Bus 欄被隱藏時，是否以浮層暫時顯示。
     pub(crate) bus_overlay: bool,
     /// 三欄版面的右欄顯示 Bus (否則顯示 Project)。
@@ -445,7 +458,9 @@ impl App {
             selection: None,
             mouse_capture: true,
             layout,
+            rendered_layout: layout,
             layout_pinned,
+            sidebar_focus: None,
             bus_overlay: false,
             right_bus: true,
             bus_visible: true,
@@ -477,6 +492,7 @@ impl App {
         let vis = self.visible_sessions();
         if let Some(idx) = vis.iter().position(|(_, id)| id == session) {
             self.selected = idx;
+            self.sidebar_focus = None;
             self.pending_select = None;
             self.sync_active_host_from_selection();
         } else {
@@ -551,9 +567,10 @@ impl App {
             .sum()
     }
 
-    /// Summary of other projects on the active host: `(project_name, live_count, total_count)`.
+    /// Summary of other projects on the active host with exact roots:
+    /// `(project_root, project_name, live_count, total_count)`.
     /// Returns empty when `!self.scope_here`.
-    pub(crate) fn other_project_summaries(&self) -> Vec<(String, usize, usize)> {
+    pub(crate) fn other_project_roots(&self) -> Vec<(String, String, usize, usize)> {
         if !self.scope_here {
             return Vec::new();
         }
@@ -570,7 +587,16 @@ impl App {
             entry.1 += 1;
         }
         map.into_iter()
-            .map(|(root, (live, total))| (project_name(root, &[]), live, total))
+            .map(|(root, (live, total))| (root.to_string(), project_name(root, &[]), live, total))
+            .collect()
+    }
+
+    /// Summary of other projects on the active host: `(project_name, live_count, total_count)`.
+    /// Returns empty when `!self.scope_here`.
+    pub(crate) fn other_project_summaries(&self) -> Vec<(String, usize, usize)> {
+        self.other_project_roots()
+            .into_iter()
+            .map(|(_, name, live, total)| (name, live, total))
             .collect()
     }
 
@@ -1077,7 +1103,7 @@ impl App {
 
     /// 切換 Bus 顯示：三欄版面把右欄在 Project／Bus 間切換，其他版面切換浮層。
     pub(crate) fn toggle_bus(&mut self) {
-        let on = if self.layout == LayoutMode::Three {
+        let on = if self.rendered_layout == LayoutMode::Three {
             self.right_bus = !self.right_bus;
             self.right_bus
         } else {
@@ -1092,14 +1118,23 @@ impl App {
     }
 
     pub(crate) fn cycle_layout(&mut self) {
-        self.set_layout(self.layout.next());
+        self.set_layout(self.rendered_layout.next());
     }
 
     pub(crate) fn set_layout(&mut self, mode: LayoutMode) {
         self.layout_pinned = true;
         self.layout = mode;
+        self.rendered_layout = mode;
         self.selection = None;
         self.status = tr!("版面：{layout}", layout = mode.id());
+    }
+
+    pub(crate) fn set_layout_auto(&mut self) {
+        self.layout_pinned = false;
+        self.layout = LayoutMode::Two;
+        self.rendered_layout = LayoutMode::Two;
+        self.selection = None;
+        self.status = tr!("版面：自動");
     }
 
     pub(crate) fn clamp_selection(&mut self) {
@@ -1109,7 +1144,155 @@ impl App {
         } else if self.selected >= n {
             self.selected = n - 1;
         }
+        if let Some(focus) = self.sidebar_focus {
+            match focus {
+                SidebarFocus::EndedFold => {
+                    if self.ended_count() == 0 {
+                        self.sidebar_focus = None;
+                    }
+                }
+                SidebarFocus::OtherProject(idx) => {
+                    let num = if self.scope_here {
+                        self.other_project_roots().len()
+                    } else {
+                        0
+                    };
+                    if num == 0 {
+                        self.sidebar_focus = None;
+                    } else if idx >= num {
+                        self.sidebar_focus = Some(SidebarFocus::OtherProject(num - 1));
+                    }
+                }
+            }
+        }
         self.sync_active_host_from_selection();
+    }
+
+    /// 移動側欄選取：包含可見 session 清單、已結束折疊列 (`EndedFold`) 與其他專案折疊列 (`OtherProject`)。
+    pub(crate) fn move_selection(&mut self, delta: isize) {
+        if delta == 0 {
+            return;
+        }
+        let steps = delta.abs();
+        for _ in 0..steps {
+            if delta > 0 {
+                let n = self.visible_sessions().len();
+                let ended = self.ended_count();
+                let num_others = if self.scope_here {
+                    self.other_project_roots().len()
+                } else {
+                    0
+                };
+
+                match self.sidebar_focus {
+                    None => {
+                        if n > 0 && self.selected + 1 < n {
+                            self.selected += 1;
+                        } else if ended > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::EndedFold);
+                        } else if num_others > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
+                        }
+                    }
+                    Some(SidebarFocus::EndedFold) => {
+                        if num_others > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
+                        }
+                    }
+                    Some(SidebarFocus::OtherProject(idx)) => {
+                        if idx + 1 < num_others {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(idx + 1));
+                        }
+                    }
+                }
+            } else {
+                let n = self.visible_sessions().len();
+                let ended = self.ended_count();
+
+                match self.sidebar_focus {
+                    Some(SidebarFocus::OtherProject(idx)) => {
+                        if idx > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(idx - 1));
+                        } else if ended > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::EndedFold);
+                        } else if n > 0 {
+                            self.sidebar_focus = None;
+                            self.selected = n - 1;
+                        }
+                    }
+                    Some(SidebarFocus::EndedFold) => {
+                        if n > 0 {
+                            self.sidebar_focus = None;
+                            self.selected = n - 1;
+                        }
+                    }
+                    None => {
+                        if self.selected > 0 {
+                            self.selected = self.selected.saturating_sub(1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 啟用目前側欄焦點項目：
+    /// - `EndedFold`: 切換 `show_ended`；若展開則將焦點移至第一筆已結束的 session。
+    /// - `OtherProject(idx)`: 切換至該專案為 `home_project`。
+    pub(crate) fn activate_sidebar_focus(&mut self) {
+        let Some(focus) = self.sidebar_focus else {
+            return;
+        };
+        match focus {
+            SidebarFocus::EndedFold => {
+                let was_expanded = self.show_ended;
+                self.show_ended = !self.show_ended;
+                if !was_expanded {
+                    let live_count = self.visible_sessions_with(false).len();
+                    let total_count = self.visible_sessions_with(true).len();
+                    self.sidebar_focus = None;
+                    if total_count > live_count {
+                        self.selected = live_count;
+                    }
+                    self.status = tr!("已展開已結束的 session，E 摺疊");
+                } else {
+                    self.sidebar_focus = Some(SidebarFocus::EndedFold);
+                    self.clamp_selection();
+                    self.status = tr!(
+                        "已摺疊已結束的 session ({n})，E 展開",
+                        n = self.ended_count()
+                    );
+                }
+            }
+            SidebarFocus::OtherProject(idx) => {
+                let others = self.other_project_roots();
+                if let Some((root, name, _, _)) = others.get(idx) {
+                    let root_path = std::path::PathBuf::from(root);
+                    self.active_project = root_path;
+                    self.home_project = root.clone();
+                    self.scope_here = true;
+                    self.sidebar_focus = None;
+                    self.selected = 0;
+                    self.selection = None;
+                    self.md_cache = None;
+                    self.rebuild_pending = true;
+                    self.clamp_selection();
+                    self.status = tr!("已切換專案：{project}", project = name);
+                }
+            }
+        }
+    }
+
+    /// 摺疊側欄目前焦點項目：若在 `EndedFold` 且目前展開，則摺疊之。
+    pub(crate) fn collapse_sidebar_focus(&mut self) {
+        if self.sidebar_focus == Some(SidebarFocus::EndedFold) && self.show_ended {
+            self.show_ended = false;
+            self.clamp_selection();
+            self.status = tr!(
+                "已摺疊已結束的 session ({n})，E 展開",
+                n = self.ended_count()
+            );
+        }
     }
 
     /// `Normal` 模式收到可列印字元：不打字，但明確提示要先切進輸入模式。
@@ -1560,9 +1743,13 @@ pub(crate) fn toggle_ended(app: &mut App, show: Option<bool>) {
     // Keep the selection on the same session when rows appear/disappear.
     let keep = app.selected_id();
     app.show_ended = show.unwrap_or(!app.show_ended);
+    if app.sidebar_focus == Some(SidebarFocus::EndedFold) && app.ended_count() == 0 {
+        app.sidebar_focus = None;
+    }
     app.selected = keep
         .and_then(|id| app.session_ids().iter().position(|s| *s == id))
         .unwrap_or(0);
+    app.clamp_selection();
     app.status = if app.show_ended {
         tr!("已展開已結束的 session，E 摺疊")
     } else {
@@ -1575,6 +1762,7 @@ pub(crate) fn toggle_ended(app: &mut App, show: Option<bool>) {
 
 pub(crate) fn toggle_scope(app: &mut App, here: Option<bool>) {
     app.scope_here = here.unwrap_or(!app.scope_here);
+    app.sidebar_focus = None;
     app.selected = 0;
     app.md_cache = None;
     app.selection = None;

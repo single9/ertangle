@@ -83,6 +83,7 @@ pub(crate) fn handle_mouse(
                 let visible = app.session_ids().len();
                 if idx < visible {
                     app.selected = idx;
+                    app.sidebar_focus = None;
                     app.sync_active_host_from_selection();
                     writer.set_active(&app.active_host);
                     app.selection = None;

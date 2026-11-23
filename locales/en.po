@@ -2203,6 +2203,22 @@ msgid "版面：{layout}"
 msgstr "Layout: {layout}"
 
 #: crates/ertangle-tui/src/app.rs
+msgid "版面：自動"
+msgstr "Layout: auto"
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已展開已結束的 session，E 摺疊"
+msgstr "Ended sessions expanded, E to collapse"
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已摺疊已結束的 session ({n})，E 展開"
+msgstr "Ended sessions collapsed ({n}), E to expand"
+
+#: crates/ertangle-tui/src/app.rs
+msgid "已切換專案：{project}"
+msgstr "Switched project: {project}"
+
+#: crates/ertangle-tui/src/app.rs
 msgid "目前是命令模式：按 {keys} 才能輸入文字"
 msgstr "Normal mode: press {keys} to type"
 
@@ -2221,10 +2237,6 @@ msgstr "Path does not exist or is not a directory: {path}"
 #: crates/ertangle-tui/src/app.rs
 msgid "無法解析路徑"
 msgstr "Cannot resolve path"
-
-#: crates/ertangle-tui/src/app.rs
-msgid "已切換專案：{project}"
-msgstr "Switched project: {project}"
 
 #: crates/ertangle-tui/src/app.rs
 msgid "▸ 工具 ×{calls} (✓{ok})· 最後：{last}"
@@ -2261,14 +2273,6 @@ msgstr "Transcript: following latest"
 #: crates/ertangle-tui/src/app.rs
 msgid "逐字稿：第 {next} 行 (End 回到最新)"
 msgstr "Transcript: line {next} (End to jump to latest)"
-
-#: crates/ertangle-tui/src/app.rs
-msgid "已展開已結束的 session，E 摺疊"
-msgstr "Ended sessions expanded, E to collapse"
-
-#: crates/ertangle-tui/src/app.rs
-msgid "已摺疊已結束的 session ({n})，E 展開"
-msgstr "Ended sessions collapsed ({n}), E to expand"
 
 #: crates/ertangle-tui/src/app.rs
 msgid "只顯示本專案的 session、Bus 訊息與任務 ({project})，P 顯示全部"
@@ -2692,8 +2696,8 @@ msgid "未知的主機：{target}，可用主機：{avail}"
 msgstr "Unknown host: {target}, available hosts: {avail}"
 
 #: crates/ertangle-tui/src/commands.rs
-msgid "用法：/layout three|two|tabs"
-msgstr "Usage: /layout three|two|tabs"
+msgid "用法：/layout three|two|tabs|auto"
+msgstr "Usage: /layout three|two|tabs|auto"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "用法：:ended [show|hide]"
@@ -4696,6 +4700,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "用法：/layout three|two|tabs"
+#~ msgstr "Usage: /layout three|two|tabs"
 
 #~ msgid " Sessions "
 #~ msgstr " Sessions "

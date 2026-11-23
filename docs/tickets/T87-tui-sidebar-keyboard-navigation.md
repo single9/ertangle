@@ -1,7 +1,5 @@
 # T87 — TUI: keyboard navigation and expand/switch for collapsed `Projects & Sessions`
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-tui`　Depends on: T85
 
 ## Problem

@@ -34,6 +34,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         app.layout
     };
     let layout = effective_layout(desired_layout, w);
+    app.rendered_layout = layout;
     let right_bus = layout == LayoutMode::Three && app.right_bus;
     app.bus_visible = right_bus || app.bus_overlay;
     if app.bus_visible {
@@ -1476,7 +1477,19 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     }
 
     let mut list_state = ListState::default();
-    if !sessions.is_empty() {
+    if let Some(focus) = app.sidebar_focus {
+        match focus {
+            SidebarFocus::EndedFold => {
+                if ended > 0 {
+                    list_state.select(Some(sessions.len()));
+                }
+            }
+            SidebarFocus::OtherProject(idx) => {
+                let divider_idx = sessions.len() + if ended > 0 { 1 } else { 0 };
+                list_state.select(Some(divider_idx + 1 + idx));
+            }
+        }
+    } else if !sessions.is_empty() {
         list_state.select(Some(app.selected.min(sessions.len() - 1)));
     }
 
