@@ -507,7 +507,7 @@ impl AutoCompactCfg {
 }
 
 /// Git 與 worktree 相關設定 ([git])。
-/// 為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫任意 shell 指令。
+/// `pre_merge_command` 為安全起見僅讀取全域設定檔；`merge_strategy` 可由 repo 設定檔覆寫。
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct GitCfg {
@@ -735,6 +735,10 @@ impl Config {
         // notify_command 只認全域設定：repo 內的設定檔不可信，不能讓它決定要執行的命令。
         if local.tui.notify_min_turn_secs.is_some() {
             out.tui.notify_min_turn_secs = local.tui.notify_min_turn_secs;
+        }
+        // pre_merge_command 只認全域設定：repo 內的設定檔不可信，不能讓它決定要執行的 shell 指令。
+        if local.git.merge_strategy.is_some() {
+            out.git.merge_strategy = local.git.merge_strategy;
         }
         for (name, pb) in local.playbooks {
             out.playbooks.insert(name, pb);

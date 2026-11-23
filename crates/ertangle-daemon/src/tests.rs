@@ -1456,6 +1456,70 @@ fn merge_rebase_resolve_loop_delegates_to_session() {
 }
 
 #[test]
+fn worktree_merge_respects_project_config_rebase_strategy() {
+    let repo = temp_repo("wt_proj_rebase");
+    fs::create_dir_all(repo.join(".ertangle")).unwrap();
+    fs::write(
+        repo.join(".ertangle/config.toml"),
+        "[git]\nmerge_strategy = \"rebase\"\n",
+    )
+    .unwrap();
+    git(&repo, &["add", ".ertangle/config.toml"]);
+    git(&repo, &["commit", "-m", "add project config"]);
+
+    let s = wt_session(&repo, "s_proj_rb");
+    let wt = Path::new(&s.cwd);
+
+    // 主分支推進一個 commit，使預設 merge 策略會產生 merge commit
+    fs::write(repo.join("main_adv.txt"), "main branch advancement\n").unwrap();
+    git(&repo, &["add", "main_adv.txt"]);
+    git(&repo, &["commit", "-m", "advance main"]);
+    let main_head = git(&repo, &["rev-parse", "HEAD"]);
+
+    // worktree 分支新增檔案
+    fs::write(wt.join("proj_rb.txt"), "project rebase feature\n").unwrap();
+    git(wt, &["add", "proj_rb.txt"]);
+    git(wt, &["commit", "-m", "feature commit"]);
+
+    let shared = test_shared();
+    let ctl = MockCtl::default();
+    {
+        let mut inner = shared.inner.lock().unwrap();
+        inner.state.sessions.insert(s.id.clone(), s.clone());
+        inner.sessions.insert(
+            s.id.clone(),
+            SessionEntry {
+                ctl: ctl.as_ctl(),
+                run: new_id("run"),
+            },
+        );
+    }
+
+    let (tx, rx) = client_channel(None);
+    shared.handle(
+        &tx,
+        Request::WorktreeMerge {
+            session: s.id.clone(),
+            dry_run: false,
+            resolve: false,
+            strategy: None,
+        },
+    );
+
+    match rx.rx.recv().unwrap() {
+        Frame::Ok { .. } => {}
+        other => panic!("預期 Frame::Ok，得到 {other:?}"),
+    }
+
+    // 驗證套用了專案設定的 rebase 策略：線性歷史、無 merge commit
+    let parents_line = git(&repo, &["rev-list", "--parents", "-n", "1", "HEAD"]);
+    let parts: Vec<&str> = parents_line.split_whitespace().collect();
+    assert_eq!(parts.len(), 2, "不應產生 merge commit：{parents_line}");
+    assert_eq!(git(&repo, &["rev-parse", "HEAD~1"]), main_head);
+    assert!(repo.join("proj_rb.txt").exists());
+}
+
+#[test]
 fn task_review_status_notifies_and_wakes_reviewer() {
     let shared = test_shared();
     let dir = temp_cwd();

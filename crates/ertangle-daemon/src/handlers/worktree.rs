@@ -124,16 +124,16 @@ pub(crate) fn handle_merge(
     resolve: bool,
     strategy: Option<MergeStrategy>,
 ) {
-    let strategy =
-        crate::config::Config::load_file(&crate::paths::config_dir().join("config.toml"))
-            .git
-            .merge_strategy(strategy);
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     let default_cwd = shared.default_cwd();
     match sess {
         Some(s) => {
-            match merge_worktree_strategy(&session_repo(&default_cwd, &s), &s, strategy, dry_run) {
+            let repo = session_repo(&default_cwd, &s);
+            let strategy = crate::config::Config::load(&crate::paths::config_dir(), &repo)
+                .git
+                .merge_strategy(strategy);
+            match merge_worktree_strategy(&repo, &s, strategy, dry_run) {
                 Ok(msg) => {
                     let _ = reply.send(Frame::ok_note(msg));
                     if !dry_run {
