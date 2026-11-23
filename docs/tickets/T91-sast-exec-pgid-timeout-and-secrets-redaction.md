@@ -1,7 +1,5 @@
 # T91 — SAST: kill process group on `handle_exec` timeout and expand `redact_secrets`
 
-Status: ready-for-agent
-
 Priority: P1　Scope: `ertangle-daemon` (`handlers/session.rs`), `ertangle-core`　Depends on: T74
 
 ## Problem

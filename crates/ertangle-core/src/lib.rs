@@ -2417,7 +2417,18 @@ pub fn compose_text(text: &str, atts: &[Attachment], images_as_text: bool) -> St
 
 /// Masks common secrets and token patterns in text (protects secrets before writing to event log).
 pub fn redact_secrets(input: &str) -> String {
-    const PREFIXES: &[&str] = &["sk-", "ghp_", "gho_", "AIza", "AKIA", "xoxb-"];
+    const PREFIXES: &[&str] = &[
+        "github_pat_",
+        "glpat-",
+        "xoxb-",
+        "xoxp-",
+        "ghp_",
+        "gho_",
+        "ghu_",
+        "AKIA",
+        "AIza",
+        "sk-",
+    ];
     let mut out = String::with_capacity(input.len());
     let bytes = input.as_bytes();
     let mut i = 0;
@@ -2792,6 +2803,16 @@ pub(crate) mod tests {
         assert_eq!(redact_secrets("ghp_12345678901"), "ghp_12345678901");
         assert_eq!(redact_secrets("ghp_123456789012"), "ghp_<REDACTED>");
         assert_eq!(redact_secrets("xoxb-123456789012"), "xoxb-<REDACTED>");
+        assert_eq!(
+            redact_secrets("github_pat_123456789012"),
+            "github_pat_<REDACTED>"
+        );
+        assert_eq!(redact_secrets("gho_123456789012"), "gho_<REDACTED>");
+        assert_eq!(redact_secrets("ghu_123456789012"), "ghu_<REDACTED>");
+        assert_eq!(redact_secrets("glpat-123456789012"), "glpat-<REDACTED>");
+        assert_eq!(redact_secrets("xoxp-123456789012"), "xoxp-<REDACTED>");
+        assert_eq!(redact_secrets("AIza123456789012"), "AIza<REDACTED>");
+        assert_eq!(redact_secrets("AIzashort"), "AIzashort");
     }
 
     #[test]

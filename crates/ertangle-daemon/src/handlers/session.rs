@@ -989,12 +989,12 @@ const EXEC_MAX_BYTES: usize = 64 * 1024;
 const EXEC_MAX_LINES: usize = 200;
 
 /// Result of a shell command run in a session's working directory.
-struct ShellOutcome {
-    output: String,
+pub(crate) struct ShellOutcome {
+    pub(crate) output: String,
     /// Exit code as text, or `timeout` / `?` when unavailable.
-    code: String,
-    timed_out: bool,
-    spawn_error: Option<String>,
+    pub(crate) code: String,
+    pub(crate) timed_out: bool,
+    pub(crate) spawn_error: Option<String>,
 }
 
 /// Trim a captured output to the configured byte/line caps without splitting a UTF-8 character.
@@ -1023,17 +1023,32 @@ fn truncate_shell_output(mut text: String) -> String {
 }
 
 /// Run `sh -c <command>` in `cwd`; readers drain both pipes so a chatty command cannot deadlock.
-fn run_shell_in(cwd: &str, session: &str, command: &str) -> ShellOutcome {
-    let mut child = match Command::new("sh")
-        .arg("-c")
+pub(crate) fn run_shell_in(cwd: &str, session: &str, command: &str) -> ShellOutcome {
+    run_shell_in_timeout(cwd, session, command, EXEC_TIMEOUT)
+}
+
+pub(crate) fn run_shell_in_timeout(
+    cwd: &str,
+    session: &str,
+    command: &str,
+    timeout: Duration,
+) -> ShellOutcome {
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c")
         .arg(command)
         .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .env("ERTANGLE_SESSION", session)
-        .spawn()
+        .env("ERTANGLE_SESSION", session);
+
+    #[cfg(unix)]
     {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+
+    let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(e) => {
             return ShellOutcome {
@@ -1041,7 +1056,7 @@ fn run_shell_in(cwd: &str, session: &str, command: &str) -> ShellOutcome {
                 code: "?".into(),
                 timed_out: false,
                 spawn_error: Some(e.to_string()),
-            }
+            };
         }
     };
     let stdout = child.stdout.take();
@@ -1060,14 +1075,23 @@ fn run_shell_in(cwd: &str, session: &str, command: &str) -> ShellOutcome {
         }
         bytes
     });
-    let deadline = Instant::now() + EXEC_TIMEOUT;
+    let deadline = Instant::now() + timeout;
     let mut timed_out = false;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
             Ok(None) if Instant::now() >= deadline => {
                 timed_out = true;
-                let _ = child.kill();
+                #[cfg(unix)]
+                {
+                    if ertangle_adapter::signal_pgid(child.id(), "-KILL").is_err() {
+                        let _ = child.kill();
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = child.kill();
+                }
                 break child.wait().ok();
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
