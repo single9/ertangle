@@ -583,6 +583,15 @@ impl Picker {
                         }
                     }
                 }
+                if let PickStage::Model(k) = &self.stage {
+                    let cached: Vec<(String, String)> = self
+                        .items
+                        .iter()
+                        .filter(|(_, v)| !v.is_empty())
+                        .cloned()
+                        .collect();
+                    update_live_models_cache(k.clone(), cached);
+                }
                 self.loading = false;
                 self.pending = None;
             }
@@ -616,18 +625,72 @@ impl Picker {
     }
 }
 
-/// 某個 agent 可選的 model：預設 + 內建清單 + config.toml 的 `models`／`model`。
+type LiveModelsCache = std::sync::RwLock<std::collections::HashMap<String, Vec<(String, String)>>>;
+
+static LIVE_CACHE: std::sync::LazyLock<LiveModelsCache> =
+    std::sync::LazyLock::new(|| std::sync::RwLock::new(std::collections::HashMap::new()));
+
+pub(crate) fn update_live_models_cache(kind: AgentKind, models: Vec<(String, String)>) {
+    if let Ok(mut cache) = LIVE_CACHE.write() {
+        cache.insert(kind.id().to_string(), models);
+    }
+}
+
+/// 某個 agent 可選的 model：預設 + 內建清單 + 快取清單 + config.toml 的 `models`／`model`。
 pub(crate) fn model_choices(kind: &AgentKind) -> Vec<(String, String)> {
     let mut out = vec![(tr!("預設 (依 config.toml)"), String::new())];
-    if matches!(kind, AgentKind::ClaudeCode) {
-        out.extend(
-            ertangle_adapter::models::CLAUDE_MODELS
-                .iter()
-                .map(|(id, name)| {
-                    let name = ertangle_core::tr_dyn!(name);
-                    (format!("{id}  ({name})"), id.to_string())
-                }),
-        );
+    match kind {
+        AgentKind::ClaudeCode => {
+            out.extend(
+                ertangle_adapter::models::CLAUDE_MODELS
+                    .iter()
+                    .map(|(id, name)| {
+                        let name = ertangle_core::tr_dyn!(name);
+                        (format!("{id}  ({name})"), id.to_string())
+                    }),
+            );
+        }
+        AgentKind::Antigravity => {
+            out.extend(
+                ertangle_adapter::models::ANTIGRAVITY_MODELS
+                    .iter()
+                    .map(|(id, name)| {
+                        let name = ertangle_core::tr_dyn!(name);
+                        (format!("{id}  ({name})"), id.to_string())
+                    }),
+            );
+        }
+        _ => {}
+    }
+    let key = kind.id().to_string();
+    let need_fetch = if matches!(kind, AgentKind::ClaudeCode) {
+        false
+    } else {
+        LIVE_CACHE
+            .read()
+            .map(|c| !c.contains_key(&key))
+            .unwrap_or(false)
+    };
+    if let Ok(cache) = LIVE_CACHE.read() {
+        if let Some(cached) = cache.get(&key) {
+            for (label, val) in cached {
+                if !out.iter().any(|(_, v)| v == val) {
+                    out.push((label.clone(), val.clone()));
+                }
+            }
+        }
+    }
+    if need_fetch {
+        if let Ok(mut cache) = LIVE_CACHE.write() {
+            cache.entry(key).or_default();
+        }
+        let k = kind.clone();
+        std::thread::spawn(move || {
+            let found = ertangle_adapter::models::query_models(&k);
+            if !found.is_empty() {
+                update_live_models_cache(k, found);
+            }
+        });
     }
     let mut values: Vec<String> = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_default();

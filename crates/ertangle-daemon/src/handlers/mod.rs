@@ -317,12 +317,23 @@ pub(crate) fn model_list(
     } else {
         let query = ertangle_adapter::models::query_models_detailed(agent);
         problem = query.problem;
-        out.extend(
-            query
-                .models
-                .into_iter()
-                .map(|(label, id)| ModelInfo { id, label }),
-        );
+        if query.models.is_empty() && matches!(agent, ertangle_core::AgentKind::Antigravity) {
+            out.extend(
+                ertangle_adapter::models::ANTIGRAVITY_MODELS
+                    .iter()
+                    .map(|(id, name)| ModelInfo {
+                        id: id.to_string(),
+                        label: ertangle_core::tr_dyn!(name),
+                    }),
+            );
+        } else {
+            out.extend(
+                query
+                    .models
+                    .into_iter()
+                    .map(|(label, id)| ModelInfo { id, label }),
+            );
+        }
     }
     let cfg = crate::config::Config::load(&crate::paths::config_dir(), cwd);
     if let Some(a) = cfg.agents.get(agent.id()) {

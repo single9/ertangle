@@ -101,6 +101,7 @@
 | [T94](T94-tui-macos-shortcuts-and-shift-enter-newline.md) | TUI input box: macOS Option/Cmd shortcuts and native `Shift+Enter` newline (已完成) | P1 | — |
 | [T95](T95-web-styled-confirm-dialog.md) | Web UI: replace native `window.confirm` with a styled in-app confirm dialog (已完成) | P2 | — |
 | [T96](T96-tui-no-session-prompt-offer-create-or-resume.md) | TUI: offer create-new / resume picker when a prompt is submitted with no session (已完成) | P2 | T88 |
+| [T97](T97-antigravity-model-choices-completion.md) | TUI & Adapter: Antigravity model choices, command candidate completion, and live cache (已完成) | P2 | T26 |
 
 ## Language convention
 

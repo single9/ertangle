@@ -26,6 +26,21 @@ pub const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-haiku-4-5", "Claude Haiku 4.5"),
 ];
 
+/// Antigravity (agy) 可用的預設 model 清單。
+pub const ANTIGRAVITY_MODELS: &[(&str, &str)] = &[
+    ("gemini-4-neon", "Gemini 4 Neon"),
+    ("gemini-4-carbon", "Gemini 4 Carbon"),
+    ("gemini-4-argon", "Gemini 4 Argon"),
+    ("gemini-4-hydrogen", "Gemini 4 Hydrogen"),
+    ("gemini-3.8-flash", "Gemini 3.8 Flash"),
+    ("gemini-pro-orchestrator-neon", "Orchestrator (Neon)"),
+    ("gemini-pro-orchestrator", "Orchestrator (Carbon)"),
+    ("gemini-pro-orchestrator-argon", "Orchestrator (Argon)"),
+    ("claude-opus-5-5", "Claude Opus 5.5"),
+    ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+    ("gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"),
+];
+
 /// 查詢 model 清單所需的時間上限。
 const QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
@@ -321,12 +336,19 @@ pub fn parse_codex_models(out: &str) -> Vec<(String, String)> {
 pub fn parse_models(out: &str) -> Vec<(String, String)> {
     out.lines()
         .filter_map(|line| {
-            let mut cols = line.split('\t');
-            let id = cols.next()?.trim();
+            let (id, name) = if let Some((id, rest)) = line.split_once('\t') {
+                (id.trim(), Some(rest.trim()))
+            } else if let Some(idx) = line.find("  ") {
+                let id = line[..idx].trim();
+                let rest = line[idx..].trim();
+                (id, if rest.is_empty() { None } else { Some(rest) })
+            } else {
+                (line.trim(), None)
+            };
             if id.is_empty() || id.contains(char::is_whitespace) || id.ends_with("...") {
                 return None;
             }
-            let label = match cols.next().map(str::trim) {
+            let label = match name {
                 Some(name) if !name.is_empty() => format!("{id}  ({name})"),
                 _ => id.to_string(),
             };
@@ -435,5 +457,27 @@ mod tests {
         let timeout =
             diagnose("agy", "agy models", &Err(CaptureError::Timeout), 0).expect("逾時應回報");
         assert!(timeout.contains("agy models"), "{timeout}");
+    }
+
+    #[test]
+    fn parse_models_handles_space_separated_columns() {
+        let out = "gemini-4-neon-high    Gemini 4 Neon (High)\nplain-model\n\n";
+        let parsed = parse_models(out);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].1, "gemini-4-neon-high");
+        assert_eq!(parsed[0].0, "gemini-4-neon-high  (Gemini 4 Neon (High))");
+        assert_eq!(parsed[1].1, "plain-model");
+        assert_eq!(parsed[1].0, "plain-model");
+    }
+
+    #[test]
+    fn antigravity_builtin_models_available() {
+        assert!(!ANTIGRAVITY_MODELS.is_empty());
+        assert!(ANTIGRAVITY_MODELS
+            .iter()
+            .any(|(id, _)| *id == "gemini-4-neon"));
+        assert!(ANTIGRAVITY_MODELS
+            .iter()
+            .any(|(id, _)| *id == "gemini-3.8-flash"));
     }
 }

@@ -1039,6 +1039,33 @@ fn picker_filters_and_offers_default_model() {
 }
 
 #[test]
+fn antigravity_models_are_offered_in_choices_and_command_candidates() {
+    let choices = crate::menu::model_choices(&AgentKind::Antigravity);
+    assert_eq!(choices[0].1, "");
+    assert!(choices.iter().any(|(_, v)| v == "gemini-4-neon"));
+    assert!(choices.iter().any(|(_, v)| v == "gemini-3.8-flash"));
+
+    let mut app = test_app();
+    let id = SessionId::from("ses_agy_test");
+    let mut s = sample_app(&[]).state.sessions.remove("ses_test").unwrap();
+    s.id = id.clone();
+    s.kind = AgentKind::Antigravity;
+    s.status = SessionStatus::Idle;
+    app.state.sessions.insert(id.clone(), s);
+    app.selected = 0;
+
+    let (_, cands) = crate::commands::arg_candidates(&app, ":model ").unwrap();
+    assert!(
+        cands.iter().any(|(v, _)| v == "gemini-4-neon"),
+        "candidates should offer gemini-4-neon, got {cands:?}"
+    );
+    assert!(
+        cands.iter().any(|(v, _)| v == "gemini-3.8-flash"),
+        "candidates should offer gemini-3.8-flash, got {cands:?}"
+    );
+}
+
+#[test]
 fn parses_models_output_and_skips_status_lines() {
     let out = "Fetching available models...\ngemini-4-argon-medium\tGemini 4 Argon (Medium)\nollama/gemma4:12b\n\n";
     let m = ertangle_adapter::models::parse_models(out);
