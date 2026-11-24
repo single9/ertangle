@@ -1,10 +1,34 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.4.0] - 2026-11-24
+
+### 🚀 Features
+
+- *(tui)* Offer create-new or resume picker on no-session prompt (T96)
+- *(tui)* Add Antigravity model choices, candidate completion, and live cache (T97)
+
+### 🐛 Bug Fixes
+
+- *(adapter)* Continue partial lines after stream pause instead of splitting them
+- *(tui)* Render ended sessions below the expanded fold header in the sidebar
+- *(tui)* Parse links and code nested inside bold, italic and strikethrough
+- *(web)* Restore inline code inside markdown link labels
+
+### 📚 Documentation
+
+- *(readme)* Add TUI demo video and feature screenshots
+
+### ⚙️ Miscellaneous Tasks
+
+- Create codeql.yml
+- *(security)* Fix CodeQL workflow permissions and test cleartext-logging alerts
+
 ## [1.3.0] - 2026-11-23
 
 ### 🚀 Features
 
+- *(tui)* Replace right-pane Bus display with live Flow graph (T82)
 - *(web)* Support markdown image syntax and artifact file preview
 - *(tui)* Add header Flow tab, filter 3p quotas, and adaptive 3-column Flow (T84, T85)
 - *(tui)* Confirm before resuming or waking on stopped session prompt (T88)
@@ -18,6 +42,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
+- *(quota)* Clear stale reached status once rate-limit windows reset
 - *(web,tui)* Fix markdown image attr escaping, sessions divider width, and wide-screen 3-col flow
 - *(web)* Support h1-h6 headings, preserve ol numbering, indented bullets, and relayout caret on image attach
 - *(web)* Prevent tool-call summary crushing and split whitespace-delimited tool names
@@ -39,6 +64,7 @@ All notable changes to this project will be documented in this file.
 
 ### 📚 Documentation
 
+- *(tickets)* Add T81 (stale quota reached) and T82 (right-pane flow graph)
 - *(tickets)* Add T83 (web image preview), T84 (header flow tab & quota filter), T85 (unified sidebar & adaptive flow)
 - *(tickets)* Add T86 (layout sync), T87 (sidebar keyboard nav), T88 (confirm resume on stopped prompt)
 - *(tickets)* Add T89 (split Flow+Bus right pane and orthogonal Flow links)
@@ -61,18 +87,12 @@ All notable changes to this project will be documented in this file.
 
 - *(daemon)* Add /clear to reset agent context without changing session identity
 - *(daemon)* Auto-compact idle sessions when context usage exceeds a configurable threshold
-- *(tui)* Replace right-pane Bus display with live Flow graph (T82)
 
 ### 🐛 Bug Fixes
 
 - *(adapter)* Keep claude session alive after user interrupt
 - *(quota)* Ignore inactive Antigravity third-party windows
 - *(bus)* Avoid waking quota-exhausted peers
-- *(quota)* Clear stale reached status once rate-limit windows reset
-
-### 📚 Documentation
-
-- *(tickets)* Add T81 (stale quota reached) and T82 (right-pane flow graph)
 
 ### Merge
 
@@ -80,24 +100,6 @@ All notable changes to this project will be documented in this file.
 - T80 quota-exhausted peer delivery fix
 
 ## [1.1.0] - 2026-11-21
-
-### 🚀 Features
-
-- *(tui)* Open folder browser as its own project action
-- *(tui)* List 'use current folder' first in the folder browser
-- *(tui)* Filter and ~ home shortcut in the folder browser
-- *(tui)* Simplify and align folder browser rows
-- *(tui)* Drop markers from parent and home rows in folder browser
-- *(tui)* List home before parent in folder browser
-- *(tui)* Make the picker filter a real text input with placeholder
-- *(tui)* Hide ~/ row in home and show folder browser hint bottom-right
-
-### 🐛 Bug Fixes
-
-- *(daemon)* Strip (deleted) suffix from exe path given to agent MCP servers
-- *(tui)* Always open the launch directory instead of the last switched project
-
-## [1.0.1] - 2026-11-20
 
 ### 🚀 Features
 
@@ -109,22 +111,40 @@ All notable changes to this project will be documented in this file.
 - *(codex)* Offer Allow/Deny options for form-less MCP elicitation
 - *(tui)* W key jumps to the next session with a pending question or approval
 - *(tui)* Complete command subcommands and add project folder picker
+- *(tui)* Open folder browser as its own project action
+- *(tui)* List 'use current folder' first in the folder browser
+- *(tui)* Filter and ~ home shortcut in the folder browser
+- *(tui)* Simplify and align folder browser rows
+- *(tui)* Drop markers from parent and home rows in folder browser
+- *(tui)* List home before parent in folder browser
+- *(tui)* Make the picker filter a real text input with placeholder
+- *(tui)* Hide ~/ row in home and show folder browser hint bottom-right
 
 ### 🐛 Bug Fixes
 
-- *(tui)* Prevent thinking indicator from overwriting last line and update README
 - *(tui)* Omit zero counts in flow summary so it fits narrow panes (T76)
 - *(bus)* Do not mark earlier unread messages read on filtered wait
 - *(codex)* Auto-approve ertangle MCP tools via mcp_servers config key
 - *(spawn)* Honor worker order and quota
+- *(daemon)* Strip (deleted) suffix from exe path given to agent MCP servers
+- *(tui)* Always open the launch directory instead of the last switched project
+
+### 📚 Documentation
+
+- *(ticket)* Add T76 TUI session flow dashboard plan
+- *(ticket)* Refine T76 flow dashboard design with verified code facts
+
+## [1.0.1] - 2026-11-20
+
+### 🐛 Bug Fixes
+
+- *(tui)* Prevent thinking indicator from overwriting last line and update README
 
 ### 📚 Documentation
 
 - Streamline README title and move name origin to appendix
 - Clarify terminal-native philosophy vs desktop GUI in README
 - *(ticket)* Record T64 live web verification
-- *(ticket)* Add T76 TUI session flow dashboard plan
-- *(ticket)* Refine T76 flow dashboard design with verified code facts
 
 ### 🧪 Testing
 
