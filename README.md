@@ -185,15 +185,13 @@ ertangle
    │
    ├─► ↳ [worker-backend]  (獨立分支 @ertangle/ses_a1 · .ertangle/wt/ses_a1)
    │      ├── 呼叫 ertangle_task_update(T1, status="doing")
-   │      ├── 修改 src/auth.rs、執行單元測試
-   │      ├── 呼叫 ertangle_task_update(T1, status="done")
-   │      └── 呼叫 ertangle_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") 後立即結束回合
+   │      ├── 修改 src/auth.rs、執行 `ertangle check` 驗證測試
+   │      └── 呼叫 ertangle_task_update(T1, status="done", report="Implemented /api/login and JWT middleware") 一鍵更新看板並回報 TASK_DONE 後立即結束回合
    │
    └─► ↳ [worker-frontend] (獨立分支 @ertangle/ses_b2 · .ertangle/wt/ses_b2)
           ├── 呼叫 ertangle_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
           ├── 修改 web/login.ts、完成表單驗證
-          ├── 呼叫 ertangle_task_update(T2, status="done")
-          └── 呼叫 ertangle_send(to="coord", "TASK_DONE task_2 Added login form and error handling") 後立即結束回合
+          └── 呼叫 ertangle_task_update(T2, status="done", report="Added login form and error handling") 一鍵更新看板並回報 TASK_DONE 後立即結束回合
 ```
 
 在 TUI 畫面上你會看到：
@@ -238,10 +236,10 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 | --- | --- | --- |
 | **自我與環境** | `ertangle_whoami`, `ertangle_peers` | 查詢自己的 session ID、工作區分支，以及其他同伴資訊 |
 | **訊息傳遞** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | 發送訊息、非同步讀取收件匣、阻塞等待新訊息、同步問答 |
-| **任務看板** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | 建立協作任務、指定負責人、支援 `depends_on` 前置相依性 |
-| **衍生與產出** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | 派生子 Agent、分享產出物、廣播進度狀態 |
+| **任務看板** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | 建立協作任務、指定負責人、支援 `depends_on` 前置相依性；`ertangle_task_update` 支援帶入 `report` 於 `done`/`blocked` 時一鍵向父 Session 發送 `TASK_DONE` / `TASK_BLOCKED` |
+| **衍生與產出** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | 派生子 Agent (支援 `task_title` / `task_id` 同步建立或綁定任務)、分享產出物、廣播進度狀態 |
 | **互動與核准** | `ertangle_question`, `ertangle_approve` | 提出互動式問題 (單選／複選／文字自填)、工具使用權限核准轉發 |
-| **Git 整合** | `ertangle_diff`, `ertangle_merge` | 查詢自身分支與主分支 diff、請求合併 |
+| **Git 整合** | `ertangle_diff`, `ertangle_merge` | 查詢分支 diff (支援 `stat_only`、`paths`、`max_lines`，並預設摺疊 `package-lock.json`、`Cargo.lock`、`*.Designer.cs`、`*ModelSnapshot.cs` 等大型生成檔)、請求合併 |
 
 - **空閒提醒 (Unread Nudge on Idle)**：
   - 當 Agent 正忙於執行回合時，發來的直接訊息 (或廣播) 只會暫存在收件匣，**不打斷運算**。
@@ -466,11 +464,18 @@ ertangle queue <session-or-label> [--clear]        # 查看或清空待送佇列
 
 # Worktree 與程式碼審查
 ertangle worktrees                                 # 列出所有由 ertangle 管理的 worktree
-ertangle diff <session-or-label>                   # 檢視指定 session 的 git diff
+ertangle diff <session-or-label> [--stat] [--max-lines <n>] [paths...] # 檢視指定 session 的 git diff (支援統計、路徑過濾與生成檔摺疊)
 ertangle review <session-or-label> --location <file>:<line> "審查意見"
 ertangle merge <session-or-label> [--dry-run] [--resolve] [--strategy merge|squash|rebase] # 合併分支回主工作區
 ertangle pr <session-or-label> --title "PR 標題"   # 透過 gh 建立 Pull Request
 ertangle gc [--session <id>]                       # 清理已結束且已合併的 worktrees
+
+# 跨語言 Agent 開發加速工具 (Rust / Node / Vite / .NET Core / Python)
+ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python>] [--quick] [--max-lines <n>] [--json] # 低雜訊建置、型別與測試檢查
+ertangle outline [paths...] [--max-depth <n>] [--json] # 提取原始碼檔案或目錄的符號骨架與起訖行號 (L<start>-L<end>)
+ertangle dev start [--cwd <dir>] [--port <port>] [--timeout-secs <n>] [--json] [-- <cmd...>] # 非阻塞背景啟動開發伺服器並自動分配連接埠
+ertangle dev status [--cwd <dir>] [--json]         # 查看目前工作區受管開發伺服器狀態
+ertangle dev stop [--cwd <dir>] [--json]           # 停止目前工作區受管開發伺服器處理程序群組
 
 # 跨 Agent 訊息與任務看板
 ertangle send <session-or-label> "訊息內容"         # 發送訊息給指定 agent
@@ -517,7 +522,8 @@ ertangle skill show
 - `[agent_spawn] auto_resume` (預設 `true`)：daemon 重啟時，自動接續當下正在執行回合的 session，並提示 agent 先用 `git status`／`git diff` 找回進度，不要重新探索整個專案。額度已滿、或上次自動接續後沒有任何進展的 session 不會再自動接續。
 - `[auto_compact] enabled` (預設 `true`)、`threshold_percent` (預設 `80`，限制在 10 到 95)：session 回到閒置且上下文用量達到門檻時，daemon 自動代送 `/compact`；僅對宣告支援 `compact` 斜線指令的 agent (如 Claude) 生效，只讀全域設定檔。也可在設定面板的「上下文」區調整。
 - `[agent_spawn] shared_cargo_target` (預設 `true`)：Cargo 專案裡，所有 worktree 的 agent 共用 `<repo>/.ertangle/target` 當 `CARGO_TARGET_DIR`。不用每個 worktree 各編一份，cargo 的目錄鎖也讓多個 worker 的編譯與測試自動排隊。已自行設定 `CARGO_TARGET_DIR` 時不覆寫。
-- 兩者都可在 `:settings` 切換。
+- `[agent_spawn] shared_worktree_deps` (預設 `true`)：在建立 git worktree 時，自動將主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除 `.example`/`.sample`/`.template`) 以及 .NET Core 的 `appsettings.Development.json` 建立符號連結 (symlink) 掛載至 worktree，並自動將 `node_modules/.bin` 與 `.venv/bin` 加入 `PATH`、注入 `DOTNET_NOLOGO=1` 與 `DOTNET_CLI_TELEMETRY_OPTOUT=1`。這些掛載連結不會被 `git status`、`ertangle_diff` 或自動 commit 誤收入分支，且在移除 worktree 時會安全卸載，不影響主工作區檔案。
+- 上述設定亦可在 `:settings` 或 `config.toml` 調整。
 
 ## 設定檔與環境變數
 

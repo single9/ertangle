@@ -245,10 +245,11 @@ daemon 開一個 MCP server (`ertangle mcp`)。spawn agent 時，透過該 agent
 | `ertangle_inbox()` | 讀取尚未處理的訊息 |
 | `ertangle_wait(timeout_ms)` | 阻塞等待下一則訊息 (協作交握用) |
 | `ertangle_ask(peer, question, timeout_ms)` | 送出問題並等回覆 (request/response) |
-| `ertangle_task_list()` / `ertangle_task_create()` / `ertangle_task_update()` | 共用任務看板。`depends_on` 未完成的任務建立為 `blocked` 且不通知負責人，前置任務全部 `done` 後由 daemon 改回 `todo` 並送指派訊息；`task_list` 的 `waiting_on` 列出還沒完成的前置任務 |
-| `ertangle_spawn(kind?, prompt, worktree?, role?)` | **agent 產生子 agent** (協調者 → 工作者) |
+| `ertangle_task_list()` / `ertangle_task_create()` / `ertangle_task_update()` | 共用任務看板。`depends_on` 未完成的任務建立為 `blocked` 且不通知負責人，前置任務全部 `done` 後由 daemon 改回 `todo` 並送指派訊息；`task_list` 的 `waiting_on` 列出還沒完成的前置任務；`task_update` 支援 `report` 參數於 `done`/`blocked` 時一鍵向父 session 發送 `TASK_DONE` / `TASK_BLOCKED` |
+| `ertangle_spawn(kind?, prompt, worktree?, role?, task_id?, task_title?)` | **agent 產生子 agent** (協調者 → 工作者)，並可同步建立或綁定看板任務 |
 | `ertangle_artifact_share(path\|branch\|diff)` | 分享產出 (檔案、分支、diff)給他人或看板 |
 | `ertangle_status(text)` | 更新自己在 TUI 上的狀態字串 (輕量進度回報) |
+| `ertangle_diff(session?, stat_only?, paths?, max_lines?)` / `ertangle_merge(...)` | 查詢工作區 diff (支援統計模式、路徑過濾與大型 lockfile / `.Designer.cs` / `*ModelSnapshot.cs` 自動摺疊) 與合併分支 |
 
 > 這是「agent 驅動 orchestration」的關鍵：**協調者 agent 可以直接 `ertangle_spawn` 出 worker**，
 > 而 worker 的核准、狀態、訊息全部回到 TUI，人類可隨時介入。
@@ -394,6 +395,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 ## 8. 工作區與 Git worktree
 
 - 每個「要寫檔的」session 預設配一個 worktree：`git worktree add .ertangle/wt/<session> -b ertangle/<label>`。
+- 跨語言相依性與未追蹤設定檔自動掛載 (`[agent_spawn] shared_worktree_deps = true`，預設開啟)：建立 worktree 時自動為主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除 `.example`/`.sample`/`.template`) 與 `appsettings.Development.json` 建立符號連結 (記錄於 `.ertangle/provisioned_links`)，並自動將 `node_modules/.bin` 與 `.venv/bin` 加入 `PATH`、注入 `DOTNET_NOLOGO=1` 與 `DOTNET_CLI_TELEMETRY_OPTOUT=1`；移除 worktree 時自動安全清理連結，不影響主工作區。
 - 唯讀 session (reviewer)可共用主 checkout (唯讀)。
 - daemon 提供：列出 worktree、取 diff、合併回主分支、開 PR (呼叫 `gh` 或 `git`)。
 - 衝突處理：以「一個 worktree 一個 branch」為原則，避免同時改同一檔；需要整合時由 coordinator/人類決定。

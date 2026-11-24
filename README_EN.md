@@ -236,10 +236,10 @@ Every structured agent session is automatically injected with a stdio MCP server
 | --- | --- | --- |
 | **Self & Peers** | `ertangle_whoami`, `ertangle_peers` | Inspect own session ID, branch, worktree path, and peer agent details |
 | **Messaging** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | Send direct/broadcast messages, non-blocking inbox reads, blocking wait, synchronous Q&A |
-| **Task Board** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | Create tasks, assign owners, specify `depends_on` prerequisite dependencies |
-| **Spawning & Output** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | Spawn sub-agents, share artifacts (files, PR links), broadcast status summaries |
+| **Task Board** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | Create tasks, assign owners, specify `depends_on` prerequisite dependencies; pass `report` to `ertangle_task_update` (`done`/`blocked`) to atomically send `TASK_DONE` / `TASK_BLOCKED` to the parent session |
+| **Spawning & Output** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | Spawn sub-agents (supports `task_title` / `task_id` to atomically create or bind a board task), share artifacts (files, PR links), broadcast status summaries |
 | **Interaction & Approval** | `ertangle_question`, `ertangle_approve` | Ask interactive single/multi-select questions, forward tool permission approvals |
-| **Git Operations** | `ertangle_diff`, `ertangle_merge` | Query branch diff vs. main branch, request worktree merge |
+| **Git Operations** | `ertangle_diff`, `ertangle_merge` | Query branch diff vs. main branch (supports `stat_only`, `paths`, `max_lines`, and auto-folds giant lock/generated files like `package-lock.json`, `Cargo.lock`, `*.Designer.cs`, `*ModelSnapshot.cs`), request worktree merge |
 
 - **Unread Nudge on Idle**:
   - Direct messages and broadcasts sent to busy agents are buffered in their mailbox **without interrupting active turns**.
@@ -464,11 +464,18 @@ ertangle queue <session-or-label> [--clear]        # View or clear prompt queue
 
 # Worktree & Code Review
 ertangle worktrees                                 # List all managed git worktrees
-ertangle diff <session-or-label>                   # View git diff for a session
+ertangle diff <session-or-label> [--stat] [--max-lines <n>] [paths...] # View git diff for a session (supports stats, path filters, and lock/designer folding)
 ertangle review <session-or-label> --location <file>:<line> "Review comment"
 ertangle merge <session-or-label> [--dry-run] [--resolve] # Merge session branch back to main
 ertangle pr <session-or-label> --title "PR title"  # Create GitHub Pull Request via gh
 ertangle gc [--session <id>]                       # Clean up merged worktrees safely
+
+# Polyglot Agent Efficiency Tools (Rust / Node / Vite / .NET Core / Python)
+ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python>] [--quick] [--max-lines <n>] [--json] # Low-token build, type, and test verifier
+ertangle outline [paths...] [--max-depth <n>] [--json] # Extract symbol outlines and exact line ranges (L<start>-L<end>)
+ertangle dev start [--cwd <dir>] [--port <port>] [--timeout-secs <n>] [--json] [-- <cmd...>] # Non-blocking background dev server with auto free port
+ertangle dev status [--cwd <dir>] [--json]         # Check status of the managed dev server in the workspace
+ertangle dev stop [--cwd <dir>] [--json]           # Stop the managed dev server process group
 
 # Cross-Agent Messaging & Tasks
 ertangle send <session-or-label> "message content" # Send message to target agent
