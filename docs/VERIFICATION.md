@@ -187,3 +187,16 @@ opencode (本機 gemma4)：`spawn nx --prompt "用 shell 執行 sleep 25…"`，
 修正：一開始方框內的狀態文字 (例如 `busy`) 與狀態符號重複，還會被截斷；改成只有沒有其他標記時才顯示狀態文字。層間最少列數從 2 改成 1，3 層的樹才能在 80×24 顯示。
 
 沒有驗證：`WaitingApproval` 的閃爍 (只有單元測試)；頻道訊息 (設計上不畫封包，只出現在邊列表)；60 ms 重繪頻率對遠端 SSH 頻寬的實際影響。
+
+## T98–T102 跨語言 Agent 開發加速工具 (實機與整合測試，2026-11-25)
+
+環境：Linux (Rust workspace 全套測試與 CLI 實測)。
+
+| 驗證項 | 做法 | 結果 |
+| --- | --- | --- |
+| T98：`ertangle_diff` 範圍與生成檔摺疊 | 修改 `src.rs`、`package-lock.json`、`20261124_Init.Designer.cs`、`AppDbContextModelSnapshot.cs` 後測試 `stat_only`、預設摺疊、`paths` 展開與 `max_lines` 截斷 | `stat_only` 僅輸出 `+N -M` 統計；未指定 `paths` 時自動將 lockfile 與 `.NET` Designer / Snapshot 摺疊為單行摘要；指定 `paths` 時完整展開 |
+| T99：任務原子回報與 `spawn` 綁定 | 驗證 `ertangle_task_update(..., status="done"\|"blocked", report="...")` 與 `ertangle_spawn(..., task_title=...)` | 單次呼叫即完成任務狀態更新與 `TASK_DONE` / `TASK_BLOCKED` 格式化訊息回報，並修正帶額度附註時的 `ses_...` ID 擷取 |
+| T100：Worktree 跨語言相依性與未追蹤設定掛載 | 在含 `node_modules/`、`.venv/`、`.env.local` 與 `src/WebApi/appsettings.Development.json` 的 Git repo 建立並移除 worktree | Worktree 自動建立符號連結並寫入 `.ertangle/provisioned_links`；`git_status_summary`、`has_uncommitted` 與 `compute_worktree_diff` 完全忽略掛載連結；`remove_worktree` 安全卸載連結且主 repo 檔案完好無損 |
+| T101：`ertangle check` 跨語言低雜訊檢查 | 實機執行 `ertangle check --quick`，並以單元測試驗證 Cargo JSON、Node/Vite (`node_modules` 堆疊過濾與 ANSI 剝除)、.NET Core MSBuild (跨專案重複 `CSxxxx` 錯誤去重與相對路徑正規化) | 實機輸出單行 `PASS [rust]: clippy (0 warnings)`；各語言錯誤脫水與行數截斷測試全數通過 |
+| T102：`ertangle outline` 與 `ertangle dev` | 實機執行 `ertangle outline crates/ertangle-daemon/src/git.rs`；測試 Rust / TS / C# (`[Http*]` Route 屬性) / Python 符號行號範圍與 `ertangle dev start\|status\|stop` 背景處理程序群組生命週期 | 精準輸出 `L<start>-L<end>` 符號骨架；`ertangle dev` 自動分配空閒連接埠、通過 TCP/Log 就緒探測非阻塞回傳，並於 `stop` 時透過 `-TERM -- -<pgid>` 乾淨終止處理程序群組 |
+| 平行 Git 測試防 GPG 簽章鎖死 | 在開啟全域 `commit.gpgsign=true` 的環境平行跑 `cargo test --workspace` | `tests.rs` 的 `git()` 與 `temp_repo()` 強制注入 `commit.gpgsign=false` 與 `tag.gpgsign=false`，消除平行測試時 `gpg-agent` / `pinentry` 搶鎖造成的隨機失敗 |

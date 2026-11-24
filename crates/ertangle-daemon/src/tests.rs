@@ -1039,7 +1039,16 @@ fn git(dir: &Path, args: &[&str]) -> String {
     let o = Command::new("git")
         .arg("-C")
         .arg(dir)
-        .args(["-c", "user.email=t@t", "-c", "user.name=t"])
+        .args([
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "tag.gpgsign=false",
+        ])
         .args(args)
         .output()
         .unwrap();
@@ -1055,6 +1064,9 @@ fn temp_repo(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("ertangle-git-{tag}-{}", new_id("t")));
     fs::create_dir_all(&d).unwrap();
     git(&d, &["init", "-q", "-b", "main"]);
+    git(&d, &["config", "commit.gpgsign", "false"]);
+    git(&d, &["config", "user.email", "t@t"]);
+    git(&d, &["config", "user.name", "t"]);
     fs::write(d.join("a.txt"), "base\n").unwrap();
     git(&d, &["add", "."]);
     git(&d, &["commit", "-qm", "init"]);
