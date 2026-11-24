@@ -492,6 +492,8 @@ pub(crate) fn handle_input_mode(
             app.spawn_target = None;
             app.spawn_effort = None;
             app.spawn_variants.clear();
+            app.pending_prompt_draft = None;
+            app.pending_spawn_attachments.clear();
         }
         KeyCode::Char('e')
             if key.modifiers.contains(KeyModifiers::CONTROL) && app.mode == Mode::Spawn =>

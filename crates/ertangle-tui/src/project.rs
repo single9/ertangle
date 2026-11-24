@@ -294,7 +294,7 @@ pub(crate) fn draw_grid(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.transcript_area = Rect::default();
     if ids.is_empty() {
         f.render_widget(
-            Paragraph::new(tr!("尚無 session：按 n 建立"))
+            Paragraph::new(tr!("尚無 session：按 n 建立，或直接輸入 prompt"))
                 .block(Block::default().borders(Borders::ALL).title(" Grid ")),
             area,
         );

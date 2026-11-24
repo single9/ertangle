@@ -561,8 +561,12 @@ pub(crate) fn draw_picker(f: &mut TuiFrame, app: &mut App) {
     let p = &*p;
     let vis = p.visible();
     let is_resume = matches!(p.stage, crate::menu::PickStage::Resume);
-    let is_wide =
-        is_resume || matches!(p.stage, crate::menu::PickStage::ConfirmResumePrompt { .. });
+    let is_wide = is_resume
+        || matches!(
+            p.stage,
+            crate::menu::PickStage::ConfirmResumePrompt { .. }
+                | crate::menu::PickStage::NoSessionPrompt { .. }
+        );
     let max_w = if is_wide { 96 } else { 72 };
     let w = max_w.min(f.area().width.saturating_sub(2));
     let extra_h: u16 = if is_resume { 5 } else { 4 };
@@ -1019,7 +1023,7 @@ pub(crate) fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
     if ids.is_empty() || area.width == 0 {
         f.render_widget(
             Paragraph::new(Span::styled(
-                tr!(" (尚無 session，按 n 建立)"),
+                tr!(" (尚無 session，按 n 建立或輸入 prompt)"),
                 Style::default().fg(Color::DarkGray),
             )),
             area,
@@ -2003,7 +2007,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 if app.raw_md { "raw" } else { "md" },
             )
         }
-        None => tr!(" (尚無 session：按 n 建立) "),
+        None => tr!(" (尚無 session：按 n 建立，或直接輸入 prompt) "),
     };
 
     // 畫面下方顯示這個 session 的執行參數 (模型、effort、權限、context、成本)，

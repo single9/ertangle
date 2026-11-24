@@ -234,6 +234,10 @@ pub(crate) struct App {
     /// 選擇器選好的 (agent, model)；Spawn 模式的輸入就只是 prompt。
     pub(crate) spawn_target: Option<(AgentKind, Option<String>)>,
     pub(crate) spawn_effort: Option<String>,
+    /// Prompt draft preserved while picking create-new or resume from `NoSessionPrompt` (T96).
+    pub(crate) pending_prompt_draft: Option<(String, Vec<ertangle_core::Attachment>)>,
+    /// Pre-extracted attachments carried into `Mode::Spawn` from `NoSessionPrompt` (T96).
+    pub(crate) pending_spawn_attachments: Vec<ertangle_core::Attachment>,
     pub(crate) help_scroll: usize,
     pub(crate) settings: Option<crate::settings::Settings>,
     /// 選擇器用於交接時，來源 session。
@@ -410,6 +414,8 @@ impl App {
             spawn_bypass_armed: false,
             spawn_target: None,
             spawn_effort: None,
+            pending_prompt_draft: None,
+            pending_spawn_attachments: Vec::new(),
             help_scroll: 0,
             settings: None,
             handoff_from: None,

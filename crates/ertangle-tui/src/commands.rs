@@ -51,15 +51,15 @@ pub(crate) fn submit_prompt_or_route(
             return Ok(());
         }
     }
+    let (body, attachments) = match crate::attach::extract_attachments(trimmed, &app.search_root())
+    {
+        Ok(r) => r,
+        Err(e) => {
+            app.status = tr!("附件錯誤：{e}", e = e);
+            return Ok(());
+        }
+    };
     if let Some(id) = app.selected_id() {
-        let (body, attachments) =
-            match crate::attach::extract_attachments(trimmed, &app.search_root()) {
-                Ok(r) => r,
-                Err(e) => {
-                    app.status = tr!("附件錯誤：{e}", e = e);
-                    return Ok(());
-                }
-            };
         let session_opt = app
             .state
             .sessions
@@ -110,7 +110,7 @@ pub(crate) fn submit_prompt_or_route(
             tr!("已送出 prompt")
         };
     } else {
-        app.status = tr!("沒有選取的 session");
+        crate::menu::start_no_session_prompt(app, body, attachments);
     }
     Ok(())
 }
@@ -1358,7 +1358,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
     };
     let prompt = prompt.filter(|p| !p.is_empty());
     let root = app.search_root();
-    let (prompt, attachments) = match prompt
+    let (prompt, mut attachments) = match prompt
         .as_deref()
         .map(|p| crate::attach::extract_attachments(p, &root))
     {
@@ -1372,6 +1372,7 @@ pub(crate) fn submit_spawn(app: &mut App, writer: &mut HostRouter, text: &str) -
         }
         None => (None, Vec::new()),
     };
+    attachments.extend(std::mem::take(&mut app.pending_spawn_attachments));
     // bypass 需要再按一次 Enter 確認。
     if app.spawn_permission == Some(PermissionPolicy::Bypass) && !app.spawn_bypass_armed {
         app.spawn_bypass_armed = true;

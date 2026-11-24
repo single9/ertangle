@@ -2361,7 +2361,7 @@ msgstr ""
 msgid "已送出 prompt"
 msgstr ""
 
-#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr ""
 
@@ -3282,7 +3282,7 @@ msgid "⏸ {label} 要求 {title}：{detail}{more} {keys}"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " (尚無 session，按 n 建立)"
+msgid " (尚無 session，按 n 建立或輸入 prompt)"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3334,7 +3334,7 @@ msgid "思考中..."
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " (尚無 session：按 n 建立) "
+msgid " (尚無 session：按 n 建立，或直接輸入 prompt) "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -4207,6 +4207,34 @@ msgid "Session \"{label}\" 已停止 ({status})，是否接續並送出 prompt�
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "已保留草稿並取消"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt (含 {n} 個附件)"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "建立新 session 並送出"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "接續先前的 session 並送出"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "保留草稿並取消"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "目前沒有作用中的 session，要如何處理這則 prompt？"
+msgstr ""
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有可用的專案清單"
 msgstr ""
 
@@ -4220,10 +4248,6 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort"
-msgstr ""
-
-#: crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/menu.rs
-msgid "已保留草稿並取消"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4264,14 +4288,6 @@ msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "已喚醒並送出 prompt"
-msgstr ""
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "已接續並送出 prompt"
-msgstr ""
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "已接續並送出 prompt (含 {n} 個附件)"
 msgstr ""
 
 #: crates/ertangle-tui/src/menu.rs
@@ -4388,7 +4404,7 @@ msgid " Project · 全部專案 "
 msgstr ""
 
 #: crates/ertangle-tui/src/project.rs
-msgid "尚無 session：按 n 建立"
+msgid "尚無 session：按 n 建立，或直接輸入 prompt"
 msgstr ""
 
 #: crates/ertangle-tui/src/ps.rs

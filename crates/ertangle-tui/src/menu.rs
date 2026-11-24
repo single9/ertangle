@@ -380,6 +380,13 @@ pub(crate) enum PickStage {
         text: String,
         attachments: Vec<Attachment>,
     },
+    /// Offer to create a new session or resume a previous one when no session is selected (T96).
+    #[allow(dead_code)]
+    NoSessionPrompt {
+        text: String,
+        attachments: Vec<Attachment>,
+        can_resume: bool,
+    },
 }
 
 /// 專案選擇器裡「瀏覽本機資料夾」項目的值。用控制字元避免與真實路徑撞名。
@@ -492,7 +499,9 @@ impl Picker {
         match self.stage {
             PickStage::Directory { .. } => tr!("輸入過濾資料夾，~ 回家目錄"),
             PickStage::Project => tr!("輸入過濾專案，或直接輸入路徑"),
-            PickStage::ConfirmResumePrompt { .. } => tr!("選擇以確認或取消"),
+            PickStage::ConfirmResumePrompt { .. } | PickStage::NoSessionPrompt { .. } => {
+                tr!("選擇以確認或取消")
+            }
             _ => tr!("輸入以過濾"),
         }
     }
@@ -501,7 +510,9 @@ impl Picker {
     pub(crate) fn hint(&self) -> Option<String> {
         match &self.stage {
             PickStage::Directory { .. } => Some(tr!("Enter 進入／選取 · Esc 取消")),
-            PickStage::ConfirmResumePrompt { .. } => Some(tr!("Enter 選擇 · Esc 取消")),
+            PickStage::ConfirmResumePrompt { .. } | PickStage::NoSessionPrompt { .. } => {
+                Some(tr!("Enter 選擇 · Esc 取消"))
+            }
             _ => None,
         }
     }
@@ -1504,6 +1515,85 @@ pub(crate) fn start_confirm_resume_prompt(
     app.mode = Mode::Pick;
 }
 
+/// Restore a cancelled prompt draft back into the input box.
+fn restore_prompt_draft(app: &mut App, text: String) {
+    app.input = text;
+    app.input_cursor = app.input.chars().count();
+    app.mode = Mode::Prompt;
+    app.status = tr!("已保留草稿並取消");
+}
+
+/// Resume an ended session and deliver the pending prompt (and any attachments).
+fn send_resume_with_prompt(
+    app: &mut App,
+    writer: &mut HostRouter,
+    session: SessionId,
+    text: String,
+    attachments: Vec<Attachment>,
+) -> Result<()> {
+    app.select_or_pend(&session);
+    if attachments.is_empty() {
+        crate::send(
+            writer,
+            &ertangle_protocol::Request::Resume {
+                session,
+                prompt: Some(text),
+            },
+        )?;
+        app.status = tr!("已接續並送出 prompt");
+    } else {
+        let n = attachments.len();
+        crate::send(
+            writer,
+            &ertangle_protocol::Request::Resume {
+                session: session.clone(),
+                prompt: None,
+            },
+        )?;
+        crate::send(
+            writer,
+            &ertangle_protocol::Request::Prompt {
+                session,
+                text,
+                attachments,
+                queue: false,
+            },
+        )?;
+        app.status = tr!("已接續並送出 prompt (含 {n} 個附件)", n = n);
+    }
+    Ok(())
+}
+
+/// Offer to create a new session or resume an ended one when submitting a prompt with no session (T96).
+pub(crate) fn start_no_session_prompt(app: &mut App, text: String, attachments: Vec<Attachment>) {
+    let can_resume = !rebuild_resume_items(app, ResumeScope::All).is_empty();
+    let mut items = vec![(tr!("建立新 session 並送出"), "create".to_string())];
+    if can_resume {
+        items.push((tr!("接續先前的 session 並送出"), "resume".to_string()));
+    }
+    items.push((tr!("保留草稿並取消"), "cancel".to_string()));
+
+    app.picker = Some(Picker {
+        stage: PickStage::NoSessionPrompt {
+            text,
+            attachments,
+            can_resume,
+        },
+        resume_scope: ResumeScope::Here,
+        title: tr!("目前沒有作用中的 session，要如何處理這則 prompt？"),
+        items,
+        filter: String::new(),
+        filter_cursor: 0,
+        cursor: 0,
+        pending: None,
+        loading: false,
+        group_effort: false,
+        variants: Default::default(),
+        load_error: None,
+    });
+    app.mode = Mode::Pick;
+}
+
 /// `:project` / `:project open`: list configured and observed project roots, then switch to the chosen one.
 pub(crate) fn start_project_picker(app: &mut App) {
     let global_dir = ertangle_daemon::config_dir();
@@ -1574,7 +1664,7 @@ pub(crate) fn start_project_picker(app: &mut App) {
     app.mode = Mode::Pick;
 }
 
-fn finish_picker(
+pub(crate) fn finish_picker(
     app: &mut App,
     writer: &mut HostRouter,
     kind: AgentKind,
@@ -1626,8 +1716,15 @@ fn finish_picker(
     app.spawn_target = Some((kind, model));
     app.spawn_effort = effort;
     app.mode = Mode::Spawn;
-    app.input.clear();
-    app.input_cursor = 0;
+    if let Some((text, attachments)) = app.pending_prompt_draft.take() {
+        app.input = text;
+        app.input_cursor = app.input.chars().count();
+        app.pending_spawn_attachments = attachments;
+    } else {
+        app.input.clear();
+        app.input_cursor = 0;
+        app.pending_spawn_attachments.clear();
+    }
     app.spawn_worktree = false;
     let cwd = std::env::current_dir().unwrap_or_default();
     let cfg = ertangle_daemon::config::Config::load(&ertangle_daemon::config_dir(), &cwd);
@@ -1645,15 +1742,14 @@ fn finish_picker(
 pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> Result<()> {
     if matches!(
         app.picker.as_ref().map(|p| &p.stage),
-        Some(PickStage::ConfirmResumePrompt { .. })
+        Some(PickStage::ConfirmResumePrompt { .. } | PickStage::NoSessionPrompt { .. })
     ) && key.code == KeyCode::Esc
     {
         if let Some(p) = app.picker.take() {
-            if let PickStage::ConfirmResumePrompt { text, .. } = p.stage {
-                app.input = text;
-                app.input_cursor = app.input.chars().count();
-                app.mode = Mode::Prompt;
-                app.status = tr!("已保留草稿並取消");
+            match p.stage {
+                PickStage::ConfirmResumePrompt { text, .. }
+                | PickStage::NoSessionPrompt { text, .. } => restore_prompt_draft(app, text),
+                _ => {}
             }
         }
         return Ok(());
@@ -1706,7 +1802,11 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
     match key.code {
         KeyCode::Esc => {
             app.picker = None;
-            app.mode = Mode::Normal;
+            if let Some((text, _)) = app.pending_prompt_draft.take() {
+                restore_prompt_draft(app, text);
+            } else {
+                app.mode = Mode::Normal;
+            }
         }
         KeyCode::Tab | KeyCode::BackTab => {
             if matches!(p.stage, PickStage::Resume) {
@@ -1951,17 +2051,21 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                     if let Some(s) = found {
                         let label = s.label.clone();
                         if !s.status.is_live() && s.native_id.is_some() {
-                            app.select_or_pend(&id);
-                            crate::send(
-                                writer,
-                                &ertangle_protocol::Request::Resume {
-                                    session: id,
-                                    prompt: None,
-                                },
-                            )?;
+                            if let Some((text, attachments)) = app.pending_prompt_draft.take() {
+                                send_resume_with_prompt(app, writer, id, text, attachments)?;
+                            } else {
+                                app.select_or_pend(&id);
+                                crate::send(
+                                    writer,
+                                    &ertangle_protocol::Request::Resume {
+                                        session: id,
+                                        prompt: None,
+                                    },
+                                )?;
+                                app.status = tr!("已要求接續 {label}", label = label);
+                            }
                             app.picker = None;
                             app.mode = Mode::Normal;
-                            app.status = tr!("已要求接續 {label}", label = label);
                         } else if !s.status.is_live() {
                             app.status = tr!(
                                 "{label} 沒有可接續的對話 id (PTY、舊版 log，或 agent 沒回報就結束)",
@@ -2007,42 +2111,27 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                                 tr!("已喚醒並送出 prompt")
                             };
                         } else {
-                            app.select_or_pend(&session);
-                            if attachments.is_empty() {
-                                crate::send(
-                                    writer,
-                                    &ertangle_protocol::Request::Resume {
-                                        session,
-                                        prompt: Some(text),
-                                    },
-                                )?;
-                                app.status = tr!("已接續並送出 prompt");
-                            } else {
-                                let n = attachments.len();
-                                crate::send(
-                                    writer,
-                                    &ertangle_protocol::Request::Resume {
-                                        session: session.clone(),
-                                        prompt: None,
-                                    },
-                                )?;
-                                crate::send(
-                                    writer,
-                                    &ertangle_protocol::Request::Prompt {
-                                        session,
-                                        text,
-                                        attachments,
-                                        queue: false,
-                                    },
-                                )?;
-                                app.status = tr!("已接續並送出 prompt (含 {n} 個附件)", n = n);
-                            }
+                            send_resume_with_prompt(app, writer, session, text, attachments)?;
                         }
                     } else {
-                        app.input = text;
-                        app.input_cursor = app.input.chars().count();
-                        app.mode = Mode::Prompt;
-                        app.status = tr!("已保留草稿並取消");
+                        restore_prompt_draft(app, text);
+                    }
+                }
+                PickStage::NoSessionPrompt {
+                    text, attachments, ..
+                } => {
+                    let action = chosen.as_deref().unwrap_or("cancel");
+                    app.picker = None;
+                    match action {
+                        "create" => {
+                            app.pending_prompt_draft = Some((text, attachments));
+                            start_spawn_picker(app);
+                        }
+                        "resume" => {
+                            app.pending_prompt_draft = Some((text, attachments));
+                            start_resume_picker(app);
+                        }
+                        _ => restore_prompt_draft(app, text),
                     }
                 }
                 PickStage::Project => {

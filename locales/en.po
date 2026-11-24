@@ -3298,8 +3298,8 @@ msgid "⏸ {label} 要求 {title}：{detail}{more} {keys}"
 msgstr "⏸ {label} requests {title}: {detail}{more} {keys}"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " (尚無 session，按 n 建立)"
-msgstr " (no sessions yet, press n to create one)"
+msgid " (尚無 session，按 n 建立或輸入 prompt)"
+msgstr " (no sessions; press n or type a prompt)"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "剩{pct}%"
@@ -3350,8 +3350,8 @@ msgid "思考中..."
 msgstr "Thinking..."
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " (尚無 session：按 n 建立) "
-msgstr " (no sessions: press n to create one) "
+msgid " (尚無 session：按 n 建立，或直接輸入 prompt) "
+msgstr " (no sessions: press n to create, or type a prompt) "
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "這裡會顯示 agent 的輸出。按 i 輸入 prompt、n 建立 session、g 切換 Diff 視圖。"
@@ -4223,6 +4223,34 @@ msgid "Session \"{label}\" 已停止 ({status})，是否接續並送出 prompt�
 msgstr "Session \"{label}\" is stopped ({status}), resume and send prompt?"
 
 #: crates/ertangle-tui/src/menu.rs
+msgid "已保留草稿並取消"
+msgstr "Draft kept and cancelled"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt"
+msgstr "Resumed and prompt sent"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "已接續並送出 prompt (含 {n} 個附件)"
+msgstr "Resumed and prompt sent (with {n} attachments)"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "建立新 session 並送出"
+msgstr "Create new session and send"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "接續先前的 session 並送出"
+msgstr "Resume previous session and send"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "保留草稿並取消"
+msgstr "Keep draft and cancel"
+
+#: crates/ertangle-tui/src/menu.rs
+msgid "目前沒有作用中的 session，要如何處理這則 prompt？"
+msgstr "No active session selected. How should this prompt be handled?"
+
+#: crates/ertangle-tui/src/menu.rs
 msgid "沒有可用的專案清單"
 msgstr "No projects available"
 
@@ -4237,10 +4265,6 @@ msgstr "Handoff to {target} requested (the old session stops; the new agent uses
 #: crates/ertangle-tui/src/menu.rs
 msgid "spawn → {target}：輸入 prompt 後 Enter (可留空)，Ctrl-R 切換角色，Ctrl-F 切換 effort"
 msgstr "spawn → {target}: type a prompt and press Enter (may be empty), Ctrl-R to cycle role, Ctrl-F to cycle effort"
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "已保留草稿並取消"
-msgstr "Draft kept and cancelled"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "沒有符合的 agent"
@@ -4281,14 +4305,6 @@ msgstr "Woken and prompt sent (with {n} attachments)"
 #: crates/ertangle-tui/src/menu.rs
 msgid "已喚醒並送出 prompt"
 msgstr "Woken and prompt sent"
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "已接續並送出 prompt"
-msgstr "Resumed and prompt sent"
-
-#: crates/ertangle-tui/src/menu.rs
-msgid "已接續並送出 prompt (含 {n} 個附件)"
-msgstr "Resumed and prompt sent (with {n} attachments)"
 
 #: crates/ertangle-tui/src/menu.rs
 msgid "已切換專案：{path}"
@@ -4404,8 +4420,8 @@ msgid " Project · 全部專案 "
 msgstr " Project · all projects "
 
 #: crates/ertangle-tui/src/project.rs
-msgid "尚無 session：按 n 建立"
-msgstr "No sessions yet: press n to create one"
+msgid "尚無 session：按 n 建立，或直接輸入 prompt"
+msgstr "No sessions yet: press n to create, or type a prompt"
 
 #: crates/ertangle-tui/src/ps.rs
 msgid "已強制終止處理程序 PID {pid} (SIGKILL)"
@@ -4826,6 +4842,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid " (尚無 session，按 n 建立)"
+#~ msgstr " (no sessions yet, press n to create one)"
+
+#~ msgid " (尚無 session：按 n 建立) "
+#~ msgstr " (no sessions: press n to create one) "
+
+#~ msgid "尚無 session：按 n 建立"
+#~ msgstr "No sessions yet: press n to create one"
 
 #~ msgid "[three|two|tabs]  切換版面"
 #~ msgstr "[three|two|tabs]  Switch layout"

@@ -100,6 +100,7 @@
 | [T93](T93-version-display-with-commit-hash.md) | Include git commit hash in `ertangle` / `ert` version display (已完成) | P3 | — |
 | [T94](T94-tui-macos-shortcuts-and-shift-enter-newline.md) | TUI input box: macOS Option/Cmd shortcuts and native `Shift+Enter` newline (已完成) | P1 | — |
 | [T95](T95-web-styled-confirm-dialog.md) | Web UI: replace native `window.confirm` with a styled in-app confirm dialog (已完成) | P2 | — |
+| [T96](T96-tui-no-session-prompt-offer-create-or-resume.md) | TUI: offer create-new / resume picker when a prompt is submitted with no session (已完成) | P2 | T88 |
 
 ## Language convention
 

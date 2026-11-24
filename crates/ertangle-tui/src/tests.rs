@@ -7012,3 +7012,225 @@ fn t94_cmd_shortcuts_super_modifier() {
     assert_eq!(app.input, "line 1\n\nline 3");
     assert_eq!(app.input_cursor, 7);
 }
+
+#[test]
+fn t96_no_session_plain_prompt_opens_picker_without_resumable() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    app.state.sessions.clear();
+    app.state.archived_sessions.clear();
+    let (mut w, mut peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "fix the build".into();
+    app.input_cursor = app.input.chars().count();
+
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+
+    let mut byte = [0u8; 1];
+    assert!(matches!(
+        peer.read(&mut byte),
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
+    ));
+
+    assert_eq!(app.mode, Mode::Pick);
+    let p = app.picker.as_ref().expect("picker must be open");
+    assert!(matches!(
+        &p.stage,
+        crate::menu::PickStage::NoSessionPrompt {
+            text,
+            can_resume: false,
+            ..
+        } if text == "fix the build"
+    ));
+    assert_eq!(p.items.len(), 2);
+    assert_eq!(p.items[0].1, "create");
+    assert_eq!(p.items[1].1, "cancel");
+}
+
+#[test]
+fn t96_no_session_with_resumable_resumes_and_sends_prompt() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    if let Some(mut s) = app.state.sessions.remove("ses_test") {
+        s.status = SessionStatus::Exited;
+        s.native_id = Some("native_conv_1".into());
+        app.state.archived_sessions.insert("ses_test".into(), s);
+    }
+    let (mut w, mut peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "continue work".into();
+    app.input_cursor = app.input.chars().count();
+
+    // Open NoSessionPrompt
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    let p = app.picker.as_ref().expect("picker must be open");
+    assert_eq!(p.items.len(), 3);
+    assert_eq!(p.items[1].1, "resume");
+
+    // Select "resume" (Down + Enter)
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+    )
+    .unwrap();
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+
+    // Now in PickStage::Resume; press Enter to resume the session
+    let p = app.picker.as_ref().expect("resume picker must be open");
+    assert!(matches!(p.stage, crate::menu::PickStage::Resume));
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.picker.is_none());
+
+    let mut buf = [0u8; 1024];
+    let n = peer.read(&mut buf).unwrap();
+    let msg = String::from_utf8_lossy(&buf[..n]);
+    assert!(msg.contains("\"resume\""), "got: {msg}");
+    assert!(msg.contains("continue work"), "got: {msg}");
+    assert!(msg.contains("ses_test"), "got: {msg}");
+}
+
+#[test]
+fn t96_no_session_create_carries_prompt_into_spawn_and_sends_once() {
+    use std::io::Read;
+    let mut app = sample_app(&[]);
+    app.state.sessions.clear();
+    let (mut w, mut peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "scaffold new api".into();
+    app.input_cursor = app.input.chars().count();
+
+    // Open NoSessionPrompt and choose "create"
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+
+    // Finish agent/model picker into Mode::Spawn
+    crate::menu::finish_picker(
+        &mut app,
+        &mut w,
+        AgentKind::parse("claude").unwrap(),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Spawn);
+    assert_eq!(app.input, "scaffold new api");
+
+    // Submit spawn
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Normal);
+
+    let mut buf = [0u8; 2048];
+    let n = peer.read(&mut buf).unwrap();
+    let msg = String::from_utf8_lossy(&buf[..n]);
+    assert!(msg.contains("\"spawn\""), "got: {msg}");
+    assert!(msg.contains("scaffold new api"), "got: {msg}");
+}
+
+#[test]
+fn t96_no_session_cancel_and_esc_restore_draft() {
+    for use_esc in [true, false] {
+        let mut app = sample_app(&[]);
+        app.state.sessions.clear();
+        let (mut w, _peer) = pair_writer();
+        app.mode = Mode::Prompt;
+        app.input = "keep my draft".into();
+        app.input_cursor = app.input.chars().count();
+
+        handle_key(
+            &mut app,
+            &mut w,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        )
+        .unwrap();
+        assert_eq!(app.mode, Mode::Pick);
+
+        if use_esc {
+            handle_key(
+                &mut app,
+                &mut w,
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            )
+            .unwrap();
+        } else {
+            // Down to "cancel" then Enter
+            handle_key(
+                &mut app,
+                &mut w,
+                KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+            )
+            .unwrap();
+            handle_key(
+                &mut app,
+                &mut w,
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            )
+            .unwrap();
+        }
+
+        assert_eq!(app.mode, Mode::Prompt);
+        assert!(app.picker.is_none());
+        assert_eq!(app.input, "keep my draft");
+        assert_eq!(app.input_cursor, "keep my draft".chars().count());
+    }
+}
+
+#[test]
+fn t96_no_session_routed_commands_do_not_open_picker() {
+    for input in ["@coord hello", "#general hi", "/help"] {
+        let mut app = sample_app(&[]);
+        app.state.sessions.clear();
+        let (mut w, _peer) = pair_writer();
+        app.mode = Mode::Prompt;
+        app.input = input.into();
+        app.input_cursor = app.input.chars().count();
+
+        handle_key(
+            &mut app,
+            &mut w,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        )
+        .unwrap();
+        assert_ne!(
+            app.mode,
+            Mode::Pick,
+            "routed input {input} should not open picker"
+        );
+    }
+}
