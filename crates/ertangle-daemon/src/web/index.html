@@ -3303,6 +3303,11 @@
       safe = safe.replace(/\n\n+/g, '</p><p>');
       safe = safe.replace(/\n/g, '<br>');
 
+      // 10b. 先還原圖片與連結：連結標籤內可能含行內程式碼佔位符，需由下一步一併還原
+      mediaPlaceholders.forEach((html, i) => {
+        safe = safe.replace(`%%%MD_MEDIA_${i}%%%`, () => html);
+      });
+
       // 11. 還原行內程式碼
       inlineCodes.forEach((code, i) => {
         safe = safe.replace(`%%%INLINE_CODE_${i}%%%`, () => `<code class="inline-code">${escapeHtml(code)}</code>`);
@@ -3325,11 +3330,6 @@
       // 13. 還原表格 (連同前後的換行一起替換，避免多出空白行)
       tables.forEach((html, i) => {
         safe = safe.replace(new RegExp(`(<br>)?%%%TABLE_${i}%%%(<br>)?`), () => html);
-      });
-
-      // 14. 還原圖片與連結
-      mediaPlaceholders.forEach((html, i) => {
-        safe = safe.replace(`%%%MD_MEDIA_${i}%%%`, () => html);
       });
 
       const result = `<p>${safe}</p>`;
