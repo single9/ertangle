@@ -1455,14 +1455,19 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         })
         .collect();
 
-    // Fold header for ended sessions: never selectable (index past the last session).
+    // Fold header for ended sessions. When expanded it sits between the live and the ended
+    // sessions so the ended ones render below it; when collapsed it closes the session list.
     let ended = app.ended_count();
+    let fold_row = app.ended_fold_row(sessions.len());
     if ended > 0 {
         let arrow = if app.show_ended { "▾" } else { "▸" };
-        items.push(ListItem::new(Line::from(Span::styled(
-            format!("{arrow} {}", tr!("已結束 ({n})", n = ended)),
-            Style::default().fg(Color::DarkGray),
-        ))));
+        items.insert(
+            fold_row.min(items.len()),
+            ListItem::new(Line::from(Span::styled(
+                format!("{arrow} {}", tr!("已結束 ({n})", n = ended)),
+                Style::default().fg(Color::DarkGray),
+            ))),
+        );
     }
 
     if app.scope_here {
@@ -1497,7 +1502,7 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         match focus {
             SidebarFocus::EndedFold => {
                 if ended > 0 {
-                    list_state.select(Some(sessions.len()));
+                    list_state.select(Some(fold_row));
                 }
             }
             SidebarFocus::OtherProject(idx) => {
@@ -1506,7 +1511,8 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             }
         }
     } else if !sessions.is_empty() {
-        list_state.select(Some(app.selected.min(sessions.len() - 1)));
+        let selected = app.selected.min(sessions.len() - 1);
+        list_state.select(Some(app.session_list_row(selected, ended > 0)));
     }
 
     let list = List::new(items)

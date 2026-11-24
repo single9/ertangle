@@ -547,6 +547,31 @@ impl App {
         Self::tree_order_sessions(&self.state, self.scope_here, &self.home_project, show_ended)
     }
 
+    /// Number of visible live sessions (those listed above the ended fold header).
+    pub(crate) fn live_visible_count(&self) -> usize {
+        self.visible_sessions_with(false).len()
+    }
+
+    /// Sidebar list row of the ended fold header: after the live sessions when expanded
+    /// (ended sessions follow it), otherwise after all `visible` sessions.
+    pub(crate) fn ended_fold_row(&self, visible: usize) -> usize {
+        if self.show_ended {
+            self.live_visible_count().min(visible)
+        } else {
+            visible
+        }
+    }
+
+    /// Sidebar list row of the visible session at `idx`, skipping over the fold header
+    /// that is inserted between live and ended sessions.
+    pub(crate) fn session_list_row(&self, idx: usize, has_fold: bool) -> usize {
+        if has_fold && self.show_ended && idx >= self.live_visible_count() {
+            idx + 1
+        } else {
+            idx
+        }
+    }
+
     /// Number of ended (non-live) sessions in scope, across all hosts when connected to several.
     pub(crate) fn ended_count(&self) -> usize {
         let count = |state: &State| {
@@ -1213,16 +1238,25 @@ impl App {
 
                 match self.sidebar_focus {
                     None => {
-                        if n > 0 && self.selected + 1 < n {
+                        let live = self.live_visible_count();
+                        let at_live_end = self.show_ended && ended > 0 && self.selected + 1 == live;
+                        if at_live_end {
+                            self.sidebar_focus = Some(SidebarFocus::EndedFold);
+                        } else if n > 0 && self.selected + 1 < n {
                             self.selected += 1;
-                        } else if ended > 0 {
+                        } else if ended > 0 && !self.show_ended {
                             self.sidebar_focus = Some(SidebarFocus::EndedFold);
                         } else if num_others > 0 {
                             self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
                         }
                     }
                     Some(SidebarFocus::EndedFold) => {
-                        if num_others > 0 {
+                        let live = self.live_visible_count();
+                        if self.show_ended && n > live {
+                            // Expanded: the ended sessions sit right below the fold header.
+                            self.sidebar_focus = None;
+                            self.selected = live;
+                        } else if num_others > 0 {
                             self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
                         }
                     }
@@ -1240,7 +1274,7 @@ impl App {
                     Some(SidebarFocus::OtherProject(idx)) => {
                         if idx > 0 {
                             self.sidebar_focus = Some(SidebarFocus::OtherProject(idx - 1));
-                        } else if ended > 0 {
+                        } else if ended > 0 && !self.show_ended {
                             self.sidebar_focus = Some(SidebarFocus::EndedFold);
                         } else if n > 0 {
                             self.sidebar_focus = None;
@@ -1248,13 +1282,18 @@ impl App {
                         }
                     }
                     Some(SidebarFocus::EndedFold) => {
-                        if n > 0 {
+                        let live = self.live_visible_count();
+                        let last = if self.show_ended { live } else { n };
+                        if last > 0 {
                             self.sidebar_focus = None;
-                            self.selected = n - 1;
+                            self.selected = last - 1;
                         }
                     }
                     None => {
-                        if self.selected > 0 {
+                        let live = self.live_visible_count();
+                        if self.show_ended && ended > 0 && self.selected == live {
+                            self.sidebar_focus = Some(SidebarFocus::EndedFold);
+                        } else if self.selected > 0 {
                             self.selected = self.selected.saturating_sub(1);
                         }
                     }

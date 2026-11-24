@@ -81,6 +81,18 @@ pub(crate) fn handle_mouse(
                 let rel_row = mouse.row.saturating_sub(area.y + 1);
                 let idx = app.sessions_offset + (rel_row / crate::SESSION_ITEM_ROWS) as usize;
                 let visible = app.session_ids().len();
+                let has_fold = app.ended_count() > 0;
+                let fold_row = app.ended_fold_row(visible);
+                if has_fold && idx == fold_row {
+                    crate::app::toggle_ended(app, None);
+                    return Ok(());
+                }
+                // Rows below an expanded fold header map back to the session index minus one.
+                let idx = if has_fold && app.show_ended && idx > fold_row {
+                    idx - 1
+                } else {
+                    idx
+                };
                 if idx < visible {
                     app.selected = idx;
                     app.sidebar_focus = None;
@@ -90,8 +102,6 @@ pub(crate) fn handle_mouse(
                     if app.view == CenterView::Diff {
                         request_selected_diff(app, writer)?;
                     }
-                } else if idx == visible && app.ended_count() > 0 {
-                    crate::app::toggle_ended(app, None);
                 }
                 return Ok(());
             }

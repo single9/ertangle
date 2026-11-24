@@ -6605,8 +6605,18 @@ fn t87_sidebar_activation_and_project_switch() {
     assert_eq!(app.sidebar_focus, None);
     assert_eq!(app.selected, 1, "focuses the first ended session");
 
-    // Navigate down onto EndedFold again and collapse with 'h'.
+    // The fold header sits above the expanded ended sessions: row 1 of the list, ended at row 2.
+    assert_eq!(app.ended_fold_row(app.visible_sessions().len()), 1);
+    assert_eq!(app.session_list_row(0, true), 0);
+    assert_eq!(app.session_list_row(1, true), 2);
+
+    // Navigate up onto EndedFold again and collapse with 'h'.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
+    // Down from the fold re-enters the first ended session below it.
     handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!((app.sidebar_focus, app.selected), (None, 1));
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
     assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
     handle_key(&mut app, &mut w, kev(KeyCode::Char('h'))).unwrap();
     assert!(!app.show_ended);
