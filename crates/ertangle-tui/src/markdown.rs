@@ -687,6 +687,21 @@ pub fn inline_with_links(
         };
     }
 
+    // Emphasis content may itself hold links or code (`**[a](u)**`), so parse it recursively
+    // and shift any link columns by where the emphasis starts.
+    macro_rules! push_nested {
+        ($content:expr, $modifier:expr) => {{
+            let (inner, inner_links) = inline_with_links($content, base.add_modifier($modifier));
+            links.extend(
+                inner_links
+                    .into_iter()
+                    .map(|(s, e, u)| (s + cur_col, e + cur_col, u)),
+            );
+            cur_col += spans_width(&inner);
+            spans.extend(inner);
+        }};
+    }
+
     while i < len {
         let rest = &text[i..];
 
@@ -702,12 +717,7 @@ pub fn inline_with_links(
             let m = &rest[..2];
             if let Some(end) = rest[2..].find(m) {
                 flush_buf!();
-                let content = &rest[2..2 + end];
-                cur_col += content.width();
-                spans.push(Span::styled(
-                    content.to_string(),
-                    base.add_modifier(Modifier::BOLD),
-                ));
+                push_nested!(&rest[2..2 + end], Modifier::BOLD);
                 i += 2 + end + 2;
                 continue;
             }
@@ -716,12 +726,7 @@ pub fn inline_with_links(
         if let Some(after) = rest.strip_prefix("~~") {
             if let Some(end) = after.find("~~") {
                 flush_buf!();
-                let content = &after[..end];
-                cur_col += content.width();
-                spans.push(Span::styled(
-                    content.to_string(),
-                    base.add_modifier(Modifier::CROSSED_OUT),
-                ));
+                push_nested!(&after[..end], Modifier::CROSSED_OUT);
                 i += 2 + end + 2;
                 continue;
             }
@@ -747,7 +752,7 @@ pub fn inline_with_links(
                     flush_buf!();
                     let label = &rest[1..close];
                     let url = &rest[close + 2..close + 2 + paren];
-                    let link_style = Style::default().fg(LINK).add_modifier(Modifier::UNDERLINED);
+                    let link_style = base.fg(LINK).add_modifier(Modifier::UNDERLINED);
                     let display_text = if label.is_empty() { url } else { label };
                     let w = display_text.width();
                     let col_start = cur_col;
@@ -766,12 +771,7 @@ pub fn inline_with_links(
             if let Some(end) = rest[1..].find(m) {
                 if end > 0 {
                     flush_buf!();
-                    let content = &rest[1..1 + end];
-                    cur_col += content.width();
-                    spans.push(Span::styled(
-                        content.to_string(),
-                        base.add_modifier(Modifier::ITALIC),
-                    ));
+                    push_nested!(&rest[1..1 + end], Modifier::ITALIC);
                     i += 1 + end + 1;
                     continue;
                 }
@@ -929,6 +929,27 @@ mod tests {
 
     fn contents(line: &Line<'_>) -> Vec<String> {
         line.spans.iter().map(|s| s.content.to_string()).collect()
+    }
+
+    #[test]
+    fn inline_link_inside_bold_is_parsed_with_shifted_columns() {
+        let (spans, links) = inline_with_links("x **[SC2P-1](https://j/1)** y", Style::default());
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(text, "x SC2P-1 y");
+        assert_eq!(links, vec![(2, 8, "https://j/1".to_string())]);
+        let label = spans.iter().find(|s| s.content == "SC2P-1").expect("label");
+        assert!(label.style.add_modifier.contains(Modifier::BOLD));
+        assert!(label.style.add_modifier.contains(Modifier::UNDERLINED));
+    }
+
+    #[test]
+    fn inline_code_inside_bold_is_parsed() {
+        let (spans, _) = inline_with_links("**a `b` c**", Style::default());
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(text, "a b c");
+        assert!(spans
+            .iter()
+            .any(|s| s.content == "b" && s.style.bg == Some(CODE_BG)));
     }
 
     #[test]
