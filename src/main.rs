@@ -351,7 +351,18 @@ enum Cmd {
         json: bool,
     },
     /// 檢視指定 session 的 worktree git diff (M3)
-    Diff { session: String },
+    Diff {
+        session: String,
+        /// 只顯示變更檔案清單與行數統計 (+N -M)
+        #[arg(long)]
+        stat: bool,
+        /// 最多顯示幾行 diff (0 代表不限制)
+        #[arg(long)]
+        max_lines: Option<usize>,
+        /// 只檢視指定的檔案或目錄路徑
+        #[arg(trailing_var_arg = true)]
+        paths: Vec<String>,
+    },
     /// 對指定 session 的程式碼留下審查註解並送回該 agent (M3)
     Review {
         session: String,
@@ -657,7 +668,12 @@ fn main() -> Result<()> {
             session,
         } => cmd_artifact(path, kind, note, session),
         Cmd::Worktrees { json } => cmd_worktrees(json),
-        Cmd::Diff { session } => cmd_diff(session),
+        Cmd::Diff {
+            session,
+            stat,
+            max_lines,
+            paths,
+        } => cmd_diff(session, stat, max_lines, paths),
         Cmd::Review {
             session,
             location,

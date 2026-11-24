@@ -11,9 +11,10 @@ use ertangle_protocol::{Frame, MergeStrategy};
 use tr::tr;
 
 use crate::git::{
-    compute_worktree_diff, create_worktree_pr, discard_worktree_change, gc_block_reason,
-    git_output, git_status_summary, merge_worktree_strategy, prepare_conflict_in_worktree,
-    remove_worktree, session_repo, MergeConflict,
+    compute_worktree_diff, compute_worktree_diff_with_options, create_worktree_pr,
+    discard_worktree_change, gc_block_reason, git_output, git_status_summary,
+    merge_worktree_strategy, prepare_conflict_in_worktree, remove_worktree, session_repo,
+    DiffOptions, MergeConflict,
 };
 use crate::handlers::session::{resume_session, send_prompt};
 use crate::{lock, new_id, ClientTx, Shared};
@@ -52,11 +53,16 @@ pub(crate) fn handle_list(shared: &Arc<Shared>, reply: &ClientTx) {
     let _ = reply.send(Frame::Worktrees { worktrees });
 }
 
-pub(crate) fn handle_diff(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
+pub(crate) fn handle_diff(
+    shared: &Arc<Shared>,
+    reply: &ClientTx,
+    session: String,
+    opts: DiffOptions,
+) {
     let sid = shared.resolve_session(&session);
     let sess = lock(&shared.inner).state.sessions.get(&sid).cloned();
     match sess {
-        Some(s) => match compute_worktree_diff(Path::new(&s.cwd)) {
+        Some(s) => match compute_worktree_diff_with_options(Path::new(&s.cwd), &opts) {
             Ok(diff) => {
                 let _ = reply.send(Frame::Diff {
                     session: s.id,

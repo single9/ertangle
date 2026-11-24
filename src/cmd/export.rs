@@ -109,6 +109,10 @@ pub(crate) fn cmd_export(
     let diff = if with_diff {
         match roundtrip(&Request::WorktreeDiff {
             session: id.clone(),
+            stat_only: false,
+            paths: Vec::new(),
+            max_lines: None,
+            fold_generated: false,
         })? {
             Frame::Diff { diff, .. } => Some(diff),
             _ => None,

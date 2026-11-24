@@ -34,7 +34,7 @@ fn general_rules(out: &mut String) {
 const TOKEN_HINTS: &str = "Token economy (tool use): every extra turn re-reads the whole context, so fewer turns and smaller outputs save the most.\n\
 - Issue independent tool calls together in one turn instead of one per turn.\n\
 - Combine read-only probes (git status, git log, ls, head) into a single shell command.\n\
-- Limit output: use line ranges, `| head -n 50`, `git diff --stat`, `git log -n 20`; do not dump whole large files or logs.\n\
+- Limit output: use line ranges, `| head -n 50`, `git diff --stat`, `git log -n 20`, `ertangle check` (low-token build/test verifier), and `ertangle outline <path>` (symbol line ranges); do not dump whole large files or logs.\n\
 - Do not re-read a file you already read unless it has changed.\n\
 - Prefer a one-line tool (rg, jq) over writing a throwaway script.";
 
@@ -64,7 +64,7 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
     ));
     match parent.map(|p| p.id.as_str()).or(me.parent.as_deref()) {
         Some(pid) => out.push_str(&format!(
-            "- Reporting: When finished or blocked, use ertangle_send (to=\"{pid}\") with concise English protocol (`TASK_DONE <task_id> <summary>` or `TASK_BLOCKED <task_id> <reason>`) to report results back to parent session, then stop your turn immediately; do not stop silently without reporting.\n"
+            "- Reporting: When finished or blocked, pass `report` to ertangle_task_update (status=\"done\" or \"blocked\") or use ertangle_send (to=\"{pid}\") with concise English protocol (`TASK_DONE <task_id> <summary>` or `TASK_BLOCKED <task_id> <reason>`) to report results back to parent session, then stop your turn immediately; do not stop silently without reporting.\n"
         )),
         None => out.push_str(
             "- Reporting: You were directly spawned by the user; answer directly in your response.\n",

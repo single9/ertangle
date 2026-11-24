@@ -35,7 +35,10 @@ pub use server::{
 mod paths;
 pub(crate) mod procs;
 pub use client::{ensure_daemon, is_running, send_request, Client, ConnStream};
-pub use git::compute_worktree_diff;
+pub use git::{
+    compute_worktree_diff, compute_worktree_diff_with_options, is_generated_or_lock_file,
+    DiffOptions,
+};
 pub use paths::{config_dir, default_token_path, log_path, runtime_dir, socket_path, state_dir};
 pub mod mcp;
 pub mod web;

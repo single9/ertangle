@@ -28,8 +28,21 @@ pub(crate) fn cmd_worktrees(json: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn cmd_diff(session: String) -> Result<()> {
-    let Frame::Diff { diff, .. } = roundtrip(&Request::WorktreeDiff { session })? else {
+pub(crate) fn cmd_diff(
+    session: String,
+    stat_only: bool,
+    max_lines: Option<usize>,
+    paths: Vec<String>,
+) -> Result<()> {
+    let fold_generated = paths.is_empty();
+    let Frame::Diff { diff, .. } = roundtrip(&Request::WorktreeDiff {
+        session,
+        stat_only,
+        paths,
+        max_lines,
+        fold_generated,
+    })?
+    else {
         bail!("{}", tr!("未取得 diff"));
     };
     print!("{diff}");

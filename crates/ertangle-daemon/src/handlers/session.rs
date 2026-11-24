@@ -476,17 +476,45 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
             socket_path().to_string_lossy().to_string(),
         ),
     ];
+    let mut path_prefixes: Vec<String> = Vec::new();
     if let Some(exe) = &mcp_exe {
         env.push((
             "ERTANGLE_BIN".to_string(),
             exe.to_string_lossy().to_string(),
         ));
         if let Some(bin_dir) = exe.parent() {
-            let current_path = std::env::var("PATH").unwrap_or_default();
+            path_prefixes.push(bin_dir.to_string_lossy().to_string());
+        }
+    }
+    let venv_dir = cwd.join(".venv");
+    let venv_bin = venv_dir.join("bin");
+    if venv_bin.is_dir() {
+        path_prefixes.push(venv_bin.to_string_lossy().to_string());
+        if std::env::var_os("VIRTUAL_ENV").is_none() {
             env.push((
-                "PATH".to_string(),
-                format!("{}:{current_path}", bin_dir.to_string_lossy()),
+                "VIRTUAL_ENV".to_string(),
+                venv_dir.to_string_lossy().to_string(),
             ));
+        }
+    }
+    let node_bin = cwd.join("node_modules").join(".bin");
+    if node_bin.is_dir() {
+        path_prefixes.push(node_bin.to_string_lossy().to_string());
+    }
+    if !path_prefixes.is_empty() {
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        env.push((
+            "PATH".to_string(),
+            format!("{}:{current_path}", path_prefixes.join(":")),
+        ));
+    }
+    for (k, v) in [
+        ("DOTNET_NOLOGO", "1"),
+        ("DOTNET_CLI_TELEMETRY_OPTOUT", "1"),
+        ("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "1"),
+    ] {
+        if std::env::var_os(k).is_none() {
+            env.push((k.to_string(), v.to_string()));
         }
     }
 

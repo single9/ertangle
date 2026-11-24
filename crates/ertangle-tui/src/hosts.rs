@@ -132,7 +132,7 @@ impl HostRouter {
             | Request::SessionRemove { session, .. }
             | Request::SessionConfig { session, .. }
             | Request::SessionBudget { session, .. }
-            | Request::WorktreeDiff { session }
+            | Request::WorktreeDiff { session, .. }
             | Request::WorktreeDiscard { session, .. }
             | Request::WorktreeMerge { session, .. }
             | Request::WorktreePr { session, .. }

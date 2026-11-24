@@ -70,6 +70,8 @@ pub struct AgentSpawnCfg {
     pub auto_resume: Option<bool>,
     /// worktree 裡的 agent 共用 `<repo>/.ertangle/target` 當 `CARGO_TARGET_DIR` (預設 true，只對 Cargo 專案)。
     pub shared_cargo_target: Option<bool>,
+    /// Provision polyglot worktree dependencies (`node_modules`, `.venv`, and untracked `.env*` / `appsettings.Development.json`) via symlinks (default true).
+    pub shared_worktree_deps: Option<bool>,
 }
 
 pub(crate) struct WorkerQuotaSnapshot<'a> {
@@ -100,6 +102,9 @@ impl AgentSpawnCfg {
     }
     pub fn shared_cargo_target(&self) -> bool {
         self.shared_cargo_target.unwrap_or(true)
+    }
+    pub fn shared_worktree_deps(&self) -> bool {
+        self.shared_worktree_deps.unwrap_or(true)
     }
     pub fn max_live_children(&self) -> usize {
         self.max_live_children.unwrap_or(3)

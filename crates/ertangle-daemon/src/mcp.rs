@@ -304,7 +304,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ertangle_task_update",
-            "description": "Update a task's status, assignee, or details. Reassigning wakes the new assignee. Setting a task to `done` unblocks the tasks that depend on it and notifies their assignees.",
+            "description": "Update a task's status, assignee, or details. Reassigning wakes the new assignee. Setting a task to `done` unblocks the tasks that depend on it and notifies their assignees. Pass `report` with `status: \"done\"` or `\"blocked\"` to atomically send `TASK_DONE <id> <report>` or `TASK_BLOCKED <id> <report>` to your parent session in the same call.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -324,6 +324,10 @@ pub fn tool_definitions() -> Vec<Value> {
                     "detail": {
                         "type": "string",
                         "description": "New task details"
+                    },
+                    "report": {
+                        "type": "string",
+                        "description": "Optional concise summary: when status is `done` or `blocked`, automatically sends `TASK_DONE <id> <report>` or `TASK_BLOCKED <id> <report>` to your parent session"
                     }
                 },
                 "required": ["id"]
@@ -331,7 +335,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ertangle_spawn",
-            "description": "Spawn a new child agent session (e.g. a coordinator spawning a worker into its own git worktree to implement in parallel). Costs tokens and quota: spawn only when parallelism is worth it, give a self-contained prompt, and check quota via ertangle_whoami first.",
+            "description": "Spawn a new child agent session (e.g. a coordinator spawning a worker into its own git worktree to implement in parallel). Costs tokens and quota: spawn only when parallelism is worth it, give a self-contained prompt, and check quota via ertangle_whoami first. Pass `task_id` or `task_title` to bind or create a board task in the same call.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -372,6 +376,19 @@ pub fn tool_definitions() -> Vec<Value> {
                     "budget_usd": {
                         "type": "number",
                         "description": "Cost limit in USD for the child session (defaults to config.toml; never higher than the parent's remaining budget)"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "description": "Optional existing task id (task_...) to automatically assign to the spawned session"
+                    },
+                    "task_title": {
+                        "type": "string",
+                        "description": "Optional title to atomically create a new task on the task board assigned to the spawned session"
+                    },
+                    "depends_on": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional prerequisite task ids when creating a task via `task_title`"
                     }
                 },
                 "required": ["prompt"]
@@ -456,7 +473,7 @@ pub fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "ertangle_diff",
-            "description": "Get the git diff of a session's workspace (for a coordinator or reviewer to inspect changes).",
+            "description": "Get the git diff of a session's workspace (for a coordinator or reviewer to inspect changes). Large lockfiles and generated designer/snapshot files are folded by default unless listed in `paths`.",
             "annotations": { "readOnlyHint": true },
             "inputSchema": {
                 "type": "object",
@@ -464,6 +481,19 @@ pub fn tool_definitions() -> Vec<Value> {
                     "session": {
                         "type": "string",
                         "description": "Target session id or label (defaults to yourself)"
+                    },
+                    "stat_only": {
+                        "type": "boolean",
+                        "description": "If true, return only changed file paths and +added/-removed line counts without unified diff hunks"
+                    },
+                    "paths": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of relative file or directory paths to filter the diff (also expands folded lock/generated files)"
+                    },
+                    "max_lines": {
+                        "type": "integer",
+                        "description": "Maximum number of lines to return (default 800; 0 for unlimited)"
                     }
                 }
             }
@@ -492,6 +522,37 @@ pub fn tool_definitions() -> Vec<Value> {
             }
         }),
     ]
+}
+
+/// Extracts a prefix-matched token (`ses_...`, `task_...`, `msg_...`) from a daemon reply note,
+/// stripping any trailing parenthesized annotations like `ses_abc(quota ...)`.
+pub(crate) fn extract_prefixed_id<'a>(note: &'a str, prefix: &str) -> Option<&'a str> {
+    note.split_whitespace().find_map(|tok| {
+        let idx = tok.find(prefix)?;
+        let rest = &tok[idx..];
+        let end = rest
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+            .unwrap_or(rest.len());
+        let candidate = &rest[..end];
+        (candidate.len() > prefix.len()).then_some(candidate)
+    })
+}
+
+/// Formats an automatic parent report body for `ertangle_task_update` when `report` is provided (T99).
+pub(crate) fn format_task_parent_report(
+    task_id: &str,
+    status: Option<TaskStatus>,
+    report: Option<&str>,
+) -> Option<String> {
+    let summary = report?.trim();
+    if summary.is_empty() {
+        return None;
+    }
+    match status? {
+        TaskStatus::Done => Some(format!("TASK_DONE {task_id} {summary}")),
+        TaskStatus::Blocked => Some(format!("TASK_BLOCKED {task_id} {summary}")),
+        _ => None,
+    }
 }
 
 /// Extracts the `warning: ...` line a task handler appended to its reply note.
@@ -808,6 +869,7 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             };
             let assignee = args["assignee"].as_str().map(|s| s.to_string());
             let detail = args["detail"].as_str().map(|s| s.to_string());
+            let report = args["report"].as_str();
 
             let frame = roundtrip(&Request::TaskUpdate {
                 id: id.clone(),
@@ -819,6 +881,30 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             if let Frame::Ok { note: Some(note) } = &frame {
                 if let Some(w) = note_warning(note) {
                     out["warning"] = json!(w);
+                }
+            }
+            if let Some(report_body) = format_task_parent_report(&id, status, report) {
+                if let Ok(Frame::Snapshot { state }) = roundtrip(&Request::Snapshot) {
+                    let parent_id = state
+                        .resolve_session_id(session)
+                        .and_then(|sid| state.sessions.get(&sid))
+                        .and_then(|s| s.parent.clone());
+                    if let Some(pid) = parent_id {
+                        if let Ok(send_frame) = roundtrip(&Request::BusSend {
+                            from: Some(session.to_string()),
+                            to: Target::Direct(pid.clone()),
+                            kind: MsgKind::Chat,
+                            body: report_body,
+                            reply_to: None,
+                        }) {
+                            out["reported_to"] = json!(pid);
+                            if let Frame::Ok { note: Some(n) } = send_frame {
+                                if let Some(w) = note_warning(&n) {
+                                    out["report_warning"] = json!(w);
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Ok(out)
@@ -842,13 +928,29 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             let permission = args["permission"]
                 .as_str()
                 .and_then(PermissionPolicy::parse);
+            let task_id_arg = args["task_id"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            let task_title_arg = args["task_title"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            let depends_on: Vec<String> = args["depends_on"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
 
             let frame = roundtrip(&Request::Spawn(SpawnRequest {
                 kind,
                 cwd: None,
                 label,
                 role,
-                prompt: Some(prompt),
+                prompt: Some(prompt.clone()),
                 worktree,
                 transport: Transport::Auto,
                 permission,
@@ -864,11 +966,37 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 Frame::Ok { note } => note.unwrap_or_default(),
                 _ => String::new(),
             };
-            let id = note
-                .split_whitespace()
-                .find(|t| t.starts_with("task_"))
-                .unwrap_or(&note);
-            Ok(json!({ "ok": true, "id": id, "note": note }))
+            let spawned_id = extract_prefixed_id(&note, "ses_")
+                .unwrap_or(&note)
+                .to_string();
+            let mut out = json!({ "ok": true, "id": spawned_id, "note": note });
+
+            if let Some(tid) = task_id_arg {
+                if roundtrip(&Request::TaskUpdate {
+                    id: tid.to_string(),
+                    status: Some(TaskStatus::Doing),
+                    assignee: Some(spawned_id.clone()),
+                    detail: None,
+                })
+                .is_ok()
+                {
+                    out["task_id"] = json!(tid);
+                }
+            } else if let Some(title) = task_title_arg {
+                if let Ok(Frame::Ok {
+                    note: Some(task_note),
+                }) = roundtrip(&Request::TaskCreate {
+                    title: title.to_string(),
+                    detail: prompt,
+                    assignee: Some(spawned_id.clone()),
+                    created_by: Some(session.to_string()),
+                    depends_on,
+                }) {
+                    let tid = extract_prefixed_id(&task_note, "task_").unwrap_or(&task_note);
+                    out["task_id"] = json!(tid);
+                }
+            }
+            Ok(out)
         }
 
         "ertangle_artifact_share" => {
@@ -961,7 +1089,28 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
 
         "ertangle_diff" => {
             let target = args["session"].as_str().unwrap_or(session).to_string();
-            match roundtrip(&Request::WorktreeDiff { session: target })? {
+            let stat_only = args["stat_only"].as_bool().unwrap_or(false);
+            let paths: Vec<String> = args["paths"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let max_lines = match args["max_lines"].as_u64() {
+                Some(0) => None,
+                Some(n) => Some(n as usize),
+                None => Some(800),
+            };
+            let fold_generated = paths.is_empty();
+            match roundtrip(&Request::WorktreeDiff {
+                session: target,
+                stat_only,
+                paths,
+                max_lines,
+                fold_generated,
+            })? {
                 Frame::Diff {
                     session,
                     branch,
@@ -1313,5 +1462,72 @@ mod merge_strategy_tests {
             props["strategy"]["enum"],
             json!(["merge", "squash", "rebase"])
         );
+    }
+
+    #[test]
+    fn extract_prefixed_id_and_parent_report_formatting() {
+        assert_eq!(
+            extract_prefixed_id(
+                "已建立 session ses_7edf1ee5688a(quota codex 52% (30d window))",
+                "ses_"
+            ),
+            Some("ses_7edf1ee5688a")
+        );
+        assert_eq!(
+            extract_prefixed_id("已建立任務 task_4d70d961b275 (blocked)", "task_"),
+            Some("task_4d70d961b275")
+        );
+        assert_eq!(extract_prefixed_id("no id here", "ses_"), None);
+
+        assert_eq!(
+            format_task_parent_report("task_1", Some(TaskStatus::Done), Some("all tests pass")),
+            Some("TASK_DONE task_1 all tests pass".to_string())
+        );
+        assert_eq!(
+            format_task_parent_report(
+                "task_1",
+                Some(TaskStatus::Blocked),
+                Some("missing API key")
+            ),
+            Some("TASK_BLOCKED task_1 missing API key".to_string())
+        );
+        assert_eq!(
+            format_task_parent_report("task_1", Some(TaskStatus::Doing), Some("working")),
+            None
+        );
+        assert_eq!(
+            format_task_parent_report("task_1", Some(TaskStatus::Done), Some("   ")),
+            None
+        );
+    }
+
+    #[test]
+    fn mcp_tools_list_includes_t98_and_t99_schemas() {
+        let tools = tool_definitions();
+        let diff_tool = tools
+            .iter()
+            .find(|t| t["name"] == "ertangle_diff")
+            .expect("ertangle_diff must exist");
+        let diff_props = &diff_tool["inputSchema"]["properties"];
+        assert_eq!(diff_props["stat_only"]["type"], "boolean");
+        assert_eq!(diff_props["paths"]["type"], "array");
+        assert_eq!(diff_props["max_lines"]["type"], "integer");
+
+        let update_tool = tools
+            .iter()
+            .find(|t| t["name"] == "ertangle_task_update")
+            .expect("ertangle_task_update must exist");
+        assert_eq!(
+            update_tool["inputSchema"]["properties"]["report"]["type"],
+            "string"
+        );
+
+        let spawn_tool = tools
+            .iter()
+            .find(|t| t["name"] == "ertangle_spawn")
+            .expect("ertangle_spawn must exist");
+        let spawn_props = &spawn_tool["inputSchema"]["properties"];
+        assert_eq!(spawn_props["task_id"]["type"], "string");
+        assert_eq!(spawn_props["task_title"]["type"], "string");
     }
 }

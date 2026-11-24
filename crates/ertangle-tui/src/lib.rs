@@ -426,7 +426,16 @@ fn handle_event(app: &mut App, writer: &mut HostRouter, ev: CtEvent) -> Result<(
 
 pub(crate) fn request_selected_diff(app: &mut App, writer: &mut HostRouter) -> Result<()> {
     if let Some(id) = app.selected_id() {
-        send(writer, &Request::WorktreeDiff { session: id })?;
+        send(
+            writer,
+            &Request::WorktreeDiff {
+                session: id,
+                stat_only: false,
+                paths: Vec::new(),
+                max_lines: None,
+                fold_generated: false,
+            },
+        )?;
     }
     Ok(())
 }

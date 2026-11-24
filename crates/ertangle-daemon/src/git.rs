@@ -4,6 +4,10 @@ use super::*;
 use ertangle_protocol::MergeStrategy;
 use tr::tr;
 
+/// 記錄自動掛載進 worktree 的 symlink 相對路徑清單 (存放於 `<wt_dir>/.ertangle/provisioned_links`)，
+/// 讓 `git status`、`compute_worktree_diff`、`auto_commit_worktree` 與 `remove_worktree` 能忽略並安全清理它們。
+const PROVISIONED_LINKS_FILE: &str = ".ertangle/provisioned_links";
+
 /// 在 `repo` 建立一個 worktree，回傳 (路徑, 分支)。
 pub(crate) fn make_worktree(repo: &Path, id: &str) -> Result<(PathBuf, String)> {
     let branch = format!("ertangle/{id}");
@@ -21,7 +25,152 @@ pub(crate) fn make_worktree(repo: &Path, id: &str) -> Result<(PathBuf, String)> 
     if !out.status.success() {
         bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
+    if crate::config::Config::load(&crate::paths::config_dir(), repo)
+        .agent_spawn
+        .shared_worktree_deps()
+    {
+        provision_worktree_deps(repo, &dir);
+    }
     Ok((dir, branch))
+}
+
+/// Checks whether `rel` is tracked by git in `repo`.
+fn is_git_tracked(repo: &Path, rel: &str) -> bool {
+    git_output(repo, &["ls-files", "--error-unmatch", "--", rel])
+        .is_ok_and(|o| o.status.success())
+}
+
+/// Symlinks polyglot untracked dependencies (`node_modules`, `.venv`) and untracked local config
+/// files (`.env*`, `appsettings.Development.json`) from `repo` into `wt_dir` (T100).
+pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
+    let mut provisioned: Vec<String> = Vec::new();
+
+    // 1) Shared dependency directories (`node_modules`, `.venv`).
+    for dir_name in ["node_modules", ".venv"] {
+        let src = repo.join(dir_name);
+        let dst = wt_dir.join(dir_name);
+        if src.is_dir() && fs::symlink_metadata(&dst).is_err() && !is_git_tracked(repo, dir_name) {
+            if std::os::unix::fs::symlink(&src, &dst).is_ok() {
+                provisioned.push(dir_name.to_string());
+            }
+        }
+    }
+
+    // 2) Top-level untracked `.env*` and `appsettings.Development.json`.
+    if let Ok(entries) = fs::read_dir(repo) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name_str) = name.to_str() else {
+                continue;
+            };
+            let is_env_file = (name_str == ".env" || name_str.starts_with(".env."))
+                && !name_str.ends_with(".example")
+                && !name_str.ends_with(".sample")
+                && !name_str.ends_with(".template");
+            let is_appsettings =
+                name_str == "appsettings.Development.json" || name_str == "appsettings.Local.json";
+            if !is_env_file && !is_appsettings {
+                continue;
+            }
+            let src = entry.path();
+            let dst = wt_dir.join(name_str);
+            if src.is_file()
+                && fs::symlink_metadata(&dst).is_err()
+                && !is_git_tracked(repo, name_str)
+            {
+                if std::os::unix::fs::symlink(&src, &dst).is_ok() {
+                    provisioned.push(name_str.to_string());
+                }
+            }
+        }
+    }
+
+    // 3) Immediate child or `src/<Project>/appsettings.Development.json` for .NET Core solutions.
+    let mut sub_dirs: Vec<PathBuf> = Vec::new();
+    if let Ok(entries) = fs::read_dir(repo) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                let n = e.file_name();
+                let ns = n.to_string_lossy();
+                if !ns.starts_with('.') && ns != "node_modules" && ns != "target" {
+                    sub_dirs.push(p.clone());
+                    if ns == "src" {
+                        if let Ok(src_entries) = fs::read_dir(&p) {
+                            for se in src_entries.flatten() {
+                                if se.path().is_dir() {
+                                    sub_dirs.push(se.path());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for sub in sub_dirs {
+        for cfg_name in ["appsettings.Development.json", ".env.local", ".env"] {
+            let src = sub.join(cfg_name);
+            if !src.is_file() {
+                continue;
+            }
+            let Ok(rel) = src.strip_prefix(repo) else {
+                continue;
+            };
+            let rel_str = rel.to_string_lossy().to_string();
+            let dst = wt_dir.join(rel);
+            if dst.parent().is_some_and(|p| p.is_dir())
+                && fs::symlink_metadata(&dst).is_err()
+                && !is_git_tracked(repo, &rel_str)
+            {
+                if std::os::unix::fs::symlink(&src, &dst).is_ok() {
+                    provisioned.push(rel_str);
+                }
+            }
+        }
+    }
+
+    if !provisioned.is_empty() {
+        let meta_path = wt_dir.join(PROVISIONED_LINKS_FILE);
+        if let Some(parent) = meta_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::write(meta_path, provisioned.join("\n"));
+    }
+}
+
+/// Reads the list of symlinked paths provisioned by `provision_worktree_deps`.
+pub(crate) fn read_provisioned_links(wt_dir: &Path) -> Vec<String> {
+    let meta_path = wt_dir.join(PROVISIONED_LINKS_FILE);
+    fs::read_to_string(meta_path)
+        .map(|s| {
+            s.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Removes symlinked dependencies/configs provisioned into `wt_dir` without touching their targets in `repo`.
+pub(crate) fn cleanup_provisioned_links(wt_dir: &Path) {
+    for rel in read_provisioned_links(wt_dir) {
+        let p = wt_dir.join(&rel);
+        if let Ok(meta) = fs::symlink_metadata(&p) {
+            if meta.file_type().is_symlink() {
+                let _ = fs::remove_file(&p);
+            }
+        }
+    }
+    let _ = fs::remove_file(wt_dir.join(PROVISIONED_LINKS_FILE));
+}
+
+fn is_provisioned_path(wt_dir: &Path, rel_path: &str) -> bool {
+    let trimmed = rel_path.trim().trim_end_matches('/');
+    read_provisioned_links(wt_dir)
+        .iter()
+        .any(|p| p == trimmed || trimmed.starts_with(&format!("{p}/")))
 }
 
 /// 查詢某個工作目錄的變更檔案數與簡短摘要。
@@ -37,7 +186,10 @@ pub(crate) fn git_status_summary(cwd: &Path) -> (usize, String) {
     let text = String::from_utf8_lossy(&out.stdout);
     let lines: Vec<&str> = text
         .lines()
-        .filter(|l| !is_ertangle_status_line(l))
+        .filter(|l| {
+            !is_ertangle_status_line(l)
+                && !is_provisioned_path(cwd, l.get(3..).unwrap_or(l).trim())
+        })
         .collect();
     let count = lines.len();
     let files: Vec<&str> = lines
@@ -53,29 +205,132 @@ pub(crate) fn git_status_summary(cwd: &Path) -> (usize, String) {
     (count, summary)
 }
 
+/// Options for filtering, folding, and truncating worktree diffs (T98).
+#[derive(Debug, Clone, Default)]
+pub struct DiffOptions {
+    pub stat_only: bool,
+    pub paths: Vec<String>,
+    pub max_lines: Option<usize>,
+    pub fold_generated: bool,
+}
+
+/// Returns true if `path` is a known giant lockfile, snapshot, or machine-generated designer file (T98).
+pub fn is_generated_or_lock_file(path: &str) -> bool {
+    let file_name = path.rsplit('/').next().unwrap_or(path);
+    matches!(
+        file_name,
+        "Cargo.lock"
+            | "package-lock.json"
+            | "yarn.lock"
+            | "pnpm-lock.yaml"
+            | "bun.lock"
+            | "bun.lockb"
+            | "packages.lock.json"
+            | "project.assets.json"
+            | "uv.lock"
+            | "poetry.lock"
+            | "Pipfile.lock"
+            | "go.sum"
+            | "composer.lock"
+            | "Gemfile.lock"
+    ) || file_name.ends_with(".Designer.cs")
+        || file_name.ends_with(".designer.cs")
+        || file_name.ends_with("ModelSnapshot.cs")
+        || file_name.ends_with(".g.cs")
+        || file_name.ends_with(".generated.cs")
+        || file_name.ends_with(".snap")
+        || file_name.ends_with(".min.js")
+        || file_name.ends_with(".min.css")
+        || file_name.ends_with(".bundle.js")
+}
+
+fn path_matches_filter(rel: &str, filters: &[String]) -> bool {
+    if filters.is_empty() {
+        return true;
+    }
+    filters.iter().any(|f| {
+        let f = f.trim().trim_start_matches("./");
+        if f.is_empty() {
+            return true;
+        }
+        let f_dir = f.trim_end_matches('/');
+        rel == f || rel == f_dir || rel.starts_with(&format!("{f_dir}/"))
+    })
+}
+
+/// Parses a complete unified diff into per-file blocks `(file_path, raw_block, added_lines, removed_lines)`.
+fn split_diff_blocks(raw: &str) -> Vec<(String, String, usize, usize)> {
+    let mut blocks: Vec<(String, String, usize, usize)> = Vec::new();
+    let mut cur_path = String::new();
+    let mut cur_buf = String::new();
+    let mut added = 0usize;
+    let mut removed = 0usize;
+
+    for line in raw.lines() {
+        if let Some(rest) = line.strip_prefix("diff --git ") {
+            if !cur_buf.is_empty() {
+                blocks.push((cur_path.clone(), cur_buf.clone(), added, removed));
+                cur_buf.clear();
+                added = 0;
+                removed = 0;
+            }
+            cur_path = rest
+                .split_whitespace()
+                .last()
+                .and_then(|b| b.strip_prefix("b/").or(Some(b)))
+                .unwrap_or(rest)
+                .to_string();
+        } else if line.starts_with('+') && !line.starts_with("+++") {
+            added += 1;
+        } else if line.starts_with('-') && !line.starts_with("---") {
+            removed += 1;
+        }
+        cur_buf.push_str(line);
+        cur_buf.push('\n');
+    }
+    if !cur_buf.is_empty() {
+        blocks.push((cur_path, cur_buf, added, removed));
+    }
+    blocks
+}
+
 /// 取得工作目錄的統一格式 diff (含已追蹤變更與新增未追蹤檔案的內容預覽)。
 pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
+    compute_worktree_diff_with_options(cwd, &DiffOptions::default())
+}
+
+/// Computes the worktree diff with optional `stat_only`, `paths` filtering, generated-file folding, and `max_lines` truncation (T98).
+pub fn compute_worktree_diff_with_options(cwd: &Path, opts: &DiffOptions) -> Result<String> {
     if !cwd.is_dir() {
         bail!("{}", tr!("工作目錄不存在：{cwd}", cwd = format!("{cwd:?}")));
     }
-    let mut out = String::new();
+    let mut raw = String::new();
 
     // 1) 已追蹤檔案相對於 HEAD 的 diff。
-    let diff = Command::new("git")
-        .arg("-C")
-        .arg(cwd)
-        .args(["diff", "HEAD"])
-        .output()
-        .with_context(|| tr!("執行 git diff 失敗"))?;
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(cwd).args(["diff", "HEAD"]);
+    let clean_paths: Vec<&str> = opts
+        .paths
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if !clean_paths.is_empty() {
+        cmd.arg("--");
+        for p in &clean_paths {
+            cmd.arg(p);
+        }
+    }
+    let diff = cmd.output().with_context(|| tr!("執行 git diff 失敗"))?;
     let diff_str = String::from_utf8_lossy(&diff.stdout);
     if !diff_str.trim().is_empty() {
-        out.push_str(&diff_str);
-        if !out.ends_with('\n') {
-            out.push('\n');
+        raw.push_str(&diff_str);
+        if !raw.ends_with('\n') {
+            raw.push('\n');
         }
     }
 
-    // 2) 未追蹤的新檔案 (排除 `.ertangle/`)：也產生 unified diff 樣式，方便在 TUI Diff 視圖審查與留註解。
+    // 2) 未追蹤的新檔案 (排除 `.ertangle/` 與 provisioned links)：也產生 unified diff 樣式。
     let untracked = Command::new("git")
         .arg("-C")
         .arg(cwd)
@@ -84,31 +339,89 @@ pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
         .with_context(|| tr!("執行 git ls-files 失敗"))?;
     for rel in String::from_utf8_lossy(&untracked.stdout).lines() {
         let rel = rel.trim();
-        if rel.is_empty() || rel.starts_with(".ertangle/") {
+        if rel.is_empty()
+            || rel == ".ertangle"
+            || rel.starts_with(".ertangle/")
+            || is_provisioned_path(cwd, rel)
+            || !path_matches_filter(rel, &opts.paths)
+        {
             continue;
         }
         let full = cwd.join(rel);
+        if fs::symlink_metadata(&full)
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            continue;
+        }
         if let Ok(content) = fs::read_to_string(&full) {
-            out.push_str(&format!("diff --git a/{rel} b/{rel}\n"));
-            out.push_str("new file mode 100644\n");
-            out.push_str("--- /dev/null\n");
-            out.push_str(&format!("+++ b/{rel}\n"));
+            raw.push_str(&format!("diff --git a/{rel} b/{rel}\n"));
+            raw.push_str("new file mode 100644\n");
+            raw.push_str("--- /dev/null\n");
+            raw.push_str(&format!("+++ b/{rel}\n"));
             let lines: Vec<&str> = content.lines().collect();
-            out.push_str(&format!("@@ -0,0 +1,{} @@\n", lines.len()));
+            raw.push_str(&format!("@@ -0,0 +1,{} @@\n", lines.len()));
             for (idx, l) in lines.iter().take(200).enumerate() {
-                out.push_str(&format!("+{l}\n"));
+                raw.push_str(&format!("+{l}\n"));
                 if idx == 199 && lines.len() > 200 {
-                    out.push_str("+... (truncated)\n");
+                    raw.push_str("+... (truncated)\n");
                 }
             }
         }
     }
 
-    if out.trim().is_empty() {
-        Ok(format!("{}\n", tr!("(目前工作區沒有尚未合併的變更)")))
-    } else {
-        Ok(out)
+    if raw.trim().is_empty() {
+        return Ok(format!("{}\n", tr!("(目前工作區沒有尚未合併的變更)")));
     }
+
+    let blocks = split_diff_blocks(&raw);
+    let mut out = String::new();
+
+    if opts.stat_only {
+        let mut total_add = 0usize;
+        let mut total_rem = 0usize;
+        for (path, _, add, rem) in &blocks {
+            total_add += *add;
+            total_rem += *rem;
+            let tag = if is_generated_or_lock_file(path) {
+                " (generated/lock)"
+            } else {
+                ""
+            };
+            out.push_str(&format!("{path} | +{add} -{rem}{tag}\n"));
+        }
+        out.push_str(&format!(
+            "{} file(s) changed, +{} -{}\n",
+            blocks.len(),
+            total_add,
+            total_rem
+        ));
+    } else {
+        for (path, block, add, rem) in &blocks {
+            if opts.fold_generated && is_generated_or_lock_file(path) {
+                out.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                out.push_str(&format!(
+                    "--- {path} | +{add} -{rem} (generated/lock file folded; pass paths=[\"{path}\"] to expand)\n"
+                ));
+            } else {
+                out.push_str(block);
+            }
+        }
+    }
+
+    if let Some(max) = opts.max_lines.filter(|m| *m > 0) {
+        let all_lines: Vec<&str> = out.lines().collect();
+        if all_lines.len() > max {
+            let omitted = all_lines.len() - max;
+            let mut truncated = all_lines[..max].join("\n");
+            truncated.push_str(&format!(
+                "\n... ({omitted} more lines truncated; use stat_only=true or paths=[...] to narrow scope)\n"
+            ));
+            return Ok(truncated);
+        }
+    }
+
+    Ok(out)
 }
 
 /// `git status --porcelain` 的一行是否屬於 `.ertangle/` 目錄下的路徑。
@@ -158,7 +471,11 @@ pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
     }
     Ok(String::from_utf8_lossy(&out.stdout)
         .lines()
-        .any(|l| !l.trim().is_empty() && !is_ertangle_status_line(l)))
+        .any(|l| {
+            !l.trim().is_empty()
+                && !is_ertangle_status_line(l)
+                && !is_provisioned_path(dir, l.get(3..).unwrap_or(l).trim())
+        }))
 }
 
 /// 合併衝突資訊。
@@ -301,7 +618,19 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
     if !has_uncommitted(wt_dir)? {
         return Ok(());
     }
-    let add = git_output(wt_dir, &["add", "-A", "--", ".", ":(exclude).ertangle"])?;
+    let provisioned = read_provisioned_links(wt_dir);
+    let mut add_args: Vec<String> = vec![
+        "add".to_string(),
+        "-A".to_string(),
+        "--".to_string(),
+        ".".to_string(),
+        ":(exclude).ertangle".to_string(),
+    ];
+    for p in provisioned {
+        add_args.push(format!(":(exclude){p}"));
+    }
+    let add_refs: Vec<&str> = add_args.iter().map(|s| s.as_str()).collect();
+    let add = git_output(wt_dir, &add_refs)?;
     if !add.status.success() {
         bail!(
             "{}",
@@ -675,6 +1004,7 @@ pub(crate) fn gc_block_reason(main_repo: &Path, session: &Session) -> Option<Str
 pub(crate) fn remove_worktree(main_repo: &Path, session: &Session, force: bool) -> Result<()> {
     let wt_dir = Path::new(&session.cwd);
     if wt_dir.exists() {
+        cleanup_provisioned_links(wt_dir);
         let wt = wt_dir.to_string_lossy();
         let mut args = vec!["worktree", "remove"];
         if force {

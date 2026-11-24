@@ -349,6 +349,18 @@ pub enum Request {
     /// 取得某個 session 工作區的 `git diff` (含未追蹤檔案摘要)。
     WorktreeDiff {
         session: SessionId,
+        /// 只回傳變更檔案與行數統計 (`+N -M`)，不含 unified diff 內容。
+        #[serde(default)]
+        stat_only: bool,
+        /// 只檢視符合指定相對路徑或前綴的檔案。
+        #[serde(default)]
+        paths: Vec<String>,
+        /// 最多回傳幾行 diff (超過時截斷並附上省略提示)。
+        #[serde(default)]
+        max_lines: Option<usize>,
+        /// 自動將大型 lockfile / 自動產生檔 (`package-lock.json`、`*.Designer.cs` 等) 摺疊為單行摘要。
+        #[serde(default)]
+        fold_generated: bool,
     },
     /// 退回 (捨棄) 某個 session 工作區的單一 Hunk 或整個檔案變更。
     WorktreeDiscard {

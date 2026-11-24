@@ -5422,3 +5422,166 @@ fn exec_timeout_kills_process_group() {
     }
     assert!(dead, "background child {child_pid} should have been killed");
 }
+
+#[test]
+fn t98_scoped_diff_folding_paths_and_truncation() {
+    let repo = temp_repo("t98_diff");
+    std::fs::write(repo.join("src.rs"), "fn main() {\n    println!(\"v2\");\n}\n").unwrap();
+    std::fs::write(
+        repo.join("package-lock.json"),
+        "{\n  \"name\": \"app\",\n  \"lockfileVersion\": 3\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("20261124_Init.Designer.cs"),
+        "// auto-generated designer\nclass Init {}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("AppDbContextModelSnapshot.cs"),
+        "// auto-generated snapshot\nclass Snap {}\n",
+    )
+    .unwrap();
+
+    // 1) Stat-only mode lists files and line counts without unified diff hunks.
+    let stat = crate::git::compute_worktree_diff_with_options(
+        &repo,
+        &crate::git::DiffOptions {
+            stat_only: true,
+            paths: Vec::new(),
+            max_lines: None,
+            fold_generated: true,
+        },
+    )
+    .unwrap();
+    assert!(stat.contains("src.rs | +3 -0"), "{stat}");
+    assert!(
+        stat.contains("package-lock.json | +4 -0 (generated/lock)"),
+        "{stat}"
+    );
+    assert!(
+        stat.contains("20261124_Init.Designer.cs | +2 -0 (generated/lock)"),
+        "{stat}"
+    );
+    assert!(!stat.contains("@@"), "stat_only must not emit hunks:\n{stat}");
+
+    // 2) Fold-generated mode folds lock and .NET Designer/ModelSnapshot files by default.
+    let folded = crate::git::compute_worktree_diff_with_options(
+        &repo,
+        &crate::git::DiffOptions {
+            stat_only: false,
+            paths: Vec::new(),
+            max_lines: None,
+            fold_generated: true,
+        },
+    )
+    .unwrap();
+    assert!(folded.contains("+    println!(\"v2\");"), "{folded}");
+    assert!(
+        folded.contains("package-lock.json | +4 -0 (generated/lock file folded"),
+        "{folded}"
+    );
+    assert!(
+        !folded.contains("lockfileVersion"),
+        "folded lockfile body must be hidden:\n{folded}"
+    );
+    assert!(
+        folded.contains("20261124_Init.Designer.cs | +2 -0 (generated/lock file folded"),
+        "{folded}"
+    );
+    assert!(
+        folded.contains("AppDbContextModelSnapshot.cs | +2 -0 (generated/lock file folded"),
+        "{folded}"
+    );
+
+    // 3) Explicit paths filter expands requested generated file and excludes others.
+    let expanded = crate::git::compute_worktree_diff_with_options(
+        &repo,
+        &crate::git::DiffOptions {
+            stat_only: false,
+            paths: vec!["package-lock.json".to_string()],
+            max_lines: None,
+            fold_generated: false,
+        },
+    )
+    .unwrap();
+    assert!(expanded.contains("lockfileVersion"), "{expanded}");
+    assert!(!expanded.contains("src.rs"), "{expanded}");
+
+    // 4) max_lines truncates output and adds an omission hint.
+    let truncated = crate::git::compute_worktree_diff_with_options(
+        &repo,
+        &crate::git::DiffOptions {
+            stat_only: false,
+            paths: Vec::new(),
+            max_lines: Some(4),
+            fold_generated: true,
+        },
+    )
+    .unwrap();
+    assert!(
+        truncated.contains("more lines truncated"),
+        "expected truncation notice:\n{truncated}"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn t100_worktree_provisions_and_cleans_polyglot_deps_and_env_files() {
+    let repo = temp_repo("t100_polyglot");
+    // Create untracked node_modules, .venv, .env.local, and src/WebApi/appsettings.Development.json
+    std::fs::create_dir_all(repo.join("node_modules/vite")).unwrap();
+    std::fs::write(repo.join("node_modules/vite/index.js"), "export default {}").unwrap();
+    std::fs::create_dir_all(repo.join(".venv/bin")).unwrap();
+    std::fs::write(repo.join(".venv/bin/pytest"), "#!/bin/sh\n").unwrap();
+    std::fs::write(repo.join(".env.local"), "VITE_API_URL=http://localhost:5000\n").unwrap();
+    std::fs::create_dir_all(repo.join("src/WebApi")).unwrap();
+    std::fs::write(repo.join("src/WebApi/Program.cs"), "// tracked").unwrap();
+    git(&repo, &["add", "src/WebApi/Program.cs"]);
+    git(&repo, &["commit", "-m", "add webapi"]);
+    std::fs::write(
+        repo.join("src/WebApi/appsettings.Development.json"),
+        "{\"Logging\":{}}",
+    )
+    .unwrap();
+
+    let sess = wt_session(&repo, "ses_poly");
+    let wt_dir = PathBuf::from(&sess.cwd);
+    // Ensure symlinks exist in the worktree
+    assert!(wt_dir.join("node_modules/vite/index.js").is_file());
+    assert!(wt_dir.join(".venv/bin/pytest").is_file());
+    assert!(wt_dir.join(".env.local").is_file());
+    assert!(wt_dir
+        .join("src/WebApi/appsettings.Development.json")
+        .is_file());
+
+    // Provisioned links must NOT appear as uncommitted changes or in worktree diffs!
+    assert!(!crate::git::has_uncommitted(&wt_dir).unwrap());
+    let (count, summary) = crate::git::git_status_summary(&wt_dir);
+    assert_eq!(count, 0, "expected clean summary, got {summary}");
+    let diff = crate::git::compute_worktree_diff(&wt_dir).unwrap();
+    assert!(!diff.contains(".env.local"), "{diff}");
+    assert!(!diff.contains("appsettings.Development.json"), "{diff}");
+
+    // Removing the worktree must remove symlinks cleanly without deleting the main repo's files!
+    crate::git::remove_worktree(&repo, &sess, false).unwrap();
+
+    assert!(!wt_dir.exists());
+    assert!(
+        repo.join("node_modules/vite/index.js").is_file(),
+        "main repo node_modules must remain intact!"
+    );
+    assert!(
+        repo.join(".venv/bin/pytest").is_file(),
+        "main repo .venv must remain intact!"
+    );
+    assert!(
+        repo.join(".env.local").is_file(),
+        "main repo .env.local must remain intact!"
+    );
+    assert!(
+        repo.join("src/WebApi/appsettings.Development.json")
+            .is_file(),
+        "main repo appsettings.Development.json must remain intact!"
+    );
+}
