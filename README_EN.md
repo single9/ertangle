@@ -321,6 +321,28 @@ Every structured agent session is automatically injected with a stdio MCP server
   - **Text & Image File Previews**: Tap interactive file pills to preview text/code files (with line jumping and highlights) or view images directly.
   - **Git Diff Review & One-Tap Merge**: Review branch diffs and merge back to main directly from your phone.
 
+### 9. Token Economy & Polyglot Agent Efficiency
+
+- **Low-Token Polyglot Verifier (`ertangle check`, T101)**:
+  - Auto-detects Rust, Node/Vite, .NET Core, and Python projects to run build, typecheck, and test commands.
+  - Strips ANSI codes, collapses `node_modules/` and async runtime stack frames, deduplicates identical diagnostics, and caps output lines (supports `--quick`, `--max-lines`, `--json`) to return only actionable error summaries.
+- **Code Skeleton & Line Range Extraction (`ertangle outline`, T102)**:
+  - Scans `.rs`, `.ts`/`.tsx`/`.js`/`.jsx`/`.vue`, `.cs`, and `.py` files or directories without reading entire files, returning symbol outlines with exact `L<start>-L<end>` ranges.
+  - Enables coordinators to include exact file paths and line ranges in worker prompts so workers edit directly without re-exploring large files.
+- **Non-Blocking Dev Server Manager (`ertangle dev`, T102)**:
+  - `ertangle dev start|status|stop` auto-detects the stack, picks a free local TCP port, spawns the dev server in its own process group streaming logs to `.ertangle/dev-<port>.log`, and returns the URL and PID as soon as the port is ready—preventing blocked agent turns and multi-worktree port collisions.
+- **Scoped Diff & Generated File Folding (`ertangle_diff` / `ertangle diff`, T98)**:
+  - Supports `stat_only` (file stats only), `paths` (path filtering), and `max_lines` (default 800 lines for MCP calls).
+  - When `paths` is omitted, automatically folds giant lock and generated files (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `*.Designer.cs`, `*ModelSnapshot.cs`, `uv.lock`, `poetry.lock`, `go.sum`, `*.snap`, `*.min.js`) into single-line summaries.
+- **Atomic Task Reporting & Spawn Binding (`ertangle_task_update` / `ertangle_spawn`, T99)**:
+  - Passing `report` to `ertangle_task_update` with `done` or `blocked` atomically updates the task board and sends `TASK_DONE` / `TASK_BLOCKED` to the parent session in a single turn.
+  - `ertangle_spawn` accepts `task_title` or `task_id` to create or bind a board task simultaneously, reducing coordinator dispatch turns.
+- **Shared Worktree Dependencies & Build Cache (`shared_worktree_deps` / `shared_cargo_target`, T100)**:
+  - Shares `<repo>/.ertangle/target` as `CARGO_TARGET_DIR` across Cargo worktrees and symlinks untracked `node_modules`, `.venv`, `.env*` (excluding templates), and `appsettings.Development.json` into worktrees without polluting `git status` or `ertangle_diff`.
+- **Optional Token Hints, Call Counter & Auto-Compact (`token_hints` / `N calls` / `auto_compact`, T47)**:
+  - Enable `[collab] token_hints = true` (off by default; also toggleable in `:settings`) to inject concise tool-batching and output-limiting hints, and monitor the `N calls` counter in the TUI session info bar.
+  - Combined with `[auto_compact]` (automatic `/compact` on idle when context reaches threshold) and the Zero Pleasantries protocol, multi-turn token overhead stays minimal.
+
 ---
 
 ## TUI User Guide
