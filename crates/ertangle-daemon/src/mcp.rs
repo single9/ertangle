@@ -1484,11 +1484,7 @@ mod merge_strategy_tests {
             Some("TASK_DONE task_1 all tests pass".to_string())
         );
         assert_eq!(
-            format_task_parent_report(
-                "task_1",
-                Some(TaskStatus::Blocked),
-                Some("missing API key")
-            ),
+            format_task_parent_report("task_1", Some(TaskStatus::Blocked), Some("missing API key")),
             Some("TASK_BLOCKED task_1 missing API key".to_string())
         );
         assert_eq!(

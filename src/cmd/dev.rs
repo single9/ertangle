@@ -14,28 +14,34 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(clap::Subcommand, Debug, Clone)]
 pub(crate) enum DevCmd {
-    /// Start a dev server in the background on an isolated free port and wait until ready
+    /// 在背景啟動開發伺服器 (自動分配空閒連接埠並等待就緒)
     Start {
+        /// 目標工作目錄 (預設為目前目錄)
         #[arg(long)]
         cwd: Option<PathBuf>,
+        /// 指定連接埠 (省略時自動分配空閒連接埠)
         #[arg(long)]
         port: Option<u16>,
+        /// 等待伺服器就緒的逾時秒數 (預設 25)
         #[arg(long, default_value = "25")]
         timeout_secs: u64,
         #[arg(long)]
         json: bool,
+        /// 自訂啟動命令 (省略時依專案自動偵測 vite / dotnet / cargo)
         #[arg(last = true)]
         cmd: Vec<String>,
     },
-    /// Check status of the managed dev server in the workspace
+    /// 查看目前工作區受管開發伺服器的狀態
     Status {
+        /// 目標工作目錄 (預設為目前目錄)
         #[arg(long)]
         cwd: Option<PathBuf>,
         #[arg(long)]
         json: bool,
     },
-    /// Stop the managed dev server in the workspace
+    /// 停止目前工作區受管的開發伺服器
     Stop {
+        /// 目標工作目錄 (預設為目前目錄)
         #[arg(long)]
         cwd: Option<PathBuf>,
         #[arg(long)]

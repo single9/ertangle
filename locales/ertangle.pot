@@ -226,6 +226,10 @@ msgid "依照內建或自訂的團隊範本一次啟動多 Agent 協作團隊"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "停止目前工作區受管的開發伺服器"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "傳輸通道：auto (預設)/ structured / pty"
 msgstr ""
 
@@ -239,6 +243,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "分享重要產出物 (檔案、PR 連結、測試報告等)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -278,6 +286,10 @@ msgid "印出所有說明文字 (供翻譯抽取用，不會啟動 daemon)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "只檢視指定的檔案或目錄路徑"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "只清理特定 session 的 worktree；未指定則清理所有已結束者"
 msgstr ""
 
@@ -287,6 +299,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "只重播序號大於此值的事件"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "只顯示變更檔案清單與行數統計 (+N -M)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -334,7 +350,15 @@ msgid "在獨立的 git worktree 中執行 (M3)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "在背景啟動開發伺服器 (自動分配空閒連接埠並等待就緒)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生效)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
@@ -422,6 +446,10 @@ msgid "從目前專案移除 (預設)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "快速檢查模式 (僅執行編譯／型別檢查，略過單元測試)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "把 ertangle-ade skill 安裝到 agent 的 skills 目錄"
 msgstr ""
 
@@ -439,6 +467,14 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "指定 session id 或標籤 (未指定則列出所有 session)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "指定技術堆疊：auto | rust | node | dotnet | python (預設 auto)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "指定連接埠 (省略時自動分配空閒連接埠)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -490,6 +526,10 @@ msgid "更新任務狀態或指派對象"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "最多顯示幾行 diff (0 代表不限制)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "查看各 session 與整體 token / USD 成本統計"
 msgstr ""
 
@@ -499,6 +539,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "查看目前 session 的收件匣"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "查看目前工作區受管開發伺服器的狀態"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -558,11 +602,31 @@ msgid "目標 session id 或標籤"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "目標專案目錄 (預設為目前目錄)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "目標工作目錄 (預設為目前目錄)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "目錄遞迴深度上限 (預設 3)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "移除已安裝的 ertangle-ade skill"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "種類：code / pr / doc / test / run (預設 code)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "等待伺服器就緒的逾時秒數 (預設 25)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "管理非阻塞背景開發伺服器並自動分配獨立連接埠 (Vite / Node / ASP.NET Core / Rust)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -582,6 +646,10 @@ msgid "自動完成腳本用的查詢 (不會啟動 daemon)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "自訂啟動命令 (省略時依專案自動偵測 vite / dotnet / cargo)"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "若 session 忙碌，先排入待送佇列，等閒下來再自動送出"
 msgstr ""
 
@@ -591,6 +659,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "補充給接手者的說明"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "要分析的檔案或目錄路徑 (預設為目前目錄)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -671,6 +743,10 @@ msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
 msgid "重播 event log 並印出歷史事件"
+msgstr ""
+
+#: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
+msgid "錯誤輸出行數上限 (預設 60)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs

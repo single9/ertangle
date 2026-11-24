@@ -1,6 +1,6 @@
 # T102 — `ertangle outline` (polyglot code skeleton for Rust, TS/JS, C#, Python) and `ertangle dev` (non-blocking dev server manager)
 
-Status: ready-for-agent
+Status: done
 
 Priority: P2　Scope: `ertangle-daemon`, `ertangle`　Depends on: T32, T47, T100
 

@@ -1,6 +1,6 @@
 # T98 — Scoped `ertangle_diff` (`stat_only`, `paths`, `max_lines`) and auto-folding for giant lock/designer files
 
-Status: ready-for-agent
+Status: done
 
 Priority: P2　Scope: `ertangle-protocol`, `ertangle-daemon`, `ertangle`　Depends on: T47
 

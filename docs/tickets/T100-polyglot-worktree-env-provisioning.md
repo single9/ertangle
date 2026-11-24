@@ -1,6 +1,6 @@
 # T100 — Polyglot worktree environment provisioning (Node/Vite `node_modules`, Python `.venv`, and .NET Core env)
 
-Status: ready-for-agent
+Status: done
 
 Priority: P2　Scope: `ertangle-daemon`　Depends on: T46
 

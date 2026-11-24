@@ -36,8 +36,7 @@ pub(crate) fn make_worktree(repo: &Path, id: &str) -> Result<(PathBuf, String)> 
 
 /// Checks whether `rel` is tracked by git in `repo`.
 fn is_git_tracked(repo: &Path, rel: &str) -> bool {
-    git_output(repo, &["ls-files", "--error-unmatch", "--", rel])
-        .is_ok_and(|o| o.status.success())
+    git_output(repo, &["ls-files", "--error-unmatch", "--", rel]).is_ok_and(|o| o.status.success())
 }
 
 /// Symlinks polyglot untracked dependencies (`node_modules`, `.venv`) and untracked local config
@@ -49,10 +48,12 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
     for dir_name in ["node_modules", ".venv"] {
         let src = repo.join(dir_name);
         let dst = wt_dir.join(dir_name);
-        if src.is_dir() && fs::symlink_metadata(&dst).is_err() && !is_git_tracked(repo, dir_name) {
-            if std::os::unix::fs::symlink(&src, &dst).is_ok() {
-                provisioned.push(dir_name.to_string());
-            }
+        if src.is_dir()
+            && fs::symlink_metadata(&dst).is_err()
+            && !is_git_tracked(repo, dir_name)
+            && std::os::unix::fs::symlink(&src, &dst).is_ok()
+        {
+            provisioned.push(dir_name.to_string());
         }
     }
 
@@ -77,10 +78,9 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
             if src.is_file()
                 && fs::symlink_metadata(&dst).is_err()
                 && !is_git_tracked(repo, name_str)
+                && std::os::unix::fs::symlink(&src, &dst).is_ok()
             {
-                if std::os::unix::fs::symlink(&src, &dst).is_ok() {
-                    provisioned.push(name_str.to_string());
-                }
+                provisioned.push(name_str.to_string());
             }
         }
     }
@@ -122,10 +122,9 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
             if dst.parent().is_some_and(|p| p.is_dir())
                 && fs::symlink_metadata(&dst).is_err()
                 && !is_git_tracked(repo, &rel_str)
+                && std::os::unix::fs::symlink(&src, &dst).is_ok()
             {
-                if std::os::unix::fs::symlink(&src, &dst).is_ok() {
-                    provisioned.push(rel_str);
-                }
+                provisioned.push(rel_str);
             }
         }
     }
@@ -187,8 +186,7 @@ pub(crate) fn git_status_summary(cwd: &Path) -> (usize, String) {
     let lines: Vec<&str> = text
         .lines()
         .filter(|l| {
-            !is_ertangle_status_line(l)
-                && !is_provisioned_path(cwd, l.get(3..).unwrap_or(l).trim())
+            !is_ertangle_status_line(l) && !is_provisioned_path(cwd, l.get(3..).unwrap_or(l).trim())
         })
         .collect();
     let count = lines.len();
@@ -469,13 +467,11 @@ pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
             )
         );
     }
-    Ok(String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .any(|l| {
-            !l.trim().is_empty()
-                && !is_ertangle_status_line(l)
-                && !is_provisioned_path(dir, l.get(3..).unwrap_or(l).trim())
-        }))
+    Ok(String::from_utf8_lossy(&out.stdout).lines().any(|l| {
+        !l.trim().is_empty()
+            && !is_ertangle_status_line(l)
+            && !is_provisioned_path(dir, l.get(3..).unwrap_or(l).trim())
+    }))
 }
 
 /// 合併衝突資訊。

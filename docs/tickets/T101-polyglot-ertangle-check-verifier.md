@@ -1,6 +1,6 @@
 # T101 — `ertangle check`: polyglot low-token build, lint, and test verifier (Rust, Node/Vite, .NET Core, Python)
 
-Status: ready-for-agent
+Status: done
 
 Priority: P2　Scope: `ertangle-daemon`, `ertangle`　Depends on: T47, T100
 

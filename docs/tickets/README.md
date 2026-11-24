@@ -102,11 +102,11 @@
 | [T95](T95-web-styled-confirm-dialog.md) | Web UI: replace native `window.confirm` with a styled in-app confirm dialog (已完成) | P2 | — |
 | [T96](T96-tui-no-session-prompt-offer-create-or-resume.md) | TUI: offer create-new / resume picker when a prompt is submitted with no session (已完成) | P2 | T88 |
 | [T97](T97-antigravity-model-choices-completion.md) | TUI & Adapter: Antigravity model choices, command candidate completion, and live cache (已完成) | P2 | T26 |
-| [T98](T98-scoped-diff-and-generated-file-folding.md) | Scoped `ertangle_diff` (`stat_only`, `paths`, `max_lines`) and auto-folding for giant lock/designer files | P2 | T47 |
-| [T99](T99-atomic-task-report-and-spawn-task-binding.md) | Atomic task completion reporting in `ertangle_task_update` and task-bound `ertangle_spawn` | P2 | T18, T37, T47 |
-| [T100](T100-polyglot-worktree-env-provisioning.md) | Polyglot worktree environment provisioning (Node/Vite `node_modules`, Python `.venv`, and .NET Core env) | P2 | T46 |
-| [T101](T101-polyglot-ertangle-check-verifier.md) | `ertangle check`: polyglot low-token build, lint, and test verifier (Rust, Node/Vite, .NET Core, Python) | P2 | T47, T100 |
-| [T102](T102-polyglot-outline-and-nonblocking-dev-server.md) | `ertangle outline` (polyglot code skeleton) and `ertangle dev` (non-blocking dev server manager) | P2 | T32, T47, T100 |
+| [T98](T98-scoped-diff-and-generated-file-folding.md) | Scoped `ertangle_diff` (`stat_only`, `paths`, `max_lines`) and auto-folding for giant lock/designer files (已完成) | P2 | T47 |
+| [T99](T99-atomic-task-report-and-spawn-task-binding.md) | Atomic task completion reporting in `ertangle_task_update` and task-bound `ertangle_spawn` (已完成) | P2 | T18, T37, T47 |
+| [T100](T100-polyglot-worktree-env-provisioning.md) | Polyglot worktree environment provisioning (Node/Vite `node_modules`, Python `.venv`, and .NET Core env) (已完成) | P2 | T46 |
+| [T101](T101-polyglot-ertangle-check-verifier.md) | `ertangle check`: polyglot low-token build, lint, and test verifier (Rust, Node/Vite, .NET Core, Python) (已完成) | P2 | T47, T100 |
+| [T102](T102-polyglot-outline-and-nonblocking-dev-server.md) | `ertangle outline` (polyglot code skeleton) and `ertangle dev` (non-blocking dev server manager) (已完成) | P2 | T32, T47, T100 |
 
 ## Language convention
 

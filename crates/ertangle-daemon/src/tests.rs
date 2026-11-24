@@ -5426,7 +5426,11 @@ fn exec_timeout_kills_process_group() {
 #[test]
 fn t98_scoped_diff_folding_paths_and_truncation() {
     let repo = temp_repo("t98_diff");
-    std::fs::write(repo.join("src.rs"), "fn main() {\n    println!(\"v2\");\n}\n").unwrap();
+    std::fs::write(
+        repo.join("src.rs"),
+        "fn main() {\n    println!(\"v2\");\n}\n",
+    )
+    .unwrap();
     std::fs::write(
         repo.join("package-lock.json"),
         "{\n  \"name\": \"app\",\n  \"lockfileVersion\": 3\n}\n",
@@ -5463,7 +5467,10 @@ fn t98_scoped_diff_folding_paths_and_truncation() {
         stat.contains("20261124_Init.Designer.cs | +2 -0 (generated/lock)"),
         "{stat}"
     );
-    assert!(!stat.contains("@@"), "stat_only must not emit hunks:\n{stat}");
+    assert!(
+        !stat.contains("@@"),
+        "stat_only must not emit hunks:\n{stat}"
+    );
 
     // 2) Fold-generated mode folds lock and .NET Designer/ModelSnapshot files by default.
     let folded = crate::git::compute_worktree_diff_with_options(
@@ -5534,7 +5541,11 @@ fn t100_worktree_provisions_and_cleans_polyglot_deps_and_env_files() {
     std::fs::write(repo.join("node_modules/vite/index.js"), "export default {}").unwrap();
     std::fs::create_dir_all(repo.join(".venv/bin")).unwrap();
     std::fs::write(repo.join(".venv/bin/pytest"), "#!/bin/sh\n").unwrap();
-    std::fs::write(repo.join(".env.local"), "VITE_API_URL=http://localhost:5000\n").unwrap();
+    std::fs::write(
+        repo.join(".env.local"),
+        "VITE_API_URL=http://localhost:5000\n",
+    )
+    .unwrap();
     std::fs::create_dir_all(repo.join("src/WebApi")).unwrap();
     std::fs::write(repo.join("src/WebApi/Program.cs"), "// tracked").unwrap();
     git(&repo, &["add", "src/WebApi/Program.cs"]);

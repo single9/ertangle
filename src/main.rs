@@ -14,8 +14,8 @@ use std::path::PathBuf;
 
 mod cmd;
 use cmd::{
-    bus::*, completions::*, cost::*, daemon::*, export::*, session::*, skill::*, task::*,
-    worktree::*,
+    bus::*, check::*, completions::*, cost::*, daemon::*, dev::*, export::*, outline::*,
+    session::*, skill::*, task::*, worktree::*,
 };
 
 #[derive(Parser)]
@@ -464,6 +464,38 @@ enum Cmd {
         #[command(subcommand)]
         cmd: SkillCmd,
     },
+    /// 執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python)
+    Check {
+        /// 目標專案目錄 (預設為目前目錄)
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        /// 指定技術堆疊：auto | rust | node | dotnet | python (預設 auto)
+        #[arg(long)]
+        stack: Option<String>,
+        /// 快速檢查模式 (僅執行編譯／型別檢查，略過單元測試)
+        #[arg(long)]
+        quick: bool,
+        /// 錯誤輸出行數上限 (預設 60)
+        #[arg(long, default_value = "60")]
+        max_lines: usize,
+        #[arg(long)]
+        json: bool,
+    },
+    /// 列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python)
+    Outline {
+        /// 要分析的檔案或目錄路徑 (預設為目前目錄)
+        paths: Vec<PathBuf>,
+        /// 目錄遞迴深度上限 (預設 3)
+        #[arg(long)]
+        max_depth: Option<usize>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// 管理非阻塞背景開發伺服器並自動分配獨立連接埠 (Vite / Node / ASP.NET Core / Rust)
+    Dev {
+        #[command(subcommand)]
+        cmd: DevCmd,
+    },
     /// 關閉常駐的 daemon 與所有受管 agent 子處理程序
     Shutdown,
     /// 重啟常駐的 daemon (換上新執行檔)，執行中的 session 自動接續
@@ -715,6 +747,19 @@ fn main() -> Result<()> {
             output,
         } => cmd_export(session, tree, diff, output),
         Cmd::Skill { cmd } => cmd_skill(cmd),
+        Cmd::Check {
+            cwd,
+            stack,
+            quick,
+            max_lines,
+            json,
+        } => cmd_check(cwd, stack, quick, max_lines, json),
+        Cmd::Outline {
+            paths,
+            max_depth,
+            json,
+        } => cmd_outline(paths, max_depth, json),
+        Cmd::Dev { cmd } => cmd_dev(cmd),
         Cmd::Shutdown => cmd_shutdown(),
         Cmd::Restart => cmd_restart(),
         Cmd::Completions { shell } => cmd_completions(shell),

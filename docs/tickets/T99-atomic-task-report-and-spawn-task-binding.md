@@ -1,6 +1,6 @@
 # T99 — Atomic task completion reporting in `ertangle_task_update` and task-bound `ertangle_spawn`
 
-Status: ready-for-agent
+Status: done
 
 Priority: P2　Scope: `ertangle-protocol`, `ertangle-daemon`　Depends on: T18, T37, T47
 
