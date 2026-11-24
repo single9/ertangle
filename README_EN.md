@@ -8,6 +8,34 @@
 
 ---
 
+## Screenshots & Demo
+
+https://github.com/user-attachments/assets/4e86a5cd-e9fb-48d6-a9c8-f78826417eab
+
+![ertangle TUI Overview: Multi-Agent Session Tree, Live Streaming, and Flow Topology](docs/images/tui-overview.png)
+
+<details>
+<summary>More Screenshots (Task Board, Inline Diff Review, Quota Monitor)</summary>
+
+### Shared Task Board with Dependencies (`Tasks` tab)
+Supports `depends_on` prerequisites; blocked tasks automatically unblock and wake their assignees once prerequisites complete.
+
+![ertangle Task Board](docs/images/tui-tasks.png)
+
+### Git Diff & Inline Review Comments (`Diff` tab)
+Inspect colored diffs for each worker's isolated worktree, press `c` on any line to send a review comment back to the agent, and press `M` to merge safely.
+
+![ertangle Diff & Inline Review](docs/images/tui-diff-review.png)
+
+### Agent Quota Monitor (`:quota`)
+Real-time 5h / 7d quota tracking and reset countdowns across agents.
+
+![ertangle Quota Monitor](docs/images/tui-quota.png)
+
+</details>
+
+---
+
 ## Why ertangle? (Terminal-Native vs. Heavy Desktop GUI IDEs)
 
 Instead of heavy desktop GUI or Electron-based IDEs, `ertangle` embraces a terminal-native, daemon-separated architecture: bringing multi-agent orchestration, worktree isolation, and real-time code review directly into your terminal workflow—ultra-lightweight (`< 20 MB`), frictionless over SSH, and instantly accessible via mobile web:

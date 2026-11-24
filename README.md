@@ -8,6 +8,34 @@
 
 ---
 
+## 畫面預覽與功能展示
+
+https://github.com/user-attachments/assets/4e86a5cd-e9fb-48d6-a9c8-f78826417eab
+
+![ertangle TUI 總覽：多 Agent Session 階層、即時串流與 Flow 拓撲圖](docs/images/tui-overview.png)
+
+<details>
+<summary>查看更多畫面截圖 (任務看板、Diff 行內審查、額度監控)</summary>
+
+### 任務看板與相依性 (`Tasks` 分頁)
+支援 `depends_on` 前置相依性；前置任務完成後會自動解鎖並喚醒負責人。
+
+![ertangle 任務看板](docs/images/tui-tasks.png)
+
+### Git Diff 審查與行內註解 (`Diff` 分頁)
+在 TUI 檢視各 Worker Worktree 的彩色 Diff，按 `c` 即可對特定行留下審查意見並送回 Agent 修正，確認無誤後按 `M` 安全合併。
+
+![ertangle Diff 審查與行內註解](docs/images/tui-diff-review.png)
+
+### Agent 額度監控 (`:quota`)
+即時追蹤各家 Agent 的 5 小時／7 天額度視窗與重置倒數。
+
+![ertangle 額度監控面板](docs/images/tui-quota.png)
+
+</details>
+
+---
+
 ## 為什麼選擇 ertangle？ (終端機原生 vs. 桌面 GUI IDE)
 
 相較於肥重的桌面 GUI 或 Electron 應用程式，`ertangle` 採用終端機原生與 Daemon 分離架構：將多 Agent 排程、Worktree 隔離與即時審查帶入你最熟悉的命令列，不僅常駐極輕量 (`< 20 MB`)，更能無縫支援 SSH 遠端開發與行動端隨身查閱：
