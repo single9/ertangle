@@ -612,8 +612,9 @@ merge_strategy = "squash"              # 合併策略：merge / squash / rebase
 為確保本地提交能穩定通過 CI 檢查，提交程式碼前可安裝 pre-commit hook 或執行一鍵驗證：
 
 ```bash
-make setup-hooks   # 自動安裝 .git/hooks/pre-commit
-make pre-commit    # 一鍵自動排版 (fmt)、跑 clippy 與檢查多國語系 (i18n)
+make setup-hooks          # 自動安裝 .git/hooks/pre-commit
+make pre-commit           # 一鍵自動排版 (fmt)、跑 clippy 與檢查多國語系 (i18n)
+cargo test --workspace    # 執行完整測試；測試暫存目錄由 TempDir guard 自動清除
 ```
 
 ---
