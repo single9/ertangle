@@ -13,9 +13,7 @@ use ertangle_protocol::{Frame, Request, SpawnRequest, Transport};
 
 #[test]
 fn test_remote_auto_token_and_incremental_reconnect() {
-    let root = std::env::temp_dir().join(format!("ertangle-reconn-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
+    let root = ertangle_test_support::temp_dir("ertangle-reconn");
 
     let sock = root.join("daemon.sock");
     std::env::set_var("ERTANGLE_SOCKET", &sock);
@@ -227,5 +225,4 @@ fn test_remote_auto_token_and_incremental_reconnect() {
 
     // 9. 清理關閉 daemon
     snap_c.send(&Request::Shutdown).unwrap();
-    let _ = fs::remove_dir_all(&root);
 }

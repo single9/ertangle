@@ -3,7 +3,6 @@
 //! 2. 驗證 client 能透過 connect_tcp 連線並彙整 Session 清單。
 //! 3. 驗證針對遠端 Session 發出的操作正確送達遠端 daemon。
 
-use std::fs;
 use std::time::{Duration, Instant};
 
 use ertangle_core::AgentKind;
@@ -12,9 +11,7 @@ use ertangle_protocol::{Frame, Request, SpawnRequest, Transport};
 
 #[test]
 fn test_multi_host_aggregation_and_routing() {
-    let root = std::env::temp_dir().join(format!("ertangle-multihost-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
+    let root = ertangle_test_support::temp_dir("ertangle-multihost");
 
     let sock = root.join("local.sock");
     std::env::set_var("ERTANGLE_SOCKET", &sock);
@@ -130,6 +127,4 @@ fn test_multi_host_aggregation_and_routing() {
         matches!(prompt_resp, Frame::Ok { .. }),
         "遠端 daemon 應接受 Prompt"
     );
-
-    let _ = fs::remove_dir_all(&root);
 }

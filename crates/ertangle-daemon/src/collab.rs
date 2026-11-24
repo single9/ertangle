@@ -228,7 +228,7 @@ mod tests {
     }
 
     fn temp_dir(tag: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(ertangle_core::new_id(tag));
+        let d = ertangle_test_support::temp_dir(tag);
         std::fs::create_dir_all(d.join(".ertangle")).unwrap();
         d
     }

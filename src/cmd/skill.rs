@@ -65,8 +65,7 @@ mod tests {
 
     #[test]
     fn install_show_uninstall_in_temp_dir() {
-        let t = std::env::temp_dir().join(ertangle_core::new_id("skillcli"));
-        std::fs::create_dir_all(&t).unwrap();
+        let t = ertangle_test_support::temp_dir("skillcli");
         let inst = SkillCmd::Install {
             target: "claude".into(),
             global: false,
@@ -84,6 +83,5 @@ mod tests {
         assert!(run_in(&t, &SkillCmd::Show)
             .unwrap()
             .contains("ertangle-ade"));
-        let _ = std::fs::remove_dir_all(&t);
     }
 }

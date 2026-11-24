@@ -217,8 +217,7 @@ impl AgentControl for MockCtl {
 fn isolate_global_config() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        let dir = std::env::temp_dir().join(format!("ertangle-test-xdg-{}", std::process::id()));
-        let _ = fs::create_dir_all(&dir);
+        let dir = ertangle_test_support::temp_dir("ertangle-test-xdg");
         std::env::set_var("XDG_CONFIG_HOME", &dir);
     });
 }
@@ -235,9 +234,7 @@ fn test_shared() -> Arc<Shared> {
 }
 
 fn temp_cwd() -> PathBuf {
-    let dir = std::env::temp_dir().join(new_id("ertangle-test"));
-    fs::create_dir_all(&dir).expect("建立測試目錄");
-    dir
+    ertangle_test_support::temp_dir("ertangle-test")
 }
 
 fn add_session(
@@ -1061,8 +1058,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 fn temp_repo(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("ertangle-git-{tag}-{}", new_id("t")));
-    fs::create_dir_all(&d).unwrap();
+    let d = ertangle_test_support::temp_dir(&format!("ertangle-git-{tag}"));
     git(&d, &["init", "-q", "-b", "main"]);
     git(&d, &["config", "commit.gpgsign", "false"]);
     git(&d, &["config", "user.email", "t@t"]);
@@ -1701,7 +1697,7 @@ pub(crate) fn restart_session(id: &str, status: SessionStatus) -> Session {
 
 #[test]
 fn restart_restores_state_and_continues_seq() {
-    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-log")));
+    let log = ertangle_test_support::temp_dir("ertangle-log").join("events.jsonl");
     let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
     first.emit(Event::SessionStarted {
         session: restart_session("ses-live", SessionStatus::Idle),
@@ -1738,7 +1734,7 @@ fn restart_restores_state_and_continues_seq() {
 
 #[test]
 fn native_id_survives_flush_and_replay_and_restart_leaves_resume_hint() {
-    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-native")));
+    let log = ertangle_test_support::temp_dir("ertangle-native").join("events.jsonl");
     let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
     for id in ["ses-with-id", "ses-no-id"] {
         first.emit(Event::SessionStarted {
@@ -1976,7 +1972,7 @@ fn snapshot_works_after_lock_poisoned() {
 
 #[test]
 fn flush_persists_last_event() {
-    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-log")));
+    let log = ertangle_test_support::temp_dir("ertangle-log").join("events.jsonl");
     let shared =
         Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
     shared.emit(out_event(1));
@@ -2391,7 +2387,7 @@ fn mcp_permission_ask_waits_for_human_decision_allow_and_deny() {
 
 #[test]
 fn restore_prunes_old_ended_sessions_but_keeps_branches_and_recent() {
-    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-prune")));
+    let log = ertangle_test_support::temp_dir("ertangle-prune").join("events.jsonl");
     let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
     let now = now_millis();
     let day = 24 * 3600 * 1000;
@@ -2649,7 +2645,7 @@ fn spawn_enforces_max_depth_and_max_children_only_for_child_sessions() {
 
 #[test]
 fn budget_warn_once_and_exceed_cancels_blocks_prompt_and_raises() {
-    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-budget-log")));
+    let log = ertangle_test_support::temp_dir("ertangle-budget-log").join("events.jsonl");
     let shared =
         Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
     let cwd = temp_cwd();
@@ -4245,8 +4241,7 @@ fn auto_resume_only_for_busy_resumable_sessions_with_quota_and_progress() {
 
 #[test]
 fn worktree_sessions_share_one_cargo_target_only_in_cargo_repos() {
-    let repo = std::env::temp_dir().join(new_id("cargo-repo"));
-    std::fs::create_dir_all(&repo).unwrap();
+    let repo = ertangle_test_support::temp_dir("cargo-repo");
     let mut s = restart_session("ses-wt", SessionStatus::Busy);
     s.repo_root = Some(repo.to_string_lossy().to_string());
     s.cwd = repo
@@ -4266,12 +4261,11 @@ fn worktree_sessions_share_one_cargo_target_only_in_cargo_repos() {
     assert_eq!(f(&main), None, "主工作目錄沿用自己的 target");
     s.branch = None;
     assert_eq!(f(&s), None, "沒有 worktree 分支");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 #[test]
 fn restart_preserves_old_live_orphans_and_archives_stale_ended_sessions() {
-    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-prune")));
+    let log = ertangle_test_support::temp_dir("ertangle-prune").join("events.jsonl");
     let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
     let old_ts = now_millis().saturating_sub(7200 * 1000);
 
@@ -4942,7 +4936,7 @@ fn strip_deleted_suffix_removes_marker_only_at_end() {
 
 #[test]
 fn inbox_cursor_survives_daemon_restart() {
-    let log = std::env::temp_dir().join(format!("{}.jsonl", new_id("ertangle-log")));
+    let log = ertangle_test_support::temp_dir("ertangle-log").join("events.jsonl");
     let first = Shared::restore(&log, PolicyEngine::default(), std::env::temp_dir(), None).unwrap();
     first.emit(Event::SessionStarted {
         session: restart_session("ses_n", SessionStatus::Idle),

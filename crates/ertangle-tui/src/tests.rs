@@ -1188,8 +1188,7 @@ fn model_query_problem_is_shown_in_picker() {
 // ---- 附件 (@檔案／圖片)----
 
 fn temp_dir_with(files: &[(&str, &[u8])]) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("ertangle-att-{}", ertangle_core::new_id("t")));
-    std::fs::create_dir_all(&d).unwrap();
+    let d = ertangle_test_support::temp_dir("ertangle-att");
     for (n, c) in files {
         std::fs::write(d.join(n), c).unwrap();
     }
@@ -1389,16 +1388,14 @@ fn history_recalls_dedups_and_restores_draft() {
 
 #[test]
 fn history_persists_across_loads() {
-    let dir = std::env::temp_dir().join(format!("ertangle-hist-{}", std::process::id()));
+    let dir = ertangle_test_support::temp_dir("ertangle-hist");
     let path = dir.join("h.jsonl");
-    let _ = std::fs::remove_dir_all(&dir);
     let mut h = crate::history::History::load(Some(path.clone()));
     h.push("第一則 \"quoted\"");
     h.push("second");
     let mut h2 = crate::history::History::load(Some(path));
     assert_eq!(h2.prev("").as_deref(), Some("second"));
     assert_eq!(h2.prev("").as_deref(), Some("第一則 \"quoted\""));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -2684,12 +2681,12 @@ fn set_command_offers_argument_candidates() {
 #[test]
 fn settings_panel_cycles_values_and_writes_config() {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    let dir = std::env::temp_dir().join(format!("ertangle-settings-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = ertangle_test_support::temp_dir("ertangle-settings");
     std::env::set_var("XDG_CONFIG_HOME", &dir);
     let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
 
-    let mut app = sample_app(&[]);
+    // 不要用 sample_app：它選取 opencode，會觸發背景 CLI 查詢並在外面的設定目錄寫入。
+    let mut app = test_app();
     app.selected = 0;
     crate::settings::open(&mut app);
     assert_eq!(app.mode, Mode::Settings);
@@ -2798,7 +2795,6 @@ fn settings_panel_cycles_values_and_writes_config() {
 
     crate::settings::handle_key(&mut app, None, key(KeyCode::Esc));
     assert_eq!(app.mode, Mode::Normal);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -3642,8 +3638,7 @@ fn grid_view_renders_page_with_selected_and_toggles() {
 
 #[test]
 fn skill_command_installs_shows_and_uninstalls_in_project() {
-    let t = std::env::temp_dir().join(ertangle_core::new_id("tuiskill"));
-    std::fs::create_dir_all(&t).unwrap();
+    let t = ertangle_test_support::temp_dir("tuiskill");
     let show = crate::commands::skill_action(&t, "show", "claude").unwrap();
     assert!(
         show.contains("未安裝") || show.contains("not installed"),
@@ -3656,7 +3651,6 @@ fn skill_command_installs_shows_and_uninstalls_in_project() {
     crate::commands::skill_action(&t, "uninstall", "claude").unwrap();
     assert!(!t.join(".claude/skills/ertangle-ade").exists());
     assert!(crate::commands::skill_action(&t, "bogus", "claude").is_err());
-    let _ = std::fs::remove_dir_all(&t);
 }
 
 #[test]
@@ -4166,10 +4160,8 @@ fn tool_folding_identical_for_show_tools_false() {
 #[test]
 fn test_resolve_active_project_precedence() {
     let tmp = std::env::temp_dir();
-    let dir_flag = tmp.join(ertangle_core::new_id("flag"));
-    let dir_cwd = tmp.join(ertangle_core::new_id("cwd"));
-    std::fs::create_dir_all(&dir_flag).unwrap();
-    std::fs::create_dir_all(&dir_cwd).unwrap();
+    let dir_flag = ertangle_test_support::temp_dir("flag");
+    let dir_cwd = ertangle_test_support::temp_dir("cwd");
     let canon_flag = dir_flag.canonicalize().unwrap();
     let canon_cwd = dir_cwd.canonicalize().unwrap();
 
@@ -4189,17 +4181,13 @@ fn test_resolve_active_project_precedence() {
         crate::app::resolve_active_project(None, &dir_cwd),
         canon_cwd
     );
-
-    let _ = std::fs::remove_dir_all(&dir_flag);
-    let _ = std::fs::remove_dir_all(&dir_cwd);
 }
 
 #[test]
 fn test_app_set_active_project_state_transition() {
     let mut app = test_app();
     let tmp = std::env::temp_dir();
-    let target = tmp.join(ertangle_core::new_id("proj_target"));
-    std::fs::create_dir_all(&target).unwrap();
+    let target = ertangle_test_support::temp_dir("proj_target");
     let canon = target.canonicalize().unwrap();
 
     app.scope_here = false;
@@ -4226,8 +4214,6 @@ fn test_app_set_active_project_state_transition() {
         app.active_project, canon,
         "active_project unchanged on error"
     );
-
-    let _ = std::fs::remove_dir_all(&target);
 }
 
 #[test]
@@ -4430,9 +4416,7 @@ fn test_resume_picker_tab_toggle_and_project_command() {
     assert!(app.scope_here);
 
     // 2. :project open <path>
-    let tmp = std::env::temp_dir();
-    let p_dir = tmp.join(ertangle_core::new_id("open_proj"));
-    std::fs::create_dir_all(&p_dir).unwrap();
+    let p_dir = ertangle_test_support::temp_dir("open_proj");
     let canon = p_dir.canonicalize().unwrap();
 
     crate::commands::execute_command(
@@ -4450,8 +4434,6 @@ fn test_resume_picker_tab_toggle_and_project_command() {
         app.picker.as_ref().map(|p| &p.stage),
         Some(crate::menu::PickStage::Project)
     ));
-
-    let _ = std::fs::remove_dir_all(&p_dir);
 }
 
 #[test]
@@ -5620,7 +5602,7 @@ fn subcommand_candidates_complete_via_tab_and_hints() {
 #[test]
 fn project_open_path_candidates_complete_directories() {
     let app = test_app();
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("path_cands"));
+    let tmp = ertangle_test_support::temp_dir("path_cands");
     let alpha = tmp.join("alpha");
     let beta = tmp.join("beta");
     std::fs::create_dir_all(&alpha).unwrap();
@@ -5634,8 +5616,6 @@ fn project_open_path_candidates_complete_directories() {
             .any(|(v, _)| v.as_str() == format!("{}/alpha/", tmp.display())),
         "expected alpha directory candidate, got {cands:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
@@ -5660,7 +5640,7 @@ fn space_p_opens_project_picker() {
 fn project_folder_browser_is_separate_from_project_list() {
     let mut app = test_app();
     let (mut w, _rx) = pair_writer();
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("folder_pick"));
+    let tmp = ertangle_test_support::temp_dir("folder_pick");
     let child = tmp.join("child_dir");
     std::fs::create_dir_all(&child).unwrap();
     app.active_project = tmp.clone();
@@ -5728,13 +5708,11 @@ fn project_folder_browser_is_separate_from_project_list() {
     assert!(app.picker.is_none());
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.active_project, tmp.canonicalize().unwrap());
-
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
 fn directory_items_put_use_current_folder_first() {
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_items"));
+    let tmp = ertangle_test_support::temp_dir("dir_items");
     std::fs::create_dir_all(tmp.join("sub")).unwrap();
     let items = crate::menu::directory_items(&tmp);
     assert_eq!(items[0].1, crate::menu::SELECT_VALUE);
@@ -5749,7 +5727,6 @@ fn directory_items_put_use_current_folder_first() {
         assert_eq!(parent, 1);
     }
     assert!(items.iter().any(|(_, v)| v == "sub"));
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 fn open_browser_at(app: &mut App, w: &mut HostRouter, dir: &std::path::Path) {
@@ -5761,7 +5738,7 @@ fn open_browser_at(app: &mut App, w: &mut HostRouter, dir: &std::path::Path) {
 fn folder_browser_filters_subfolders_and_backspace_edits_filter() {
     let mut app = test_app();
     let (mut w, _rx) = pair_writer();
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_filter"));
+    let tmp = ertangle_test_support::temp_dir("dir_filter");
     for d in ["alpha", "beta", "alphabet"] {
         std::fs::create_dir_all(tmp.join(d)).unwrap();
     }
@@ -5812,7 +5789,6 @@ fn folder_browser_filters_subfolders_and_backspace_edits_filter() {
         crate::menu::PickStage::Directory { current } => assert_eq!(current, &tmp.join("beta")),
         _ => panic!("expected directory stage"),
     }
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
@@ -5825,8 +5801,7 @@ fn folder_browser_tilde_shortcut_jumps_to_home() {
     };
     let mut app = test_app();
     let (mut w, _rx) = pair_writer();
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_home"));
-    std::fs::create_dir_all(&tmp).unwrap();
+    let tmp = ertangle_test_support::temp_dir("dir_home");
 
     // 捷徑列。
     open_browser_at(&mut app, &mut w, &tmp);
@@ -5853,12 +5828,11 @@ fn folder_browser_tilde_shortcut_jumps_to_home() {
         crate::menu::PickStage::Directory { current } => assert_eq!(current, &home),
         _ => panic!("expected directory stage"),
     }
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
 fn directory_items_share_a_two_column_gutter() {
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_align"));
+    let tmp = ertangle_test_support::temp_dir("dir_align");
     std::fs::create_dir_all(tmp.join("sub")).unwrap();
     for (label, _) in crate::menu::directory_items(&tmp) {
         let mut chars = label.chars();
@@ -5874,15 +5848,13 @@ fn directory_items_share_a_two_column_gutter() {
             "{label:?}"
         );
     }
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
 fn picker_filter_is_a_text_input_with_cursor_and_placeholder() {
     let mut app = test_app();
     let (mut w, _rx) = pair_writer();
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("pick_input"));
-    std::fs::create_dir_all(&tmp).unwrap();
+    let tmp = ertangle_test_support::temp_dir("pick_input");
     open_browser_at(&mut app, &mut w, &tmp);
 
     // 空輸入框顯示提示，標題不再夾帶「輸入過濾」。
@@ -5927,15 +5899,13 @@ fn picker_filter_is_a_text_input_with_cursor_and_placeholder() {
     assert!(app.picker.as_ref().unwrap().filter.is_empty());
     handle_paste(&mut app, "x\ny");
     assert_eq!(app.picker.as_ref().unwrap().filter, "x y");
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
 fn folder_browser_hides_home_row_in_home_and_shows_hint_bottom_right() {
     let mut app = test_app();
     let (mut w, _rx) = pair_writer();
-    let tmp = std::env::temp_dir().join(ertangle_core::new_id("dir_hint"));
-    std::fs::create_dir_all(&tmp).unwrap();
+    let tmp = ertangle_test_support::temp_dir("dir_hint");
 
     // 右下角的 Enter 提示：在邊框最後一列，靠右。
     open_browser_at(&mut app, &mut w, &tmp);
@@ -5971,7 +5941,6 @@ fn folder_browser_hides_home_row_in_home_and_shows_hint_bottom_right() {
         .items
         .iter()
         .all(|(_, v)| v != crate::menu::HOME_VALUE));
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]

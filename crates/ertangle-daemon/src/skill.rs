@@ -77,8 +77,7 @@ mod tests {
 
     #[test]
     fn install_and_uninstall_paths() {
-        let t = std::env::temp_dir().join(ertangle_core::new_id("skill"));
-        std::fs::create_dir_all(&t).unwrap();
+        let t = ertangle_test_support::temp_dir("skill");
         for (target, rel) in [
             ("claude", ".claude/skills/ertangle-ade/SKILL.md"),
             ("agents", ".agents/skills/ertangle-ade/SKILL.md"),
@@ -93,7 +92,6 @@ mod tests {
         }
         assert!(install(&t, "bogus").is_err());
         assert!(uninstall(&t, "bogus").is_err());
-        let _ = std::fs::remove_dir_all(&t);
     }
 
     #[test]
@@ -118,7 +116,7 @@ mod tests {
 
     #[test]
     fn uninstall_removes_legacy_skill_dir() {
-        let base = std::env::temp_dir().join(ertangle_core::new_id("skill-legacy"));
+        let base = ertangle_test_support::temp_dir("skill-legacy");
         let legacy = base.join(".claude/skills").join(LEGACY_SKILL_NAME);
         std::fs::create_dir_all(&legacy).unwrap();
         std::fs::write(legacy.join("SKILL.md"), "old").unwrap();
@@ -126,6 +124,5 @@ mod tests {
         assert_eq!(removed, Some(legacy.clone()));
         assert!(!legacy.exists());
         assert_eq!(uninstall(&base, "claude").unwrap(), None);
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

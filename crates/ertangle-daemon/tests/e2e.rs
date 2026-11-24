@@ -8,9 +8,7 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn spawn_prompt_output_shutdown() {
-    let root = std::env::temp_dir().join(format!("ertangle-e2e-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let root = ertangle_test_support::temp_dir("ertangle-e2e");
     std::env::set_var("ERTANGLE_SOCKET", root.join("d.sock"));
     std::env::set_var("XDG_STATE_HOME", root.join("state"));
     std::env::set_var("XDG_CONFIG_HOME", root.join("config"));

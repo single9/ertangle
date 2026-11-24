@@ -102,9 +102,7 @@ mod tests {
     use super::*;
 
     fn tmp(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(ertangle_core::new_id(tag));
-        std::fs::create_dir_all(&d).unwrap();
-        d
+        ertangle_test_support::temp_dir(tag)
     }
 
     #[test]
@@ -129,7 +127,6 @@ mod tests {
         assert!(!legacy.exists());
         // 第二次不再動作。
         assert_eq!(migrate_legacy_dir(new.clone(), legacy), new);
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -140,7 +137,6 @@ mod tests {
         std::fs::create_dir_all(&legacy).unwrap();
         assert_eq!(migrate_legacy_dir(new.clone(), legacy.clone()), new);
         assert!(legacy.exists());
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -151,7 +147,6 @@ mod tests {
         // 新路徑的父目錄不存在，rename 必然失敗。
         let new = base.join("missing-parent").join("ertangle");
         assert_eq!(migrate_legacy_dir(new, legacy.clone()), legacy);
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -159,6 +154,5 @@ mod tests {
         let base = tmp("none");
         let new = base.join("ertangle");
         assert_eq!(migrate_legacy_dir(new.clone(), base.join("termade")), new);
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

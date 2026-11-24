@@ -1219,10 +1219,10 @@ mod tests {
         assert!(INDEX_HTML.contains(r#"value="$1""#));
 
         // Verify path validation for artifact dirs
-        let tmp = std::env::temp_dir()
+        let tmp = ertangle_test_support::temp_dir("ertangle_test_brain")
             .canonicalize()
-            .unwrap_or_else(|_| PathBuf::from("/tmp"));
-        let artifact_dir = tmp.join("ertangle_test_brain");
+            .unwrap();
+        let artifact_dir = tmp.join("artifact");
         let _ = std::fs::create_dir_all(&artifact_dir);
         let canonical_artifact = artifact_dir.canonicalize().unwrap();
 
@@ -1233,7 +1233,6 @@ mod tests {
         // System paths and traversal outside allowed roots are blocked
         assert!(!is_path_allowed(Path::new("/etc/passwd"), &allowed));
         assert!(!is_path_allowed(&tmp, &allowed));
-        let _ = std::fs::remove_dir_all(&artifact_dir);
     }
 
     /// T92: Web Markdown uses bounded `mdRenderCache` and function replacers to prevent `$` expansion.
@@ -1308,12 +1307,7 @@ mod tests {
     /// T90: Test path validation and artifact scope tightening for agent directories.
     #[test]
     fn test_file_access_and_artifact_scope() {
-        let tmp = std::env::temp_dir()
-            .canonicalize()
-            .unwrap_or_else(|_| PathBuf::from("/tmp"));
-        let test_base = tmp.join(format!("ertangle_test_scope_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&test_base);
-        std::fs::create_dir_all(&test_base).unwrap();
+        let test_base = ertangle_test_support::temp_dir("ertangle_test_scope");
 
         let brain_dir = test_base.join(".gemini/antigravity-cli/brain");
         let ertangle_dir = test_base.join(".ertangle");
@@ -1420,19 +1414,12 @@ mod tests {
             &allowed_roots,
             &image_only_roots
         ));
-
-        let _ = std::fs::remove_dir_all(&test_base);
     }
 
     /// T90: Test serve_file strips CORS headers and rejects sensitive ~/.ertangle/config.toml.
     #[test]
     fn test_serve_file_no_cors_and_blocks_sensitive_file() {
-        let tmp = std::env::temp_dir()
-            .canonicalize()
-            .unwrap_or_else(|_| PathBuf::from("/tmp"));
-        let test_base = tmp.join(format!("ertangle_test_serve_file_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&test_base);
-        std::fs::create_dir_all(&test_base).unwrap();
+        let test_base = ertangle_test_support::temp_dir("ertangle_test_serve_file");
 
         let fake_home = test_base.join("home");
         let fake_ws = test_base.join("ws");
@@ -1529,8 +1516,6 @@ mod tests {
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.contains("brain_note"));
         assert!(!resp.contains("Access-Control-Allow-Origin"));
-
-        let _ = std::fs::remove_dir_all(&test_base);
     }
 
     mod hex {

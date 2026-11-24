@@ -30,9 +30,7 @@ fn cmd_with_env(root: &Path, sock: &Path) -> Command {
 #[test]
 fn cli_completions_and_complete_sessions_e2e() {
     // macOS 的 temp_dir 經過符號連結 (/var → /private/var)，先正規化讓路徑比較一致。
-    let tmp = std::fs::canonicalize(std::env::temp_dir()).unwrap();
-    let root = tmp.join(format!("ertangle-compl-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = ertangle_test_support::temp_dir("ertangle-compl");
     let proj_a = root.join("proj-a");
     let proj_b = root.join("proj-b");
     std::fs::create_dir_all(&proj_a).unwrap();
@@ -147,5 +145,4 @@ fn cli_completions_and_complete_sessions_e2e() {
 
     let _ = cmd_with_env(&root, &live_sock).arg("shutdown").output();
     let _ = daemon.wait();
-    let _ = std::fs::remove_dir_all(&root);
 }

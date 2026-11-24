@@ -17,3 +17,6 @@ serde_json.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
 unicode-width.workspace = true
+
+[dev-dependencies]
+ertangle-test-support = { workspace = true }

@@ -28,6 +28,7 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 ertangle-adapter = { workspace = true }
+ertangle-test-support = { workspace = true }
 
 [workspace]
 resolver = "2"
@@ -46,6 +47,7 @@ ertangle-protocol = { path = "crates/ertangle-protocol", version = "1.4.0" }
 ertangle-adapter = { path = "crates/ertangle-adapter", version = "1.4.0" }
 ertangle-daemon = { path = "crates/ertangle-daemon", version = "1.4.0" }
 ertangle-tui = { path = "crates/ertangle-tui", version = "1.4.0" }
+ertangle-test-support = { path = "crates/ertangle-test-support" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -469,6 +469,7 @@ dependencies = [
  "ertangle-core",
  "ertangle-daemon",
  "ertangle-protocol",
+ "ertangle-test-support",
  "ertangle-tui",
  "serde_json",
  "tr",
@@ -509,6 +510,7 @@ dependencies = [
  "ertangle-adapter",
  "ertangle-core",
  "ertangle-protocol",
+ "ertangle-test-support",
  "nix 0.28.0",
  "serde",
  "serde_json",
@@ -528,6 +530,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ertangle-test-support"
+version = "1.4.0"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "ertangle-tui"
 version = "1.4.0"
 dependencies = [
@@ -537,6 +546,7 @@ dependencies = [
  "ertangle-core",
  "ertangle-daemon",
  "ertangle-protocol",
+ "ertangle-test-support",
  "ratatui",
  "serde_json",
  "tr",
@@ -561,6 +571,12 @@ dependencies = [
  "bit-set",
  "regex",
 ]
+
+[[package]]
+name = "fastrand"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "filedescriptor"
@@ -1723,6 +1739,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "once_cell",
+ "rustix",
+ "windows-sys",
 ]
 
 [[package]]

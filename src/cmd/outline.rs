@@ -999,14 +999,7 @@ def top():
 
     #[test]
     fn directory_walk_respects_depth_and_skips() {
-        let root = std::env::temp_dir().join(format!(
-            "ertangle-outline-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
+        let root = ertangle_test_support::temp_dir("ertangle-outline");
         let deep = root.join("a/b/c/d");
         std::fs::create_dir_all(&deep).unwrap();
         std::fs::create_dir_all(root.join("node_modules")).unwrap();
@@ -1033,7 +1026,6 @@ def top():
 
         let summary = render_summary(&root.join("top.py"), "def f():\n    pass\n");
         assert!(summary.contains("(2 lines): 1 symbols"));
-        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

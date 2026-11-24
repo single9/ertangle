@@ -1076,7 +1076,7 @@ impl Config {
 mod tests {
     #[test]
     fn repo_local_file_prefers_new_then_legacy() {
-        let d = std::env::temp_dir().join(ertangle_core::new_id("repocfg"));
+        let d = ertangle_test_support::temp_dir("repocfg");
         std::fs::create_dir_all(d.join(".termade")).unwrap();
         // 都沒有新檔：退回舊檔 (若存在)，否則指向新路徑。
         assert_eq!(
@@ -1094,7 +1094,6 @@ mod tests {
             repo_local_file(&d, "config.toml"),
             d.join(".ertangle/config.toml")
         );
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     use super::*;
@@ -1421,7 +1420,7 @@ session_usd = 1.5
 
     #[test]
     fn set_value_creates_updates_and_removes() {
-        let dir = std::env::temp_dir().join(format!("ertangle-cfg-{}", std::process::id()));
+        let dir = ertangle_test_support::temp_dir("ertangle-cfg");
         let path = dir.join("sub").join("config.toml");
         Config::set_value(&path, &["agents", "claude"], "model", "opus").unwrap();
         Config::set_value(&path, &["agents", "claude"], "effort", "high").unwrap();
@@ -1436,7 +1435,6 @@ session_usd = 1.5
         let c = Config::load_file(&path);
         assert_eq!(c.agents["claude"].model.as_deref(), Some("haiku"));
         assert_eq!(c.agents["claude"].effort, None);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

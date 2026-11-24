@@ -67,9 +67,7 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 #[test]
 fn test_web_companion_http_and_websocket() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let root = std::env::temp_dir().join(format!("ertangle-webtest-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
+    let root = ertangle_test_support::temp_dir("ertangle-webtest");
 
     let sock = root.join("daemon.sock");
     std::env::set_var("ERTANGLE_SOCKET", &sock);
@@ -367,16 +365,12 @@ fn test_web_companion_http_and_websocket() {
         assert!(resp.starts_with("HTTP/1.1 403 Forbidden"), "{resp}");
         assert!(resp.contains("拒絕存取：路徑不在工作區範圍內"));
     }
-
-    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
 fn test_web_companion_dynamic_control_and_config() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let root = std::env::temp_dir().join(format!("ertangle-webdyn-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
+    let root = ertangle_test_support::temp_dir("ertangle-webdyn");
 
     let sock = root.join("daemon.sock");
     std::env::set_var("ERTANGLE_SOCKET", &sock);
@@ -488,16 +482,12 @@ fn test_web_companion_dynamic_control_and_config() {
         let frame = client.recv().unwrap();
         assert!(matches!(frame, Frame::Ok { .. }));
     }
-
-    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
 fn test_web_companion_custom_port() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let root = std::env::temp_dir().join(format!("ertangle-webtest-port-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
+    let root = ertangle_test_support::temp_dir("ertangle-webtest-port");
 
     let sock = root.join("daemon.sock");
     std::env::set_var("ERTANGLE_SOCKET", &sock);
@@ -545,8 +535,6 @@ fn test_web_companion_custom_port() {
     let mut status_line = String::new();
     reader.read_line(&mut status_line).unwrap();
     assert!(status_line.contains("200 OK"));
-
-    let _ = fs::remove_dir_all(&root);
 }
 
 /// 網頁版只把 core/TUI 的 `❯ ` 當成使用者 prompt；`» [來源] ` 是其他 agent 或 ertangle 送的，

@@ -1227,8 +1227,8 @@ mod tests {
     fn mcp_initialize_includes_session_label_and_respects_disable_config() {
         use ertangle_core::{AgentKind, Role, Session, SessionStatus, State};
 
-        let global = std::env::temp_dir().join(ertangle_core::new_id("mcp-g"));
-        let repo = std::env::temp_dir().join(ertangle_core::new_id("mcp-r"));
+        let global = ertangle_test_support::temp_dir("mcp-g");
+        let repo = ertangle_test_support::temp_dir("mcp-r");
         std::fs::create_dir_all(&global).unwrap();
         std::fs::create_dir_all(repo.join(".ertangle")).unwrap();
 

@@ -524,17 +524,9 @@ fn package_json(dir: &Path) -> Option<Value> {
 mod tests {
     use super::*;
     use std::fs;
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
     fn temp_dir() -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "ertangle-check-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&path).expect("create test directory");
-        path
+        ertangle_test_support::temp_dir("ertangle-check")
     }
 
     #[test]
@@ -556,7 +548,6 @@ mod tests {
         fs::create_dir_all(&nested).expect("create nested project");
         fs::write(nested.join("App.csproj"), "").expect("write project");
         assert!(detect_stacks(&root).contains(&ProjectStack::DotNet));
-        fs::remove_dir_all(root).expect("remove test directory");
     }
 
     #[test]
@@ -574,7 +565,6 @@ mod tests {
         let (count, lines) = dehydrate_cargo_json(&format!("{diagnostic}\n{diagnostic}"), &root);
         assert_eq!(count, 1);
         assert_eq!(lines, vec!["src/lib.rs:3:2: warning[dead_code]: unused"]);
-        fs::remove_dir_all(root).expect("remove test directory");
     }
 
     #[test]
@@ -594,7 +584,6 @@ mod tests {
         let lines = dehydrate_node_output(&raw, &root);
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[1], "at fn (src/main.ts:1:2)");
-        fs::remove_dir_all(root).expect("remove test directory");
     }
 
     #[test]
@@ -606,7 +595,6 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert!(lines[0].starts_with("src/App.cs(4,5): error CS1061"));
         assert!(!lines[0].contains(".csproj"));
-        fs::remove_dir_all(root).expect("remove test directory");
     }
 
     #[test]

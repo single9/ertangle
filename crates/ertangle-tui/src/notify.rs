@@ -767,8 +767,7 @@ mod tests {
 
     #[test]
     fn command_runs_and_missing_command_is_reported() {
-        let dir = std::env::temp_dir().join(format!("ertangle-notify-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = ertangle_test_support::temp_dir("ertangle-notify");
         let file = dir.join("out");
         let cfg = TuiCfg {
             notify: Some(vec!["command".into()]),
@@ -793,7 +792,6 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert_eq!(got, "approval|worker/a：等待核准 Bash");
-        let _ = std::fs::remove_dir_all(&dir);
 
         let mut n = Notifier::from_cfg(&TuiCfg {
             notify: Some(vec!["command".into()]),

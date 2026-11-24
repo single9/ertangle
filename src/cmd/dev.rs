@@ -451,13 +451,7 @@ mod tests {
     use super::*;
 
     fn tmp(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!(
-            "ertangle-dev-{tag}-{}-{}",
-            std::process::id(),
-            now_ms()
-        ));
-        fs::create_dir_all(&d).unwrap();
-        d
+        ertangle_test_support::temp_dir(&format!("ertangle-dev-{tag}"))
     }
 
     fn have_python() -> bool {
@@ -487,7 +481,6 @@ mod tests {
         fs::remove_file(d.join("pnpm-lock.yaml")).unwrap();
         let (cmd, _) = detect_dev_command(&d, 1).unwrap();
         assert_eq!(cmd[0], "npm");
-        fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
@@ -514,7 +507,6 @@ mod tests {
         .unwrap();
         let (cmd, _) = detect_dev_command(&d, 5055).unwrap();
         assert_eq!(cmd, strs(&["dotnet", "run", "--no-launch-profile"]));
-        fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
@@ -525,7 +517,6 @@ mod tests {
         let (cmd, env) = detect_dev_command(&d, 7000).unwrap();
         assert_eq!(cmd, strs(&["cargo", "run"]));
         assert_eq!(env, vec![("PORT".to_string(), "7000".to_string())]);
-        fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
@@ -567,7 +558,6 @@ mod tests {
         assert!(!is_alive(st.pid));
         assert!(status_dev(&d).is_none());
         assert!(!stop_dev(&d).unwrap());
-        fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
@@ -581,7 +571,6 @@ mod tests {
         assert!(err.contains("Some(3)"), "{err}");
         assert!(err.contains("boom-output"), "{err}");
         assert!(status_dev(&d).is_none());
-        fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
@@ -592,6 +581,5 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("not ready"), "{err}");
-        fs::remove_dir_all(&d).unwrap();
     }
 }
