@@ -36,6 +36,9 @@ pub enum AgentEvent {
     Status(SessionStatus),
     /// Text output from the agent (may contain newlines).
     Output(String),
+    /// Continues the last unterminated output line (the first segment of the text is
+    /// appended to it), so a mid-line stream pause does not split Markdown constructs.
+    OutputAppend(String),
     ToolCall {
         name: String,
         input: String,

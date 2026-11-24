@@ -260,27 +260,23 @@ impl Conn {
             }
             "agent_message_chunk" => {
                 if let Some(t) = update["content"]["text"].as_str() {
-                    let text = self
+                    let chunk = self
                         .stream
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
-                        .push("msg", t);
-                    if !text.is_empty() {
-                        let _ = self.tx.send(AgentEvent::Output(text));
-                    }
+                        .push_chunk("msg", t);
+                    self.send_chunk(chunk);
                     let _ = self.stream_poke.send(());
                 }
             }
             "agent_thought_chunk" => {
                 if let Some(t) = update["content"]["text"].as_str() {
-                    let text = self
+                    let chunk = self
                         .stream
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
-                        .push("think", t);
-                    if !text.is_empty() {
-                        let _ = self.tx.send(AgentEvent::Output(text));
-                    }
+                        .push_chunk("think", t);
+                    self.send_chunk(chunk);
                     let _ = self.stream_poke.send(());
                 }
             }
@@ -341,14 +337,35 @@ impl Conn {
 
     /// Flushes remaining buffered lines (called before switching event types or tool calls).
     fn flush_stream(&self) {
-        let text = self
+        let chunk = self
             .stream
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .flush();
-        if !text.is_empty() {
-            let _ = self.tx.send(AgentEvent::Output(text));
+            .flush_chunk();
+        self.send_chunk(chunk);
+    }
+
+    /// Flushes buffered text after a stream pause *without* a trailing newline, so the
+    /// next chunk continues the same transcript line instead of splitting it mid-token.
+    fn idle_flush_stream(&self) {
+        let chunk = self
+            .stream
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .idle_flush_chunk();
+        self.send_chunk(chunk);
+    }
+
+    fn send_chunk(&self, chunk: crate::stream::Chunk) {
+        if chunk.text.is_empty() {
+            return;
         }
+        let ev = if chunk.append {
+            AgentEvent::OutputAppend(chunk.text)
+        } else {
+            AgentEvent::Output(chunk.text)
+        };
+        let _ = self.tx.send(ev);
     }
 
     fn on_permission(&self, msg: &Value) {
@@ -961,7 +978,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                         Ok(()) => continue,
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             if let Some(c) = weak.upgrade() {
-                                c.flush_stream();
+                                c.idle_flush_stream();
                             }
                             break;
                         }

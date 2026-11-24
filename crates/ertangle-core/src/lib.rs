@@ -900,6 +900,12 @@ pub enum Event {
         session: SessionId,
         text: String,
     },
+    /// Continuation of an unterminated [`Event::Output`] line: the first segment of `text`
+    /// is appended to the last transcript line instead of starting a new one.
+    OutputAppend {
+        session: SessionId,
+        text: String,
+    },
     /// A session's inbox read cursor advanced to `msg` (persisted so restarts do not redeliver).
     InboxRead {
         session: SessionId,
@@ -1343,6 +1349,28 @@ impl State {
                 }
                 for line in parts {
                     buf.push_back(line.to_string());
+                }
+                while buf.len() > TRANSCRIPT_CAP {
+                    buf.pop_front();
+                }
+            }
+            Event::OutputAppend { session, text } => {
+                let buf = self.transcripts.entry(session.clone()).or_default();
+                let mut parts = text.split('\n');
+                if let Some(first) = parts.next() {
+                    match buf.back_mut() {
+                        Some(last) => last.push_str(first),
+                        None => buf.push_back(first.to_string()),
+                    }
+                }
+                let rest: Vec<&str> = parts.collect();
+                // Same rule as `Output`: a trailing newline does not make an empty line.
+                let rest = match rest.split_last() {
+                    Some((&"", init)) => init,
+                    _ => &rest[..],
+                };
+                for line in rest {
+                    buf.push_back((*line).to_string());
                 }
                 while buf.len() > TRANSCRIPT_CAP {
                     buf.pop_front();
@@ -2498,6 +2526,47 @@ pub(crate) mod tests {
             tool_calls: 0,
             ended_ms: None,
         }
+    }
+
+    #[test]
+    fn output_append_continues_last_line() {
+        let mut st = State::new();
+        let mut seq = 0;
+        let mut feed = |ev: Event| {
+            seq += 1;
+            st.apply(&rec(seq, ev));
+        };
+        let out = |text: &str| Event::Output {
+            session: "s1".into(),
+            text: text.into(),
+        };
+        let app = |text: &str| Event::OutputAppend {
+            session: "s1".into(),
+            text: text.into(),
+        };
+        feed(out("| a | b"));
+        feed(app(" |\n| c"));
+        feed(app(" | d |\n"));
+        feed(out("next\n"));
+        // Bare newline closes a dangling line without producing an empty one.
+        feed(out("tail"));
+        feed(app("\n"));
+        let lines: Vec<_> = st.transcripts["s1"].iter().cloned().collect();
+        assert_eq!(lines, ["| a | b |", "| c | d |", "next", "tail"]);
+    }
+
+    #[test]
+    fn output_append_on_empty_transcript_starts_a_line() {
+        let mut st = State::new();
+        st.apply(&rec(
+            1,
+            Event::OutputAppend {
+                session: "s1".into(),
+                text: "x\n".into(),
+            },
+        ));
+        let lines: Vec<_> = st.transcripts["s1"].iter().cloned().collect();
+        assert_eq!(lines, ["x"]);
     }
 
     #[test]

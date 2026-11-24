@@ -669,6 +669,10 @@ impl Shared {
                 session: sid.clone(),
                 text: t,
             },
+            AgentEvent::OutputAppend(t) => Event::OutputAppend {
+                session: sid.clone(),
+                text: t,
+            },
             AgentEvent::ToolCall {
                 name,
                 input,
