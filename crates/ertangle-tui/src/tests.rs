@@ -691,18 +691,10 @@ fn tabs_keep_selected_visible_when_overflowing() {
         );
     }
     app.layout = LayoutMode::Tabs;
-    let last = app.session_ids().len() - 1;
-    for sel in [0, 5, last] {
+    for (sel, expected_label) in [(0, "worker"), (5, "label-04"), (12, "label-11")] {
         app.selected = sel;
         let (term, _) = render_size(&mut app, 50, 20);
-        let label = app
-            .state
-            .sessions
-            .get(&app.session_ids()[sel])
-            .unwrap()
-            .label
-            .clone();
-        assert!(row_text(&term, 2).contains(&label), "sel {sel} hidden");
+        assert!(row_text(&term, 2).contains(expected_label));
         assert!(app.tab_areas.iter().any(|(_, i)| *i == sel));
     }
     let (term, _) = render_size(&mut app, 50, 20);
@@ -1584,7 +1576,7 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
     assert_eq!(app.project_count(), 2);
     crate::app::toggle_scope(&mut app, Some(true));
     let ids = app.session_ids();
-    assert_eq!(ids.len(), 2, "{ids:?}");
+    assert_eq!(ids.len(), 2);
     assert!(!ids.contains(&"c".to_string()));
     let roots = ["/a/app", "/b/app", "/c/x"];
     assert_eq!(crate::app::project_name("/a/app", &roots), "a/app");
@@ -5161,7 +5153,7 @@ fn ended_sessions_are_folded_by_default_and_counted() {
     assert_eq!(app.ended_count(), 2);
     let ids = app.session_ids();
     assert!(ids.contains(&"ses_test".to_string()));
-    assert!(!ids.iter().any(|id| id.starts_with("ses_done")), "{ids:?}");
+    assert!(!ids.iter().any(|id| id.starts_with("ses_done")));
 }
 
 #[test]
