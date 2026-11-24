@@ -1,0 +1,620 @@
+#![allow(dead_code)]
+
+use anyhow::{bail, Context, Result};
+use serde_json::Value;
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::time::Instant;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ProjectStack {
+    Rust,
+    Node,
+    DotNet,
+    Python,
+}
+
+impl ProjectStack {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Rust => "rust",
+            Self::Node => "node",
+            Self::DotNet => "dotnet",
+            Self::Python => "python",
+        }
+    }
+}
+
+pub(crate) fn detect_stacks(dir: &Path) -> Vec<ProjectStack> {
+    let mut stacks = Vec::new();
+    if dir.join("Cargo.toml").exists() {
+        stacks.push(ProjectStack::Rust);
+    }
+    if dir.join("package.json").exists() {
+        stacks.push(ProjectStack::Node);
+    }
+    if has_dotnet_project(dir) {
+        stacks.push(ProjectStack::DotNet);
+    }
+    if ["pyproject.toml", "pytest.ini", "setup.py"]
+        .iter()
+        .any(|name| dir.join(name).exists())
+    {
+        stacks.push(ProjectStack::Python);
+    }
+    stacks
+}
+
+fn has_dotnet_project(dir: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file()
+            && matches!(
+                path.extension().and_then(|v| v.to_str()),
+                Some("sln" | "slnx" | "csproj")
+            )
+        {
+            return true;
+        }
+        if path.is_dir() {
+            let Ok(children) = fs::read_dir(path) else {
+                continue;
+            };
+            if children
+                .flatten()
+                .any(|child| child.path().extension().and_then(|v| v.to_str()) == Some("csproj"))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+pub(crate) fn strip_ansi(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut result = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '\x1b' && chars.get(i + 1) == Some(&'[') {
+            i += 2;
+            while i < chars.len() && !chars[i].is_ascii_alphabetic() {
+                i += 1;
+            }
+            i += usize::from(i < chars.len());
+        } else if chars[i] == '\x1b' && chars.get(i + 1) == Some(&']') {
+            i += 2;
+            while i < chars.len() {
+                if chars[i] == '\x07' {
+                    i += 1;
+                    break;
+                }
+                if chars[i] == '\x1b' && chars.get(i + 1) == Some(&'\\') {
+                    i += 2;
+                    break;
+                }
+                i += 1;
+            }
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+    result
+}
+
+pub(crate) fn dehydrate_cargo_json(jsonl: &str, workspace_root: &Path) -> (usize, Vec<String>) {
+    let mut lines = Vec::new();
+    let mut seen = HashSet::new();
+    for raw in jsonl.lines() {
+        let Ok(value) = serde_json::from_str::<Value>(raw) else {
+            continue;
+        };
+        if value.get("reason").and_then(Value::as_str) != Some("compiler-message") {
+            continue;
+        }
+        let Some(message) = value.get("message") else {
+            continue;
+        };
+        let Some(level) = message.get("level").and_then(Value::as_str) else {
+            continue;
+        };
+        if !matches!(level, "error" | "warning") {
+            continue;
+        }
+        let text = message.get("message").and_then(Value::as_str).unwrap_or("");
+        let code = message.pointer("/code/code").and_then(Value::as_str);
+        let span = message
+            .get("spans")
+            .and_then(Value::as_array)
+            .and_then(|spans| {
+                spans
+                    .iter()
+                    .find(|span| span.get("is_primary").and_then(Value::as_bool) == Some(true))
+                    .or_else(|| spans.first())
+            });
+        let location = span
+            .map(|span| {
+                let file = span.get("file_name").and_then(Value::as_str).unwrap_or("?");
+                let file = normalize_path(file, workspace_root);
+                let line = span.get("line_start").and_then(Value::as_u64).unwrap_or(0);
+                let column = span
+                    .get("column_start")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                format!("{file}:{line}:{column}")
+            })
+            .unwrap_or_else(|| "?:0:0".to_owned());
+        let code_part = code.map(|code| format!("[{code}]")).unwrap_or_default();
+        let line = format!("{location}: {level}{code_part}: {text}");
+        if seen.insert(line.clone()) {
+            lines.push(line);
+        }
+    }
+    (lines.len(), lines)
+}
+
+pub(crate) fn dehydrate_cargo_test_output(output: &str) -> (usize, usize, Vec<String>) {
+    let mut passed = 0;
+    let mut failed = 0;
+    let mut keep = Vec::new();
+    let mut in_failure = false;
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("test result:") {
+            let fields: Vec<_> = trimmed.split_whitespace().collect();
+            for pair in fields.windows(2) {
+                if let Ok(count) = pair[0].parse::<usize>() {
+                    match pair[1].trim_end_matches(';') {
+                        "passed" => passed += count,
+                        "failed" => failed += count,
+                        _ => {}
+                    }
+                }
+            }
+            continue;
+        }
+        if trimmed.starts_with("---- ") && trimmed.ends_with(" stdout ----") {
+            in_failure = true;
+        }
+        if trimmed == "failures:" || trimmed.starts_with("failures:") {
+            in_failure = true;
+        }
+        if trimmed.starts_with("Compiling ")
+            || trimmed.starts_with("Finished ")
+            || trimmed.starts_with("Running unittests ")
+        {
+            continue;
+        }
+        if trimmed.starts_with("test ") && trimmed.ends_with(" ... ok") {
+            continue;
+        }
+        if in_failure && !trimmed.is_empty() {
+            keep.push(trimmed.to_owned());
+        }
+    }
+    (passed, failed, keep)
+}
+
+pub(crate) fn dehydrate_node_output(raw: &str, workspace_root: &Path) -> Vec<String> {
+    strip_ansi(raw)
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty()
+                || is_node_noise(line)
+                || (line.starts_with("at ") && line.contains("node_modules/"))
+            {
+                return None;
+            }
+            Some(normalize_path(line, workspace_root))
+        })
+        .collect()
+}
+
+fn is_node_noise(line: &str) -> bool {
+    [
+        "[vite] ", "vite v", "webpack ", "[webpack", "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇",
+        "⠏",
+    ]
+    .iter()
+    .any(|prefix| line.starts_with(prefix))
+}
+
+pub(crate) fn dehydrate_dotnet_output(raw: &str, workspace_root: &Path) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut seen = HashSet::new();
+    for line in strip_ansi(raw).lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || is_dotnet_noise(trimmed)
+            || trimmed.contains("at System.Runtime.CompilerServices.TaskAwaiter")
+            || trimmed.starts_with("--- End of stack trace from previous location ---")
+        {
+            continue;
+        }
+        let mut line = trimmed.to_owned();
+        if let Some(start) = line.rfind(" [") {
+            if line.ends_with(']') && line[start..].contains(".csproj]") {
+                line.truncate(start);
+            }
+        }
+        line = normalize_path(&line, workspace_root);
+        if (line.contains(": error ") || line.contains(": warning ")) && !seen.insert(line.clone())
+        {
+            continue;
+        }
+        lines.push(line);
+    }
+    lines
+}
+
+fn is_dotnet_noise(line: &str) -> bool {
+    line.starts_with("Welcome to .NET")
+        || line.starts_with("Telemetry")
+        || line.starts_with("Learn about")
+        || line.starts_with("Determining projects to restore")
+        || line.starts_with("Restored ")
+        || line == "Build succeeded."
+        || line.starts_with("Time Elapsed ")
+}
+
+fn normalize_path(input: &str, root: &Path) -> String {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let root_text = root.to_string_lossy();
+    let input_text = input.to_owned();
+    input_text
+        .replace(root_text.as_ref(), "")
+        .replace("(/", "(")
+        .replace("\\", "/")
+        .trim_start_matches('/')
+        .to_owned()
+}
+
+pub(crate) fn truncate_lines(lines: &[String], max_lines: usize) -> (Vec<String>, usize) {
+    let omitted = lines.len().saturating_sub(max_lines);
+    (lines.iter().take(max_lines).cloned().collect(), omitted)
+}
+
+pub(crate) fn cmd_check(
+    cwd: Option<PathBuf>,
+    stack: Option<String>,
+    quick: bool,
+    max_lines: usize,
+    json: bool,
+) -> Result<()> {
+    let dir = cwd.unwrap_or(std::env::current_dir()?);
+    let dir = dir
+        .canonicalize()
+        .with_context(|| format!("cannot access {}", dir.display()))?;
+    let stacks = parse_stacks(stack.as_deref(), &dir)?;
+    if stacks.is_empty() {
+        bail!("no supported project stack detected");
+    }
+    let mut reports = Vec::new();
+    for stack in stacks {
+        reports.push(run_stack(stack, &dir, quick, max_lines)?);
+    }
+    let failed = reports.iter().any(|report| !report.success);
+    if json {
+        println!("{}", serde_json::to_string(&reports.iter().map(|report| serde_json::json!({"stack":report.stack,"success":report.success,"summary":report.summary,"lines":report.lines})).collect::<Vec<_>>())?);
+    } else {
+        for report in &reports {
+            if report.success {
+                println!("PASS [{}]: {}", report.stack, report.summary);
+            } else {
+                println!(
+                    "FAIL [{}] ({} lines): {}",
+                    report.stack,
+                    report.lines.len(),
+                    report.summary
+                );
+                for line in &report.lines {
+                    println!("  {line}");
+                }
+            }
+        }
+    }
+    if failed {
+        bail!("check failed");
+    }
+    Ok(())
+}
+
+fn parse_stacks(explicit: Option<&str>, dir: &Path) -> Result<Vec<ProjectStack>> {
+    let Some(explicit) = explicit else {
+        return Ok(detect_stacks(dir));
+    };
+    match explicit.to_ascii_lowercase().as_str() {
+        "auto" => Ok(detect_stacks(dir)),
+        "rust" => Ok(vec![ProjectStack::Rust]),
+        "node" => Ok(vec![ProjectStack::Node]),
+        "dotnet" => Ok(vec![ProjectStack::DotNet]),
+        "python" => Ok(vec![ProjectStack::Python]),
+        _ => bail!("unsupported stack: {explicit}"),
+    }
+}
+
+struct Report {
+    stack: &'static str,
+    success: bool,
+    summary: String,
+    lines: Vec<String>,
+}
+
+fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> Result<Report> {
+    let start = Instant::now();
+    let mut outputs = Vec::new();
+    let mut summary = Vec::new();
+    let mut success = true;
+    match stack {
+        ProjectStack::Rust => {
+            let clippy = execute(
+                dir,
+                "cargo",
+                &[
+                    "clippy",
+                    "--all-targets",
+                    "--message-format=json",
+                    "--",
+                    "-D",
+                    "warnings",
+                ],
+            )?;
+            let (count, messages) = dehydrate_cargo_json(&combined(&clippy), dir);
+            summary.push(format!("clippy ({count} warnings)"));
+            outputs.extend(messages);
+            success &= clippy.status.success();
+            if !quick {
+                let test = execute(dir, "cargo", &["test", "--no-fail-fast"])?;
+                let (passed, failed, messages) = dehydrate_cargo_test_output(&combined(&test));
+                summary.push(format!("test ({passed} passed, {failed} failed)"));
+                outputs.extend(messages);
+                success &= test.status.success();
+            }
+        }
+        ProjectStack::Node => {
+            let manager = if dir.join("pnpm-lock.yaml").exists() {
+                "pnpm"
+            } else if dir.join("yarn.lock").exists() {
+                "yarn"
+            } else if dir.join("bun.lock").exists() || dir.join("bun.lockb").exists() {
+                "bun"
+            } else {
+                "npm"
+            };
+            if dir.join("tsconfig.json").exists() && dir.join("node_modules/.bin/tsc").exists() {
+                let typecheck = execute(
+                    dir,
+                    "npx",
+                    &["--no-install", "tsc", "--noEmit", "--pretty", "false"],
+                )?;
+                outputs.extend(dehydrate_node_output(&combined(&typecheck), dir));
+                success &= typecheck.status.success();
+                summary.push("typecheck".to_owned());
+            }
+            if !quick && package_has_test(dir) {
+                let args: Vec<&str> = match manager {
+                    "pnpm" => vec!["test", "--", "--run"],
+                    "yarn" => vec!["test", "--run"],
+                    "bun" => vec!["test", "--", "--run"],
+                    _ => vec!["test", "--", "--run"],
+                };
+                let mut args = args;
+                if package_script_mentions(dir, "jest") {
+                    args = match manager {
+                        "pnpm" => vec!["test", "--", "--watchAll=false"],
+                        "yarn" => vec!["test", "--watchAll=false"],
+                        "bun" => vec!["test", "--", "--watchAll=false"],
+                        _ => vec!["test", "--", "--watchAll=false"],
+                    };
+                }
+                let test = execute(dir, manager, &args)?;
+                outputs.extend(dehydrate_node_output(&combined(&test), dir));
+                success &= test.status.success();
+                summary.push("test".to_owned());
+            }
+        }
+        ProjectStack::DotNet => {
+            let build = execute(
+                dir,
+                "dotnet",
+                &[
+                    "build",
+                    "--nologo",
+                    "-v",
+                    "quiet",
+                    "-clp:ErrorsOnly;NoSummary",
+                ],
+            )?;
+            outputs.extend(dehydrate_dotnet_output(&combined(&build), dir));
+            success &= build.status.success();
+            summary.push("build".to_owned());
+            if !quick {
+                let test = execute(
+                    dir,
+                    "dotnet",
+                    &["test", "--nologo", "--logger", "console;verbosity=minimal"],
+                )?;
+                outputs.extend(dehydrate_dotnet_output(&combined(&test), dir));
+                success &= test.status.success();
+                summary.push("test".to_owned());
+            }
+        }
+        ProjectStack::Python => {
+            if !quick {
+                let test = execute(dir, "pytest", &["-q", "--tb=short", "--no-header"])?;
+                outputs.extend(dehydrate_node_output(&combined(&test), dir));
+                success &= test.status.success();
+                summary.push("pytest".to_owned());
+            }
+        }
+    }
+    if success && outputs.is_empty() {
+        outputs.push(format!(
+            "{} in {:.1}s",
+            summary.join(", "),
+            start.elapsed().as_secs_f32()
+        ));
+    }
+    let (lines, omitted) = truncate_lines(&outputs, max_lines);
+    let mut summary = summary.join(", ");
+    if omitted > 0 {
+        summary.push_str(&format!("; {omitted} lines omitted"));
+    }
+    Ok(Report {
+        stack: stack.name(),
+        success,
+        summary,
+        lines,
+    })
+}
+
+fn execute(dir: &Path, program: &str, args: &[&str]) -> Result<Output> {
+    Command::new(program)
+        .args(args)
+        .current_dir(dir)
+        .env("CI", "1")
+        .env("NO_COLOR", "1")
+        .env("FORCE_COLOR", "0")
+        .env("DOTNET_NOLOGO", "1")
+        .env("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
+        .output()
+        .with_context(|| format!("failed to execute {program}"))
+}
+
+fn combined(output: &Output) -> String {
+    format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+fn package_has_test(dir: &Path) -> bool {
+    package_json(dir)
+        .and_then(|v| {
+            v.pointer("/scripts/test")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .is_some()
+}
+fn package_script_mentions(dir: &Path, needle: &str) -> bool {
+    package_json(dir)
+        .and_then(|v| {
+            v.pointer("/scripts/test")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .is_some_and(|script| script.contains(needle))
+}
+fn package_json(dir: &Path) -> Option<Value> {
+    fs::read_to_string(dir.join("package.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    fn temp_dir() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "ertangle-check-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&path).expect("create test directory");
+        path
+    }
+
+    #[test]
+    fn detects_project_markers() {
+        let root = temp_dir();
+        for marker in ["Cargo.toml", "package.json", "App.sln", "pyproject.toml"] {
+            fs::write(root.join(marker), "").expect("write marker");
+        }
+        assert_eq!(
+            detect_stacks(&root),
+            vec![
+                ProjectStack::Rust,
+                ProjectStack::Node,
+                ProjectStack::DotNet,
+                ProjectStack::Python
+            ]
+        );
+        let nested = root.join("src").join("App");
+        fs::create_dir_all(&nested).expect("create nested project");
+        fs::write(nested.join("App.csproj"), "").expect("write project");
+        assert!(detect_stacks(&root).contains(&ProjectStack::DotNet));
+        fs::remove_dir_all(root).expect("remove test directory");
+    }
+
+    #[test]
+    fn strips_csi_and_osc_sequences() {
+        assert_eq!(
+            strip_ansi("\x1b[31mred\x1b[0m \x1b]0;title\x07ok"),
+            "red ok"
+        );
+    }
+
+    #[test]
+    fn dehydrates_and_deduplicates_cargo_messages() {
+        let root = temp_dir();
+        let diagnostic = r#"{"reason":"compiler-message","message":{"level":"warning","code":{"code":"dead_code"},"message":"unused","spans":[{"file_name":"src/lib.rs","line_start":3,"column_start":2,"is_primary":true}]}}"#;
+        let (count, lines) = dehydrate_cargo_json(&format!("{diagnostic}\n{diagnostic}"), &root);
+        assert_eq!(count, 1);
+        assert_eq!(lines, vec!["src/lib.rs:3:2: warning[dead_code]: unused"]);
+        fs::remove_dir_all(root).expect("remove test directory");
+    }
+
+    #[test]
+    fn dehydrates_cargo_test_failures() {
+        let raw = "test ok_case ... ok\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n---- broken stdout ----\npanicked at src/lib.rs:2\nfailures:\nbroken\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out";
+        let (passed, failed, lines) = dehydrate_cargo_test_output(raw);
+        assert_eq!((passed, failed), (4, 1));
+        assert!(lines.iter().any(|line| line.contains("panicked")));
+        assert!(!lines.iter().any(|line| line.contains("ok_case")));
+    }
+
+    #[test]
+    fn dehydrates_node_output() {
+        let root = temp_dir();
+        let root_text = root.to_string_lossy();
+        let raw = format!("\x1b[31mError\x1b[0m\nat fn ({root_text}/src/main.ts:1:2)\nat fn (node_modules/pkg/a.js:3:4)\n\n vite v5 ready");
+        let lines = dehydrate_node_output(&raw, &root);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[1], "at fn (src/main.ts:1:2)");
+        fs::remove_dir_all(root).expect("remove test directory");
+    }
+
+    #[test]
+    fn dehydrates_dotnet_diagnostics() {
+        let root = temp_dir();
+        let absolute = root.join("src/App.cs");
+        let raw = format!("{}(4,5): error CS1061: missing [{}]\n{}(4,5): error CS1061: missing [{}]\nat System.Runtime.CompilerServices.TaskAwaiter.GetResult()\n", absolute.display(), root.join("App.csproj").display(), absolute.display(), root.join("Other.csproj").display());
+        let lines = dehydrate_dotnet_output(&raw, &root);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].starts_with("src/App.cs(4,5): error CS1061"));
+        assert!(!lines[0].contains(".csproj"));
+        fs::remove_dir_all(root).expect("remove test directory");
+    }
+
+    #[test]
+    fn truncates_with_omission_count() {
+        let lines = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
+        assert_eq!(
+            truncate_lines(&lines, 2),
+            (vec!["a".to_owned(), "b".to_owned()], 1)
+        );
+    }
+}

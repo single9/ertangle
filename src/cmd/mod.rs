@@ -1,6 +1,7 @@
 //! 子命令實作 (CLI 定義留在 main.rs)。
 
 pub(crate) mod bus;
+pub(crate) mod check;
 pub(crate) mod completions;
 pub(crate) mod cost;
 pub(crate) mod daemon;
