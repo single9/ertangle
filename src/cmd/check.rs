@@ -514,31 +514,56 @@ fn gdunit4_stats_ok(messages: &[String]) -> bool {
 /// Collect changed or untracked `.gd` files in the workspace (skipping `addons/`).
 fn changed_gd_files(dir: &Path) -> Vec<String> {
     let mut files = std::collections::BTreeSet::new();
+    let mut push_gd = |path: &str| {
+        if path.ends_with(".gd") && !path.starts_with("addons/") && dir.join(path).is_file() {
+            files.insert(path.to_owned());
+        }
+    };
     if let Ok(out) = Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "status", "--porcelain"])
+        .args([
+            "-C",
+            &dir.to_string_lossy(),
+            "-c",
+            "core.quotePath=false",
+            "status",
+            "--porcelain",
+            "-z",
+        ])
         .output()
     {
         if out.status.success() {
-            for line in String::from_utf8_lossy(&out.stdout).lines() {
-                let raw = line.get(3..).unwrap_or("").trim().trim_matches('"');
-                let path = raw.rsplit(" -> ").next().unwrap_or(raw);
-                if path.ends_with(".gd") && !path.starts_with("addons/") && dir.join(path).is_file()
-                {
-                    files.insert(path.to_owned());
+            let mut entries = out.stdout.split(|&b| b == 0);
+            while let Some(raw) = entries.next() {
+                if raw.is_empty() {
+                    continue;
                 }
+                let entry = String::from_utf8_lossy(raw);
+                let status = entry.get(..2).unwrap_or("");
+                let path = entry.get(3..).unwrap_or(&entry);
+                if status.contains('R') || status.contains('C') {
+                    let _ = entries.next();
+                }
+                push_gd(path);
             }
         }
     }
     if let Ok(out) = Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "diff", "--name-only", "HEAD"])
+        .args([
+            "-C",
+            &dir.to_string_lossy(),
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--name-only",
+            "-z",
+            "HEAD",
+        ])
         .output()
     {
         if out.status.success() {
-            for line in String::from_utf8_lossy(&out.stdout).lines() {
-                let path = line.trim();
-                if path.ends_with(".gd") && !path.starts_with("addons/") && dir.join(path).is_file()
-                {
-                    files.insert(path.to_owned());
+            for raw in out.stdout.split(|&b| b == 0) {
+                if !raw.is_empty() {
+                    push_gd(&String::from_utf8_lossy(raw));
                 }
             }
         }
@@ -1086,6 +1111,31 @@ Overall Summary:\n\
             ]
         );
         assert!(!gdunit4_stats_ok(&fail_lines));
+    }
+
+    #[test]
+    fn changed_gd_files_handles_non_ascii_paths() {
+        let dir = temp_dir();
+        let run_git = |args: &[&str]| {
+            let out = Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .expect("run git");
+            assert!(out.status.success(), "git {args:?} failed");
+        };
+        run_git(&["init"]);
+        fs::write(dir.join("腳本.gd"), "extends Node\n").expect("write initial gd");
+        run_git(&["add", "."]);
+        run_git(&["commit", "-m", "init"]);
+
+        fs::write(dir.join("腳本.gd"), "extends Node2D\n").expect("modify gd");
+        fs::write(dir.join("新角色.gd"), "extends Node\n").expect("new gd");
+        assert_eq!(
+            changed_gd_files(&dir),
+            vec!["新角色.gd".to_owned(), "腳本.gd".to_owned()]
+        );
     }
 
     #[test]

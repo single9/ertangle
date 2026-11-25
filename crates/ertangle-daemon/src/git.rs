@@ -227,29 +227,13 @@ fn is_provisioned_path(wt_dir: &Path, rel_path: &str) -> bool {
         .any(|p| p == trimmed || trimmed.starts_with(&format!("{p}/")))
 }
 
-/// 查詢某個工作目錄的變更檔案數與簡短摘要。
+/// 查詢某個工作目錄的變更檔案數與簡短摘要 (沿用 `pending_uncommitted_paths` 過濾規則)。
 pub(crate) fn git_status_summary(cwd: &Path) -> (usize, String) {
-    let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(cwd)
-        .args(["status", "--porcelain"])
-        .output()
-    else {
+    let Ok(paths) = pending_uncommitted_paths(cwd) else {
         return (0, String::new());
     };
-    let text = String::from_utf8_lossy(&out.stdout);
-    let lines: Vec<&str> = text
-        .lines()
-        .filter(|l| {
-            !is_ertangle_status_line(l) && !is_provisioned_path(cwd, l.get(3..).unwrap_or(l).trim())
-        })
-        .collect();
-    let count = lines.len();
-    let files: Vec<&str> = lines
-        .iter()
-        .take(3)
-        .map(|l| l.get(3..).unwrap_or(l).trim())
-        .collect();
+    let count = paths.len();
+    let files: Vec<&str> = paths.iter().take(3).map(String::as_str).collect();
     let summary = if count == 0 {
         "clean".to_string()
     } else {
@@ -577,6 +561,7 @@ pub fn compute_worktree_diff_with_options(cwd: &Path, opts: &DiffOptions) -> Res
 }
 
 /// `git status --porcelain` 的一行是否屬於 `.ertangle/` 目錄下的路徑。
+#[cfg(test)]
 pub(crate) fn is_ertangle_status_line(line: &str) -> bool {
     let path = line.get(3..).unwrap_or("").trim();
     path == ".ertangle" || path.starts_with(".ertangle/")
