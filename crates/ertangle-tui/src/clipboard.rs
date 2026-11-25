@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 use tr::tr;
 
-use crate::app::{main_pane_text, visible_transcript, App, CenterView};
+use crate::app::{main_pane_text, strip_thought_prefix, App, CenterView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ClipBackend {
@@ -205,20 +205,21 @@ fn transcript_messages(lines: &[String]) -> Vec<Vec<String>> {
     msgs
 }
 
+fn copyable_transcript_lines<'a>(lines: impl Iterator<Item = &'a String>) -> Vec<String> {
+    lines
+        .filter(|line| {
+            strip_thought_prefix(line).is_none()
+                && !line.starts_with("▸ ")
+                && !line.starts_with("  ✓")
+        })
+        .cloned()
+        .collect()
+}
+
 fn transcript_lines(app: &App) -> Vec<String> {
-    let active = app
-        .selected_id()
-        .and_then(|id| app.state.sessions.get(&id))
-        .map(|s| s.active_tools.as_slice())
-        .unwrap_or(&[]);
     app.selected_id()
         .and_then(|id| app.state.transcripts.get(&id))
-        .map(|buf| {
-            visible_transcript(buf.iter(), app.show_thoughts, app.show_tools, active)
-                .into_iter()
-                .map(|c| c.into_owned())
-                .collect()
-        })
+        .map(|buf| copyable_transcript_lines(buf.iter()))
         .unwrap_or_default()
 }
 
@@ -280,5 +281,56 @@ pub(crate) fn copy_main_pane(app: &mut App, message: Option<usize>) {
             );
         }
         Err(e) => app.status = tr!("複製失敗：{e}", e = e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn copyable_transcript_excludes_thoughts_and_tools() {
+        let raw = [
+            "❯ hello".to_string(),
+            "⋯ thinking step 1".to_string(),
+            "💭 legacy thought".to_string(),
+            "▸ Read foo.rs".to_string(),
+            "  ✓ ok".to_string(),
+            "Here is the answer.".to_string(),
+            "Second line.".to_string(),
+        ];
+        let filtered = copyable_transcript_lines(raw.iter());
+        assert_eq!(
+            filtered,
+            vec!["❯ hello", "Here is the answer.", "Second line."]
+        );
+        let msgs = transcript_messages(&filtered);
+        assert_eq!(
+            msgs,
+            vec![vec![
+                "❯ hello".to_string(),
+                "Here is the answer.".to_string(),
+                "Second line.".to_string(),
+            ]]
+        );
+    }
+
+    #[test]
+    fn copyable_transcript_drops_thought_only_message() {
+        let raw = [
+            "❯ first".to_string(),
+            "⋯ only thinking".to_string(),
+            "❯ second".to_string(),
+            "actual reply".to_string(),
+        ];
+        let filtered = copyable_transcript_lines(raw.iter());
+        let msgs = transcript_messages(&filtered);
+        assert_eq!(
+            msgs,
+            vec![
+                vec!["❯ first".to_string()],
+                vec!["❯ second".to_string(), "actual reply".to_string()],
+            ]
+        );
     }
 }
