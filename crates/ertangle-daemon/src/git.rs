@@ -609,7 +609,67 @@ pub(crate) fn session_repo(default_cwd: &Path, s: &Session) -> PathBuf {
         .unwrap_or_else(|| default_cwd.to_path_buf())
 }
 
-/// 目錄內是否有未 commit 的變更 (忽略 `.ertangle/`)。
+/// 移除單行中的 `uid="..."` 與 `unique_id=...` 屬性，供比對是否僅有 Godot UID 變動。
+fn strip_godot_uid_tokens(line: &str) -> String {
+    let mut out = Vec::new();
+    for tok in line.split_whitespace() {
+        // 先處理結尾緊接 `]` 的情況，例如 `uid="uid://xyz"]` 或 `unique_id=123]`
+        if let Some(prefix) = tok.strip_suffix(']') {
+            if prefix.starts_with("uid=") || prefix.starts_with("unique_id=") {
+                if let Some(last) = out.last_mut() {
+                    *last = format!("{last}]");
+                }
+                continue;
+            }
+        }
+        if tok.starts_with("uid=") || tok.starts_with("unique_id=") {
+            continue;
+        }
+        out.push(tok.to_owned());
+    }
+    out.join(" ")
+}
+
+/// Godot 專案自動匯入產生的雜訊變更 (`*.import`、`*.uid`，或僅改動 `uid=` / `unique_id=` 的 `.tscn`/`.tres`)。
+fn is_godot_import_noise(dir: &Path, status_line: &str) -> bool {
+    if !dir.join("project.godot").is_file() {
+        return false;
+    }
+    let status = status_line.get(..2).unwrap_or("");
+    let raw_path = status_line
+        .get(3..)
+        .unwrap_or(status_line)
+        .trim()
+        .trim_matches('"');
+    let path = raw_path.rsplit(" -> ").next().unwrap_or(raw_path);
+    if path.ends_with(".import") || path.ends_with(".uid") {
+        return true;
+    }
+    if (path.ends_with(".tscn") || path.ends_with(".tres")) && status != "??" {
+        if let Ok(out) = git_output(dir, &["diff", "-U0", "--", path]) {
+            if out.status.success() {
+                let diff = String::from_utf8_lossy(&out.stdout);
+                let mut removed = Vec::new();
+                let mut added = Vec::new();
+                for l in diff.lines() {
+                    if let Some(rest) = l.strip_prefix('-') {
+                        if !l.starts_with("---") {
+                            removed.push(strip_godot_uid_tokens(rest));
+                        }
+                    } else if let Some(rest) = l.strip_prefix('+') {
+                        if !l.starts_with("+++") {
+                            added.push(strip_godot_uid_tokens(rest));
+                        }
+                    }
+                }
+                return !added.is_empty() && removed == added;
+            }
+        }
+    }
+    false
+}
+
+/// 目錄內是否有未 commit 的變更 (忽略 `.ertangle/`、provisioned 連結與 Godot import 雜訊)。
 pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
     let out = git_output(dir, &["status", "--porcelain"])?;
     if !out.status.success() {
@@ -625,6 +685,7 @@ pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
         !l.trim().is_empty()
             && !is_ertangle_status_line(l)
             && !is_provisioned_path(dir, l.get(3..).unwrap_or(l).trim())
+            && !is_godot_import_noise(dir, l)
     }))
 }
 
@@ -1276,4 +1337,54 @@ pub(crate) fn discard_worktree_change(
         }
     }
     Ok(tr!("已還原檔案 {file}", file = file))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("run git");
+        assert!(out.status.success(), "git {args:?} failed");
+    }
+
+    #[test]
+    fn has_uncommitted_ignores_godot_import_and_uid_only_diffs() {
+        let repo = ertangle_test_support::temp_dir("godot_uncommitted");
+        fs::write(repo.join("project.godot"), "config_version=5\n").expect("write project.godot");
+        fs::write(
+            repo.join("scene.tscn"),
+            "[gd_scene load_steps=1 format=3]\n[node name=\"Root\" type=\"Node2D\"]\n",
+        )
+        .expect("write scene");
+        git(&repo, &["init"]);
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-m", "init"]);
+
+        // *.import and *.uid noise should be ignored
+        fs::write(repo.join("icon.png.import"), "[remap]\n").expect("write import");
+        fs::write(repo.join("script.gd.uid"), "uid://abc\n").expect("write uid");
+        assert!(!has_uncommitted(&repo).expect("has_uncommitted"));
+
+        // uid-only diff in .tscn should be ignored
+        fs::write(
+            repo.join("scene.tscn"),
+            "[gd_scene load_steps=1 format=3 uid=\"uid://xyz\"]\n[node name=\"Root\" type=\"Node2D\" unique_id=12345]\n",
+        )
+        .expect("write uid-only scene");
+        assert!(!has_uncommitted(&repo).expect("has_uncommitted uid-only"));
+
+        // Real content change in .tscn must still count as uncommitted
+        fs::write(
+            repo.join("scene.tscn"),
+            "[gd_scene load_steps=1 format=3 uid=\"uid://xyz\"]\n[node name=\"Other\" type=\"Node2D\" unique_id=12345]\n",
+        )
+        .expect("write real change");
+        assert!(has_uncommitted(&repo).expect("has_uncommitted real change"));
+    }
 }

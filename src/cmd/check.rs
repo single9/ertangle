@@ -296,6 +296,9 @@ pub(crate) fn dehydrate_godot_output(raw: &str, workspace_root: &Path) -> Vec<St
                 i += 1;
             }
         }
+        if is_godot_noise(&text) {
+            continue;
+        }
         if seen.insert(text.clone()) {
             out.push(text);
         }
@@ -303,19 +306,30 @@ pub(crate) fn dehydrate_godot_output(raw: &str, workspace_root: &Path) -> Vec<St
     out
 }
 
+fn is_godot_shutdown_noise(line: &str) -> bool {
+    line.contains("Capture not registered:")
+        || line.contains("resources still in use at exit")
+        || line.contains("ObjectDB instances leaked at exit")
+        || line.contains("RID allocations of type")
+        || line.contains("pages in use by")
+}
+
 fn is_godot_noise(line: &str) -> bool {
-    [
-        "Godot Engine v",
-        "Vulkan ",
-        "OpenGL ",
-        "ALSA lib ",
-        "PulseAudio",
-        "core/",
-        "servers/",
-        "USER WARNING: ",
-    ]
-    .iter()
-    .any(|prefix| line.starts_with(prefix))
+    is_godot_shutdown_noise(line)
+        || godot_location(line)
+            .is_some_and(|(path, _)| path.starts_with("core/") || path.starts_with("servers/"))
+        || [
+            "Godot Engine v",
+            "Vulkan ",
+            "OpenGL ",
+            "ALSA lib ",
+            "PulseAudio",
+            "core/",
+            "servers/",
+            "USER WARNING: ",
+        ]
+        .iter()
+        .any(|prefix| line.starts_with(prefix))
         || (line.starts_with("WARNING: ") && line.contains("lavapipe"))
 }
 
@@ -367,8 +381,58 @@ fn on_path(name: &str) -> bool {
 /// Godot may exit 0 even when scripts fail to parse, so inspect the messages too.
 fn godot_messages_ok(messages: &[String]) -> bool {
     !messages.iter().any(|line| {
-        line.contains("SCRIPT ERROR:") || line.contains("Parse Error:") || line.contains("ERROR:")
+        if is_godot_shutdown_noise(line) {
+            return false;
+        }
+        line.contains("SCRIPT ERROR:")
+            || line.contains("Parse Error:")
+            || line.contains("Failed to load script")
+            || line.contains("ERROR:")
     })
+}
+
+/// Inspect gdUnit4 `Statistics` summary lines (`0 errors` and `0 failures`).
+fn gdunit4_stats_ok(messages: &[String]) -> bool {
+    !messages.iter().any(|line| {
+        let lower = line.to_ascii_lowercase();
+        (lower.contains("errors") && lower.contains("failures"))
+            && !(lower.contains("0 errors") && lower.contains("0 failures"))
+    })
+}
+
+/// Collect changed or untracked `.gd` files in the workspace (skipping `addons/`).
+fn changed_gd_files(dir: &Path) -> Vec<String> {
+    let mut files = std::collections::BTreeSet::new();
+    if let Ok(out) = Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "status", "--porcelain"])
+        .output()
+    {
+        if out.status.success() {
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let raw = line.get(3..).unwrap_or("").trim().trim_matches('"');
+                let path = raw.rsplit(" -> ").next().unwrap_or(raw);
+                if path.ends_with(".gd") && !path.starts_with("addons/") && dir.join(path).is_file()
+                {
+                    files.insert(path.to_owned());
+                }
+            }
+        }
+    }
+    if let Ok(out) = Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "diff", "--name-only", "HEAD"])
+        .output()
+    {
+        if out.status.success() {
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let path = line.trim();
+                if path.ends_with(".gd") && !path.starts_with("addons/") && dir.join(path).is_file()
+                {
+                    files.insert(path.to_owned());
+                }
+            }
+        }
+    }
+    files.into_iter().take(20).collect()
 }
 
 fn normalize_path(input: &str, root: &Path) -> String {
@@ -568,12 +632,26 @@ fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> 
             let check = execute(
                 dir,
                 &godot_bin,
-                &["--headless", "--path", &project, "--quit"],
+                &["--headless", "--path", &project, "--import"],
             )?;
             let messages = dehydrate_godot_output(&combined(&check), dir);
             success &= check.status.success() && godot_messages_ok(&messages);
             outputs.extend(messages);
-            summary.push("headless-check".to_owned());
+            summary.push("headless-import".to_owned());
+            let gd_files = changed_gd_files(dir);
+            if !gd_files.is_empty() {
+                for gd in &gd_files {
+                    let sc = execute(
+                        dir,
+                        &godot_bin,
+                        &["--headless", "--path", &project, "--check-only", "-s", gd],
+                    )?;
+                    let msgs = dehydrate_godot_output(&combined(&sc), dir);
+                    success &= sc.status.success() && godot_messages_ok(&msgs);
+                    outputs.extend(msgs);
+                }
+                summary.push(format!("gdscript-check ({})", gd_files.len()));
+            }
             if !quick && dir.join("addons/gut/gut_cmdln.gd").is_file() {
                 let test = execute(
                     dir,
@@ -591,6 +669,20 @@ fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> 
                 success &= test.status.success() && godot_messages_ok(&messages);
                 outputs.extend(messages);
                 summary.push("gut".to_owned());
+            }
+            if !quick && dir.join("addons/gdUnit4/runtest.sh").is_file() {
+                let test = execute_with_env(
+                    dir,
+                    "sh",
+                    &["addons/gdUnit4/runtest.sh", "-a", "test"],
+                    &[("GODOT_BIN", &godot_bin)],
+                )?;
+                let messages = dehydrate_godot_output(&combined(&test), dir);
+                success &= test.status.success()
+                    && godot_messages_ok(&messages)
+                    && gdunit4_stats_ok(&messages);
+                outputs.extend(messages);
+                summary.push("gdunit4".to_owned());
             }
         }
     }
@@ -615,15 +707,27 @@ fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> 
 }
 
 fn execute(dir: &Path, program: &str, args: &[&str]) -> Result<Output> {
-    Command::new(program)
-        .args(args)
+    execute_with_env(dir, program, args, &[])
+}
+
+fn execute_with_env(
+    dir: &Path,
+    program: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<Output> {
+    let mut cmd = Command::new(program);
+    cmd.args(args)
         .current_dir(dir)
         .env("CI", "1")
         .env("NO_COLOR", "1")
         .env("FORCE_COLOR", "0")
         .env("DOTNET_NOLOGO", "1")
-        .env("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
-        .output()
+        .env("DOTNET_CLI_TELEMETRY_OPTOUT", "1");
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    cmd.output()
         .with_context(|| format!("failed to execute {program}"))
 }
 
@@ -772,6 +876,31 @@ ERROR: Failed to load script \"res://scripts/player.gd\" with error \"Parse erro
         );
         assert!(!godot_messages_ok(&lines));
         assert!(godot_messages_ok(&["all good".to_owned()]));
+    }
+
+    #[test]
+    fn godot_filters_shutdown_noise_and_checks_gdunit4_stats() {
+        let root = temp_dir();
+        let raw = "\
+ERROR: Capture not registered: 'beehave'\n\
+   at: capture (core/debugger/engine_debugger.cpp:62)\n\
+core/io/resource.cpp:810: ERROR: 3 resources still in use at exit\n\
+WARNING: ObjectDB instances leaked at exit\n\
+RID allocations of type 'N10RendererRD' leaked\n\
+| 0 errors | 0 failures |\n";
+        let lines = dehydrate_godot_output(raw, &root);
+        assert_eq!(lines, vec!["| 0 errors | 0 failures |"]);
+        assert!(godot_messages_ok(&lines));
+        assert!(gdunit4_stats_ok(&lines));
+        assert!(!gdunit4_stats_ok(&["| 1 errors | 0 failures |".to_owned()]));
+        assert!(godot_messages_ok(&[
+            "core/debugger/engine_debugger.cpp:62: ERROR: Capture not registered: 'beehave'"
+                .to_owned(),
+            "WARNING: ObjectDB instances leaked at exit".to_owned(),
+        ]));
+        assert!(!godot_messages_ok(&[
+            "scripts/a.gd:10: SCRIPT ERROR: Invalid call".to_owned(),
+        ]));
     }
 
     #[test]
