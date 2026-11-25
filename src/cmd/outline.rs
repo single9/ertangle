@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! `ertangle outline`: fast polyglot code skeleton (Rust, TS/JS/Vue, C#, Python,
 //! GDScript, Godot scenes and shaders).
 //!

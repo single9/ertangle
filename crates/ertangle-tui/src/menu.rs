@@ -371,7 +371,7 @@ pub(crate) enum PickStage {
         current: PathBuf,
     },
     /// Confirm resuming and sending prompt to an ended or sleeping session (T88).
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "對話框狀態變體之部分欄位保留供後續流程讀取")]
     ConfirmResumePrompt {
         session: SessionId,
         label: String,
@@ -381,7 +381,10 @@ pub(crate) enum PickStage {
         attachments: Vec<Attachment>,
     },
     /// Offer to create a new session or resume a previous one when no session is selected (T96).
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "對話框狀態變體之部分欄位保留供後續流程讀取")
+    )]
     NoSessionPrompt {
         text: String,
         attachments: Vec<Attachment>,

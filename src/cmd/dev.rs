@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! `ertangle dev`: non-blocking dev server manager (start / status / stop).
 //!
 //! The server runs in its own process group, logs to `.ertangle/dev-<port>.log`,

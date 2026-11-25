@@ -23,7 +23,11 @@ const INDEX_HTML: &str = include_str!("web/index.html");
 const MANIFEST_JSON: &str = include_str!("web/manifest.json");
 
 /// 計算 SHA-1 雜湊值 (RFC 3174)。
-#[allow(clippy::chunks_exact_to_as_chunks, clippy::needless_range_loop)]
+#[expect(
+    clippy::chunks_exact_to_as_chunks,
+    clippy::needless_range_loop,
+    reason = "SHA-1 演算法標準實作"
+)]
 pub fn sha1(data: &[u8]) -> [u8; 20] {
     let mut h0: u32 = 0x67452301;
     let mut h1: u32 = 0xEFCDAB89;

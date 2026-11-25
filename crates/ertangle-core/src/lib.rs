@@ -811,7 +811,10 @@ pub struct PermissionRequest {
 /// System events. Append-only, serializable, replayable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "事件列舉變體大小差異大，部分變體攜帶完整快照狀態"
+)]
 pub enum Event {
     /// Complete state written to first line of new log file after rotation; replay begins from here. seq inherits value from rotation time.
     Snapshot {

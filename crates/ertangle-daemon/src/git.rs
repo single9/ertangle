@@ -803,13 +803,15 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
 }
 
 /// 把 session 的 worktree 分支合併回主工作區 (預設一般合併)。
-#[allow(dead_code)]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "供未來或外部模組呼叫之預設工作區合併介面")
+)]
 pub(crate) fn merge_worktree(main_repo: &Path, session: &Session, dry_run: bool) -> Result<String> {
     merge_worktree_with(main_repo, session, dry_run, None)
 }
 
 /// 帶自訂前置驗證指令 (如測試時覆寫，避免多執行緒共用設定檔競爭) 的合併實作 (預設一般合併)。
-#[allow(dead_code)]
 pub(crate) fn merge_worktree_with(
     main_repo: &Path,
     session: &Session,

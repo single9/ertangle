@@ -67,7 +67,6 @@ fn reed_solomon_compute(data: &[u8], ec_count: usize) -> Vec<u8> {
 struct QrVersion {
     version: usize,
     size: usize,
-    #[allow(dead_code)]
     total_codewords: usize,
     data_codewords: usize,
     ec_codewords: usize,
@@ -246,14 +245,14 @@ impl QrCode {
             }
 
             // 交錯排列資料位元組
-            #[allow(clippy::needless_range_loop)]
+            #[expect(clippy::needless_range_loop, reason = "依區塊索引交錯讀取位元組陣列")]
             for i in 0..data_per_block {
                 for b in 0..num_blocks {
                     all_bytes.push(block_data[b][i]);
                 }
             }
             // 交錯排列糾錯位元組
-            #[allow(clippy::needless_range_loop)]
+            #[expect(clippy::needless_range_loop, reason = "依區塊索引交錯讀取位元組陣列")]
             for i in 0..ec_per_block {
                 for b in 0..num_blocks {
                     all_bytes.push(block_ec[b][i]);

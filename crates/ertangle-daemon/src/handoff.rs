@@ -9,7 +9,10 @@ use ertangle_core::{BusMessage, Role, Session, State, Target, Task};
 const TAIL_LINES: usize = 40;
 
 /// 組出交接簡報。`git_summary` 是工作目錄的 status／diff stat／最近 commit。
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "交接簡報組裝函式需要多個來源狀態參數"
+)]
 pub(crate) fn build_handoff_brief(
     state: &State,
     s: &Session,

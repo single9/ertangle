@@ -24,7 +24,10 @@ impl std::fmt::Display for ClipBackend {
     }
 }
 
-#[allow(dead_code)]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "供測試或非同步環境選擇原生剪貼簿後端之函式")
+)]
 pub(crate) fn choose_native(
     remote: bool,
     wayland: bool,
@@ -148,7 +151,10 @@ pub(crate) fn base64_encode(data: &[u8]) -> String {
 }
 
 /// 最小 base64 解碼器 (測試與驗證用)。
-#[allow(dead_code)]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "供單元測試與剪貼簿驗證使用之解碼函式")
+)]
 pub(crate) fn base64_decode(input: &str) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     let mut buf = 0u32;

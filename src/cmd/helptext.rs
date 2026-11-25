@@ -65,7 +65,7 @@ pub(crate) fn dump(cmd: &Command) {
     println!("//! 由 `ertangle __help-strings` 產生，請勿手改；用 `make i18n-extract` 更新。");
     println!("//! 只是讓 xtr 抽得到 clap 的說明文字，執行時期不使用。");
     println!();
-    println!("#[allow(dead_code)]");
+    println!("#[expect(dead_code, reason = \"供 i18n 工具萃取字串使用，執行時期不直接參照\")]");
     println!("pub(super) const HELP_STRINGS: &[&str] = &[");
     for s in set {
         println!("    ertangle_core::tr_noop!({s:?}),");

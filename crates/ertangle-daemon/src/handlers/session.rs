@@ -1319,7 +1319,10 @@ fn with_attachment_summary(text: &str, atts: &[ertangle_core::Attachment]) -> St
 }
 
 /// 交接：停掉舊 session、組簡報、讓新 agent 沿用同一個工作目錄接手。
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "處理交接處理程序需要多項設定與狀態參數"
+)]
 pub(crate) fn handle_handoff(
     shared: &Arc<Shared>,
     reply: &ClientTx,

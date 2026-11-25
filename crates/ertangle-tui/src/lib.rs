@@ -1,3 +1,4 @@
+#![expect(unused_imports, reason = "內部模組共用之跨模組 re-export 項目")]
 //! `ertangle-tui` — 全終端機非同步多 agent 儀表板。
 //!
 //! 提供三欄式 (或依視窗寬度降級為雙欄／分頁)互動介面：
@@ -31,44 +32,29 @@ mod settings;
 mod tasks;
 mod term_reply;
 
-#[allow(unused_imports)]
 pub(crate) use app::*;
-#[allow(unused_imports)]
 pub(crate) use clipboard::*;
-#[allow(unused_imports)]
 pub(crate) use commands::*;
-#[allow(unused_imports)]
 pub(crate) use diff::*;
-#[allow(unused_imports)]
 pub(crate) use draw::*;
-#[allow(unused_imports)]
 pub(crate) use input::*;
-#[allow(unused_imports)]
 pub(crate) use mouse::*;
 
-#[allow(unused_imports)]
 pub(crate) use crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
-#[allow(unused_imports)]
 pub(crate) use ertangle_core::{
     now_millis, AgentKind, Artifact, BusMessage, Decision, MsgKind, PermissionPolicy, Role,
     Session, SessionId, SessionStatus, State, Target, WorktreeInfo,
 };
-#[allow(unused_imports)]
 pub(crate) use ratatui::layout::{Constraint, Direction, Layout, Rect};
-#[allow(unused_imports)]
 pub(crate) use ratatui::style::{Color, Modifier, Style};
-#[allow(unused_imports)]
 pub(crate) use ratatui::text::{Line, Span};
-#[allow(unused_imports)]
 pub(crate) use ratatui::widgets::{
     Block, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
     ScrollbarState, Wrap,
 };
-#[allow(unused_imports)]
 pub(crate) use ratatui::{Frame as TuiFrame, Terminal};
-#[allow(unused_imports)]
 pub(crate) use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use anyhow::Result;

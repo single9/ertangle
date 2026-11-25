@@ -133,7 +133,10 @@ impl Renderer {
     }
 
     /// 把來源行渲染成樣式化行。`width` 是可用顯示寬度 (不含邊框)。
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "供外部模組或測試呼叫之樣式行渲染介面")
+    )]
     pub fn render<S: AsRef<str>>(&mut self, src: &[S], width: usize) -> Vec<Line<'static>> {
         self.render_with_links(src, width)
             .into_iter()

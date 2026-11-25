@@ -73,7 +73,7 @@ pub(crate) struct HostRouter {
 }
 
 impl HostRouter {
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "供單元測試或未來擴充之建構函式")]
     pub fn new() -> Self {
         Self {
             writers: BTreeMap::new(),
@@ -100,7 +100,7 @@ impl HostRouter {
         self.active_host = host.to_string();
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "供多主機拓撲路由擴充使用之方法")]
     pub fn map_session(&mut self, session: SessionId, host: String) {
         self.session_to_host.insert(session, host);
     }

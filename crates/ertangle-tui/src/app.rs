@@ -172,7 +172,7 @@ pub(crate) struct MdCache {
 /// 單一主機的狀態與資料快照。
 #[derive(Debug, Clone)]
 pub(crate) struct HostData {
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "保留供偵錯與未來主機狀態顯示使用之欄位")]
     pub(crate) name: String,
     pub(crate) state: State,
     pub(crate) status: crate::hosts::HostStatus,
@@ -366,7 +366,10 @@ pub(crate) struct App {
 }
 
 impl App {
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "供單元測試或無專案啟動使用之建構函式")
+    )]
     pub(crate) fn new() -> Self {
         Self::with_project(None)
     }
@@ -510,7 +513,6 @@ impl App {
         self.hosts.len() > 1
     }
 
-    #[allow(dead_code)]
     pub(crate) fn active_host(&self) -> &str {
         &self.active_host
     }
@@ -731,7 +733,7 @@ impl App {
             .unwrap_or_else(|| self.active_host.clone())
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "供多主機查詢 session 所屬主機使用之輔助方法")]
     pub(crate) fn session_host(&self, session_id: &str) -> Option<String> {
         for (name, host) in &self.hosts {
             if host.state.sessions.contains_key(session_id) {

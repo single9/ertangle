@@ -217,6 +217,7 @@ impl Conn {
         let conn = self.clone();
         std::thread::spawn(move || {
             struct Guard<'a>(&'a std::sync::atomic::AtomicBool);
+            // Safe Rust: 原子操作 store 保證不失敗，確保 Drop 不會 panic。
             impl Drop for Guard<'_> {
                 fn drop(&mut self) {
                     self.0.store(false, Ordering::SeqCst);

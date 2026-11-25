@@ -86,7 +86,10 @@ pub(crate) fn cmd_sessions(json: bool) -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "啟動 session 之命令列介面包含多個設定參數"
+)]
 pub(crate) fn cmd_spawn(
     kind: Option<String>,
     prompt: Option<String>,

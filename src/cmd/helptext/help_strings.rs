@@ -1,7 +1,7 @@
 //! 由 `ertangle __help-strings` 產生，請勿手改；用 `make i18n-extract` 更新。
 //! 只是讓 xtr 抽得到 clap 的說明文字，執行時期不使用。
 
-#[allow(dead_code)]
+#[expect(dead_code, reason = "供 i18n 工具萃取字串使用，執行時期不直接參照")]
 pub(super) const HELP_STRINGS: &[&str] = &[
     ertangle_core::tr_noop!("Agent 種類：opencode / claude / codex / antigravity；可加 `:model` (例如 claude:opus)"),
     ertangle_core::tr_noop!("Archive ended sessions that are merged or have no worktree"),
