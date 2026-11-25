@@ -58,7 +58,10 @@ fn elicitation_accept_content(entries: &[(String, bool, Vec<String>)]) -> Value 
     let mut content = serde_json::Map::new();
     for (key, multi_select, answers) in entries {
         let value = if !multi_select && answers.len() == 1 {
-            json!(answers[0])
+            answers
+                .first()
+                .map(|a| json!(a))
+                .unwrap_or_else(|| json!(""))
         } else {
             json!(answers)
         };
@@ -241,7 +244,10 @@ impl Conn {
     }
 
     fn on_update(&self, msg: &Value) {
-        let update = &msg["params"]["update"];
+        let update = msg
+            .get("params")
+            .and_then(|p| p.get("update"))
+            .unwrap_or(&Value::Null);
         let kind = update["sessionUpdate"].as_str().unwrap_or("");
         match kind {
             "available_commands_update" => {
@@ -267,7 +273,11 @@ impl Conn {
                 self.report_rate_limit(&update.to_string());
             }
             "agent_message_chunk" => {
-                if let Some(t) = update["content"]["text"].as_str() {
+                if let Some(t) = update
+                    .get("content")
+                    .and_then(|c| c.get("text"))
+                    .and_then(|t| t.as_str())
+                {
                     let chunk = self
                         .stream
                         .lock()
@@ -279,7 +289,11 @@ impl Conn {
                 }
             }
             "agent_thought_chunk" => {
-                if let Some(t) = update["content"]["text"].as_str() {
+                if let Some(t) = update
+                    .get("content")
+                    .and_then(|c| c.get("text"))
+                    .and_then(|t| t.as_str())
+                {
                     let chunk = self
                         .stream
                         .lock()
@@ -385,11 +399,16 @@ impl Conn {
 
         // Always forward to daemon: rule engine and session policy (auto/bypass auto-approval) are evaluated there.
         let req = new_id("perm");
-        let title = params["toolCall"]["title"]
-            .as_str()
+        let title = params
+            .get("toolCall")
+            .and_then(|tc| tc.get("title"))
+            .and_then(|t| t.as_str())
             .unwrap_or("permission")
             .to_string();
-        let detail = params["toolCall"]["rawInput"].to_string();
+        let detail = params
+            .get("toolCall")
+            .and_then(|tc| tc.get("rawInput"))
+            .map_or_else(String::new, |v| v.to_string());
         self.perms
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -562,10 +581,17 @@ fn tool_update_ok(update: &Value) -> Option<bool> {
 /// Falls back to `rawOutput` when no text content is available.
 fn tool_result_text(update: &Value) -> Option<String> {
     let mut parts: Vec<&str> = Vec::new();
-    for item in update["content"].as_array().into_iter().flatten() {
-        if let Some(t) = item["content"]["text"]
-            .as_str()
-            .or_else(|| item["text"].as_str())
+    for item in update
+        .get("content")
+        .and_then(|c| c.as_array())
+        .into_iter()
+        .flatten()
+    {
+        if let Some(t) = item
+            .get("content")
+            .and_then(|c| c.get("text"))
+            .and_then(|t| t.as_str())
+            .or_else(|| item.get("text").and_then(|t| t.as_str()))
             .filter(|t| !t.trim().is_empty())
         {
             parts.push(t);
@@ -605,7 +631,10 @@ fn is_rate_limit_error(text: &str) -> bool {
     // Standalone `429` (surrounded by non-digits) to avoid matching `4290` etc.
     let b = lower.as_bytes();
     lower.match_indices("429").any(|(i, _)| {
-        (i == 0 || !b[i - 1].is_ascii_digit()) && b.get(i + 3).is_none_or(|c| !c.is_ascii_digit())
+        i.checked_sub(1)
+            .and_then(|prev| b.get(prev))
+            .is_none_or(|c| !c.is_ascii_digit())
+            && b.get(i + 3).is_none_or(|c| !c.is_ascii_digit())
     })
 }
 
@@ -745,9 +774,9 @@ impl AgentControl for AcpControl {
                     CALL_TIMEOUT,
                 )
                 .with_context(|| tr!("設定 {what} `{value}` 失敗", what = what, value = value))?;
-            if r["configOptions"].is_array() {
+            if let Some(opts) = r.get("configOptions").filter(|co| co.is_array()) {
                 *self.options.lock().unwrap_or_else(|e| e.into_inner()) =
-                    json!({ "configOptions": r["configOptions"] });
+                    json!({ "configOptions": opts });
             }
             if what == "model" {
                 applied = Some(value);
@@ -1045,8 +1074,10 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     )?;
     tracing::debug!("ACP initialize: {init}");
     conn.image_ok.store(
-        init["agentCapabilities"]["promptCapabilities"]["image"]
-            .as_bool()
+        init.get("agentCapabilities")
+            .and_then(|ac| ac.get("promptCapabilities"))
+            .and_then(|pc| pc.get("image"))
+            .and_then(|v| v.as_bool())
             .unwrap_or(false),
         Ordering::SeqCst,
     );
@@ -1068,8 +1099,10 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         None => json!([]),
     };
     // Only agents declaring `loadSession` can be reconnected later.
-    let can_load = init["agentCapabilities"]["loadSession"]
-        .as_bool()
+    let can_load = init
+        .get("agentCapabilities")
+        .and_then(|ac| ac.get("loadSession"))
+        .and_then(|v| v.as_bool())
         .unwrap_or(false);
     let (sid, new) = match &spec.resume {
         Some(id) => {
@@ -1112,8 +1145,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 json!({ "cwd": spec.cwd.to_string_lossy(), "mcpServers": mcp_servers }),
                 CALL_TIMEOUT,
             )?;
-            let sid = new["sessionId"]
-                .as_str()
+            let sid = new
+                .get("sessionId")
+                .and_then(|v| v.as_str())
                 .with_context(|| tr!("`session/new` 未回傳 sessionId"))?
                 .to_string();
             (sid, new)
@@ -1125,7 +1159,8 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         let _ = tx.send(AgentEvent::NativeId(sid.clone()));
     }
     // When resuming, model/effort already exist in agent conversation; do not reset if response lacks configOptions.
-    let has_options = spec.resume.is_none() || new["configOptions"].is_array();
+    let has_options =
+        spec.resume.is_none() || new.get("configOptions").is_some_and(|co| co.is_array());
     if let Some(wanted) = spec.model.as_ref().filter(|_| has_options) {
         let (config_id, value) = pick_model_option(&new, wanted)?;
         conn.call(
@@ -1161,7 +1196,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let control = AcpControl {
         conn,
         child,
-        options: Mutex::new(json!({ "configOptions": new["configOptions"] })),
+        options: Mutex::new(
+            json!({ "configOptions": new.get("configOptions").cloned().unwrap_or(Value::Null) }),
+        ),
     };
 
     if let Some(p) = &spec.initial_prompt {
@@ -1395,7 +1432,11 @@ fn query_agy_quota(prog: &std::path::Path, env: &[(String, String)]) -> Option<S
 /// Parses output of `agy --output-format json -p /quota` into `Quota`.
 pub(crate) fn parse_agy_quota_json(raw: &str, reached: bool) -> Option<ertangle_core::Quota> {
     let v: Value = serde_json::from_str(raw.trim()).ok()?;
-    let groups = v["command"]["data"]["groups"].as_array()?;
+    let groups = v
+        .get("command")
+        .and_then(|c| c.get("data"))
+        .and_then(|d| d.get("groups"))
+        .and_then(|g| g.as_array())?;
     let mut windows = Vec::new();
     for g in groups {
         let group_name = g["name"].as_str().unwrap_or("");

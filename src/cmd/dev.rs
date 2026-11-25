@@ -254,7 +254,8 @@ fn wait_dead(pid: u32, limit: Duration) -> bool {
 fn log_tail(path: &Path, max_lines: usize) -> String {
     let text = fs::read_to_string(path).unwrap_or_default();
     let lines: Vec<&str> = text.lines().collect();
-    lines[lines.len().saturating_sub(max_lines)..].join("\n")
+    let start = lines.len().saturating_sub(max_lines);
+    lines.get(start..).unwrap_or(&[]).join("\n")
 }
 
 const READY_MARKERS: &[&str] = &[
@@ -325,7 +326,7 @@ pub(crate) fn start_dev(
     let log_err = log.try_clone().context("clone dev log handle")?;
 
     let mut c = Command::new(program);
-    c.args(&argv[1..])
+    c.args(argv.get(1..).unwrap_or(&[]))
         .current_dir(dir)
         .envs(env)
         .stdin(Stdio::null())
@@ -405,7 +406,9 @@ pub(crate) fn cmd_dev(cmd: DevCmd) -> Result<()> {
             let st = start_dev(&dir, port, Duration::from_secs(timeout_secs), cmd)?;
             if json {
                 let mut v = st.to_json();
-                v["ok"] = json!(true);
+                if let Some(map) = v.as_object_mut() {
+                    map.insert("ok".to_string(), json!(true));
+                }
                 println!("{}", serde_json::to_string(&v)?);
             } else {
                 println!(
@@ -420,7 +423,9 @@ pub(crate) fn cmd_dev(cmd: DevCmd) -> Result<()> {
                 Some((st, alive)) => {
                     if json {
                         let mut v = st.to_json();
-                        v["running"] = json!(alive);
+                        if let Some(map) = v.as_object_mut() {
+                            map.insert("running".to_string(), json!(alive));
+                        }
                         println!("{}", serde_json::to_string(&v)?);
                     } else if alive {
                         println!("running: {} (pid {}, log {})", st.url, st.pid, st.log_path);

@@ -84,27 +84,30 @@ pub(crate) fn strip_ansi(input: &str) -> String {
     let mut result = String::new();
     let mut i = 0;
     while i < chars.len() {
-        if chars[i] == '\x1b' && chars.get(i + 1) == Some(&'[') {
+        let Some(&ch) = chars.get(i) else { break };
+        if ch == '\x1b' && chars.get(i + 1) == Some(&'[') {
             i += 2;
-            while i < chars.len() && !chars[i].is_ascii_alphabetic() {
+            while let Some(&c) = chars.get(i) {
                 i += 1;
+                if c.is_ascii_alphabetic() {
+                    break;
+                }
             }
-            i += usize::from(i < chars.len());
-        } else if chars[i] == '\x1b' && chars.get(i + 1) == Some(&']') {
+        } else if ch == '\x1b' && chars.get(i + 1) == Some(&']') {
             i += 2;
-            while i < chars.len() {
-                if chars[i] == '\x07' {
+            while let Some(&c) = chars.get(i) {
+                if c == '\x07' {
                     i += 1;
                     break;
                 }
-                if chars[i] == '\x1b' && chars.get(i + 1) == Some(&'\\') {
+                if c == '\x1b' && chars.get(i + 1) == Some(&'\\') {
                     i += 2;
                     break;
                 }
                 i += 1;
             }
         } else {
-            result.push(chars[i]);
+            result.push(ch);
             i += 1;
         }
     }
@@ -172,11 +175,13 @@ pub(crate) fn dehydrate_cargo_test_output(output: &str) -> (usize, usize, Vec<St
         if trimmed.starts_with("test result:") {
             let fields: Vec<_> = trimmed.split_whitespace().collect();
             for pair in fields.windows(2) {
-                if let Ok(count) = pair[0].parse::<usize>() {
-                    match pair[1].trim_end_matches(';') {
-                        "passed" => passed += count,
-                        "failed" => failed += count,
-                        _ => {}
+                if let (Some(p0), Some(p1)) = (pair.first(), pair.get(1)) {
+                    if let Ok(count) = p0.parse::<usize>() {
+                        match p1.trim_end_matches(';') {
+                            "passed" => passed += count,
+                            "failed" => failed += count,
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -281,7 +286,7 @@ pub(crate) fn dehydrate_godot_output(raw: &str, workspace_root: &Path) -> Vec<St
     let mut seen = HashSet::new();
     let mut i = 0;
     while i < lines.len() {
-        let line = lines[i];
+        let Some(&line) = lines.get(i) else { break };
         i += 1;
         let mut text = normalize_godot_line(line, workspace_root);
         if is_godot_error(line) {

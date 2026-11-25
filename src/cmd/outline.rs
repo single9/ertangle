@@ -102,7 +102,7 @@ fn sanitize(content: &str, lang: Lang) -> Vec<String> {
         let mut o = String::with_capacity(line.len());
         let mut i = 0;
         while i < c.len() {
-            let ch = c[i];
+            let Some(&ch) = c.get(i) else { break };
             let next = c.get(i + 1).copied();
             match state {
                 State::Block => {
@@ -162,7 +162,7 @@ fn sanitize(content: &str, lang: Lang) -> Vec<String> {
                             i += 1;
                             state = State::DqMulti;
                         }
-                        '"' if lang == Lang::Cs && i > 0 && c[i - 1] == '@' => {
+                        '"' if lang == Lang::Cs && i > 0 && c.get(i - 1) == Some(&'@') => {
                             o.push('"');
                             i += 1;
                             state = State::Verbatim;
@@ -193,13 +193,14 @@ fn blank_inline(c: &[char], start: usize, quote: char, o: &mut String) -> usize 
     o.push(quote);
     let mut i = start + 1;
     while i < c.len() {
-        if c[i] == '\\' {
+        let Some(&ch) = c.get(i) else { break };
+        if ch == '\\' {
             o.push(' ');
             if i + 1 < c.len() {
                 o.push(' ');
             }
             i += 2;
-        } else if c[i] == quote {
+        } else if ch == quote {
             o.push(quote);
             return i + 1;
         } else {
@@ -276,7 +277,7 @@ fn signature_of(clean: &str, orig: &str) -> String {
             _ => {}
         }
     }
-    let s: String = oc[..cut.min(oc.len())].iter().collect();
+    let s: String = oc.get(..cut.min(oc.len())).unwrap_or(&[]).iter().collect();
     s.trim().trim_end_matches(';').trim().to_string()
 }
 
@@ -484,13 +485,16 @@ fn cs_method(rest: &str) -> bool {
         .chars()
         .all(|c| c.is_alphanumeric() || c.is_whitespace() || "_.?[],~".contains(c));
     let tokens: Vec<&str> = prefix.split_whitespace().collect();
-    if !ok_chars || tokens.is_empty() || tokens.len() > 2 {
+    let Some(&first) = tokens.first() else {
+        return false;
+    };
+    if !ok_chars || tokens.len() > 2 {
         return false;
     }
-    if CS_STMT_WORDS.contains(&tokens[0]) {
+    if CS_STMT_WORDS.contains(&first) {
         return false;
     }
-    tokens.len() == 2 || tokens[0].starts_with(|c: char| c.is_uppercase() || c == '~')
+    tokens.len() == 2 || first.starts_with(|c: char| c.is_uppercase() || c == '~')
 }
 
 // ---------------------------------------------------------------- braced langs
@@ -513,8 +517,12 @@ fn extract_braced(lang: Lang, content: &str) -> Vec<SymbolEntry> {
         while stack.last().is_some_and(|(end, _)| *end < i) {
             stack.pop();
         }
-        let oc: Vec<char> = originals[i].chars().collect();
-        let cc: Vec<char> = clean[i].chars().collect();
+        let oc: Vec<char> = originals
+            .get(i)
+            .map_or_else(Vec::new, |line| line.chars().collect());
+        let cc: Vec<char> = clean
+            .get(i)
+            .map_or_else(Vec::new, |line| line.chars().collect());
         let mut off = cc.iter().take_while(|c| c.is_whitespace()).count();
         if off >= cc.len() {
             continue; // blank or comment-only: keep pending attributes
@@ -524,7 +532,7 @@ fn extract_braced(lang: Lang, content: &str) -> Vec<SymbolEntry> {
                 let Some(close) = matching_bracket(&cc, off) else {
                     break;
                 };
-                let attr: String = oc[off..=close].iter().collect();
+                let attr: String = oc.get(off..=close).unwrap_or(&[]).iter().collect();
                 if ["[Http", "[Route"].iter().any(|p| attr.starts_with(p)) {
                     pending_attrs.push(attr);
                     pending_start.get_or_insert(i);
@@ -538,7 +546,7 @@ fn extract_braced(lang: Lang, content: &str) -> Vec<SymbolEntry> {
                 continue;
             }
         }
-        let text: String = cc[off..].iter().collect();
+        let text: String = cc.get(off..).unwrap_or(&[]).iter().collect();
         let in_type = stack.last().is_some_and(|(_, t)| *t);
         let found = match lang {
             Lang::Rust => detect_rust(&text),
@@ -550,7 +558,7 @@ fn extract_braced(lang: Lang, content: &str) -> Vec<SymbolEntry> {
             pending_start = None;
             continue;
         };
-        let orig_text: String = oc[off.min(oc.len())..].iter().collect();
+        let orig_text: String = oc.get(off.min(oc.len())..).unwrap_or(&[]).iter().collect();
         let mut end = find_end(&clean, i, d.eol_rule);
         if d.kind == "namespace" && text.trim_end().ends_with(';') {
             end = n - 1; // file-scoped namespace spans to EOF
@@ -620,12 +628,12 @@ fn extract_python(content: &str) -> Vec<SymbolEntry> {
         let mut j = i + 1;
         // Multi-line signature: continue until parentheses balance.
         while balance > 0 && j < lines.len() {
-            balance += paren_balance(lines[j]);
+            balance += lines.get(j).map_or(0, |l| paren_balance(l));
             last = j;
             j += 1;
         }
         while j < lines.len() {
-            let l = lines[j];
+            let Some(&l) = lines.get(j) else { break };
             let lt = l.trim();
             if lt.is_empty() || lt.starts_with('#') {
                 j += 1;
@@ -660,18 +668,18 @@ fn paren_balance(s: &str) -> i32 {
 /// Line index after the indented body of a block starting at `i` (Python/GDScript rule):
 /// returns the index of the last line belonging to the block.
 fn indented_block_end(lines: &[&str], i: usize) -> usize {
-    let indent = indent_of(lines[i]);
-    let mut balance = paren_balance(lines[i]);
+    let indent = lines.get(i).map_or(0, |l| indent_of(l));
+    let mut balance = lines.get(i).map_or(0, |l| paren_balance(l));
     let mut last = i;
     let mut j = i + 1;
     // Multi-line signature: continue until brackets balance.
     while balance > 0 && j < lines.len() {
-        balance += paren_balance(lines[j]);
+        balance += lines.get(j).map_or(0, |l| paren_balance(l));
         last = j;
         j += 1;
     }
     while j < lines.len() {
-        let l = lines[j];
+        let Some(&l) = lines.get(j) else { break };
         let lt = l.trim();
         if lt.is_empty() || lt.starts_with('#') {
             j += 1;
@@ -734,7 +742,9 @@ fn extract_gdscript(content: &str) -> Vec<SymbolEntry> {
                 let mut last = i;
                 while balance > 0 && last + 1 < lines.len() {
                     last += 1;
-                    balance += paren_balance(lines[last]);
+                    if let Some(&line) = lines.get(last) {
+                        balance += paren_balance(line);
+                    }
                 }
                 SymbolEntry {
                     kind: "enum".to_string(),
@@ -786,7 +796,7 @@ fn gd_header(t: &str) -> String {
         match ch {
             '(' | '[' | '{' => depth += 1,
             ')' | ']' | '}' => depth -= 1,
-            ':' if depth == 0 => return t[..idx].trim().to_string(),
+            ':' if depth == 0 => return t.get(..idx).unwrap_or("").trim().to_string(),
             _ => {}
         }
     }
@@ -805,7 +815,7 @@ fn extract_tscn(content: &str) -> Vec<SymbolEntry> {
         .collect();
     let mut out = Vec::new();
     for (n, &start) in headers.iter().enumerate() {
-        let header = lines[start].trim();
+        let header = lines.get(start).map_or("", |l| l.trim());
         let Some(kind) = tscn_section_kind(header) else {
             continue;
         };
@@ -822,7 +832,7 @@ fn extract_tscn(content: &str) -> Vec<SymbolEntry> {
         let next = headers.get(n + 1).copied().unwrap_or(lines.len());
         let end = (start..next)
             .rev()
-            .find(|&j| !lines[j].trim().is_empty())
+            .find(|&j| lines.get(j).is_some_and(|l| !l.trim().is_empty()))
             .unwrap_or(start);
         out.push(SymbolEntry {
             kind: kind.to_string(),
@@ -851,7 +861,10 @@ fn extract_gdshader(content: &str) -> Vec<SymbolEntry> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < clean.len() {
-        let t = clean[i].trim();
+        let Some(clean_line) = clean.get(i) else {
+            break;
+        };
+        let t = clean_line.trim();
         if t.is_empty() || t.starts_with('#') {
             i += 1;
             continue;
@@ -861,7 +874,7 @@ fn extract_gdshader(content: &str) -> Vec<SymbolEntry> {
             let o = orig.get(i).copied().unwrap_or("");
             out.push(SymbolEntry {
                 kind: kind.to_string(),
-                signature: signature_of(&clean[i], o),
+                signature: signature_of(clean_line, o),
                 start_line: i + 1,
                 end_line: end + 1,
             });
@@ -889,15 +902,16 @@ fn gdshader_kind(t: &str) -> Option<&'static str> {
     let all_idents = toks
         .iter()
         .all(|tok| !tok.is_empty() && tok.chars().all(|c| c.is_alphanumeric() || c == '_'));
-    (toks.len() >= 2 && all_idents && !matches!(toks[0], "return" | "else")).then_some("fn")
+    let first = toks.first().copied().unwrap_or("");
+    (toks.len() >= 2 && all_idents && !matches!(first, "return" | "else")).then_some("fn")
 }
 
 /// Value of a `key="value"` attribute inside a Godot section header.
 fn tscn_attr(sig: &str, key: &str) -> Option<String> {
     let pat = format!("{key}=\"");
     let start = sig.find(&pat)? + pat.len();
-    let len = sig[start..].find('"')?;
-    Some(sig[start..start + len].to_string())
+    let len = sig.get(start..)?.find('"')?;
+    sig.get(start..start + len).map(str::to_string)
 }
 
 // ---------------------------------------------------------------- output

@@ -69,7 +69,7 @@ impl Conn {
         let Ok(msg) = serde_json::from_str::<Value>(line) else {
             return;
         };
-        match msg["type"].as_str().unwrap_or("") {
+        match msg.get("type").and_then(|v| v.as_str()).unwrap_or("") {
             "system" => self.on_system(&msg),
             "stream_event" => self.on_stream_event(&msg),
             "assistant" => self.on_assistant(&msg),
@@ -147,7 +147,13 @@ impl Conn {
                 }
             }
             // Finish text output when a tool call starts so the order is correct.
-            "content_block_start" if ev["content_block"]["type"].as_str() == Some("tool_use") => {
+            "content_block_start"
+                if ev
+                    .get("content_block")
+                    .and_then(|b| b.get("type"))
+                    .and_then(|t| t.as_str())
+                    == Some("tool_use") =>
+            {
                 self.flush_stream();
             }
             _ => {}
@@ -156,8 +162,10 @@ impl Conn {
 
     /// Full assistant message: attaches tool calls and text (when partial messages are disabled).
     fn on_assistant(&self, msg: &Value) {
-        let content = msg["message"]["content"]
-            .as_array()
+        let content = msg
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_array())
             .cloned()
             .unwrap_or_default();
         for block in &content {
@@ -189,15 +197,26 @@ impl Conn {
             }
         }
         // Context usage = input tokens for this assistant message (including cache); window size is only known at `result`.
-        let u = &msg["message"]["usage"];
-        if !u.is_null() {
-            let used = u["input_tokens"]
-                .as_u64()
-                .unwrap_or(0)
-                .saturating_add(u["cache_creation_input_tokens"].as_u64().unwrap_or(0))
-                .saturating_add(u["cache_read_input_tokens"].as_u64().unwrap_or(0));
-            if used > 0 {
-                self.emit(AgentEvent::Context { used, window: None });
+        let u = msg.get("message").and_then(|m| m.get("usage"));
+        if let Some(u) = u {
+            if !u.is_null() {
+                let used = u
+                    .get("input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+                    .saturating_add(
+                        u.get("cache_creation_input_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
+                    )
+                    .saturating_add(
+                        u.get("cache_read_input_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
+                    );
+                if used > 0 {
+                    self.emit(AgentEvent::Context { used, window: None });
+                }
             }
         }
         // Do not emit per-message usage here: it only has tokens for a single message, which would overwrite
@@ -206,8 +225,10 @@ impl Conn {
 
     /// Tool result (Claude reports this via a `user` message).
     fn on_tool_results(&self, msg: &Value) {
-        let content = msg["message"]["content"]
-            .as_array()
+        let content = msg
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_array())
             .cloned()
             .unwrap_or_default();
         for block in &content {
