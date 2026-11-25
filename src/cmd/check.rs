@@ -14,6 +14,7 @@ pub(crate) enum ProjectStack {
     Node,
     DotNet,
     Python,
+    Godot,
 }
 
 impl ProjectStack {
@@ -23,6 +24,7 @@ impl ProjectStack {
             Self::Node => "node",
             Self::DotNet => "dotnet",
             Self::Python => "python",
+            Self::Godot => "godot",
         }
     }
 }
@@ -43,6 +45,9 @@ pub(crate) fn detect_stacks(dir: &Path) -> Vec<ProjectStack> {
         .any(|name| dir.join(name).exists())
     {
         stacks.push(ProjectStack::Python);
+    }
+    if dir.join("project.godot").is_file() {
+        stacks.push(ProjectStack::Godot);
     }
     stacks
 }
@@ -264,6 +269,105 @@ fn is_dotnet_noise(line: &str) -> bool {
         || line.starts_with("Time Elapsed ")
 }
 
+/// Condense Godot headless output: drop engine/renderer/audio startup noise,
+/// fold `ERROR` + `at: ... (res://path:line)` pairs into `path:line: ERROR`,
+/// strip `res://` prefixes, and drop duplicate lines (order preserved).
+pub(crate) fn dehydrate_godot_output(raw: &str, workspace_root: &Path) -> Vec<String> {
+    let clean = strip_ansi(raw);
+    let lines: Vec<&str> = clean
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !is_godot_noise(line))
+        .collect();
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        i += 1;
+        let mut text = normalize_godot_line(line, workspace_root);
+        if is_godot_error(line) {
+            if let Some((path, number)) = lines.get(i).and_then(|next| godot_location(next)) {
+                let path = normalize_godot_line(&path, workspace_root);
+                text = format!("{path}:{number}: {text}");
+                i += 1;
+            }
+        }
+        if seen.insert(text.clone()) {
+            out.push(text);
+        }
+    }
+    out
+}
+
+fn is_godot_noise(line: &str) -> bool {
+    [
+        "Godot Engine v",
+        "Vulkan ",
+        "OpenGL ",
+        "ALSA lib ",
+        "PulseAudio",
+        "core/",
+        "servers/",
+        "USER WARNING: ",
+    ]
+    .iter()
+    .any(|prefix| line.starts_with(prefix))
+        || (line.starts_with("WARNING: ") && line.contains("lavapipe"))
+}
+
+fn is_godot_error(line: &str) -> bool {
+    ["SCRIPT ERROR:", "USER ERROR:", "Parse Error:", "ERROR:"]
+        .iter()
+        .any(|prefix| line.starts_with(prefix))
+}
+
+/// Parse `at: <func> (<path>:<line>)` into `(path, line)`.
+fn godot_location(line: &str) -> Option<(String, String)> {
+    let rest = line.strip_prefix("at: ")?;
+    let inner = rest.strip_suffix(')')?;
+    let open = inner.rfind('(')?;
+    let (path, number) = inner[open + 1..].rsplit_once(':')?;
+    if path.is_empty() || number.is_empty() || !number.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some((path.to_owned(), number.to_owned()))
+}
+
+fn normalize_godot_line(line: &str, workspace_root: &Path) -> String {
+    normalize_path(&line.replace("res://", ""), workspace_root)
+}
+
+/// Godot executable: `ERTANGLE_GODOT_BIN`, else `godot` / `godot4` on `PATH`, else `godot`.
+fn resolve_godot_bin() -> String {
+    if let Ok(bin) = std::env::var("ERTANGLE_GODOT_BIN") {
+        if !bin.trim().is_empty() {
+            return bin;
+        }
+    }
+    ["godot", "godot4"]
+        .into_iter()
+        .find(|name| on_path(name))
+        .unwrap_or("godot")
+        .to_owned()
+}
+
+fn on_path(name: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths).any(|dir| {
+            let candidate = dir.join(name);
+            candidate.is_file() || candidate.with_extension("exe").is_file()
+        })
+    })
+}
+
+/// Godot may exit 0 even when scripts fail to parse, so inspect the messages too.
+fn godot_messages_ok(messages: &[String]) -> bool {
+    !messages.iter().any(|line| {
+        line.contains("SCRIPT ERROR:") || line.contains("Parse Error:") || line.contains("ERROR:")
+    })
+}
+
 fn normalize_path(input: &str, root: &Path) -> String {
     let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let root_text = root.to_string_lossy();
@@ -336,6 +440,7 @@ fn parse_stacks(explicit: Option<&str>, dir: &Path) -> Result<Vec<ProjectStack>>
         "node" => Ok(vec![ProjectStack::Node]),
         "dotnet" => Ok(vec![ProjectStack::DotNet]),
         "python" => Ok(vec![ProjectStack::Python]),
+        "godot" => Ok(vec![ProjectStack::Godot]),
         _ => bail!("unsupported stack: {explicit}"),
     }
 }
@@ -452,6 +557,37 @@ fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> 
                 outputs.extend(dehydrate_node_output(&combined(&test), dir));
                 success &= test.status.success();
                 summary.push("pytest".to_owned());
+            }
+        }
+        ProjectStack::Godot => {
+            let godot_bin = resolve_godot_bin();
+            let project = dir.to_string_lossy();
+            let check = execute(
+                dir,
+                &godot_bin,
+                &["--headless", "--path", &project, "--quit"],
+            )?;
+            let messages = dehydrate_godot_output(&combined(&check), dir);
+            success &= check.status.success() && godot_messages_ok(&messages);
+            outputs.extend(messages);
+            summary.push("headless-check".to_owned());
+            if !quick && dir.join("addons/gut/gut_cmdln.gd").is_file() {
+                let test = execute(
+                    dir,
+                    &godot_bin,
+                    &[
+                        "--headless",
+                        "--path",
+                        &project,
+                        "-s",
+                        "addons/gut/gut_cmdln.gd",
+                        "-gexit",
+                    ],
+                )?;
+                let messages = dehydrate_godot_output(&combined(&test), dir);
+                success &= test.status.success() && godot_messages_ok(&messages);
+                outputs.extend(messages);
+                summary.push("gut".to_owned());
             }
         }
     }
@@ -595,6 +731,54 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert!(lines[0].starts_with("src/App.cs(4,5): error CS1061"));
         assert!(!lines[0].contains(".csproj"));
+    }
+
+    #[test]
+    fn detects_and_parses_godot_stack() {
+        let root = temp_dir();
+        assert!(!detect_stacks(&root).contains(&ProjectStack::Godot));
+        fs::write(root.join("project.godot"), "config_version=5\n").expect("write marker");
+        assert_eq!(detect_stacks(&root), vec![ProjectStack::Godot]);
+        assert_eq!(
+            parse_stacks(Some("godot"), &root).expect("parse godot"),
+            vec![ProjectStack::Godot]
+        );
+        assert_eq!(ProjectStack::Godot.name(), "godot");
+    }
+
+    #[test]
+    fn dehydrates_godot_output() {
+        let root = temp_dir();
+        let raw =
+            "\x1b[1mGodot Engine v4.3.stable.official.77dcf97d8 - https://godotengine.org\x1b[0m\n\
+Vulkan API 1.3.255 - Forward+ - Using Device #0: llvmpipe\n\
+\n\
+SCRIPT ERROR: Parse Error: Identifier \"foo\" not declared in the current scope.\n\
+          at: GDScript::reload (res://scripts/player.gd:42)\n\
+SCRIPT ERROR: Parse Error: Identifier \"foo\" not declared in the current scope.\n\
+          at: GDScript::reload (res://scripts/player.gd:42)\n\
+ERROR: Failed to load script \"res://scripts/player.gd\" with error \"Parse error\".\n\
+   at: load (modules/gdscript/gdscript.cpp:2936)\n";
+        let lines = dehydrate_godot_output(raw, &root);
+        assert_eq!(
+            lines,
+            vec![
+                "scripts/player.gd:42: SCRIPT ERROR: Parse Error: Identifier \"foo\" not declared in the current scope.",
+                "modules/gdscript/gdscript.cpp:2936: ERROR: Failed to load script \"scripts/player.gd\" with error \"Parse error\".",
+            ]
+        );
+        assert!(!godot_messages_ok(&lines));
+        assert!(godot_messages_ok(&["all good".to_owned()]));
+    }
+
+    #[test]
+    fn godot_location_requires_numeric_line() {
+        assert_eq!(
+            godot_location("at: f (res://a.gd:7)"),
+            Some(("res://a.gd".to_owned(), "7".to_owned()))
+        );
+        assert_eq!(godot_location("at: f (res://a.gd:x)"), None);
+        assert_eq!(godot_location("not a location"), None);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-//! `ertangle outline`: fast polyglot code skeleton (Rust, TS/JS/Vue, C#, Python).
+//! `ertangle outline`: fast polyglot code skeleton (Rust, TS/JS/Vue, C#, Python,
+//! GDScript, Godot scenes and shaders).
 //!
 //! A dependency-free line scanner: comments and string literals are blanked out
 //! first, then declarations are matched per line and their end line is found by
@@ -38,6 +39,7 @@ const SKIP_DIRS: &[&str] = &[
     "obj",
     ".ertangle",
     "dist",
+    ".godot",
 ];
 const DEFAULT_MAX_DEPTH: usize = 3;
 
@@ -47,6 +49,9 @@ enum Lang {
     Ts,
     Cs,
     Py,
+    Gd,
+    Tscn,
+    GdShader,
 }
 
 fn lang_of(path: &Path) -> Option<Lang> {
@@ -55,6 +60,9 @@ fn lang_of(path: &Path) -> Option<Lang> {
         "ts" | "tsx" | "js" | "jsx" | "mjs" | "vue" => Some(Lang::Ts),
         "cs" => Some(Lang::Cs),
         "py" => Some(Lang::Py),
+        "gd" => Some(Lang::Gd),
+        "tscn" => Some(Lang::Tscn),
+        "gdshader" => Some(Lang::GdShader),
         _ => None,
     }
 }
@@ -63,6 +71,9 @@ fn lang_of(path: &Path) -> Option<Lang> {
 pub(crate) fn extract_outline(path: &Path, content: &str) -> Vec<SymbolEntry> {
     match lang_of(path) {
         Some(Lang::Py) => extract_python(content),
+        Some(Lang::Gd) => extract_gdscript(content),
+        Some(Lang::Tscn) => extract_tscn(content),
+        Some(Lang::GdShader) => extract_gdshader(content),
         Some(lang) => extract_braced(lang, content),
         None => Vec::new(),
     }
@@ -645,6 +656,251 @@ fn paren_balance(s: &str) -> i32 {
     })
 }
 
+// ---------------------------------------------------------------- godot
+
+/// Line index after the indented body of a block starting at `i` (Python/GDScript rule):
+/// returns the index of the last line belonging to the block.
+fn indented_block_end(lines: &[&str], i: usize) -> usize {
+    let indent = indent_of(lines[i]);
+    let mut balance = paren_balance(lines[i]);
+    let mut last = i;
+    let mut j = i + 1;
+    // Multi-line signature: continue until brackets balance.
+    while balance > 0 && j < lines.len() {
+        balance += paren_balance(lines[j]);
+        last = j;
+        j += 1;
+    }
+    while j < lines.len() {
+        let l = lines[j];
+        let lt = l.trim();
+        if lt.is_empty() || lt.starts_with('#') {
+            j += 1;
+            continue;
+        }
+        if indent_of(l) <= indent {
+            break;
+        }
+        last = j;
+        j += 1;
+    }
+    last
+}
+
+/// Drop a long `= value` initializer so the signature stays compact.
+fn strip_long_value(sig: &str) -> String {
+    const MAX_SIG: usize = 60;
+    if sig.chars().count() <= MAX_SIG {
+        return sig.to_string();
+    }
+    match sig.split_once('=') {
+        Some((head, _)) => head.trim_end().trim_end_matches(':').trim_end().to_string(),
+        None => sig.to_string(),
+    }
+}
+
+fn single(kind: &str, signature: String, idx: usize) -> SymbolEntry {
+    SymbolEntry {
+        kind: kind.to_string(),
+        signature,
+        start_line: idx + 1,
+        end_line: idx + 1,
+    }
+}
+
+/// GDScript (`.gd`): indentation-based like Python, `#` comments.
+fn extract_gdscript(content: &str) -> Vec<SymbolEntry> {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut out = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let top_level = indent_of(line) == 0;
+        let word = take_word(t).0;
+        let entry = match word {
+            "class_name" | "extends" | "signal" if starts_ws_or(&t[word.len()..], &[]) => {
+                single(word, t.to_string(), i)
+            }
+            "const" if starts_ws_or(&t[word.len()..], &[]) => {
+                single("const", strip_long_value(t), i)
+            }
+            "var" if top_level && starts_ws_or(&t[3..], &[]) => {
+                single("var", strip_long_value(t), i)
+            }
+            _ if t.starts_with('@') && gd_annotated_var(t) => single("var", strip_long_value(t), i),
+            "enum" if starts_ws_or(&t[4..], &['{']) => {
+                let mut balance = paren_balance(t);
+                let mut last = i;
+                while balance > 0 && last + 1 < lines.len() {
+                    last += 1;
+                    balance += paren_balance(lines[last]);
+                }
+                SymbolEntry {
+                    kind: "enum".to_string(),
+                    signature: gd_enum_signature(t),
+                    start_line: i + 1,
+                    end_line: last + 1,
+                }
+            }
+            "class" if starts_ws_or(&t[5..], &[]) => gd_block("class", t, &lines, i),
+            "func" if starts_ws_or(&t[4..], &[]) => gd_block("func", t, &lines, i),
+            "static" if t["static".len()..].trim_start().starts_with("func ") => {
+                gd_block("func", t, &lines, i)
+            }
+            _ => continue,
+        };
+        out.push(entry);
+    }
+    out
+}
+
+/// `@export var x`, `@onready var x`, `@export_range(0, 1) var x` (annotation(s) then `var`).
+fn gd_annotated_var(t: &str) -> bool {
+    t.split_whitespace().any(|tok| tok == "var")
+        && t.split_whitespace()
+            .take_while(|tok| *tok != "var")
+            .all(|tok| tok.starts_with('@') || !tok.starts_with(|c: char| c.is_alphabetic()))
+}
+
+/// `enum State { IDLE, RUN }` -> `enum State`; anonymous enums keep `enum`.
+fn gd_enum_signature(t: &str) -> String {
+    t.split('{').next().unwrap_or(t).trim().to_string()
+}
+
+fn gd_block(kind: &str, t: &str, lines: &[&str], i: usize) -> SymbolEntry {
+    let end = indented_block_end(lines, i);
+    SymbolEntry {
+        kind: kind.to_string(),
+        signature: gd_header(t),
+        start_line: i + 1,
+        end_line: end + 1,
+    }
+}
+
+/// Header text up to the block-opening `:` (first `:` outside brackets), so
+/// `func f(x: int) -> void: pass` becomes `func f(x: int) -> void`.
+fn gd_header(t: &str) -> String {
+    let mut depth = 0i32;
+    for (idx, ch) in t.char_indices() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            ':' if depth == 0 => return t[..idx].trim().to_string(),
+            _ => {}
+        }
+    }
+    t.trim().to_string()
+}
+
+/// Godot scene (`.tscn`): keep `[node]`, `[connection]` and script/scene `[ext_resource]`
+/// sections; skip `[gd_scene]`, `[sub_resource]`, `[editable]` and other bulky data.
+fn extract_tscn(content: &str) -> Vec<SymbolEntry> {
+    let lines: Vec<&str> = content.lines().collect();
+    let headers: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| tscn_section_kind(l).is_some())
+        .map(|(i, _)| i)
+        .collect();
+    let mut out = Vec::new();
+    for (n, &start) in headers.iter().enumerate() {
+        let header = lines[start].trim();
+        let Some(kind) = tscn_section_kind(header) else {
+            continue;
+        };
+        let keep = match kind {
+            "node" | "connection" => true,
+            "ext_resource" => {
+                header.contains("type=\"Script\"") || header.contains("type=\"PackedScene\"")
+            }
+            _ => false,
+        };
+        if !keep {
+            continue;
+        }
+        let next = headers.get(n + 1).copied().unwrap_or(lines.len());
+        let end = (start..next)
+            .rev()
+            .find(|&j| !lines[j].trim().is_empty())
+            .unwrap_or(start);
+        out.push(SymbolEntry {
+            kind: kind.to_string(),
+            signature: header.to_string(),
+            start_line: start + 1,
+            end_line: end + 1,
+        });
+    }
+    out
+}
+
+/// Section kind of a `[kind attr=...]` header line, if `line` is one.
+fn tscn_section_kind(line: &str) -> Option<&str> {
+    let inner = line.trim().strip_prefix('[')?.strip_suffix(']')?;
+    let (kind, rest) = take_word(inner);
+    let valid = !kind.is_empty()
+        && kind.chars().all(|c| c.is_ascii_lowercase() || c == '_')
+        && (rest.is_empty() || rest.starts_with(' '));
+    valid.then_some(kind)
+}
+
+/// Godot shader (`.gdshader`): C-like syntax with `//` and `/* */` comments.
+fn extract_gdshader(content: &str) -> Vec<SymbolEntry> {
+    let orig: Vec<&str> = content.lines().collect();
+    let clean = sanitize(content, Lang::GdShader);
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < clean.len() {
+        let t = clean[i].trim();
+        if t.is_empty() || t.starts_with('#') {
+            i += 1;
+            continue;
+        }
+        let end = find_end(&clean, i, false);
+        if let Some(kind) = gdshader_kind(t) {
+            let o = orig.get(i).copied().unwrap_or("");
+            out.push(SymbolEntry {
+                kind: kind.to_string(),
+                signature: signature_of(&clean[i], o),
+                start_line: i + 1,
+                end_line: end + 1,
+            });
+        }
+        i = end + 1;
+    }
+    out
+}
+
+fn gdshader_kind(t: &str) -> Option<&'static str> {
+    let (word, rest) = take_word(t);
+    match word {
+        "shader_type" => return Some("shader_type"),
+        "render_mode" => return Some("render_mode"),
+        "uniform" => return Some("uniform"),
+        "global" | "instance" if rest.trim_start().starts_with("uniform") => {
+            return Some("uniform")
+        }
+        "struct" => return Some("struct"),
+        _ => {}
+    }
+    // Function: `<qualifiers/ret_type> <name>(...)`, all identifier tokens before `(`.
+    let (head, _) = t.split_once('(')?;
+    let toks: Vec<&str> = head.split_whitespace().collect();
+    let all_idents = toks
+        .iter()
+        .all(|tok| !tok.is_empty() && tok.chars().all(|c| c.is_alphanumeric() || c == '_'));
+    (toks.len() >= 2 && all_idents && !matches!(toks[0], "return" | "else")).then_some("fn")
+}
+
+/// Value of a `key="value"` attribute inside a Godot section header.
+fn tscn_attr(sig: &str, key: &str) -> Option<String> {
+    let pat = format!("{key}=\"");
+    let start = sig.find(&pat)? + pat.len();
+    let len = sig[start..].find('"')?;
+    Some(sig[start..start + len].to_string())
+}
+
 // ---------------------------------------------------------------- output
 
 /// Render a single file outline: header plus `  L<start>-L<end>: <signature>` lines,
@@ -669,6 +925,20 @@ pub(crate) fn render_file(path: &Path, content: &str) -> String {
 
 /// Name token following the kind keyword in a signature (for compact summaries).
 fn symbol_name(e: &SymbolEntry) -> String {
+    match e.kind.as_str() {
+        "node" => return tscn_attr(&e.signature, "name").unwrap_or_default(),
+        "ext_resource" => return tscn_attr(&e.signature, "path").unwrap_or_default(),
+        "connection" => return tscn_attr(&e.signature, "method").unwrap_or_default(),
+        "uniform" => {
+            let head = e.signature.split([':', '=']).next().unwrap_or("");
+            return head
+                .split_whitespace()
+                .last()
+                .map(|t| take_word(t).0.to_string())
+                .unwrap_or_default();
+        }
+        _ => {}
+    }
     let mut toks = e.signature.split_whitespace();
     let kw = if e.kind == "method" || e.kind == "const" {
         None
@@ -681,12 +951,21 @@ fn symbol_name(e: &SymbolEntry) -> String {
                 break;
             }
         }
-        return toks
+        let name = toks
             .next()
             .map(|t| take_word(t).0.to_string())
             .unwrap_or_default();
+        if !name.is_empty() {
+            return name;
+        }
     }
-    let sig = e.signature.split('(').next().unwrap_or("");
+    // Fallback: last word before `(` (and before `=` / `:` for constants).
+    let cut: &[char] = if e.kind == "const" {
+        &['(', '=', ':']
+    } else {
+        &['(']
+    };
+    let sig = e.signature.split(cut).next().unwrap_or("");
     sig.split_whitespace()
         .last()
         .map(|t| take_word(t).0.to_string())
@@ -697,7 +976,12 @@ fn render_summary(path: &Path, content: &str) -> String {
     let entries = extract_outline(path, content);
     let tops: Vec<String> = entries
         .iter()
-        .filter(|e| !matches!(e.kind.as_str(), "fn" | "method" | "def" | "function"))
+        .filter(|e| {
+            !matches!(
+                e.kind.as_str(),
+                "fn" | "method" | "def" | "function" | "func"
+            )
+        })
         .take(5)
         .map(|e| format!("{} {}", e.kind, symbol_name(e)))
         .collect();
@@ -980,6 +1264,205 @@ def top():
         assert!(r.contains(&("def a(self)".into(), 6, 7)));
         assert!(r.contains(&("async def b(self,".into(), 11, 13)));
         assert!(r.contains(&("def top()".into(), 16, 17)));
+    }
+
+    fn kinds(path: &str, src: &str) -> Vec<(String, String, usize, usize)> {
+        extract_outline(Path::new(path), src)
+            .into_iter()
+            .map(|e| (e.kind, e.signature, e.start_line, e.end_line))
+            .collect()
+    }
+
+    #[test]
+    fn gdscript_items_and_ranges() {
+        let src = r#"class_name Player
+extends CharacterBody2D
+
+signal health_changed(new_val)
+const MAX_HP = 100
+@export var speed: float = 200.0
+@onready var sprite: Sprite2D = $Sprite2D
+
+enum State { IDLE, RUN }
+enum Dir {
+    LEFT,
+    RIGHT,
+}
+
+func _physics_process(delta: float) -> void:
+    var local := 1
+    # comment
+
+    move_and_slide()
+
+static func make(a: int,
+        b: int) -> Player:
+    return null
+
+class Inventory:
+    var items := []
+
+    func add(item) -> void: items.append(item)
+"#;
+        let r = kinds("player.gd", src);
+        let has = |k: &str, sig: &str, s: usize, e: usize| {
+            assert!(
+                r.contains(&(k.into(), sig.into(), s, e)),
+                "missing {k} {sig} {s}-{e} in {r:?}"
+            );
+        };
+        has("class_name", "class_name Player", 1, 1);
+        has("extends", "extends CharacterBody2D", 2, 2);
+        has("signal", "signal health_changed(new_val)", 4, 4);
+        has("const", "const MAX_HP = 100", 5, 5);
+        has("var", "@export var speed: float = 200.0", 6, 6);
+        has("var", "@onready var sprite: Sprite2D = $Sprite2D", 7, 7);
+        has("enum", "enum State", 9, 9);
+        has("enum", "enum Dir", 10, 13);
+        has(
+            "func",
+            "func _physics_process(delta: float) -> void",
+            15,
+            19,
+        );
+        has("func", "static func make(a: int,", 21, 23);
+        has("class", "class Inventory", 25, 28);
+        has("func", "func add(item) -> void", 28, 28);
+        assert!(!r.iter().any(|(_, sig, _, _)| sig.contains("local")));
+        let summary = render_summary(Path::new("player.gd"), src);
+        assert!(summary.contains("class_name Player"));
+        assert!(summary.contains("var speed"));
+    }
+
+    #[test]
+    fn gdscript_strips_long_initializer() {
+        let src = "@export var colors: Array[Color] = [Color.RED, Color.GREEN, Color.BLUE, Color.WHITE]\n";
+        assert_eq!(
+            kinds("a.gd", src),
+            vec![(
+                "var".into(),
+                "@export var colors: Array[Color]".into(),
+                1,
+                1
+            )]
+        );
+    }
+
+    #[test]
+    fn tscn_sections_and_ranges() {
+        let src = r#"[gd_scene load_steps=3 format=3 uid="uid://abc"]
+
+[ext_resource type="Script" path="res://player.gd" id="1"]
+[ext_resource type="Texture2D" path="res://icon.svg" id="2"]
+
+[sub_resource type="RectangleShape2D" id="Sub1"]
+size = Vector2(10, 10)
+
+[node name="Player" type="CharacterBody2D"]
+script = ExtResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+position = Vector2(1, 2)
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]
+"#;
+        let r = kinds("main.tscn", src);
+        assert_eq!(
+            r,
+            vec![
+                (
+                    "ext_resource".into(),
+                    r#"[ext_resource type="Script" path="res://player.gd" id="1"]"#.into(),
+                    3,
+                    3
+                ),
+                (
+                    "node".into(),
+                    r#"[node name="Player" type="CharacterBody2D"]"#.into(),
+                    9,
+                    10
+                ),
+                (
+                    "node".into(),
+                    r#"[node name="Sprite2D" type="Sprite2D" parent="."]"#.into(),
+                    12,
+                    14
+                ),
+                (
+                    "connection".into(),
+                    r#"[connection signal="body_entered" from="." to="." method="_on_body_entered"]"#
+                        .into(),
+                    16,
+                    16
+                ),
+            ]
+        );
+        let rendered = render_file(Path::new("main.tscn"), src);
+        assert!(rendered.contains("\n  L12-L14: [node name=\"Sprite2D\""));
+        let summary = render_summary(Path::new("main.tscn"), src);
+        assert!(summary.contains("ext_resource res://player.gd"));
+        assert!(summary.contains("node Player"));
+        assert!(summary.contains("connection _on_body_entered"));
+    }
+
+    #[test]
+    fn gdshader_items_and_ranges() {
+        let src = r#"shader_type canvas_item;
+render_mode unshaded, blend_add;
+
+// uniform in comment
+uniform vec4 tint : source_color = vec4(1.0);
+global uniform float g_time;
+const float PI = 3.14;
+
+struct Light {
+    vec3 color;
+};
+
+vec3 shade(vec3 c,
+           float k) {
+    return c * k;
+}
+
+void fragment() {
+    COLOR = texture(TEXTURE, UV) * tint;
+}
+"#;
+        let r = kinds("fx.gdshader", src);
+        assert_eq!(
+            r,
+            vec![
+                ("shader_type".into(), "shader_type canvas_item".into(), 1, 1),
+                (
+                    "render_mode".into(),
+                    "render_mode unshaded, blend_add".into(),
+                    2,
+                    2
+                ),
+                (
+                    "uniform".into(),
+                    "uniform vec4 tint : source_color = vec4(1.0)".into(),
+                    5,
+                    5
+                ),
+                ("uniform".into(), "global uniform float g_time".into(), 6, 6),
+                ("struct".into(), "struct Light".into(), 9, 11),
+                ("fn".into(), "vec3 shade(vec3 c,".into(), 13, 16),
+                ("fn".into(), "void fragment()".into(), 18, 20),
+            ]
+        );
+        let summary = render_summary(Path::new("fx.gdshader"), src);
+        assert!(summary.contains("uniform tint"));
+        assert!(summary.contains("struct Light"));
+    }
+
+    #[test]
+    fn godot_extensions_and_skip_dir() {
+        assert_eq!(lang_of(Path::new("a.gd")), Some(Lang::Gd));
+        assert_eq!(lang_of(Path::new("a.tscn")), Some(Lang::Tscn));
+        assert_eq!(lang_of(Path::new("a.gdshader")), Some(Lang::GdShader));
+        assert!(SKIP_DIRS.contains(&".godot"));
     }
 
     #[test]
