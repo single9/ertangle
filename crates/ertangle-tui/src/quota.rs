@@ -35,7 +35,7 @@ pub(crate) fn open(app: &mut App) {
 }
 
 pub(crate) fn handle_key(app: &mut App, key: KeyEvent) {
-    let tabs = app.quota_agents.len() + 1;
+    let tabs = app.quota_agents.len().saturating_add(1);
     match key.code {
         KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => {
             app.quota_tab = (app.quota_tab + 1) % tabs;
@@ -145,7 +145,10 @@ pub(crate) fn agent_lines(agent: &str, quota: Option<&Quota>, now_ms: u64) -> Ve
     for (w, label) in q.windows.iter().zip(labels.iter()) {
         let reset = match w.resets_at_ms {
             Some(r) if r <= now_ms => Some(tr!("已重置")),
-            Some(r) => Some(tr!("{t} 後重置", t = format_remaining(r - now_ms))),
+            Some(r) => Some(tr!(
+                "{t} 後重置",
+                t = format_remaining(r.saturating_sub(now_ms))
+            )),
             None => None,
         };
         // 已過重置時間的視窗視為已恢復 100% 剩餘額度。

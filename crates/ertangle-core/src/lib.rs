@@ -1607,8 +1607,8 @@ impl State {
         let mut total = Cost::default();
         for s in self.sessions.values() {
             total.usd += s.cost.usd;
-            total.input_tokens += s.cost.input_tokens;
-            total.output_tokens += s.cost.output_tokens;
+            total.input_tokens = total.input_tokens.saturating_add(s.cost.input_tokens);
+            total.output_tokens = total.output_tokens.saturating_add(s.cost.output_tokens);
         }
         total
     }
@@ -1772,8 +1772,12 @@ impl State {
 
         let member_ids: Vec<&str> = members.iter().map(|s| s.id.as_str()).collect();
         let total_usd: f64 = members.iter().map(|s| s.cost.usd).sum();
-        let total_in: u64 = members.iter().map(|s| s.cost.input_tokens).sum();
-        let total_out: u64 = members.iter().map(|s| s.cost.output_tokens).sum();
+        let total_in: u64 = members
+            .iter()
+            .fold(0u64, |acc, s| acc.saturating_add(s.cost.input_tokens));
+        let total_out: u64 = members
+            .iter()
+            .fold(0u64, |acc, s| acc.saturating_add(s.cost.output_tokens));
 
         let mut out = String::new();
         out.push_str(&tr!("# 協作報告：{label}\n\n", label = root_session.label));
@@ -2196,7 +2200,7 @@ impl Quota {
                     "{name} {pct}% (重置 {remaining})",
                     name = w.name,
                     pct = format!("{:.0}", w.used_percent),
-                    remaining = format_remaining(r - now_ms)
+                    remaining = format_remaining(r.saturating_sub(now_ms))
                 ),
                 None => format!("{} {:.0}%", w.name, w.used_percent),
             })

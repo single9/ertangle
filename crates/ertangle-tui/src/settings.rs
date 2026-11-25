@@ -482,11 +482,13 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
                 Some(ertangle_daemon::config::TomlValue::String(value.clone())),
             )
         };
+        // 寫入設定檔與通知 daemon，若失敗則保留目前狀態
         let _ = Config::set_toml(&path, &["web"], "enabled", enabled_val);
         let _ = Config::set_toml(&path, &["web"], "addr", addr_val);
         s.cfg = Config::load_file(&path);
         if let Some(w) = writer {
             if value.is_empty() {
+                // 傳送控制請求至 daemon，連線中斷時忽略
                 let _ = crate::send(
                     w,
                     &ertangle_protocol::Request::WebControl {
@@ -496,6 +498,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
                 );
                 app.status = tr!("已關閉 Web 版並儲存至 {path}", path = path.display());
             } else {
+                // 傳送控制請求至 daemon，連線中斷時忽略
                 let _ = crate::send(
                     w,
                     &ertangle_protocol::Request::WebControl {
@@ -533,11 +536,13 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
                 .ok()
                 .map(ertangle_daemon::config::TomlValue::Integer)
         };
+        // 寫入設定檔，失敗時保留現狀
         let _ = Config::set_toml(&path, &["web"], "port", port_val);
         s.cfg = Config::load_file(&path);
         if s.cfg.web.is_enabled() {
             if let Some(w) = writer {
                 let addr = s.cfg.web.resolved_addr();
+                // 傳送控制請求至 daemon，連線中斷時忽略
                 let _ = crate::send(
                     w,
                     &ertangle_protocol::Request::WebControl {

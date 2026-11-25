@@ -42,6 +42,7 @@ impl AgentControl for PtyControl {
 
     fn kill(&self) -> Result<()> {
         if let Some(pid) = self.pid() {
+            // 強制終止處理程序群組或處理程序，若行程已結束則忽略
             let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
         }
         self.child
@@ -130,6 +131,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| tr!("take writer 失敗"))?;
     drop(pair.master);
 
+    // 接收端若已關閉則忽略狀態更新
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
     // Read output: strip terminal escape codes and send in real time, but skip redraw chunks that are entirely whitespace.
@@ -178,6 +180,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                     Err(_) => break None,
                 }
             };
+            // 接收端若已關閉則忽略退出事件
             let _ = tx.send(AgentEvent::Exited(code));
         });
     }
@@ -188,6 +191,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     };
 
     if let Some(p) = &spec.initial_prompt {
+        // 寫入初始 prompt 失敗由後續事件與流程處理
         let _ = control.send_input_with(p, &spec.initial_attachments);
     }
 

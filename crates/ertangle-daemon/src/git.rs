@@ -145,6 +145,7 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
         let imported_src = godot_src.join("imported");
         let imported_dst = godot_dst.join("imported");
         if imported_src.is_dir() && fs::symlink_metadata(&imported_dst).is_err() {
+            // 建立符號連結失敗則忽略，不阻礙 worktree 建立
             let _ = std::os::unix::fs::symlink(&imported_src, &imported_dst);
         }
         for cache_file in [
@@ -155,6 +156,7 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
             let f_src = godot_src.join(cache_file);
             let f_dst = godot_dst.join(cache_file);
             if f_src.is_file() {
+                // 複製快取設定檔失敗則忽略
                 let _ = fs::copy(&f_src, &f_dst);
             }
         }
@@ -164,8 +166,10 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
     if !provisioned.is_empty() {
         let meta_path = wt_dir.join(PROVISIONED_LINKS_FILE);
         if let Some(parent) = meta_path.parent() {
+            // 建立父目錄失敗由後續寫入處理
             let _ = fs::create_dir_all(parent);
         }
+        // 寫入配置清單失敗不影響 worktree 使用
         let _ = fs::write(meta_path, provisioned.join("\n"));
     }
 }
@@ -192,6 +196,7 @@ pub(crate) fn cleanup_provisioned_links(wt_dir: &Path) {
             continue;
         };
         if meta.file_type().is_symlink() {
+            // 移除符號連結失敗則忽略
             let _ = fs::remove_file(&p);
         } else if rel == ".godot" && meta.is_dir() {
             // Unlink any symlinks inside `.godot` (such as `.godot/imported`) before removing `.godot`.
@@ -202,13 +207,16 @@ pub(crate) fn cleanup_provisioned_links(wt_dir: &Path) {
                         .map(|m| m.file_type().is_symlink())
                         .unwrap_or(false)
                     {
+                        // 移除巢狀符號連結失敗則忽略
                         let _ = fs::remove_file(&child);
                     }
                 }
             }
+            // 移除目錄失敗則忽略
             let _ = fs::remove_dir_all(&p);
         }
     }
+    // 移除配置清單記錄檔失敗則忽略
     let _ = fs::remove_file(wt_dir.join(PROVISIONED_LINKS_FILE));
 }
 
@@ -678,6 +686,7 @@ pub(crate) fn prepare_conflict_in_worktree(
     wt_dir: &Path,
     target_branch: &str,
 ) -> Result<Vec<String>> {
+    // 產生衝突標記，命令回傳非 0 狀態屬預期行為，忽略輸出結果
     let _ = git_output(wt_dir, &["merge", "--no-commit", target_branch])?;
     Ok(collect_conflicts(wt_dir))
 }
@@ -696,6 +705,7 @@ fn run_pre_merge_command(wt_dir: &Path, cmd: &str) -> Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let out = child.wait_with_output();
+        // 逾時處理可能已放棄接收，忽略傳送結果
         let _ = tx.send(out);
     });
 
@@ -723,6 +733,7 @@ fn run_pre_merge_command(wt_dir: &Path, cmd: &str) -> Result<()> {
         }
         Ok(Err(e)) => bail!("{}", tr!("執行合併前驗證指令失敗：{e}", e = e)),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            // 強制終止逾時命令處理程序，忽略命令執行結果
             let _ = std::process::Command::new("kill")
                 .args(["-9", &child_id.to_string()])
                 .output();
@@ -950,6 +961,7 @@ pub(crate) fn merge_worktree_strategy_with(
             let out = git_output(main_repo, &["merge", "--no-edit", branch])?;
             if !out.status.success() {
                 let conflicts = collect_conflicts(main_repo);
+                // 合併失敗時嘗試中止合併還原狀態，忽略 abort 命令結果
                 let _ = git_output(main_repo, &["merge", "--abort"]);
                 let detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
                 if conflicts.is_empty() {
@@ -980,6 +992,7 @@ pub(crate) fn merge_worktree_strategy_with(
             let out = git_output(main_repo, &["merge", "--squash", "--no-edit", branch])?;
             if !out.status.success() {
                 let conflicts = collect_conflicts(main_repo);
+                // squash 合併失敗時還原工作目錄，忽略 reset 命令結果
                 let _ = git_output(main_repo, &["reset", "--hard", "HEAD"]);
                 let detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
                 if conflicts.is_empty() {
@@ -1029,6 +1042,7 @@ pub(crate) fn merge_worktree_strategy_with(
             let rebase_out = git_output(wt_dir, &["rebase", &target])?;
             if !rebase_out.status.success() {
                 let conflicts = collect_conflicts(wt_dir);
+                // rebase 失敗時嘗試中止 rebase 還原狀態，忽略 abort 命令結果
                 let _ = git_output(wt_dir, &["rebase", "--abort"]);
                 let detail = String::from_utf8_lossy(&rebase_out.stderr)
                     .trim()

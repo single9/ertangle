@@ -153,6 +153,7 @@ pub fn ensure_daemon() -> Result<()> {
     }
     let exe = crate::current_exe_path().with_context(|| tr!("取得自身執行檔路徑失敗"))?;
     let log_dir = state_dir();
+    // 建立日誌目錄，若已存在或建立失敗在開啟日誌檔時會一併處理
     let _ = fs::create_dir_all(&log_dir);
     let log_path = log_dir.join("daemon.log");
     let err_file = OpenOptions::new()

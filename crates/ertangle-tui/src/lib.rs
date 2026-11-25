@@ -324,6 +324,7 @@ fn event_loop(
 
         let title = format!("{}{}", status_prefix(&app), window_title(&app));
         if title != last_title {
+            // 更新終端機標題，終端機若不支援或輸出關閉則忽略
             let _ = write!(io::stdout(), "\x1b]0;{title}\x07");
             let _ = io::stdout().flush();
             last_title = title;
