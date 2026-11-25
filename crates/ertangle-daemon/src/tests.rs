@@ -5602,3 +5602,118 @@ fn t100_worktree_provisions_and_cleans_polyglot_deps_and_env_files() {
         "main repo appsettings.Development.json must remain intact!"
     );
 }
+
+#[test]
+#[cfg(unix)]
+fn t103_godot_worktree_cache_provisioning_and_diff_folding() {
+    let repo = temp_repo("t103_godot");
+    std::fs::write(repo.join("project.godot"), "[application]\nconfig/name=\"Game\"\n").unwrap();
+    git(&repo, &["add", "project.godot"]);
+    git(&repo, &["commit", "-m", "add project.godot"]);
+
+    // Create untracked .godot/imported and .godot/global_script_class_cache.cfg
+    std::fs::create_dir_all(repo.join(".godot/imported")).unwrap();
+    std::fs::write(
+        repo.join(".godot/imported/hero.png-1234.ctex"),
+        "ctex-binary-data",
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join(".godot/global_script_class_cache.cfg"),
+        "list=[{\"class\": &\"Player\"}]\n",
+    )
+    .unwrap();
+    std::fs::write(repo.join(".godot/uid_cache.bin"), "uid-bytes").unwrap();
+
+    let sess = wt_session(&repo, "ses_godot");
+    let wt_dir = PathBuf::from(&sess.cwd);
+
+    // 1) .godot/imported is symlinked and global_script_class_cache.cfg is copied into an isolated .godot/ dir
+    assert!(wt_dir.join(".godot").is_dir());
+    assert!(
+        !std::fs::symlink_metadata(wt_dir.join(".godot"))
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        ".godot itself must be an isolated directory"
+    );
+    assert!(
+        std::fs::symlink_metadata(wt_dir.join(".godot/imported"))
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        ".godot/imported must be a symlink"
+    );
+    assert!(wt_dir
+        .join(".godot/imported/hero.png-1234.ctex")
+        .is_file());
+    assert!(wt_dir
+        .join(".godot/global_script_class_cache.cfg")
+        .is_file());
+    assert!(wt_dir.join(".godot/uid_cache.bin").is_file());
+
+    // 2) Provisioned .godot directory must not dirty git status or appear in diff
+    assert!(!crate::git::has_uncommitted(&wt_dir).unwrap());
+    let (count, summary) = crate::git::git_status_summary(&wt_dir);
+    assert_eq!(count, 0, "expected clean worktree status, got {summary}");
+
+    // 3) Test Godot diff folding for .import files and >300-char Packed*Array lines in .tscn
+    std::fs::write(
+        wt_dir.join("hero.png.import"),
+        "[remap]\nimporter=\"texture\"\n",
+    )
+    .unwrap();
+    let long_packed: String = (0..120).map(|i| format!("{i}, ")).collect();
+    let tscn_content = format!(
+        "[gd_scene format=3]\n[node name=\"Level\" type=\"Node2D\"]\ntile_map_data = PackedByteArray({long_packed})\nposition = Vector2(10, 20)\n"
+    );
+    std::fs::write(wt_dir.join("level.tscn"), &tscn_content).unwrap();
+
+    let folded_diff = crate::git::compute_worktree_diff_with_options(
+        &wt_dir,
+        &crate::git::DiffOptions {
+            stat_only: false,
+            paths: Vec::new(),
+            max_lines: None,
+            fold_generated: true,
+        },
+    )
+    .unwrap();
+    assert!(
+        folded_diff.contains("hero.png.import | +2 -0 (generated/lock file folded"),
+        "{folded_diff}"
+    );
+    assert!(
+        folded_diff.contains("Godot PackedArray folded"),
+        "expected long PackedByteArray line in .tscn to be folded:\n{folded_diff}"
+    );
+    assert!(
+        folded_diff.contains("+position = Vector2(10, 20)"),
+        "normal scene properties must remain visible:\n{folded_diff}"
+    );
+
+    // 4) Explicitly requesting level.tscn in paths expands the PackedByteArray line
+    let expanded_diff = crate::git::compute_worktree_diff_with_options(
+        &wt_dir,
+        &crate::git::DiffOptions {
+            stat_only: false,
+            paths: vec!["level.tscn".to_string()],
+            max_lines: None,
+            fold_generated: false,
+        },
+    )
+    .unwrap();
+    assert!(
+        !expanded_diff.contains("Godot PackedArray folded"),
+        "{expanded_diff}"
+    );
+    assert!(expanded_diff.contains(&long_packed), "{expanded_diff}");
+
+    // 5) Clean up worktree and ensure main repo .godot/imported is untouched
+    crate::git::remove_worktree(&repo, &sess, true).unwrap();
+    assert!(!wt_dir.exists());
+    assert!(
+        repo.join(".godot/imported/hero.png-1234.ctex").is_file(),
+        "main repo .godot/imported asset must remain intact!"
+    );
+}

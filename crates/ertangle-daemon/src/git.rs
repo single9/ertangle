@@ -129,6 +129,38 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
         }
     }
 
+    // 4) Godot Engine `.godot/` import and global script class cache (T103).
+    // We create an isolated `.godot/` directory in `wt_dir`, symlink `.godot/imported` to share
+    // heavy asset imports, and copy lightweight cache files (`global_script_class_cache.cfg`,
+    // `uid_cache.bin`, `extension_list.cfg`) so the worker has valid class_name/UID mappings
+    // without contending with a running Godot Editor in the main repo.
+    let godot_src = repo.join(".godot");
+    let godot_dst = wt_dir.join(".godot");
+    if repo.join("project.godot").is_file()
+        && godot_src.is_dir()
+        && fs::symlink_metadata(&godot_dst).is_err()
+        && !is_git_tracked(repo, ".godot")
+        && fs::create_dir_all(&godot_dst).is_ok()
+    {
+        let imported_src = godot_src.join("imported");
+        let imported_dst = godot_dst.join("imported");
+        if imported_src.is_dir() && fs::symlink_metadata(&imported_dst).is_err() {
+            let _ = std::os::unix::fs::symlink(&imported_src, &imported_dst);
+        }
+        for cache_file in [
+            "global_script_class_cache.cfg",
+            "uid_cache.bin",
+            "extension_list.cfg",
+        ] {
+            let f_src = godot_src.join(cache_file);
+            let f_dst = godot_dst.join(cache_file);
+            if f_src.is_file() {
+                let _ = fs::copy(&f_src, &f_dst);
+            }
+        }
+        provisioned.push(".godot".to_string());
+    }
+
     if !provisioned.is_empty() {
         let meta_path = wt_dir.join(PROVISIONED_LINKS_FILE);
         if let Some(parent) = meta_path.parent() {
@@ -156,10 +188,25 @@ pub(crate) fn read_provisioned_links(wt_dir: &Path) -> Vec<String> {
 pub(crate) fn cleanup_provisioned_links(wt_dir: &Path) {
     for rel in read_provisioned_links(wt_dir) {
         let p = wt_dir.join(&rel);
-        if let Ok(meta) = fs::symlink_metadata(&p) {
-            if meta.file_type().is_symlink() {
-                let _ = fs::remove_file(&p);
+        let Ok(meta) = fs::symlink_metadata(&p) else {
+            continue;
+        };
+        if meta.file_type().is_symlink() {
+            let _ = fs::remove_file(&p);
+        } else if rel == ".godot" && meta.is_dir() {
+            // Unlink any symlinks inside `.godot` (such as `.godot/imported`) before removing `.godot`.
+            if let Ok(entries) = fs::read_dir(&p) {
+                for entry in entries.flatten() {
+                    let child = entry.path();
+                    if fs::symlink_metadata(&child)
+                        .map(|m| m.file_type().is_symlink())
+                        .unwrap_or(false)
+                    {
+                        let _ = fs::remove_file(&child);
+                    }
+                }
             }
+            let _ = fs::remove_dir_all(&p);
         }
     }
     let _ = fs::remove_file(wt_dir.join(PROVISIONED_LINKS_FILE));
@@ -240,6 +287,39 @@ pub fn is_generated_or_lock_file(path: &str) -> bool {
         || file_name.ends_with(".min.js")
         || file_name.ends_with(".min.css")
         || file_name.ends_with(".bundle.js")
+        || file_name.ends_with(".import")
+        || file_name.ends_with(".uid")
+        || file_name.ends_with(".translation")
+}
+
+/// Folds multi-hundred-character `Packed*Array(...)` data lines inside Godot `.tscn` / `.tres` diff blocks (T103).
+fn fold_godot_scene_block(path: &str, block: &str) -> String {
+    if !path.ends_with(".tscn") && !path.ends_with(".tres") {
+        return block.to_string();
+    }
+    let mut out = String::with_capacity(block.len());
+    for line in block.lines() {
+        let is_diff_change = (line.starts_with('+') && !line.starts_with("+++"))
+            || (line.starts_with('-') && !line.starts_with("---"));
+        if is_diff_change
+            && line.len() > 300
+            && line.contains("Packed")
+            && line.contains("Array(")
+        {
+            if let Some(arr_idx) = line.find("Array(") {
+                let prefix_end = (arr_idx + "Array(".len()).min(120);
+                let prefix = &line[..prefix_end];
+                out.push_str(&format!(
+                    "{prefix}...) (Godot PackedArray folded, {} chars; pass paths=[\"{path}\"] to expand)\n",
+                    line.len()
+                ));
+                continue;
+            }
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
 }
 
 fn path_matches_filter(rel: &str, filters: &[String]) -> bool {
@@ -401,6 +481,8 @@ pub fn compute_worktree_diff_with_options(cwd: &Path, opts: &DiffOptions) -> Res
                 out.push_str(&format!(
                     "--- {path} | +{add} -{rem} (generated/lock file folded; pass paths=[\"{path}\"] to expand)\n"
                 ));
+            } else if opts.fold_generated {
+                out.push_str(&fold_godot_scene_block(path, block));
             } else {
                 out.push_str(block);
             }
