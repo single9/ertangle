@@ -5,7 +5,11 @@
 //! 4. 驗證透過 WebSocket 接收 Ready、Snapshot，以及送出 Prompt 與 Permission 操作。
 //! 5. 驗證 WebSocket 斷線後以 since 與 epoch 增量重連。
 
-#![expect(clippy::unwrap_used, reason = "整合測試檔案內的輔助函式")]
+#![expect(
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "整合測試檔案內的輔助函式"
+)]
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

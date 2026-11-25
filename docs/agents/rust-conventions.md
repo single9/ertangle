@@ -44,7 +44,7 @@
 
 ## 5. 提交前檢查與強制方式
 
-- 根目錄 `Cargo.toml` 的 `[workspace.lints]` 與各 crate 的 `[lints] workspace = true` 強制 `unsafe_code = "forbid"`，以及 `unwrap_used`、`expect_used`、`panic`、`todo`、`unimplemented`、`unreachable` 為 `warn`；`clippy.toml` 僅於 `#[test]` 與 `#[cfg(test)]` 放行。
+- 根目錄 `Cargo.toml` 的 `[workspace.lints]` 與各 crate 的 `[lints] workspace = true` 強制 `unsafe_code = "forbid"`，以及 `unwrap_used`、`expect_used`、`panic`、`todo`、`unimplemented`、`unreachable`、`indexing_slicing` 為 `warn`；`clippy.toml` 僅於 `#[test]` 與 `#[cfg(test)]` 放行。
 - `cargo fmt`、`cargo clippy --all-targets -- -D warnings`、`make i18n-check` 全部成功。
 - commit message 使用英文 Conventional Commits。
 - 修改本文件時要同步更新 `AGENTS.md` 的摘要。

@@ -80,8 +80,7 @@ panic = "warn"
 todo = "warn"
 unimplemented = "warn"
 unreachable = "warn"
-# 待既有 300+ 處索引/切片重構完成後再啟用：
-# indexing_slicing = "warn"
+indexing_slicing = "warn"
 
 [profile.release]
 opt-level = 3
