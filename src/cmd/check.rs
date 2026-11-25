@@ -434,6 +434,66 @@ fn gdunit4_command(has_display: bool, has_xvfb: bool) -> (&'static str, &'static
     }
 }
 
+/// Condense gdUnit4 output: keep only failing test cases (`FAILED` / `ERROR`
+/// test lines, assertion/expectation details, `res://...gd:line` locations)
+/// and final `Statistics:` summary lines; drop `STARTED` / `PASSED` /
+/// `Run Test Suite` / `WARNING:` / engine runtime noise / game prints.
+fn dehydrate_gdunit4_output(raw: &str, workspace_root: &Path) -> Vec<String> {
+    let clean = strip_ansi(raw);
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    let mut in_failure = false;
+    for raw_line in clean.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || is_godot_noise(line) {
+            continue;
+        }
+        let lower = line.to_ascii_lowercase();
+        let is_stats = line.starts_with("Statistics:")
+            || (lower.contains("errors") && lower.contains("failures"));
+        if is_stats {
+            in_failure = false;
+            let text = normalize_godot_line(line, workspace_root);
+            if seen.insert(text.clone()) {
+                out.push(text);
+            }
+            continue;
+        }
+        if line.contains("PASSED")
+            || line.contains("STARTED")
+            || line.starts_with("Run Test Suite")
+            || line.starts_with("WARNING:")
+            || line.starts_with("modules/")
+        {
+            in_failure = false;
+            continue;
+        }
+        let is_fail_header = line.contains("FAILED")
+            || (line.contains("ERROR") && !line.starts_with("ERROR:") && !line.contains(".cpp:"));
+        if is_fail_header {
+            in_failure = true;
+            let text = normalize_godot_line(line, workspace_root);
+            if seen.insert(text.clone()) {
+                out.push(text);
+            }
+            continue;
+        }
+        if in_failure
+            && (line.contains("Expecting")
+                || line.contains("at line")
+                || line.contains("res://")
+                || line.starts_with("at: ")
+                || line.starts_with("Report:"))
+        {
+            let text = normalize_godot_line(line, workspace_root);
+            if seen.insert(text.clone()) {
+                out.push(text);
+            }
+        }
+    }
+    out
+}
+
 /// Inspect gdUnit4 `Statistics` summary lines (`0 errors` and `0 failures`).
 fn gdunit4_stats_ok(messages: &[String]) -> bool {
     !messages.iter().any(|line| {
@@ -718,10 +778,8 @@ fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> 
                     || std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty());
                 let (prog, args) = gdunit4_command(has_display, on_path("xvfb-run"));
                 let test = execute_with_env(dir, prog, args, &[("GODOT_BIN", &godot_bin)])?;
-                let messages = dehydrate_godot_output(&combined(&test), dir);
-                success &= test.status.success()
-                    && godot_messages_ok(&messages)
-                    && gdunit4_stats_ok(&messages);
+                let messages = dehydrate_gdunit4_output(&combined(&test), dir);
+                success &= test.status.success() && gdunit4_stats_ok(&messages);
                 outputs.extend(messages);
                 summary.push("gdunit4".to_owned());
             }
@@ -958,6 +1016,46 @@ RID allocations of type 'N10RendererRD' leaked\n\
             "sh",
             "existing DISPLAY should run sh directly"
         );
+    }
+
+    #[test]
+    fn dehydrates_gdunit4_output_and_ignores_runtime_error_on_pass() {
+        let root = temp_dir();
+        let passing_raw = "\
+Run Test Suite res://test/foo_test.gd\n\
+\tSTARTED test_a\n\
+modules/gdscript/gdscript_lambda_callable.cpp:110: ERROR: Lambda capture at index 1 was freed\n\
+player spawned\n\
+\tPASSED test_a\n\
+Statistics:\n\
+| 1 tests cases | 0 errors | 0 failures |\n";
+        let pass_lines = dehydrate_gdunit4_output(passing_raw, &root);
+        assert_eq!(
+            pass_lines,
+            vec!["Statistics:", "| 1 tests cases | 0 errors | 0 failures |"]
+        );
+        assert!(gdunit4_stats_ok(&pass_lines));
+
+        let failing_raw = "\
+Run Test Suite res://test/bar_test.gd\n\
+\tSTARTED test_hp\n\
+\tFAILED test_hp (res://test/bar_test.gd:42)\n\
+\t\tExpecting: '10' but was '5'\n\
+\tPASSED test_other\n\
+WARNING: unused signal\n\
+Statistics:\n\
+| 2 tests cases | 0 errors | 1 failures |\n";
+        let fail_lines = dehydrate_gdunit4_output(failing_raw, &root);
+        assert_eq!(
+            fail_lines,
+            vec![
+                "FAILED test_hp (test/bar_test.gd:42)",
+                "Expecting: '10' but was '5'",
+                "Statistics:",
+                "| 2 tests cases | 0 errors | 1 failures |",
+            ]
+        );
+        assert!(!gdunit4_stats_ok(&fail_lines));
     }
 
     #[test]
