@@ -323,22 +323,22 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 
 ### 9. 節省 Token 與跨語言 Agent 開發加速 (Token Economy & Polyglot Tools)
 
-- **低雜訊建置與測試驗證 (`ertangle check`, T101)**：
-  - 自動偵測 Rust、Node / Vite、.NET Core 與 Python 專案並執行建置、型別檢查與測試。
+- **低雜訊建置與測試驗證 (`ertangle check`, T101, T103)**：
+  - 自動偵測 Rust、Node / Vite、.NET Core、Python 與 Godot (`project.godot`) 專案並執行建置、型別檢查與測試。針對 Godot 執行 `--headless --quit` (若有 `addons/gut/gut_cmdln.gd` 則執行 GUT 測試)，並將多行 `SCRIPT ERROR:` 與接續的 `at: ... (res://path:line)` 合併為單行 `path:line: SCRIPT ERROR: ...` 診斷。
   - 自動剝除 ANSI 色彩碼、摺疊 `node_modules/` 或非同步執行時期堆疊追蹤、去重重複診斷並限制輸出行數 (支援 `--quick`、`--max-lines`、`--json`)，只回傳可行動的錯誤摘要，大幅減少測試輸出佔用的 Token。
-- **程式碼骨架與精確行號提取 (`ertangle outline`, T102)**：
-  - 免讀取整份原始碼，即可快速掃描 `.rs`、`.ts`/`.tsx`/`.js`/`.jsx`/`.vue`、`.cs`、`.py` 檔案或目錄，提取符號骨架與精確起訖行號 (`L<start>-L<end>`)。
+- **程式碼骨架與精確行號提取 (`ertangle outline`, T102, T103)**：
+  - 免讀取整份原始碼，即可快速掃描 `.rs`、`.ts`/`.tsx`/`.js`/`.jsx`/`.vue`、`.cs`、`.py`、`.gd` (GDScript)、`.tscn` (Godot 場景節點樹 `[node]`、外部腳本 `[ext_resource]` 與 `[connection]` Signal 綁定，自動略過龐大的 `[sub_resource]`) 與 `.gdshader` (Godot Shader) 檔案或目錄，提取符號骨架與精確起訖行號 (`L<start>-L<end>`)。
   - Coordinator 可在派工 Prompt 直接附上檔案與行號範圍，讓 Worker 精準定位編輯，避免重複探索與讀取整支大型檔案。
 - **非阻塞開發伺服器管理 (`ertangle dev`, T102)**：
   - 透過 `ertangle dev start|status|stop` 自動偵測框架並分配空閒本機連接埠，在獨立處理程序群組於背景啟動開發伺服器，將輸出寫入 `.ertangle/dev-<port>.log` 並在連接埠就緒後立即回傳 URL 與 PID，避免 Agent 回合被前景伺服器阻塞或發生多 Worktree 連接埠衝突。
-- **範圍過濾 Diff 與生成檔自動摺疊 (`ertangle_diff` / `ertangle diff`, T98)**：
+- **範圍過濾 Diff 與生成檔自動摺疊 (`ertangle_diff` / `ertangle diff`, T98, T103)**：
   - 支援 `stat_only` (僅列變更統計)、`paths` (過濾特定檔案或目錄) 與 `max_lines` (MCP 呼叫預設上限 800 行)。
-  - 未指定 `paths` 時，自動將 `Cargo.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`*.Designer.cs`、`*ModelSnapshot.cs`、`uv.lock`、`poetry.lock`、`go.sum`、`*.snap`、`*.min.js` 等大型鎖定檔與生成檔摺疊為單行摘要，避免數萬字元灌爆上下文。
+  - 未指定 `paths` 時，自動將 `Cargo.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`*.Designer.cs`、`*ModelSnapshot.cs`、`uv.lock`、`poetry.lock`、`go.sum`、`*.snap`、`*.min.js`、Godot 的 `*.import`、`*.uid`、`*.translation` 以及 `.tscn` / `.tres` 場景與資源檔中超過 300 字元的 `Packed*Array(...)` 資料行自動摺疊為單行摘要，避免數萬字元灌爆上下文。
 - **單回合原子性回報與派工綁定 (`ertangle_task_update` / `ertangle_spawn`, T99)**：
   - `ertangle_task_update` 在設定 `done` 或 `blocked` 時可帶入 `report`，於同一回合原子性更新任務看板並向父 Session 發送 `TASK_DONE` / `TASK_BLOCKED`，省去額外一輪 `ertangle_send` 的全量上下文重讀。
   - `ertangle_spawn` 支援 `task_title` / `task_id`，派生 Worker 時同步建立或綁定看板任務，減少 Coordinator 派工回合數。
-- **Worktree 共用相依套件與建置快取 (`shared_worktree_deps` / `shared_cargo_target`, T100)**：
-  - 預設啟用共用 `<repo>/.ertangle/target` 作為 `CARGO_TARGET_DIR`，並以符號連結自動掛載主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除範例檔) 與 `appsettings.Development.json`，免去每個 Worktree 重複安裝相依套件與編譯，且不污染 `git status` 或 `ertangle_diff`。
+- **Worktree 共用相依套件與建置快取 (`shared_worktree_deps` / `shared_cargo_target`, T100, T103)**：
+  - 預設啟用共用 `<repo>/.ertangle/target` 作為 `CARGO_TARGET_DIR`，並以符號連結自動掛載主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除範例檔) 與 `appsettings.Development.json`；針對 Godot 專案 (`project.godot`)，在 Worktree 中建立獨立的 `.godot/` 目錄，以符號連結共用 `.godot/imported` 龐大資產匯入快取，並複製 `global_script_class_cache.cfg`、`uid_cache.bin` 與 `extension_list.cfg`，免去每個 Worktree 重複安裝相依套件與編譯，且不污染 `git status` 或 `ertangle_diff`。
 - **省 Token 提示注入、呼叫計數與自動壓縮 (`token_hints` / `N calls` / `auto_compact`, T47)**：
   - 可在 `:settings` 開啟「把省 token 提示注入協作說明」(`[collab] token_hints = true`，預設關閉)，引導 Agent 平行批次呼叫與限制輸出長度，並透過 TUI 次要資訊列的 `N calls` 比較工具呼叫次數。
   - 搭配 `[auto_compact]` (閒置且上下文達門檻時自動代送 `/compact`) 與零寒暄協定 (`Zero Pleasantries`)，有效壓低多回合協作的 Token 消耗。

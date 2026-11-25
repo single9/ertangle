@@ -122,6 +122,9 @@ ertangle                 # 等同 ertangle tui：確保 daemon 在跑 → attach
 ertangle daemon          # 前景執行 daemon (--detach 可背景化)
 ertangle tui             # 純前端
 ertangle mcp             # 以 stdio 跑 MCP server (供 agent 子處理程序當 MCP server 用)
+ertangle check           # 低 Token 建置、測試與診斷萃取 (支援 Rust、Node、.NET、Python、Godot)
+ertangle outline <path>  # 提取符號骨架與行號範圍 (支援 .rs、.ts、.cs、.py、.gd、.tscn、.gdshader)
+ertangle dev ...         # 非阻塞背景開發伺服器管理 (自動分配連接埠與就緒探測)
 ertangle send/recv/tasks # CLI，給 shell / agent 用
 ertangle spawn ...       # 建立 session (可指定 agent、worktree、prompt)
 ```
@@ -249,7 +252,7 @@ daemon 開一個 MCP server (`ertangle mcp`)。spawn agent 時，透過該 agent
 | `ertangle_spawn(kind?, prompt, worktree?, role?, task_id?, task_title?)` | **agent 產生子 agent** (協調者 → 工作者)，並可同步建立或綁定看板任務 |
 | `ertangle_artifact_share(path\|branch\|diff)` | 分享產出 (檔案、分支、diff)給他人或看板 |
 | `ertangle_status(text)` | 更新自己在 TUI 上的狀態字串 (輕量進度回報) |
-| `ertangle_diff(session?, stat_only?, paths?, max_lines?)` / `ertangle_merge(...)` | 查詢工作區 diff (支援統計模式、路徑過濾與大型 lockfile / `.Designer.cs` / `*ModelSnapshot.cs` 自動摺疊) 與合併分支 |
+| `ertangle_diff(session?, stat_only?, paths?, max_lines?)` / `ertangle_merge(...)` | 查詢工作區 diff (支援統計模式、路徑過濾、大型 lockfile / `.Designer.cs` / `*ModelSnapshot.cs` / Godot `*.import` / `*.uid` / `*.translation` 與 `.tscn` / `.tres` 龐大 `Packed*Array(...)` 自動摺疊) 與合併分支 |
 
 > 這是「agent 驅動 orchestration」的關鍵：**協調者 agent 可以直接 `ertangle_spawn` 出 worker**，
 > 而 worker 的核准、狀態、訊息全部回到 TUI，人類可隨時介入。
@@ -263,6 +266,9 @@ ertangle send --to worker/checkout "請先跑測試再交棒"
 ertangle inbox --json
 ertangle task create "修正 EU 郵遞區號驗證"
 ertangle spawn --kind codex --worktree --role worker "實作 X，完成後 ertangle send --to coordinator done"
+ertangle check --quick
+ertangle outline src/cmd/check.rs
+ertangle dev start
 ```
 
 CLI 內部直接打 daemon 的 control socket，零額外成本。
@@ -395,7 +401,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 ## 8. 工作區與 Git worktree
 
 - 每個「要寫檔的」session 預設配一個 worktree：`git worktree add .ertangle/wt/<session> -b ertangle/<label>`。
-- 跨語言相依性與未追蹤設定檔自動掛載 (`[agent_spawn] shared_worktree_deps = true`，預設開啟)：建立 worktree 時自動為主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除 `.example`/`.sample`/`.template`) 與 `appsettings.Development.json` 建立符號連結 (記錄於 `.ertangle/provisioned_links`)，並自動將 `node_modules/.bin` 與 `.venv/bin` 加入 `PATH`、注入 `DOTNET_NOLOGO=1` 與 `DOTNET_CLI_TELEMETRY_OPTOUT=1`；移除 worktree 時自動安全清理連結，不影響主工作區。
+- 跨語言相依性與未追蹤設定檔自動掛載 (`[agent_spawn] shared_worktree_deps = true`，預設開啟)：建立 worktree 時自動為主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除 `.example`/`.sample`/`.template`) 與 `appsettings.Development.json` 建立符號連結 (記錄於 `.ertangle/provisioned_links`)，針對 Godot 專案建立獨立 `.godot/` 目錄並以符號連結共用 `.godot/imported` 資產快取，同步複製 `global_script_class_cache.cfg`、`uid_cache.bin` 與 `extension_list.cfg`；自動將 `node_modules/.bin` 與 `.venv/bin` 加入 `PATH`、注入 `DOTNET_NOLOGO=1` 與 `DOTNET_CLI_TELEMETRY_OPTOUT=1`；移除 worktree 時自動安全清理連結，不影響主工作區。
 - 唯讀 session (reviewer)可共用主 checkout (唯讀)。
 - daemon 提供：列出 worktree、取 diff、合併回主分支、開 PR (呼叫 `gh` 或 `git`)。
 - 衝突處理：以「一個 worktree 一個 branch」為原則，避免同時改同一檔；需要整合時由 coordinator/人類決定。

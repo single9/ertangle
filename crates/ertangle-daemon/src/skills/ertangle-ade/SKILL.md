@@ -23,7 +23,7 @@ After sending `TASK_DONE`, stop your turn immediately.
 ## Token and quota economy
 
 1. Do small tasks inline; spawn the fewest workers that parallelism really needs.
-2. Give workers self-contained prompts: exact files, line ranges (use `ertangle outline <path>`), acceptance checks (`ertangle check`), so they do not re-explore.
+2. Give workers self-contained prompts: exact files, line ranges (use `ertangle outline <path>` supporting Rust, Node/Vite/TS, .NET Core/C#, Python, Godot `.gd`/`.tscn`/`.gdshader`), acceptance checks (`ertangle check` supporting Rust, Node/Vite, .NET Core, Python, Godot), so they do not re-explore.
 3. Prefer cheaper default models/effort for mechanical work; do not self-select expensive ones.
 4. Check quota with `ertangle_whoami` before spawning. Spawn can be rejected or switched to a fallback agent when quota is high.
 5. On `QUOTA_WARN <agent>`: stop spawning `<agent>` workers (switch to another agent with available quota if needed) and have active `<agent>` workers commit and report.
@@ -41,6 +41,6 @@ After sending `TASK_DONE`, stop your turn immediately.
 ## Worker workflow
 
 1. Set your task to `doing` with `ertangle_task_update`; keep a one-line `ertangle_status`.
-2. Stay inside the assigned scope; do not spawn sessions unless told to. Use `ertangle check` for low-token build/test verification and `ertangle dev start|status|stop` for non-blocking dev servers.
+2. Stay inside the assigned scope; do not spawn sessions unless told to. Use `ertangle check` for low-token build/test verification (Rust, Node/Vite, .NET Core, Python, Godot) and `ertangle dev start|status|stop` for non-blocking dev servers.
 3. Commit on your worktree branch (do not merge into main yourself). Never use `git stash` in a worktree: the stash stack is shared across all worktrees; use a WIP commit instead.
 4. Mark the task `done` and report to your parent in one call via `ertangle_task_update(id, status="done", report="<summary>")` (or send `TASK_DONE <task_id> <summary>`), then stop immediately.
