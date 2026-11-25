@@ -60,14 +60,20 @@ pub(crate) fn rows(text: &str, width: usize) -> Vec<Row> {
 pub(crate) fn cursor_pos(text: &str, rows: &[Row], cursor: usize) -> (usize, usize) {
     let chars: Vec<char> = text.chars().collect();
     let cursor = cursor.min(chars.len());
-    let last = rows.len() - 1;
+    let last = rows.len().saturating_sub(1);
     let r = rows
         .iter()
         .enumerate()
         .find(|(i, row)| cursor < row.end || (cursor == row.end && (row.hard || *i == last)))
         .map_or(last, |(i, _)| i);
-    let row = rows[r];
-    let col = chars[row.start..cursor.max(row.start)]
+    let row = rows.get(r).copied().unwrap_or(Row {
+        start: 0,
+        end: 0,
+        hard: false,
+    });
+    let col = chars
+        .get(row.start..cursor.max(row.start))
+        .unwrap_or(&[])
         .iter()
         .map(|&c| char_width(c))
         .sum();
@@ -77,11 +83,18 @@ pub(crate) fn cursor_pos(text: &str, rows: &[Row], cursor: usize) -> (usize, usi
 /// 在第 `r` 列找最接近且不超過 `col` 欄的字元索引。
 pub(crate) fn index_at(text: &str, rows: &[Row], r: usize, col: usize) -> usize {
     let chars: Vec<char> = text.chars().collect();
-    let row = rows[r.min(rows.len() - 1)];
+    let row = rows
+        .get(r.min(rows.len().saturating_sub(1)))
+        .copied()
+        .unwrap_or(Row {
+            start: 0,
+            end: 0,
+            hard: false,
+        });
     let mut w = 0;
     let mut idx = row.start;
     while idx < row.end {
-        let cw = char_width(chars[idx]);
+        let cw = chars.get(idx).map_or(0, |&c| char_width(c));
         if w + cw > col {
             break;
         }
@@ -95,11 +108,15 @@ pub(crate) fn index_at(text: &str, rows: &[Row], r: usize, col: usize) -> usize 
 pub(crate) fn line_bounds(text: &str, cursor: usize) -> (usize, usize) {
     let chars: Vec<char> = text.chars().collect();
     let cursor = cursor.min(chars.len());
-    let start = chars[..cursor]
+    let start = chars
+        .get(..cursor)
+        .unwrap_or(&[])
         .iter()
         .rposition(|&c| c == '\n')
         .map_or(0, |p| p + 1);
-    let end = chars[cursor..]
+    let end = chars
+        .get(cursor..)
+        .unwrap_or(&[])
         .iter()
         .position(|&c| c == '\n')
         .map_or(chars.len(), |p| cursor + p);
@@ -133,9 +150,9 @@ pub(crate) fn row_line(
         return Line::raw(plain);
     }
     let chars: Vec<char> = text.chars().collect();
-    let prefix: String = chars[row.start..from].iter().collect();
-    let mid: String = chars[from..to].iter().collect();
-    let suffix: String = chars[to..row.end].iter().collect();
+    let prefix: String = chars.get(row.start..from).unwrap_or(&[]).iter().collect();
+    let mid: String = chars.get(from..to).unwrap_or(&[]).iter().collect();
+    let suffix: String = chars.get(to..row.end).unwrap_or(&[]).iter().collect();
     Line::from(vec![
         Span::raw(prefix),
         Span::styled(mid, Style::default().add_modifier(Modifier::REVERSED)),

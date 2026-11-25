@@ -256,7 +256,7 @@ pub(crate) fn draw_tasks(f: &mut TuiFrame, area: Rect, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(3), Constraint::Length(detail_h)])
         .split(area);
-    let list_area = parts[0];
+    let list_area = parts.first().copied().unwrap_or(area);
 
     let inner_w = list_area.width.saturating_sub(2) as usize;
     let title_w = inner_w.saturating_sub(46).clamp(12, 60);
@@ -266,12 +266,14 @@ pub(crate) fn draw_tasks(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let mut lines: Vec<Line> = Vec::new();
     let mut last_group = None;
     for (i, id) in ids.iter().enumerate() {
-        let t = &app.state.tasks[id];
+        let Some(t) = app.state.tasks.get(id) else {
+            continue;
+        };
         if last_group != Some(t.status) {
             last_group = Some(t.status);
             let n = ids
                 .iter()
-                .filter(|x| app.state.tasks[*x].status == t.status)
+                .filter(|x| app.state.tasks.get(*x).map(|task| task.status) == Some(t.status))
                 .count();
             lines.push(Line::styled(
                 format!("── {} ({n}) ──", t.status.id()),
@@ -338,12 +340,16 @@ pub(crate) fn draw_tasks(f: &mut TuiFrame, area: Rect, app: &mut App) {
     f.render_widget(para, list_area);
 
     if detail_h > 0 {
-        draw_task_detail(f, parts[1], app, &ids[app.task_cursor]);
+        if let (Some(&detail_area), Some(task_id)) = (parts.get(1), ids.get(app.task_cursor)) {
+            draw_task_detail(f, detail_area, app, task_id);
+        }
     }
 }
 
 fn draw_task_detail(f: &mut TuiFrame, area: Rect, app: &App, id: &str) {
-    let t = &app.state.tasks[id];
+    let Some(t) = app.state.tasks.get(id) else {
+        return;
+    };
     let who = |s: &Option<String>| {
         s.as_deref()
             .map_or_else(|| "-".to_string(), |a| session_label(app, a))
@@ -429,9 +435,9 @@ pub(crate) fn click_task(app: &mut App, column: u16, row: u16) -> bool {
 pub(crate) fn tasks_text(app: &App) -> String {
     visible_task_ids(app)
         .iter()
-        .map(|id| {
-            let t = &app.state.tasks[id];
-            format!(
+        .filter_map(|id| {
+            let t = app.state.tasks.get(id)?;
+            Some(format!(
                 "[{}] {} {} @{}",
                 t.status.id(),
                 t.id,
@@ -439,7 +445,7 @@ pub(crate) fn tasks_text(app: &App) -> String {
                 t.assignee
                     .as_deref()
                     .map_or_else(|| "-".to_string(), |a| session_label(app, a))
-            )
+            ))
         })
         .collect::<Vec<_>>()
         .join("\n")

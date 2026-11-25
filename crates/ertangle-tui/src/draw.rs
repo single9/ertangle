@@ -9,7 +9,7 @@ pub(crate) const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", 
 /// Current spinner frame, advancing every 120ms so busy redraws animate it.
 pub(crate) fn spinner_frame() -> &'static str {
     let idx = (ertangle_core::now_millis() / 120) as usize % SPINNER_FRAMES.len();
-    SPINNER_FRAMES[idx]
+    SPINNER_FRAMES.get(idx).copied().unwrap_or("⠋")
 }
 
 pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
@@ -46,7 +46,8 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     app.tasks_area = Rect::default();
     app.task_rows.clear();
 
-    draw_header(f, chunks[0], app);
+    let header_chunk = chunks.first().copied().unwrap_or(f.area());
+    draw_header(f, header_chunk, app);
 
     let (side_l, side_r) = if w >= 140 {
         (34, 46)
@@ -57,7 +58,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     } else {
         (22, 24)
     };
-    let main = chunks[1];
+    let main = chunks.get(1).copied().unwrap_or(f.area());
     let mut bus_area = None;
     let center = match layout {
         LayoutMode::Three => {
@@ -69,25 +70,33 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
                     Constraint::Length(side_r),
                 ])
                 .split(main);
-            draw_sessions(f, cols[0], app);
-            bus_area = Some(cols[2]);
-            cols[1]
+            if let Some(&c0) = cols.first() {
+                draw_sessions(f, c0, app);
+            }
+            if let Some(&c2) = cols.get(2) {
+                bus_area = Some(c2);
+            }
+            cols.get(1).copied().unwrap_or(main)
         }
         LayoutMode::Two => {
             let cols = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Length(side_l), Constraint::Min(20)])
                 .split(main);
-            draw_sessions(f, cols[0], app);
-            cols[1]
+            if let Some(&c0) = cols.first() {
+                draw_sessions(f, c0, app);
+            }
+            cols.get(1).copied().unwrap_or(main)
         }
         LayoutMode::Tabs => {
             let rows = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(1), Constraint::Min(1)])
                 .split(main);
-            draw_session_tabs(f, rows[0], app);
-            rows[1]
+            if let Some(&r0) = rows.first() {
+                draw_session_tabs(f, r0, app);
+            }
+            rows.get(1).copied().unwrap_or(main)
         }
     };
 
@@ -99,8 +108,10 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(1)])
             .split(center);
-        draw_pending_banner(f, rows[0], app);
-        rows[1]
+        if let Some(&r0) = rows.first() {
+            draw_pending_banner(f, r0, app);
+        }
+        rows.get(1).copied().unwrap_or(center)
     } else {
         center
     };
@@ -131,19 +142,21 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         f.render_widget(Clear, r);
         draw_right_flow_and_bus(f, r, app);
     }
-    draw_input(f, chunks[2], app);
-    draw_status(f, chunks[3], app);
+    let input_chunk = chunks.get(2).copied().unwrap_or(f.area());
+    let status_chunk = chunks.get(3).copied().unwrap_or(f.area());
+    draw_input(f, input_chunk, app);
+    draw_status(f, status_chunk, app);
     match app.mode {
-        Mode::Menu => draw_menu(f, chunks[2], app),
-        Mode::Command => draw_command_hints(f, chunks[2], app),
-        Mode::Prompt | Mode::Spawn | Mode::Message => draw_file_suggestions(f, chunks[2], app),
+        Mode::Menu => draw_menu(f, input_chunk, app),
+        Mode::Command => draw_command_hints(f, input_chunk, app),
+        Mode::Prompt | Mode::Spawn | Mode::Message => draw_file_suggestions(f, input_chunk, app),
         Mode::Pick
             if matches!(
                 app.picker.as_ref().map(|p| &p.stage),
                 Some(crate::menu::PickStage::Question { .. })
             ) =>
         {
-            draw_question_picker(f, chunks[2], app)
+            draw_question_picker(f, input_chunk, app)
         }
         Mode::Pick => draw_picker(f, app),
         Mode::Help => draw_help(f, app),
@@ -432,7 +445,9 @@ fn draw_settings_sub(
     sub: &crate::settings::Sub,
     panel: Rect,
 ) {
-    let item = crate::settings::ITEMS[s.cursor];
+    let Some(&item) = crate::settings::ITEMS.get(s.cursor) else {
+        return;
+    };
     let all = s.sub_visible();
     let w = panel.width.saturating_sub(8).clamp(30, 80);
     let h = (all.len() as u16 + 3)
@@ -1079,18 +1094,24 @@ pub(crate) fn draw_session_tabs(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let widths: Vec<usize> = items.iter().map(|(t, _)| t.width()).collect();
     let total = area.width as usize;
     let (lo, hi) = if widths.iter().sum::<usize>() <= total {
-        (0, ids.len() - 1)
+        (0, ids.len().saturating_sub(1))
     } else {
         let avail = total.saturating_sub(2);
         let (mut lo, mut hi) = (sel, sel);
-        let mut used = widths[sel];
+        let mut used = widths.get(sel).copied().unwrap_or(0);
         loop {
-            if hi + 1 < widths.len() && used + widths[hi + 1] <= avail {
+            let next_hi_w = widths.get(hi + 1).copied();
+            let prev_lo_w = if lo > 0 {
+                widths.get(lo - 1).copied()
+            } else {
+                None
+            };
+            if let Some(w) = next_hi_w.filter(|w| used + *w <= avail) {
                 hi += 1;
-                used += widths[hi];
-            } else if lo > 0 && used + widths[lo - 1] <= avail {
+                used += w;
+            } else if let Some(w) = prev_lo_w.filter(|w| used + *w <= avail) {
                 lo -= 1;
-                used += widths[lo];
+                used += w;
             } else {
                 break;
             }
@@ -1297,8 +1318,20 @@ pub(crate) fn draw_header(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let stats = Line::from(stat_spans);
 
     // 額度摘要的位置，給滑鼠點擊開啟 `:quota` 浮層。
-    let before: usize = stats.spans[..q_start].iter().map(|s| s.width()).sum();
-    let qw: usize = stats.spans[q_start..q_end].iter().map(|s| s.width()).sum();
+    let before: usize = stats
+        .spans
+        .get(..q_start)
+        .unwrap_or(&[])
+        .iter()
+        .map(|s| s.width())
+        .sum();
+    let qw: usize = stats
+        .spans
+        .get(q_start..q_end)
+        .unwrap_or(&[])
+        .iter()
+        .map(|s| s.width())
+        .sum();
     app.quota_area = if qw > 0 && area.height > 1 {
         Rect::new(
             area.x + before as u16,
@@ -1581,18 +1614,21 @@ pub(crate) fn find_safe_boundary(buf: &std::collections::VecDeque<String>) -> us
 
     // 優先找 code fence 之外的空白行：空白行必非工具行、非表格、非段落中斷，且會 flush 工具摺疊
     for i in (1..=search_end).rev() {
-        if !fence_after[i - 1] && buf[i - 1].trim().is_empty() && !buf[i].starts_with("  ✓") {
+        if !fence_after.get(i - 1).copied().unwrap_or(false)
+            && buf.get(i - 1).is_some_and(|l| l.trim().is_empty())
+            && !buf.get(i).is_some_and(|l| l.starts_with("  ✓"))
+        {
             return i;
         }
     }
 
     // 若無空白行，找 code fence 之外的獨立普通行
     for i in (1..=search_end).rev() {
-        if fence_after[i - 1] {
+        if fence_after.get(i - 1).copied().unwrap_or(false) {
             continue;
         }
-        let prev = &buf[i - 1];
-        let next = &buf[i];
+        let prev = buf.get(i - 1).map_or("", |s| s.as_str());
+        let next = buf.get(i).map_or("", |s| s.as_str());
 
         if prev.starts_with("▸ ") || prev.starts_with("  ✓") || prev.starts_with("  ✗") {
             continue;
@@ -1987,34 +2023,30 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
         .checked_div(max_off)
         .map(|p| p.min(100))
         .unwrap_or(100);
-    let title = match &selected {
-        Some(id) => {
-            let s = &app.state.sessions[id];
-            format!(
-                " Transcript: {}{} · {} · {}% · {} ",
-                if multi_project_state(app) || !app.scope_here {
-                    format!("[{}] ", project_name(s.project_root(), &all_roots(app)))
-                } else {
-                    String::new()
-                },
-                s.label,
-                if s.transport.is_empty() {
-                    "-"
-                } else {
-                    &s.transport
-                },
-                pct,
-                if app.raw_md { "raw" } else { "md" },
-            )
-        }
+    let title = match selected.as_ref().and_then(|id| app.state.sessions.get(id)) {
+        Some(s) => format!(
+            " Transcript: {}{} · {} · {}% · {} ",
+            if multi_project_state(app) || !app.scope_here {
+                format!("[{}] ", project_name(s.project_root(), &all_roots(app)))
+            } else {
+                String::new()
+            },
+            s.label,
+            if s.transport.is_empty() {
+                "-"
+            } else {
+                &s.transport
+            },
+            pct,
+            if app.raw_md { "raw" } else { "md" },
+        ),
         None => tr!(" (尚無 session：按 n 建立，或直接輸入 prompt) "),
     };
 
     // 畫面下方顯示這個 session 的執行參數 (模型、effort、權限、context、成本)，
     // 左側清單只留辨識用的資訊，避免過擠。
-    let footer = match &selected {
-        Some(id) => {
-            let s = &app.state.sessions[id];
+    let footer = match selected.as_ref().and_then(|id| app.state.sessions.get(id)) {
+        Some(s) => {
             let mut parts: Vec<String> = Vec::new();
             let mut model = s.kind.id().to_string();
             if let Some(m) = s.model.as_deref().filter(|m| !m.is_empty()) {
@@ -2048,7 +2080,7 @@ pub(crate) fn draw_transcript(f: &mut TuiFrame, area: Rect, app: &mut App) {
             )];
             if !s.bg_procs.is_empty() {
                 let count = s.bg_procs.len();
-                let name = &s.bg_procs[0].name;
+                let name = s.bg_procs.first().map_or("", |p| p.name.as_str());
                 let bg_label = if count > 1 {
                     format!(" · bg:{count} ({name}…)")
                 } else {
@@ -2153,17 +2185,17 @@ pub(crate) fn draw_diff(f: &mut TuiFrame, area: Rect, app: &App) {
         .map(|(idx, total, path)| format!("· [{idx}/{total}] {path}  "))
         .unwrap_or_default();
     let title = match app.selected_id() {
-        Some(id) => {
-            let s = &app.state.sessions[&id];
-            tr!(
+        Some(id) => match app.state.sessions.get(&id) {
+            Some(s) => tr!(
                 " Diff: {label} ({branch})  {file_part}+{added} -{removed}  ·  j/k 選行 · {{/}} hunk · (/) 檔案 · Enter 摺疊 · X 退回 · c 註解 · M 合併 ",
                 label = s.label,
                 branch = s.branch.as_deref().unwrap_or("main"),
                 file_part = file_part,
                 added = app.diff_added,
                 removed = app.diff_removed,
-            )
-        }
+            ),
+            None => " Diff ".into(),
+        },
         None => {
             if file_part.is_empty() {
                 " Diff ".into()
@@ -2424,8 +2456,12 @@ fn draw_right_flow_and_bus(f: &mut TuiFrame, area: Rect, app: &App) {
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
             .split(area);
-        crate::flow::draw_flow_pane(f, chunks[0], app);
-        draw_bus(f, chunks[1], app);
+        if let Some(&top) = chunks.first() {
+            crate::flow::draw_flow_pane(f, top, app);
+        }
+        if let Some(&bottom) = chunks.get(1) {
+            draw_bus(f, bottom, app);
+        }
     } else {
         crate::flow::draw_flow_pane(f, area, app);
     }

@@ -556,9 +556,9 @@ impl Picker {
                             }
                         }
                         // 顯示名稱去掉尾端的 `(Medium)` 這類 effort 標記。
-                        let name = members[0]
-                            .0
-                            .split_once("  (")
+                        let name = members
+                            .first()
+                            .and_then(|(s, _)| s.split_once("  ("))
                             .map(|(_, n)| n.trim_end_matches(')'))
                             .and_then(|n| n.rsplit_once(" ("))
                             .map(|(n, _)| n.to_string());
@@ -1040,10 +1040,10 @@ fn ordered_selection(p: &Picker) -> Vec<String> {
 /// Previous word boundary (char index) before `cur`: skip spaces, then the word.
 fn word_start(chars: &[char], cur: usize) -> usize {
     let mut i = cur.min(chars.len());
-    while i > 0 && chars[i - 1].is_whitespace() {
+    while i > 0 && chars.get(i - 1).is_some_and(|c| c.is_whitespace()) {
         i -= 1;
     }
-    while i > 0 && !chars[i - 1].is_whitespace() {
+    while i > 0 && chars.get(i - 1).is_some_and(|c| !c.is_whitespace()) {
         i -= 1;
     }
     i
@@ -1052,10 +1052,10 @@ fn word_start(chars: &[char], cur: usize) -> usize {
 /// Next word boundary (char index) after `cur`: skip the word, then spaces.
 fn word_end(chars: &[char], cur: usize) -> usize {
     let mut i = cur.min(chars.len());
-    while i < chars.len() && !chars[i].is_whitespace() {
+    while i < chars.len() && chars.get(i).is_some_and(|c| !c.is_whitespace()) {
         i += 1;
     }
-    while i < chars.len() && chars[i].is_whitespace() {
+    while i < chars.len() && chars.get(i).is_some_and(|c| c.is_whitespace()) {
         i += 1;
     }
     i

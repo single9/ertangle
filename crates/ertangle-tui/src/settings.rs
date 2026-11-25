@@ -422,12 +422,16 @@ fn cycle(app: &mut App, writer: Option<&mut HostRouter>, dir: isize) {
     let Some(s) = app.settings.as_mut() else {
         return;
     };
-    let item = ITEMS[s.cursor];
+    let Some(&item) = ITEMS.get(s.cursor) else {
+        return;
+    };
     let choices = item.choices(s);
     let cur = item.current(s);
     let idx = choices.iter().position(|(v, _)| *v == cur).unwrap_or(0) as isize;
     let next = (idx + dir).rem_euclid(choices.len() as isize) as usize;
-    let value = choices[next].0.clone();
+    let value = choices
+        .get(next)
+        .map_or_else(String::new, |(v, _)| v.clone());
     apply_value(app, writer, value);
 }
 
@@ -436,7 +440,9 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
     let Some(s) = app.settings.as_mut() else {
         return;
     };
-    let item = ITEMS[s.cursor];
+    let Some(&item) = ITEMS.get(s.cursor) else {
+        return;
+    };
     if item == Item::TargetAgent {
         s.agent = value;
         s.fetch_models();
@@ -446,7 +452,9 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
     if let Some(slot) = item.worker_slot() {
         let mut order = s.cfg.defaults.worker_order.clone();
         order.resize(order.len().max(slot + 1), String::new());
-        order[slot] = value;
+        if let Some(elem) = order.get_mut(slot) {
+            *elem = value;
+        }
         // 空位與重複的 agent 去掉，保留相對順序。
         let mut seen = std::collections::HashSet::new();
         order.retain(|a| !a.is_empty() && seen.insert(a.clone()));
@@ -619,8 +627,10 @@ impl Settings {
     /// 值選擇清單目前顯示的項目 (依過濾字)。
     pub(crate) fn sub_visible(&self) -> Vec<(String, String)> {
         let f = self.sub.as_ref().map(|s| s.filter.to_lowercase());
-        ITEMS[self.cursor]
-            .choices(self)
+        let choices = ITEMS
+            .get(self.cursor)
+            .map_or_else(Vec::new, |item| item.choices(self));
+        choices
             .into_iter()
             .filter(|(v, l)| {
                 f.as_deref().is_none_or(|f| {
@@ -668,7 +678,9 @@ fn open_sub(app: &mut App) {
     let Some(s) = app.settings.as_mut() else {
         return;
     };
-    let item = ITEMS[s.cursor];
+    let Some(&item) = ITEMS.get(s.cursor) else {
+        return;
+    };
     let cur = item.current(s);
     let cursor = item
         .choices(s)
@@ -705,7 +717,8 @@ pub(crate) fn handle_key(app: &mut App, writer: Option<&mut HostRouter>, key: Ke
             let toggle = app
                 .settings
                 .as_ref()
-                .is_some_and(|s| ITEMS[s.cursor].is_toggle());
+                .and_then(|s| ITEMS.get(s.cursor))
+                .is_some_and(|item| item.is_toggle());
             if toggle {
                 cycle(app, writer, 1)
             } else {

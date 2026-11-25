@@ -73,7 +73,9 @@ impl Renderer {
         let mut out = Vec::with_capacity(src.len());
         let mut i = 0usize;
         while i < src.len() {
-            let line = src[i].as_ref();
+            let Some(line) = src.get(i).map(|s| s.as_ref()) else {
+                break;
+            };
 
             if self.in_fence {
                 if fence(line).is_some() {
@@ -112,14 +114,19 @@ impl Renderer {
                 continue;
             }
 
-            if is_table_row(line) && i + 1 < src.len() && is_table_sep(src[i + 1].as_ref()) {
+            let next_line = src.get(i + 1).map(|s| s.as_ref());
+            if is_table_row(line) && next_line.is_some_and(is_table_sep) {
+                let Some(sep_line) = next_line else { break };
                 let mut block = vec![line];
                 let mut j = i + 2;
-                while j < src.len() && is_table_row(src[j].as_ref()) {
-                    block.push(src[j].as_ref());
+                while let Some(row_str) = src.get(j).map(|s| s.as_ref()) {
+                    if !is_table_row(row_str) {
+                        break;
+                    }
+                    block.push(row_str);
                     j += 1;
                 }
-                for tl in render_table(&block, src[i + 1].as_ref(), width) {
+                for tl in render_table(&block, sep_line, width) {
                     out.push((tl, Vec::new()));
                 }
                 i = j;
@@ -540,19 +547,30 @@ fn truncate_spans(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
 }
 
 fn render_table<S: AsRef<str>>(rows: &[S], sep: &str, width: usize) -> Vec<Line<'static>> {
-    let header = split_row(rows[0].as_ref());
+    let header = rows
+        .first()
+        .map_or_else(Vec::new, |r| split_row(r.as_ref()));
     let n = header.len().max(1);
     let aligns = parse_align(sep, n);
-    let body: Vec<Vec<String>> = rows[1..].iter().map(|r| split_row(r.as_ref())).collect();
+    let body: Vec<Vec<String>> = rows
+        .get(1..)
+        .unwrap_or(&[])
+        .iter()
+        .map(|r| split_row(r.as_ref()))
+        .collect();
     let header_style = Style::default().fg(HEADING).add_modifier(Modifier::BOLD);
 
     let mut widths = vec![1usize; n];
     for (c, cell) in header.iter().enumerate().take(n) {
-        widths[c] = widths[c].max(spans_width(&inline(cell, header_style)));
+        if let Some(w) = widths.get_mut(c) {
+            *w = (*w).max(spans_width(&inline(cell, header_style)));
+        }
     }
     for row in &body {
         for (c, cell) in row.iter().enumerate().take(n) {
-            widths[c] = widths[c].max(spans_width(&inline(cell, Style::default())));
+            if let Some(w) = widths.get_mut(c) {
+                *w = (*w).max(spans_width(&inline(cell, Style::default())));
+            }
         }
     }
 
@@ -567,9 +585,17 @@ fn render_table<S: AsRef<str>>(rows: &[S], sep: &str, width: usize) -> Vec<Line<
             .max_by_key(|(_, w)| **w)
             .map(|(i, _)| i);
         match widest {
-            Some(idx) if widths[idx] > 1 => {
-                widths[idx] -= 1;
-                total -= 1;
+            Some(idx) => {
+                if let Some(w) = widths.get_mut(idx) {
+                    if *w > 1 {
+                        *w -= 1;
+                        total -= 1;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
             _ => break,
         }
@@ -629,13 +655,14 @@ fn table_row(
         .map(|r| {
             let mut spans = Vec::new();
             for (c, w) in widths.iter().enumerate() {
-                let cell_spans = wrapped[c]
-                    .get(r)
+                let cell_spans = wrapped
+                    .get(c)
+                    .and_then(|wc| wc.get(r))
                     .map(|l| l.spans.clone())
                     .unwrap_or_default();
                 let cw = spans_width(&cell_spans);
                 let pad = w.saturating_sub(cw);
-                let (left, right) = match aligns[c] {
+                let (left, right) = match aligns.get(c).copied().unwrap_or(Align::Left) {
                     Align::Left => (0, pad),
                     Align::Right => (pad, 0),
                     Align::Center => (pad / 2, pad - pad / 2),
@@ -852,7 +879,9 @@ pub fn wrap_line_with_links(
                     line: start_line_idx + out.len(),
                     col_start: w_start,
                     col_end: cur_w,
-                    url: line_links[l_idx].2.clone(),
+                    url: line_links
+                        .get(l_idx)
+                        .map_or_else(String::new, |l| l.2.clone()),
                 });
             }
 
@@ -862,7 +891,9 @@ pub fn wrap_line_with_links(
                         line: start_line_idx + out.len(),
                         col_start: w_start,
                         col_end: cur_w,
-                        url: line_links[l_idx].2.clone(),
+                        url: line_links
+                            .get(l_idx)
+                            .map_or_else(String::new, |l| l.2.clone()),
                     });
                     active_link = Some((l_idx, 0));
                 }
@@ -885,7 +916,9 @@ pub fn wrap_line_with_links(
             line: start_line_idx + out.len(),
             col_start: w_start,
             col_end: cur_w,
-            url: line_links[l_idx].2.clone(),
+            url: line_links
+                .get(l_idx)
+                .map_or_else(String::new, |l| l.2.clone()),
         });
     }
     out.push(Line::from(cur));

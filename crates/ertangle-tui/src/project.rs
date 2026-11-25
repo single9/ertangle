@@ -77,13 +77,11 @@ pub(crate) fn project_panel_lines(app: &App, now_ms: u64) -> Vec<Line<'static>> 
     let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
     let mut has_parent: HashSet<&str> = HashSet::new();
     for id in &ids {
-        if let Some(p) = app.state.sessions[id]
-            .parent
-            .as_deref()
-            .filter(|p| in_scope.contains(p))
-        {
-            children.entry(p).or_default().push(id.as_str());
-            has_parent.insert(id.as_str());
+        if let Some(s) = app.state.sessions.get(id) {
+            if let Some(p) = s.parent.as_deref().filter(|p| in_scope.contains(p)) {
+                children.entry(p).or_default().push(id.as_str());
+                has_parent.insert(id.as_str());
+            }
         }
     }
     let participates =
@@ -97,7 +95,9 @@ pub(crate) fn project_panel_lines(app: &App, now_ms: u64) -> Vec<Line<'static>> 
         held: &HashMap<&str, Vec<&ertangle_core::Task>>,
         out: &mut Vec<Line<'static>>,
     ) {
-        let s = &app.state.sessions[id];
+        let Some(s) = app.state.sessions.get(id) else {
+            return;
+        };
         let indent = "  ".repeat(depth);
         let mut spans = vec![
             Span::styled(
@@ -147,7 +147,9 @@ pub(crate) fn project_panel_lines(app: &App, now_ms: u64) -> Vec<Line<'static>> 
     // Running：進行中的工具／Subagent 與背景處理程序。
     let mut running: Vec<Line<'static>> = Vec::new();
     for id in &ids {
-        let s = &app.state.sessions[id];
+        let Some(s) = app.state.sessions.get(id) else {
+            continue;
+        };
         for t in &s.active_tools {
             let tag = if t.is_subagent { "sub" } else { "run" };
             let secs = now_ms.saturating_sub(t.started_ms) / 1000;
@@ -278,11 +280,14 @@ pub(crate) fn grid_rects(area: Rect, n: usize) -> Vec<Rect> {
         }
         _ => {
             let rows = split(area, Direction::Vertical, 2);
-            let mut out = split(rows[0], Direction::Horizontal, 2);
+            let first_row = rows.first().copied().unwrap_or(area);
+            let mut out = split(first_row, Direction::Horizontal, 2);
             if n == 3 {
-                out.push(rows[1]);
-            } else {
-                out.extend(split(rows[1], Direction::Horizontal, 2));
+                if let Some(&second_row) = rows.get(1) {
+                    out.push(second_row);
+                }
+            } else if let Some(&second_row) = rows.get(1) {
+                out.extend(split(second_row, Direction::Horizontal, 2));
             }
             out
         }
@@ -308,13 +313,18 @@ pub(crate) fn draw_grid(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let (start, n, pages) = grid_page(sel, ids.len());
     let rects = grid_rects(area, n);
     for (k, rect) in rects.iter().enumerate() {
-        let id = &ids[start + k];
-        let s = &app.state.sessions[id];
+        let Some(id) = ids.get(start + k) else {
+            continue;
+        };
+        let Some(s) = app.state.sessions.get(id) else {
+            continue;
+        };
         let selected = start + k == sel;
         let inner_w = rect.width.saturating_sub(2).max(8) as usize;
         let (all, _) = build_transcript_lines(app, id, inner_w);
         let h = rect.height.saturating_sub(2) as usize;
-        let tail: Vec<Line<'static>> = all[all.len().saturating_sub(h)..].to_vec();
+        let tail_slice = all.get(all.len().saturating_sub(h)..).unwrap_or(&[]);
+        let tail: Vec<Line<'static>> = tail_slice.to_vec();
         let mut title = format!(" {} {}", s.status.glyph(), s.label);
         if let Some(t) = s.active_tools.last() {
             title.push_str(&format!(

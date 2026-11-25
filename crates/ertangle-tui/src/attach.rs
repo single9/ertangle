@@ -78,12 +78,13 @@ pub(crate) fn fuzzy_score(query: &str, path: &str) -> Option<i64> {
     let mut qi = 0usize;
     let mut last: Option<usize> = None;
     for (i, c) in p.iter().enumerate() {
-        if qi < q.len() && *c == q[qi] {
+        if qi < q.len() && q.get(qi).is_some_and(|qc| c == qc) {
             score += 10;
             if last == Some(i.wrapping_sub(1)) {
                 score += 15; // 連續
             }
-            if i == base_start || (i > 0 && "/_-.".contains(p[i - 1])) {
+            if i == base_start || (i > 0 && p.get(i - 1).is_some_and(|&prev| "/_-.".contains(prev)))
+            {
                 score += 20; // 詞首
             }
             if i >= base_start {
@@ -97,7 +98,7 @@ pub(crate) fn fuzzy_score(query: &str, path: &str) -> Option<i64> {
         return None;
     }
     // 完整檔名／字首命中給大加分
-    let base: String = p[base_start..].iter().collect();
+    let base: String = p.get(base_start..).unwrap_or(&[]).iter().collect();
     let ql: String = q.iter().collect();
     if base == ql {
         score += 200;
@@ -131,11 +132,11 @@ pub(crate) fn current_at_token(input: &str, cursor: usize) -> Option<(usize, Str
     let chars: Vec<char> = input.chars().collect();
     let cur = cursor.min(chars.len());
     let mut i = cur;
-    while i > 0 && !chars[i - 1].is_whitespace() {
+    while i > 0 && chars.get(i - 1).is_some_and(|c| !c.is_whitespace()) {
         i -= 1;
     }
-    if i < cur && chars[i] == '@' {
-        let tok: String = chars[i + 1..cur].iter().collect();
+    if i < cur && chars.get(i) == Some(&'@') {
+        let tok: String = chars.get(i + 1..cur).unwrap_or(&[]).iter().collect();
         return Some((i, tok));
     }
     if i == cur && cur > 0 {
@@ -164,7 +165,7 @@ pub(crate) fn find_in_project(root: &Path, token: &str) -> Option<PathBuf> {
         .into_iter()
         .filter(|f| *f == token || f.ends_with(&suffix))
         .collect();
-    (hits.len() == 1).then(|| root.join(&hits[0]))
+    (hits.len() == 1).then(|| root.join(hits.first().map_or("", |s| s.as_str())))
 }
 
 /// 展開 `~` 並以目前目錄為基準。
@@ -345,14 +346,18 @@ fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
-        if b[i] == b'%' && i + 2 < b.len() {
-            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
-                out.push(v);
-                i += 3;
-                continue;
+        if b.get(i) == Some(&b'%') && i + 2 < b.len() {
+            if let Some(sub) = s.get(i + 1..i + 3) {
+                if let Ok(v) = u8::from_str_radix(sub, 16) {
+                    out.push(v);
+                    i += 3;
+                    continue;
+                }
             }
         }
-        out.push(b[i]);
+        if let Some(&byte) = b.get(i) {
+            out.push(byte);
+        }
         i += 1;
     }
     String::from_utf8_lossy(&out).to_string()
