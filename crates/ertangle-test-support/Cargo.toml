@@ -1,6 +1,7 @@
 [package]
 name = "ertangle-test-support"
 description = "Test-only helpers for isolated temporary directories"
+publish = false
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -33,7 +33,7 @@ jobs:
       - run: git config --global user.email ci@example.com && git config --global user.name ci
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      - run: cargo test --locked
 
   # Everything `cargo publish` would do, minus the upload: package every crate
   # and verify it builds against the packaged siblings.
