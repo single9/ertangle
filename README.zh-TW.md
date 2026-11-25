@@ -267,10 +267,10 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
   - `auto` (預設)：安全工具自動核准。
   - `bypass`：跳過權限確認。
 - **規則引擎**：支援全域 `~/.config/ertangle/policy.toml` 與專案 `.ertangle/policy.toml`，以 `deny` (黑名單) → `allow` (白名單) → session 政策順序過濾指令。
-- **Claude 逐項核准轉發 (T33)**：非 `bypass` 模式下為 Claude 掛載 `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host`，使 Claude 的單一工具呼叫能受到 `policy.toml` 攔截並在 `ask` 模式下由 TUI 互動核准。
-- **全面秘密遮罩 (Secret Redaction, T33)**：所有 MCP 工具輸出 (包含 `ertangle_inbox`、`ertangle_wait`、`ertangle_ask`、`ertangle_diff` 等) 與事件紀錄在送出前均自動過濾常見 API Key 與 Token (`sk-...`、`ghp_...`、`AKIA...` 等)，遮罩為 `<REDACTED>`。
+- **Claude 逐項核准轉發**：非 `bypass` 模式下為 Claude 掛載 `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host`，使 Claude 的單一工具呼叫能受到 `policy.toml` 攔截並在 `ask` 模式下由 TUI 互動核准。
+- **全面秘密遮罩 (Secret Redaction)**：所有 MCP 工具輸出 (包含 `ertangle_inbox`、`ertangle_wait`、`ertangle_ask`、`ertangle_diff` 等) 與事件紀錄在送出前均自動過濾常見 API Key 與 Token (`sk-...`、`ghp_...`、`AKIA...` 等)，遮罩為 `<REDACTED>`。
 
-### 6. 遠端連線、Tailscale 整合與斷線自動重連 (T28)
+### 6. 遠端連線、Tailscale 整合與斷線自動重連
 
 - **自動偵測 Tailscale 位址**：
   - 支援 `ertangle daemon --listen tailscale`，自動呼叫本機 `tailscale ip -4` 解析點對點安全通道 IP，無需手動查詢輸入。
@@ -281,7 +281,7 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
   - 當筆電休眠喚醒、跨 Wi-Fi 切換網路或短暫斷線時，TUI 會在背景以指數退避演算法自動重試。
   - 連線恢復時自動發送帶有最後已知序列號的 `Request::Hello { since, epoch, token }`，無縫還原狀態並補齊離線期間遺漏的事件記錄。
 
-### 7. TUI 多主機聚合視圖 (Multi-Host Aggregation, T29)
+### 7. TUI 多主機聚合視圖 (Multi-Host Aggregation)
 
 - **跨機統一儀表板**：
   - 在 `config.toml` 中配置 `[remotes]` 或使用命令列參數 `ertangle --remote workstation:7420 --remote gpu-box:7420`。
@@ -291,7 +291,7 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
   - 發送 Prompt、審核權限或檢視 Diff 時，指令會自動透明路由至所屬的遠端主機。
   - 按 `:` 輸入 `:host <名稱>` (或 `:host all`) 可隨時切換聚焦單一主機或全域視圖。
 
-### 8. Web 版支援與行動介面 (Web Interface & Mobile PWA, T30)
+### 8. Web 版支援與行動介面 (Web Interface & Mobile PWA)
 
 - **隨身攜帶、買咖啡不中斷**：
   - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。可在 TUI 設定面板 (`:settings` 或 `Space ,`) 中直接切換啟用，或輸入 `:web on [位址]` (亦可從 CLI 啟動 `ertangle daemon --web tailscale`)。
@@ -310,23 +310,23 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 
 ### 9. 節省 Token 與跨語言 Agent 開發加速 (Token Economy & Polyglot Tools)
 
-- **低雜訊建置與測試驗證 (`ertangle check`, T101, T103)**：
+- **低雜訊建置與測試驗證 (`ertangle check`)**：
   - 自動偵測 Rust、Node / Vite、.NET Core、Python 與 Godot (`project.godot`) 專案並執行建置、型別檢查與測試。針對 Godot 執行 `--headless --quit` (若有 `addons/gut/gut_cmdln.gd` 則執行 GUT 測試)，並將多行 `SCRIPT ERROR:` 與接續的 `at: ... (res://path:line)` 合併為單行 `path:line: SCRIPT ERROR: ...` 診斷。
   - 自動剝除 ANSI 色彩碼、摺疊 `node_modules/` 或非同步執行時期堆疊追蹤、去重重複診斷並限制輸出行數 (支援 `--quick`、`--max-lines`、`--json`)，只回傳可行動的錯誤摘要，大幅減少測試輸出佔用的 Token。
-- **程式碼骨架與精確行號提取 (`ertangle outline`, T102, T103)**：
+- **程式碼骨架與精確行號提取 (`ertangle outline`)**：
   - 免讀取整份原始碼，即可快速掃描 `.rs`、`.ts`/`.tsx`/`.js`/`.jsx`/`.vue`、`.cs`、`.py`、`.gd` (GDScript)、`.tscn` (Godot 場景節點樹 `[node]`、外部腳本 `[ext_resource]` 與 `[connection]` Signal 綁定，自動略過龐大的 `[sub_resource]`) 與 `.gdshader` (Godot Shader) 檔案或目錄，提取符號骨架與精確起訖行號 (`L<start>-L<end>`)。
   - Coordinator 可在派工 Prompt 直接附上檔案與行號範圍，讓 Worker 精準定位編輯，避免重複探索與讀取整支大型檔案。
-- **非阻塞開發伺服器管理 (`ertangle dev`, T102)**：
+- **非阻塞開發伺服器管理 (`ertangle dev`)**：
   - 透過 `ertangle dev start|status|stop` 自動偵測框架並分配空閒本機連接埠，在獨立處理程序群組於背景啟動開發伺服器，將輸出寫入 `.ertangle/dev-<port>.log` 並在連接埠就緒後立即回傳 URL 與 PID，避免 Agent 回合被前景伺服器阻塞或發生多 Worktree 連接埠衝突。
-- **範圍過濾 Diff 與生成檔自動摺疊 (`ertangle_diff` / `ertangle diff`, T98, T103)**：
+- **範圍過濾 Diff 與生成檔自動摺疊 (`ertangle_diff` / `ertangle diff`)**：
   - 支援 `stat_only` (僅列變更統計)、`paths` (過濾特定檔案或目錄) 與 `max_lines` (MCP 呼叫預設上限 800 行)。
   - 未指定 `paths` 時，自動將 `Cargo.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`*.Designer.cs`、`*ModelSnapshot.cs`、`uv.lock`、`poetry.lock`、`go.sum`、`*.snap`、`*.min.js`、Godot 的 `*.import`、`*.uid`、`*.translation` 以及 `.tscn` / `.tres` 場景與資源檔中超過 300 字元的 `Packed*Array(...)` 資料行自動摺疊為單行摘要，避免數萬字元灌爆上下文。
-- **單回合原子性回報與派工綁定 (`ertangle_task_update` / `ertangle_spawn`, T99)**：
+- **單回合原子性回報與派工綁定 (`ertangle_task_update` / `ertangle_spawn`)**：
   - `ertangle_task_update` 在設定 `done` 或 `blocked` 時可帶入 `report`，於同一回合原子性更新任務看板並向父 Session 發送 `TASK_DONE` / `TASK_BLOCKED`，省去額外一輪 `ertangle_send` 的全量上下文重讀。
   - `ertangle_spawn` 支援 `task_title` / `task_id`，派生 Worker 時同步建立或綁定看板任務，減少 Coordinator 派工回合數。
-- **Worktree 共用相依套件與建置快取 (`shared_worktree_deps` / `shared_cargo_target`, T100, T103)**：
+- **Worktree 共用相依套件與建置快取 (`shared_worktree_deps` / `shared_cargo_target`)**：
   - 預設啟用共用 `<repo>/.ertangle/target` 作為 `CARGO_TARGET_DIR`，並以符號連結自動掛載主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除範例檔) 與 `appsettings.Development.json`；針對 Godot 專案 (`project.godot`)，在 Worktree 中建立獨立的 `.godot/` 目錄，以符號連結共用 `.godot/imported` 龐大資產匯入快取，並複製 `global_script_class_cache.cfg`、`uid_cache.bin` 與 `extension_list.cfg`，免去每個 Worktree 重複安裝相依套件與編譯，且不污染 `git status` 或 `ertangle_diff`。
-- **省 Token 提示注入、呼叫計數與自動壓縮 (`token_hints` / `N calls` / `auto_compact`, T47)**：
+- **省 Token 提示注入、呼叫計數與自動壓縮 (`token_hints` / `N calls` / `auto_compact`)**：
   - 可在 `:settings` 開啟「把省 token 提示注入協作說明」(`[collab] token_hints = true`，預設關閉)，引導 Agent 平行批次呼叫與限制輸出長度，並透過 TUI 次要資訊列的 `N calls` 比較工具呼叫次數。
   - 搭配 `[auto_compact]` (閒置且上下文達門檻時自動代送 `/compact`) 與零寒暄協定 (`Zero Pleasantries`)，有效壓低多回合協作的 Token 消耗。
 
@@ -438,7 +438,7 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 - `:quota` — 彈出額度面板：已安裝 agent 的各視窗用量 (progress bar) 與重置倒數
 - `:task <標題>` / `:tasks` — 建立新任務 / 切換到任務看板視圖
 - `:task-status <todo|doing|blocked|review|done>` — 修改選取任務的狀態
-- `:host <目標|all>` — 切換多主機視圖篩選 (T29)
+- `:host <目標|all>` — 切換多主機視圖篩選
 - `:remote` — 顯示目前主機的遠端連線資訊、Tailscale IP 與行動端 Web 網址
 - `:notify on|off|test` — 開關桌面通知或測試發送
 - `:shutdown` — 關閉共用 Daemon 與所有專案的 Agent (安全保護：需輸入 `:shutdown!` 確認)
@@ -555,7 +555,7 @@ port = 7421                       # 自訂連接埠：預設 7421 (亦可直接�
 addr = "tailscale"                # 監聽位址："tailscale" (自動偵測 IP) | "127.0.0.1" | "0.0.0.0"
 
 [remotes]
-# 跨主機聚合設定 (T29)
+# 跨主機聚合設定
 workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/ertangle/workstation.token" }
 gpu-box = { addr = "100.64.0.8:7420" }
 

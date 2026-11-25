@@ -267,10 +267,10 @@ Every structured agent session is automatically injected with a stdio MCP server
   - `auto` (default): Safe operations are approved automatically.
   - `bypass`: Skips permission confirmation.
 - **Policy Engine**: Configured via `~/.config/ertangle/policy.toml` and `.ertangle/policy.toml` using `deny` (blacklist) → `allow` (whitelist) → session policy order.
-- **Claude Granular Approval Forwarding (T33)**: Mounts `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host` in non-`bypass` mode, enabling Claude's tool invocations to be filtered by `policy.toml` and approved interactively in TUI `ask` mode.
-- **Comprehensive Secret Redaction (T33)**: All MCP tool outputs (including `ertangle_inbox`, `ertangle_wait`, `ertangle_ask`, `ertangle_diff`, etc.) and event logs automatically sanitize sensitive credentials (`sk-...`, `ghp_...`, `AKIA...`, etc.) into `<REDACTED>` before delivery.
+- **Claude Granular Approval Forwarding**: Mounts `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host` in non-`bypass` mode, enabling Claude's tool invocations to be filtered by `policy.toml` and approved interactively in TUI `ask` mode.
+- **Comprehensive Secret Redaction**: All MCP tool outputs (including `ertangle_inbox`, `ertangle_wait`, `ertangle_ask`, `ertangle_diff`, etc.) and event logs automatically sanitize sensitive credentials (`sk-...`, `ghp_...`, `AKIA...`, etc.) into `<REDACTED>` before delivery.
 
-### 6. Remote Connections, Tailscale Integration & Auto-Reconnect (T28)
+### 6. Remote Connections, Tailscale Integration & Auto-Reconnect
 
 - **Automatic Tailscale Detection**:
   - Start daemon with `ertangle daemon --listen tailscale` to auto-resolve your machine's peer-to-peer Tailscale IPv4 address via `tailscale ip -4`.
@@ -281,7 +281,7 @@ Every structured agent session is automatically injected with a stdio MCP server
   - When laptops wake from sleep, networks switch, or brief disconnects happen, the TUI automatically reconnects in the background with exponential backoff.
   - Reconnects using `Request::Hello { since, epoch, token }` to seamlessly resume state and backfill missed events without interruption.
 
-### 7. Multi-Host Aggregation in TUI (T29)
+### 7. Multi-Host Aggregation in TUI
 
 - **Unified Multi-Machine Dashboard**:
   - Configure `[remotes]` in `config.toml` or launch with `ertangle --remote workstation:7420 --remote gpu-box:7420`.
@@ -291,7 +291,7 @@ Every structured agent session is automatically injected with a stdio MCP server
   - Sending prompts, reviewing diffs, and approving tool executions are automatically routed to the owning host.
   - Switch host views anytime using `:host <target>` or `:host all`.
 
-### 8. Web Interface & Mobile PWA (T30)
+### 8. Web Interface & Mobile PWA
 
 - **Mobile Review On The Go**:
   - Step away from your desk without losing review flow. Enable it directly from the TUI settings panel (`:settings` or `Space ,`) or by typing `:web on [addr]` (or via CLI `ertangle daemon --web tailscale`).
@@ -310,23 +310,23 @@ Every structured agent session is automatically injected with a stdio MCP server
 
 ### 9. Token Economy & Polyglot Agent Efficiency
 
-- **Low-Token Polyglot Verifier (`ertangle check`, T101, T103)**:
+- **Low-Token Polyglot Verifier (`ertangle check`)**:
   - Auto-detects Rust, Node/Vite, .NET Core, Python, and Godot (`project.godot`) projects to run build, typecheck, and test commands. For Godot, it runs `--headless --quit` (and GUT tests if `addons/gut/gut_cmdln.gd` is present) and merges multi-line `SCRIPT ERROR:` + `at: ... (res://path:line)` into single-line `path:line: SCRIPT ERROR: ...` diagnostics.
   - Strips ANSI codes, collapses `node_modules/` and async runtime stack frames, deduplicates identical diagnostics, and caps output lines (supports `--quick`, `--max-lines`, `--json`) to return only actionable error summaries.
-- **Code Skeleton & Line Range Extraction (`ertangle outline`, T102, T103)**:
+- **Code Skeleton & Line Range Extraction (`ertangle outline`)**:
   - Scans `.rs`, `.ts`/`.tsx`/`.js`/`.jsx`/`.vue`, `.cs`, `.py`, `.gd` (GDScript), `.tscn` (Godot scene node tree `[node]`, external scripts `[ext_resource]`, and `[connection]` signal bindings, skipping massive `[sub_resource]`), and `.gdshader` (Godot Shader) files or directories without reading entire files, returning symbol outlines with exact `L<start>-L<end>` ranges.
   - Enables coordinators to include exact file paths and line ranges in worker prompts so workers edit directly without re-exploring large files.
-- **Non-Blocking Dev Server Manager (`ertangle dev`, T102)**:
+- **Non-Blocking Dev Server Manager (`ertangle dev`)**:
   - `ertangle dev start|status|stop` auto-detects the stack, picks a free local TCP port, spawns the dev server in its own process group streaming logs to `.ertangle/dev-<port>.log`, and returns the URL and PID as soon as the port is ready—preventing blocked agent turns and multi-worktree port collisions.
-- **Scoped Diff & Generated File Folding (`ertangle_diff` / `ertangle diff`, T98, T103)**:
+- **Scoped Diff & Generated File Folding (`ertangle_diff` / `ertangle diff`)**:
   - Supports `stat_only` (file stats only), `paths` (path filtering), and `max_lines` (default 800 lines for MCP calls).
   - When `paths` is omitted, automatically folds giant lock and generated files (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `*.Designer.cs`, `*ModelSnapshot.cs`, `uv.lock`, `poetry.lock`, `go.sum`, `*.snap`, `*.min.js`), Godot `*.import`, `*.uid`, `*.translation` files, and >300-character `Packed*Array(...)` lines inside `.tscn` / `.tres` scene and resource files into single-line summaries.
-- **Atomic Task Reporting & Spawn Binding (`ertangle_task_update` / `ertangle_spawn`, T99)**:
+- **Atomic Task Reporting & Spawn Binding (`ertangle_task_update` / `ertangle_spawn`)**:
   - Passing `report` to `ertangle_task_update` with `done` or `blocked` atomically updates the task board and sends `TASK_DONE` / `TASK_BLOCKED` to the parent session in a single turn.
   - `ertangle_spawn` accepts `task_title` or `task_id` to create or bind a board task simultaneously, reducing coordinator dispatch turns.
-- **Shared Worktree Dependencies & Build Cache (`shared_worktree_deps` / `shared_cargo_target`, T100, T103)**:
+- **Shared Worktree Dependencies & Build Cache (`shared_worktree_deps` / `shared_cargo_target`)**:
   - Shares `<repo>/.ertangle/target` as `CARGO_TARGET_DIR` across Cargo worktrees and symlinks untracked `node_modules`, `.venv`, `.env*` (excluding templates), and `appsettings.Development.json` into worktrees without polluting `git status` or `ertangle_diff`. For Godot projects (`project.godot`), creates an isolated `.godot/` directory in the worktree, symlinks `.godot/imported` to share heavy asset imports, and copies `global_script_class_cache.cfg`, `uid_cache.bin`, and `extension_list.cfg`.
-- **Optional Token Hints, Call Counter & Auto-Compact (`token_hints` / `N calls` / `auto_compact`, T47)**:
+- **Optional Token Hints, Call Counter & Auto-Compact (`token_hints` / `N calls` / `auto_compact`)**:
   - Enable `[collab] token_hints = true` (off by default; also toggleable in `:settings`) to inject concise tool-batching and output-limiting hints, and monitor the `N calls` counter in the TUI session info bar.
   - Combined with `[auto_compact]` (automatic `/compact` on idle when context reaches threshold) and the Zero Pleasantries protocol, multi-turn token overhead stays minimal.
 
@@ -438,7 +438,7 @@ Press `:` to open the command line with `Tab` completion:
 - `:quota` — Display rate limit windows and reset countdowns for all agent accounts
 - `:task <title>` / `:tasks` — Create task / switch to Tasks board view
 - `:task-status <todo|doing|blocked|review|done>` — Update status of selected task
-- `:host <target|all>` — Filter sessions by host in multi-host mode (T29)
+- `:host <target|all>` — Filter sessions by host in multi-host mode
 - `:remote` — Display remote connection details, Tailscale IP, and Web version URL
 - `:notify on|off|test` — Toggle desktop notifications or send a test alert
 - `:shutdown` — Shut down daemon and all running agents (requires `:shutdown!` to confirm)
@@ -532,7 +532,7 @@ port = 7421                       # Custom port: default 7421 (can also be speci
 addr = "tailscale"                # Listen address: "tailscale" (auto-detect IP) | "127.0.0.1" | "0.0.0.0"
 
 [remotes]
-# Multi-host aggregation (T29)
+# Multi-host aggregation
 workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/ertangle/workstation.token" }
 gpu-box = { addr = "100.64.0.8:7420" }
 
