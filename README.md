@@ -70,19 +70,6 @@ Each agent communicates via its **official, native structured interface without 
 
 ---
 
----
-
-## Migrating from termade
-
-This project has been renamed from `termade` to `ertangle`. When upgrading, note the following compatibility and migration details:
-
-- **Stop the old daemon**: Stop the running `termade` daemon before launching `ertangle` for the first time (`termade shutdown` or terminate the process).
-- **Config and state directories**: On first run, `~/.config/termade` and `~/.local/state/termade` are moved automatically to `~/.config/ertangle` and `~/.local/state/ertangle` if the new directories do not exist yet.
-- **Project config**: Repo-local `.termade/config.toml` is still read as a fallback until v1.0, but should be renamed to `.ertangle/`.
-- **Environment variables**: `TERMADE_*` environment variables remain accepted as fallbacks until v1.0. Please migrate to `ERTANGLE_*`.
-- **Reinstall skills**: Run `ertangle skill install` to reinstall the agent skill (`ertangle skill uninstall` also removes the legacy `termade-ade` skill).
-- **Git branches**: Existing `termade/*` branches are untouched.
-
 ## Quick Start
 
 ### 1. Installation

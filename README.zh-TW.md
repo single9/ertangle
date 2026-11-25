@@ -70,19 +70,6 @@ https://github.com/user-attachments/assets/4e86a5cd-e9fb-48d6-a9c8-f78826417eab
 
 ---
 
----
-
-## 從 termade 遷移
-
-本專案已由 `termade` 正式更名為 `ertangle`。升級時請留意以下相容層與遷移事項：
-
-- **停止舊 Daemon**：首次執行 `ertangle` 前，請先停止舊的 `termade` daemon (`termade shutdown` 或關閉對應處理程序)。
-- **設定與狀態目錄**：首次啟動時，若新目錄尚不存在，系統會自動將 `~/.config/termade` 與 `~/.local/state/termade` 搬移至 `~/.config/ertangle` 與 `~/.local/state/ertangle`。
-- **專案設定檔**：Repo 內的 `.termade/config.toml` 在 v1.0 前仍會作為相容退路被讀取，但建議將目錄重新命名為 `.ertangle/`。
-- **環境變數**：`TERMADE_*` 系列環境變數仍會作為退路支援至 v1.0，建議改用 `ERTANGLE_*`。
-- **重新安裝 Skill**：請執行 `ertangle skill install` 重新安裝 agent skill (`ertangle skill uninstall` 也會一併清理舊的 `termade-ade`)。
-- **Git 分支**：既有的 `termade/*` 分支維持原樣，不受影響。
-
 ## 快速開始
 
 ### 1. 安裝
