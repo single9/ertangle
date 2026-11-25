@@ -516,7 +516,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     },
                     "strategy": {
                         "type": "string",
-                        "description": "Merge strategy: merge | squash | rebase",
+                        "description": "Optional merge strategy override: merge | squash | rebase. Omit to use the configured git.merge_strategy default.",
                         "enum": ["merge", "squash", "rebase"]
                     }
                 },
