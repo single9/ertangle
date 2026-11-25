@@ -318,14 +318,14 @@ pub fn parse_codex_models(out: &str) -> Vec<(String, String)> {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(out) else {
         return Vec::new();
     };
-    v["models"]
-        .as_array()
+    v.get("models")
+        .and_then(|m| m.as_array())
         .into_iter()
         .flatten()
-        .filter(|m| m["visibility"] == "list")
+        .filter(|m| m.get("visibility").and_then(|x| x.as_str()) == Some("list"))
         .filter_map(|m| {
-            let slug = m["slug"].as_str()?;
-            let label = match m["display_name"].as_str() {
+            let slug = m.get("slug")?.as_str()?;
+            let label = match m.get("display_name").and_then(|x| x.as_str()) {
                 Some(n) if !n.is_empty() => format!("{slug}  ({n})"),
                 _ => slug.to_string(),
             };

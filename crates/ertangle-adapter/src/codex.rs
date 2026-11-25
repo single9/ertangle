@@ -73,7 +73,10 @@ fn elicitation_content(entries: &[(String, bool, Vec<String>)]) -> Value {
     let mut content = serde_json::Map::new();
     for (key, multi_select, answers) in entries {
         let value = if !multi_select && answers.len() == 1 {
-            json!(answers[0])
+            answers
+                .first()
+                .map(|a| json!(a))
+                .unwrap_or_else(|| json!(""))
         } else {
             json!(answers)
         };
@@ -180,14 +183,15 @@ impl Conn {
                 return;
             }
         }
-        let method = msg["method"].as_str().unwrap_or("");
+        let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("");
         // 2) Server -> client requests (requiring our response).
         if msg.get("id").is_some() && !method.is_empty() {
             self.on_server_request(method, &msg);
             return;
         }
         // 3) Notifications.
-        self.on_notification(method, &msg["params"]);
+        let params = msg.get("params").unwrap_or(&Value::Null);
+        self.on_notification(method, params);
     }
 
     fn on_server_request(&self, method: &str, msg: &Value) {
@@ -261,12 +265,15 @@ impl Conn {
                 ("Edit".to_string(), reason.to_string(), ApprovalKind::File)
             }
             "mcpServer/elicitation/request" => {
-                let tool_name = params["_meta"]["tool_name"]
-                    .as_str()
-                    .or_else(|| params["serverName"].as_str())
+                let tool_name = params
+                    .get("_meta")
+                    .and_then(|m| m.get("tool_name"))
+                    .and_then(|t| t.as_str())
+                    .or_else(|| params.get("serverName").and_then(|s| s.as_str()))
                     .unwrap_or("tool");
-                let msg_text = params["message"]
-                    .as_str()
+                let msg_text = params
+                    .get("message")
+                    .and_then(|m| m.as_str())
                     .unwrap_or("MCP tool call approval");
                 (
                     format!("MCP ({tool_name})"),
@@ -339,7 +346,11 @@ impl Conn {
                 }
             }
             "turn/started" => {
-                if let Some(id) = p["turn"]["id"].as_str() {
+                if let Some(id) = p
+                    .get("turn")
+                    .and_then(|t| t.get("id"))
+                    .and_then(|i| i.as_str())
+                {
                     *self.turn.lock().unwrap_or_else(|e| e.into_inner()) = id.to_string();
                 }
                 *self.last_error.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -347,9 +358,10 @@ impl Conn {
             }
             "turn/completed" => {
                 self.flush_stream();
-                let failed = !p["turn"]["error"].is_null();
-                if failed {
-                    self.report_error(&p["turn"]["error"]);
+                let err = p.get("turn").and_then(|t| t.get("error"));
+                let failed = err.is_some_and(|e| !e.is_null());
+                if let Some(e) = err.filter(|e| !e.is_null()) {
+                    self.report_error(e);
                 }
                 self.emit(AgentEvent::Status(if failed {
                     SessionStatus::Failed
@@ -357,30 +369,50 @@ impl Conn {
                     SessionStatus::Idle
                 }));
             }
-            "item/completed" => self.on_item_completed(&p["item"]),
+            "item/completed" => {
+                if let Some(it) = p.get("item") {
+                    self.on_item_completed(it);
+                }
+            }
             "thread/tokenUsage/updated" => {
-                let last = &p["tokenUsage"]["last"];
-                if let Some(used) = last["totalTokens"].as_u64() {
+                let tu = p.get("tokenUsage");
+                let last = tu.and_then(|t| t.get("last"));
+                if let Some(used) = last
+                    .and_then(|l| l.get("totalTokens"))
+                    .and_then(|t| t.as_u64())
+                {
                     self.emit(AgentEvent::Context {
                         used,
-                        window: p["tokenUsage"]["modelContextWindow"].as_u64(),
+                        window: tu
+                            .and_then(|t| t.get("modelContextWindow"))
+                            .and_then(|w| w.as_u64()),
                     });
                 }
-                let total = &p["tokenUsage"]["total"];
+                let total = tu.and_then(|t| t.get("total"));
                 let cost = Cost {
                     usd: 0.0,
-                    input_tokens: total["inputTokens"].as_u64().unwrap_or(0),
-                    output_tokens: total["outputTokens"].as_u64().unwrap_or(0),
+                    input_tokens: total
+                        .and_then(|t| t.get("inputTokens"))
+                        .and_then(|i| i.as_u64())
+                        .unwrap_or(0),
+                    output_tokens: total
+                        .and_then(|t| t.get("outputTokens"))
+                        .and_then(|o| o.as_u64())
+                        .unwrap_or(0),
                 };
                 self.emit(AgentEvent::Cost(cost));
             }
             "account/rateLimits/updated" => {
-                if let Some(q) = parse_rate_limits(&p["rateLimits"]) {
+                if let Some(q) = p.get("rateLimits").and_then(parse_rate_limits) {
                     self.emit(AgentEvent::Quota(q));
                 }
             }
             "thread/started" => {
-                if let Some(id) = p["thread"]["id"].as_str() {
+                if let Some(id) = p
+                    .get("thread")
+                    .and_then(|t| t.get("id"))
+                    .and_then(|i| i.as_str())
+                {
                     *self.thread.lock().unwrap_or_else(|e| e.into_inner()) = id.to_string();
                 }
             }
@@ -449,14 +481,21 @@ impl Conn {
                     format!("{server}:{tool}")
                 };
                 let ok = item["status"].as_str().map(|s| s == "completed");
-                let output = item["result"]["content"].as_array().and_then(|arr| {
-                    let texts: Vec<&str> = arr.iter().filter_map(|c| c["text"].as_str()).collect();
-                    if texts.is_empty() {
-                        None
-                    } else {
-                        Some(texts.join("\n"))
-                    }
-                });
+                let output = item
+                    .get("result")
+                    .and_then(|r| r.get("content"))
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| {
+                        let texts: Vec<&str> = arr
+                            .iter()
+                            .filter_map(|c| c.get("text").and_then(|t| t.as_str()))
+                            .collect();
+                        if texts.is_empty() {
+                            None
+                        } else {
+                            Some(texts.join("\n"))
+                        }
+                    });
                 self.emit(AgentEvent::ToolCall {
                     name,
                     input: item["arguments"].to_string(),
@@ -549,11 +588,13 @@ impl AgentControl for CodexControl {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
-        if let Some(m) = m {
-            params["model"] = json!(m);
-        }
-        if let Some(e) = e {
-            params["effort"] = json!(e);
+        if let Some(map) = params.as_object_mut() {
+            if let Some(m) = m {
+                map.insert("model".to_string(), json!(m));
+            }
+            if let Some(e) = e {
+                map.insert("effort".to_string(), json!(e));
+            }
         }
         self.conn.call("turn/start", params, CALL_TIMEOUT)?;
         Ok(())
@@ -630,7 +671,7 @@ impl AgentControl for CodexControl {
             bail!("{}", tr!("未知的核准請求：{req}", req = req));
         };
         let id = entry.get("id").cloned().unwrap_or(Value::Null);
-        let kind = match entry["kind"].as_str() {
+        let kind = match entry.get("kind").and_then(|k| k.as_str()) {
             Some("file") => ApprovalKind::File,
             Some("mcp_elicitation") => ApprovalKind::McpElicitation,
             Some("permissions") => ApprovalKind::Permissions,
@@ -932,20 +973,22 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     let started = conn
         .call(method, thread_open_params(&spec), CALL_TIMEOUT)
         .with_context(|| tr!("codex `{method}` 失敗", method = method))?;
-    let tid = started["thread"]["id"]
-        .as_str()
+    let tid = started
+        .get("thread")
+        .and_then(|t| t.get("id"))
+        .and_then(|i| i.as_str())
         .with_context(|| tr!("`{method}` 未回傳 thread id", method = method))?
         .to_string();
     *conn.thread.lock().unwrap_or_else(|e| e.into_inner()) = tid.clone();
     // 接收端若已關閉則忽略事件傳送
     let _ = tx.send(AgentEvent::NativeId(tid));
-    if let Some(model) = started["model"].as_str() {
+    if let Some(model) = started.get("model").and_then(|m| m.as_str()) {
         // 接收端若已關閉則忽略
         let _ = tx.send(AgentEvent::Model(model.to_string()));
     }
     // Query account quota once on startup (skipped if not logged in or unsupported by older codex versions).
     if let Ok(r) = conn.call("account/rateLimits/read", json!({}), CALL_TIMEOUT) {
-        if let Some(q) = parse_rate_limits(&r["rateLimits"]) {
+        if let Some(q) = r.get("rateLimits").and_then(parse_rate_limits) {
             // 接收端若已關閉則忽略
             let _ = tx.send(AgentEvent::Quota(q));
         }
@@ -1014,8 +1057,10 @@ fn turn_input(text: &str, atts: &[ertangle_core::Attachment]) -> Value {
 fn thread_open_params(spec: &SessionSpec) -> Value {
     let mut p = thread_start_params(spec);
     if let Some(id) = &spec.resume {
-        p["threadId"] = json!(id);
-        p["excludeTurns"] = json!(true);
+        if let Some(map) = p.as_object_mut() {
+            map.insert("threadId".to_string(), json!(id));
+            map.insert("excludeTurns".to_string(), json!(true));
+        }
     }
     p
 }
@@ -1071,29 +1116,32 @@ pub fn resolve_codex_sandbox(spec: &SessionSpec, bwrap_ok: bool) -> String {
 }
 
 fn thread_start_params(spec: &SessionSpec) -> Value {
-    let mut p = json!({
-        "cwd": spec.cwd.to_string_lossy(),
-        "approvalPolicy": spec.permission.codex_approval_policy(),
-    });
-    if let Some(m) = &spec.model {
-        p["model"] = json!(m);
-    }
-    let mut config = json!({
-        "sandbox_workspace_write": {
-            "network_access": true
-        }
-    });
+    let sandbox = resolve_codex_sandbox(spec, is_bwrap_usable());
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "sandbox_workspace_write".to_string(),
+        json!({ "network_access": true }),
+    );
     if let Some(e) = &spec.effort {
         // Thread-level config override, equivalent to `-c model_reasoning_effort=...`.
-        config["model_reasoning_effort"] = json!(e);
+        config.insert("model_reasoning_effort".to_string(), json!(e));
     }
-    p["config"] = config;
-    let sandbox = resolve_codex_sandbox(spec, is_bwrap_usable());
-    p["sandbox"] = json!(sandbox);
+
+    let mut map = serde_json::Map::new();
+    map.insert("cwd".to_string(), json!(spec.cwd.to_string_lossy()));
+    map.insert(
+        "approvalPolicy".to_string(),
+        json!(spec.permission.codex_approval_policy()),
+    );
+    if let Some(m) = &spec.model {
+        map.insert("model".to_string(), json!(m));
+    }
+    map.insert("config".to_string(), Value::Object(config));
+    map.insert("sandbox".to_string(), json!(sandbox));
     if let Some(inst) = spec.system_append.as_deref().filter(|s| !s.is_empty()) {
-        p["developerInstructions"] = json!(inst);
+        map.insert("developerInstructions".to_string(), json!(inst));
     }
-    p
+    Value::Object(map)
 }
 
 #[cfg(test)]

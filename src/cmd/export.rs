@@ -75,7 +75,7 @@ pub(crate) fn cmd_playbook(name: String, goal: Vec<String>) -> Result<()> {
             tr!(
                 "已建立 {id} ({label})",
                 id = fresh,
-                label = state.sessions[&fresh].label
+                label = state.sessions.get(&fresh).map_or("", |s| &s.label)
             )
         );
     }

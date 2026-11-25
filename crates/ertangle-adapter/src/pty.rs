@@ -148,7 +148,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
-                        let text = stripper.feed(&buf[..n]);
+                        let text = stripper.feed(buf.get(..n).unwrap_or_default());
                         if text.trim().is_empty() {
                             continue;
                         }

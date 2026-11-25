@@ -1728,7 +1728,9 @@ impl State {
             .and_then(|id| self.messages.iter().position(|m| m.id == id))
             .map(|idx| idx + 1)
             .unwrap_or(0);
-        self.messages[start..]
+        self.messages
+            .get(start..)
+            .unwrap_or(&[])
             .iter()
             .filter(|m| m.matches_recipient(&resolved, label))
             .cloned()
@@ -2334,18 +2336,31 @@ pub fn base64_encode(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
-        let n = (u32::from(chunk[0]) << 16)
+        let Some(&first) = chunk.first() else {
+            continue;
+        };
+        let n = (u32::from(first) << 16)
             | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
             | u32::from(*chunk.get(2).unwrap_or(&0));
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
+        if let Some(&ch) = T.get((n >> 18) as usize & 63) {
+            out.push(ch as char);
+        }
+        if let Some(&ch) = T.get((n >> 12) as usize & 63) {
+            out.push(ch as char);
+        }
         out.push(if chunk.len() > 1 {
-            T[(n >> 6) as usize & 63] as char
+            T.get((n >> 6) as usize & 63)
+                .copied()
+                .map(char::from)
+                .unwrap_or('=')
         } else {
             '='
         });
         out.push(if chunk.len() > 2 {
-            T[n as usize & 63] as char
+            T.get(n as usize & 63)
+                .copied()
+                .map(char::from)
+                .unwrap_or('=')
         } else {
             '='
         });

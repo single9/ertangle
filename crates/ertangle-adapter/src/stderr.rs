@@ -70,7 +70,7 @@ impl StderrTail {
                 if n == 0 {
                     break;
                 }
-                let text = strip.feed(&buf[..n]);
+                let text = strip.feed(buf.get(..n).unwrap_or_default());
                 shared
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
