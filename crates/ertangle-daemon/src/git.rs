@@ -565,7 +565,7 @@ pub fn compute_worktree_diff_with_options(cwd: &Path, opts: &DiffOptions) -> Res
         let all_lines: Vec<&str> = out.lines().collect();
         if all_lines.len() > max {
             let omitted = all_lines.len() - max;
-            let mut truncated = all_lines[..max].join("\n");
+            let mut truncated = all_lines.get(..max).unwrap_or(&all_lines).join("\n");
             truncated.push_str(&format!(
                 "\n... ({omitted} more lines truncated; use stat_only=true or paths=[...] to narrow scope)\n"
             ));
@@ -670,9 +670,12 @@ fn collect_conflicts(dir: &Path) -> Vec<String> {
             for line in String::from_utf8_lossy(&st.stdout).lines() {
                 let bytes = line.as_bytes();
                 if bytes.len() >= 4 {
-                    let code = &bytes[0..2];
-                    if matches!(code, b"UU" | b"AA" | b"UD" | b"DU" | b"DD" | b"AU" | b"UA") {
-                        files.push(line[3..].trim().to_string());
+                    if let Some(code) = bytes.get(0..2) {
+                        if matches!(code, b"UU" | b"AA" | b"UD" | b"DU" | b"DD" | b"AU" | b"UA") {
+                            if let Some(path) = line.get(3..) {
+                                files.push(path.trim().to_string());
+                            }
+                        }
                     }
                 }
             }
@@ -719,7 +722,7 @@ fn run_pre_merge_command(wt_dir: &Path, cmd: &str) -> Result<()> {
                 );
                 let lines: Vec<&str> = combined.lines().collect();
                 let start_idx = lines.len().saturating_sub(20);
-                let tail = lines[start_idx..].join("\n");
+                let tail = lines.get(start_idx..).unwrap_or(&lines).join("\n");
                 bail!(
                     "{}",
                     tr!(
@@ -756,10 +759,11 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
         for line in String::from_utf8_lossy(&st.stdout).lines() {
             let bytes = line.as_bytes();
             if bytes.len() >= 4 {
-                let code = &bytes[0..2];
-                if matches!(code, b"UU" | b"AA" | b"UD" | b"DU" | b"DD" | b"AU" | b"UA") {
-                    has_unmerged_status = true;
-                    break;
+                if let Some(code) = bytes.get(0..2) {
+                    if matches!(code, b"UU" | b"AA" | b"UD" | b"DU" | b"DD" | b"AU" | b"UA") {
+                        has_unmerged_status = true;
+                        break;
+                    }
                 }
             }
         }

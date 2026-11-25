@@ -23,11 +23,7 @@ const INDEX_HTML: &str = include_str!("web/index.html");
 const MANIFEST_JSON: &str = include_str!("web/manifest.json");
 
 /// 計算 SHA-1 雜湊值 (RFC 3174)。
-#[expect(
-    clippy::chunks_exact_to_as_chunks,
-    clippy::needless_range_loop,
-    reason = "SHA-1 演算法標準實作"
-)]
+#[expect(clippy::chunks_exact_to_as_chunks, reason = "SHA-1 演算法標準實作")]
 pub fn sha1(data: &[u8]) -> [u8; 20] {
     let mut h0: u32 = 0x67452301;
     let mut h1: u32 = 0xEFCDAB89;
@@ -45,16 +41,21 @@ pub fn sha1(data: &[u8]) -> [u8; 20] {
 
     for chunk in msg.chunks_exact(64) {
         let mut w = [0u32; 80];
-        for i in 0..16 {
-            w[i] = u32::from_be_bytes([
-                chunk[i * 4],
-                chunk[i * 4 + 1],
-                chunk[i * 4 + 2],
-                chunk[i * 4 + 3],
-            ]);
+        for (i, c) in chunk.chunks_exact(4).take(16).enumerate() {
+            if let Some(slot) = w.get_mut(i) {
+                if let Ok(bytes) = <[u8; 4]>::try_from(c) {
+                    *slot = u32::from_be_bytes(bytes);
+                }
+            }
         }
         for i in 16..80 {
-            w[i] = (w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]).rotate_left(1);
+            let v = w.get(i - 3).copied().unwrap_or(0)
+                ^ w.get(i - 8).copied().unwrap_or(0)
+                ^ w.get(i - 14).copied().unwrap_or(0)
+                ^ w.get(i - 16).copied().unwrap_or(0);
+            if let Some(slot) = w.get_mut(i) {
+                *slot = v.rotate_left(1);
+            }
         }
 
         let mut a = h0;
@@ -63,7 +64,7 @@ pub fn sha1(data: &[u8]) -> [u8; 20] {
         let mut d = h3;
         let mut e = h4;
 
-        for i in 0..80 {
+        for (i, &wi) in w.iter().enumerate() {
             let (f, k) = match i {
                 0..=19 => ((b & c) | ((!b) & d), 0x5A827999),
                 20..=39 => (b ^ c ^ d, 0x6ED9EBA1),
@@ -75,7 +76,7 @@ pub fn sha1(data: &[u8]) -> [u8; 20] {
                 .wrapping_add(f)
                 .wrapping_add(e)
                 .wrapping_add(k)
-                .wrapping_add(w[i]);
+                .wrapping_add(wi);
             e = d;
             d = c;
             c = b.rotate_left(30);
@@ -147,12 +148,9 @@ fn handle_http_or_ws(shared: Arc<Shared>, mut stream: TcpStream) -> Result<()> {
         return Ok(());
     }
 
-    let parts: Vec<&str> = first_line.split_whitespace().collect();
-    if parts.len() < 2 {
-        bail!("無效的 HTTP 請求列");
-    }
-    let method = parts[0];
-    let path = parts[1];
+    let mut parts = first_line.split_whitespace();
+    let method = parts.next().context("無效的 HTTP 請求列")?;
+    let path = parts.next().context("無效的 HTTP 請求列")?;
 
     let mut headers = Vec::new();
     let mut ws_key = None;
@@ -280,20 +278,22 @@ fn percent_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'+' {
+    while let Some(&byte) = b.get(i) {
+        if byte == b'+' {
             out.push(b' ');
             i += 1;
             continue;
         }
-        if b[i] == b'%' && i + 2 < b.len() {
-            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
-                out.push(v);
-                i += 3;
-                continue;
+        if byte == b'%' {
+            if let Some(sub) = s.get(i + 1..i + 3) {
+                if let Ok(v) = u8::from_str_radix(sub, 16) {
+                    out.push(v);
+                    i += 3;
+                    continue;
+                }
             }
         }
-        out.push(b[i]);
+        out.push(byte);
         i += 1;
     }
     String::from_utf8_lossy(&out).to_string()
@@ -865,8 +865,8 @@ fn read_ws_frame<R: Read>(reader: &mut R) -> Result<(u8, Vec<u8>)> {
     reader.read_exact(&mut payload)?;
 
     if let Some(mask) = mask_key {
-        for (i, b) in payload.iter_mut().enumerate() {
-            *b ^= mask[i % 4];
+        for (b, &m) in payload.iter_mut().zip(mask.iter().cycle()) {
+            *b ^= m;
         }
     }
 

@@ -789,7 +789,10 @@ impl Config {
             .iter()
             .position(|m| Role::parse(&m.role) == Role::Coordinator)
             .unwrap_or(0);
-        let mut ordered: Vec<&PlaybookMember> = vec![&pb.sessions[coordinator]];
+        let mut ordered: Vec<&PlaybookMember> = Vec::with_capacity(pb.sessions.len());
+        if let Some(coord_member) = pb.sessions.get(coordinator).or_else(|| pb.sessions.first()) {
+            ordered.push(coord_member);
+        }
         ordered.extend(
             pb.sessions
                 .iter()

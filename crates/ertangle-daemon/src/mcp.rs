@@ -136,7 +136,9 @@ fn initialize_result(client_ver: &str, instructions: Option<String>) -> Value {
         }
     });
     if let Some(text) = instructions {
-        res["instructions"] = json!(text);
+        if let Some(obj) = res.as_object_mut() {
+            obj.insert("instructions".to_string(), json!(text));
+        }
     }
     res
 }
@@ -746,7 +748,9 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .unwrap_or(&note);
             let mut out = json!({ "ok": true, "id": id, "note": note });
             if let Some(w) = note_warning(&note) {
-                out["warning"] = json!(w);
+                if let Some(obj) = out.as_object_mut() {
+                    obj.insert("warning".to_string(), json!(w));
+                }
             }
             Ok(out)
         }
@@ -891,7 +895,9 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
             let mut out = json!({ "ok": true, "id": id });
             if let Frame::Ok { note: Some(note) } = &frame {
                 if let Some(w) = note_warning(note) {
-                    out["warning"] = json!(w);
+                    if let Some(obj) = out.as_object_mut() {
+                        obj.insert("warning".to_string(), json!(w));
+                    }
                 }
             }
             if let Some(report_body) = format_task_parent_report(&id, status, report) {
@@ -908,10 +914,14 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                             body: report_body,
                             reply_to: None,
                         }) {
-                            out["reported_to"] = json!(pid);
+                            if let Some(obj) = out.as_object_mut() {
+                                obj.insert("reported_to".to_string(), json!(pid));
+                            }
                             if let Frame::Ok { note: Some(n) } = send_frame {
                                 if let Some(w) = note_warning(&n) {
-                                    out["report_warning"] = json!(w);
+                                    if let Some(obj) = out.as_object_mut() {
+                                        obj.insert("report_warning".to_string(), json!(w));
+                                    }
                                 }
                             }
                         }
@@ -1018,7 +1028,9 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 })
                 .is_ok()
                 {
-                    out["task_id"] = json!(tid);
+                    if let Some(obj) = out.as_object_mut() {
+                        obj.insert("task_id".to_string(), json!(tid));
+                    }
                 }
             }
             Ok(out)
@@ -1359,7 +1371,9 @@ fn task_list_json(state: &ertangle_core::State) -> Value {
                     })
                 })
                 .collect();
-            v["waiting_on"] = Value::Array(waiting);
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert("waiting_on".to_string(), Value::Array(waiting));
+            }
             v
         })
         .collect();

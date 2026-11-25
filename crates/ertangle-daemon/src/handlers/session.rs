@@ -1045,7 +1045,9 @@ fn truncate_shell_output(mut text: String) -> String {
     }
     let lines: Vec<&str> = text.lines().collect();
     if lines.len() > EXEC_MAX_LINES {
-        text = lines[..EXEC_MAX_LINES].join("\n");
+        if let Some(sub) = lines.get(..EXEC_MAX_LINES) {
+            text = sub.join("\n");
+        }
         truncated = true;
     }
     if truncated {

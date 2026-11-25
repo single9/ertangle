@@ -2,6 +2,10 @@
 //! 支援 Version 1 到 9，Byte 模式，Low 容錯率 (ECC L)。
 
 /// GF(256) 常數與對數表 (多項式 0x11D)。
+#[expect(
+    clippy::indexing_slicing,
+    reason = "compile-time constant table initialization with bounded loops"
+)]
 const GF_EXP: [u8; 512] = {
     let mut exp = [0u8; 512];
     let mut x = 1u16;
@@ -18,6 +22,10 @@ const GF_EXP: [u8; 512] = {
     exp
 };
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "compile-time constant table initialization with bounded loops"
+)]
 const GF_LOG: [u8; 256] = {
     let mut log = [0u8; 256];
     let mut i = 0;
@@ -32,7 +40,9 @@ fn gf_mul(x: u8, y: u8) -> u8 {
     if x == 0 || y == 0 {
         0
     } else {
-        GF_EXP[(GF_LOG[x as usize] as usize + GF_LOG[y as usize] as usize) % 255]
+        let log_x = GF_LOG.get(x as usize).copied().unwrap_or(0) as usize;
+        let log_y = GF_LOG.get(y as usize).copied().unwrap_or(0) as usize;
+        GF_EXP.get((log_x + log_y) % 255).copied().unwrap_or(0)
     }
 }
 
@@ -43,8 +53,12 @@ fn reed_solomon_compute(data: &[u8], ec_count: usize) -> Vec<u8> {
     for &factor in GF_EXP.iter().take(ec_count) {
         let mut next = vec![0u8; gen.len() + 1];
         for (j, &c) in gen.iter().enumerate() {
-            next[j] ^= gf_mul(c, factor);
-            next[j + 1] ^= c;
+            if let Some(n) = next.get_mut(j) {
+                *n ^= gf_mul(c, factor);
+            }
+            if let Some(n) = next.get_mut(j + 1) {
+                *n ^= c;
+            }
         }
         gen = next;
     }
@@ -53,11 +67,17 @@ fn reed_solomon_compute(data: &[u8], ec_count: usize) -> Vec<u8> {
 
     let mut rem = vec![0u8; ec_count];
     for &byte in data {
-        let factor = byte ^ rem[0];
-        rem.copy_within(1..ec_count, 0);
-        rem[ec_count - 1] = 0;
-        for j in 0..ec_count {
-            rem[j] ^= gf_mul(gen[j + 1], factor);
+        let first_rem = rem.first().copied().unwrap_or(0);
+        let factor = byte ^ first_rem;
+        if ec_count > 1 {
+            rem.copy_within(1..ec_count, 0);
+        }
+        if let Some(last) = rem.get_mut(ec_count - 1) {
+            *last = 0;
+        }
+        for (j, rem_j) in rem.iter_mut().enumerate().take(ec_count) {
+            let gen_val = gen.get(j + 1).copied().unwrap_or(0);
+            *rem_j ^= gf_mul(gen_val, factor);
         }
     }
     rem
@@ -166,7 +186,10 @@ pub struct QrCode {
 impl QrCode {
     pub fn is_dark(&self, row: usize, col: usize) -> bool {
         if row < self.size && col < self.size {
-            self.modules[row * self.size + col]
+            self.modules
+                .get(row * self.size + col)
+                .copied()
+                .unwrap_or(false)
         } else {
             false
         }
@@ -215,10 +238,9 @@ impl QrCode {
             data_bytes.push(val);
         }
         // 交替填補碼 0xEC 與 0x11
-        let pad_bytes = [0xEC, 0x11];
         let mut pad_idx = 0;
         while data_bytes.len() < ver.data_codewords {
-            data_bytes.push(pad_bytes[pad_idx % 2]);
+            data_bytes.push(if pad_idx % 2 == 0 { 0xEC } else { 0x11 });
             pad_idx += 1;
         }
 
@@ -238,24 +260,32 @@ impl QrCode {
             for b in 0..num_blocks {
                 let start = b * data_per_block;
                 let end = start + data_per_block;
-                let slice = &data_bytes[start..end];
+                let slice = data_bytes.get(start..end).unwrap_or_default();
                 let ec = reed_solomon_compute(slice, ec_per_block);
                 block_data.push(slice);
                 block_ec.push(ec);
             }
 
             // 交錯排列資料位元組
-            #[expect(clippy::needless_range_loop, reason = "依區塊索引交錯讀取位元組陣列")]
             for i in 0..data_per_block {
                 for b in 0..num_blocks {
-                    all_bytes.push(block_data[b][i]);
+                    let val = block_data
+                        .get(b)
+                        .and_then(|blk| blk.get(i))
+                        .copied()
+                        .unwrap_or(0);
+                    all_bytes.push(val);
                 }
             }
             // 交錯排列糾錯位元組
-            #[expect(clippy::needless_range_loop, reason = "依區塊索引交錯讀取位元組陣列")]
             for i in 0..ec_per_block {
                 for b in 0..num_blocks {
-                    all_bytes.push(block_ec[b][i]);
+                    let val = block_ec
+                        .get(b)
+                        .and_then(|blk| blk.get(i))
+                        .copied()
+                        .unwrap_or(0);
+                    all_bytes.push(val);
                 }
             }
         }
@@ -283,8 +313,12 @@ impl QrCode {
                             || c == 6
                             || ((2..=4).contains(&r) && (2..=4).contains(&c));
                         let idx = (top + r) * sz + (left + c);
-                        m[idx] = Some(is_black);
-                        f[idx] = true;
+                        if let Some(slot) = m.get_mut(idx) {
+                            *slot = Some(is_black);
+                        }
+                        if let Some(slot) = f.get_mut(idx) {
+                            *slot = true;
+                        }
                     }
                 }
                 // 分隔區 (Separator)
@@ -294,9 +328,13 @@ impl QrCode {
                         let cc = left as isize + c as isize - (if left > 0 { 1 } else { 0 });
                         if rr >= 0 && rr < sz as isize && cc >= 0 && cc < sz as isize {
                             let idx = (rr as usize) * sz + (cc as usize);
-                            if !f[idx] {
-                                m[idx] = Some(false);
-                                f[idx] = true;
+                            if !f.get(idx).copied().unwrap_or(true) {
+                                if let Some(slot) = m.get_mut(idx) {
+                                    *slot = Some(false);
+                                }
+                                if let Some(slot) = f.get_mut(idx) {
+                                    *slot = true;
+                                }
                             }
                         }
                     }
@@ -321,8 +359,12 @@ impl QrCode {
                             let is_b =
                                 dr == 0 || dr == 4 || dc == 0 || dc == 4 || (dr == 2 && dc == 2);
                             let idx = (r - 2 + dr) * size + (c - 2 + dc);
-                            matrix[idx] = Some(is_b);
-                            function[idx] = true;
+                            if let Some(slot) = matrix.get_mut(idx) {
+                                *slot = Some(is_b);
+                            }
+                            if let Some(slot) = function.get_mut(idx) {
+                                *slot = true;
+                            }
                         }
                     }
                 }
@@ -332,32 +374,52 @@ impl QrCode {
         // 定時圖案 (Timing Patterns: row 6 與 col 6)
         for i in 8..(size - 8) {
             let row_idx = 6 * size + i;
-            if !function[row_idx] {
-                matrix[row_idx] = Some(i % 2 == 0);
-                function[row_idx] = true;
+            if !function.get(row_idx).copied().unwrap_or(true) {
+                if let Some(slot) = matrix.get_mut(row_idx) {
+                    *slot = Some(i % 2 == 0);
+                }
+                if let Some(slot) = function.get_mut(row_idx) {
+                    *slot = true;
+                }
             }
             let col_idx = i * size + 6;
-            if !function[col_idx] {
-                matrix[col_idx] = Some(i % 2 == 0);
-                function[col_idx] = true;
+            if !function.get(col_idx).copied().unwrap_or(true) {
+                if let Some(slot) = matrix.get_mut(col_idx) {
+                    *slot = Some(i % 2 == 0);
+                }
+                if let Some(slot) = function.get_mut(col_idx) {
+                    *slot = true;
+                }
             }
         }
 
         // 暗模組 (Dark module)
         let dark_idx = (4 * ver.version + 9) * size + 8;
-        matrix[dark_idx] = Some(true);
-        function[dark_idx] = true;
+        if let Some(slot) = matrix.get_mut(dark_idx) {
+            *slot = Some(true);
+        }
+        if let Some(slot) = function.get_mut(dark_idx) {
+            *slot = true;
+        }
 
         // 保留格式資訊區 (Format information area)
         for i in 0..9 {
             if i != 6 {
-                function[8 * size + i] = true;
-                function[i * size + 8] = true;
+                if let Some(slot) = function.get_mut(8 * size + i) {
+                    *slot = true;
+                }
+                if let Some(slot) = function.get_mut(i * size + 8) {
+                    *slot = true;
+                }
             }
         }
         for i in 0..8 {
-            function[8 * size + (size - 1 - i)] = true;
-            function[(size - 1 - i) * size + 8] = true;
+            if let Some(slot) = function.get_mut(8 * size + (size - 1 - i)) {
+                *slot = true;
+            }
+            if let Some(slot) = function.get_mut((size - 1 - i) * size + 8) {
+                *slot = true;
+            }
         }
 
         // Version 7+ 需要版本資訊區 (右上角 3x6 與左下角 6x3)，先保留避免資料寫入。
@@ -365,8 +427,12 @@ impl QrCode {
             for i in 0..18 {
                 let a = size - 11 + i % 3;
                 let b = i / 3;
-                function[b * size + a] = true;
-                function[a * size + b] = true;
+                if let Some(slot) = function.get_mut(b * size + a) {
+                    *slot = true;
+                }
+                if let Some(slot) = function.get_mut(a * size + b) {
+                    *slot = true;
+                }
             }
         }
 
@@ -388,16 +454,14 @@ impl QrCode {
             for r in rows {
                 for c in [col as usize, (col - 1) as usize] {
                     let idx = r * size + c;
-                    if !function[idx] {
-                        let bit = if bit_idx < all_bits.len() {
-                            all_bits[bit_idx]
-                        } else {
-                            false
-                        };
+                    if !function.get(idx).copied().unwrap_or(true) {
+                        let bit = all_bits.get(bit_idx).copied().unwrap_or(false);
                         bit_idx += 1;
                         // Mask Pattern 0: (r + c) % 2 == 0
                         let mask = (r + c) % 2 == 0;
-                        matrix[idx] = Some(bit ^ mask);
+                        if let Some(slot) = matrix.get_mut(idx) {
+                            *slot = Some(bit ^ mask);
+                        }
                     }
                 }
             }
@@ -420,7 +484,9 @@ impl QrCode {
             } else {
                 (8, 14 - i)
             };
-            matrix[r * size + c] = Some(b);
+            if let Some(slot) = matrix.get_mut(r * size + c) {
+                *slot = Some(b);
+            }
 
             // 右上與左下部分
             let (r2, c2) = if i < 8 {
@@ -428,7 +494,9 @@ impl QrCode {
             } else {
                 (size - 15 + i, 8)
             };
-            matrix[r2 * size + c2] = Some(b);
+            if let Some(slot) = matrix.get_mut(r2 * size + c2) {
+                *slot = Some(b);
+            }
         }
 
         // 7. 版本資訊 (Version 7+)：6 bits 版本號 + 12 bits BCH (產生多項式 0x1F25)。
@@ -442,8 +510,12 @@ impl QrCode {
                 let b = (version_bits >> i) & 1 == 1;
                 let a = size - 11 + i % 3;
                 let row = i / 3;
-                matrix[row * size + a] = Some(b);
-                matrix[a * size + row] = Some(b);
+                if let Some(slot) = matrix.get_mut(row * size + a) {
+                    *slot = Some(b);
+                }
+                if let Some(slot) = matrix.get_mut(a * size + row) {
+                    *slot = Some(b);
+                }
             }
         }
 
