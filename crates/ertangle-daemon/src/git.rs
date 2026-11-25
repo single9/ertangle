@@ -374,6 +374,47 @@ pub fn compute_worktree_diff(cwd: &Path) -> Result<String> {
     compute_worktree_diff_with_options(cwd, &DiffOptions::default())
 }
 
+/// 當工作目錄沒有未提交變更時，嘗試解析出分支相對於 main 或 master 的 merge-base。
+fn resolve_diff_base(cwd: &Path) -> Option<String> {
+    let base_branch = if branch_exists(cwd, "main") {
+        "main"
+    } else if branch_exists(cwd, "master") {
+        "master"
+    } else {
+        return None;
+    };
+
+    let mb_out = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["merge-base", base_branch, "HEAD"])
+        .output()
+        .ok()?;
+    if !mb_out.status.success() {
+        return None;
+    }
+    let mb = String::from_utf8_lossy(&mb_out.stdout).trim().to_string();
+    if mb.is_empty() {
+        return None;
+    }
+
+    let head_out = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if !head_out.status.success() {
+        return None;
+    }
+    let head = String::from_utf8_lossy(&head_out.stdout).trim().to_string();
+    if head.is_empty() || mb == head {
+        return None;
+    }
+
+    Some(mb)
+}
+
 /// Computes the worktree diff with optional `stat_only`, `paths` filtering, generated-file folding, and `max_lines` truncation (T98).
 pub fn compute_worktree_diff_with_options(cwd: &Path, opts: &DiffOptions) -> Result<String> {
     if !cwd.is_dir() {
@@ -440,6 +481,32 @@ pub fn compute_worktree_diff_with_options(cwd: &Path, opts: &DiffOptions) -> Res
                 raw.push_str(&format!("+{l}\n"));
                 if idx == 199 && lines.len() > 200 {
                     raw.push_str("+... (truncated)\n");
+                }
+            }
+        }
+    }
+
+    // 3) 當工作目錄相對於 HEAD 沒有未提交變更且沒有未追蹤檔案時，
+    // 若當前分支有相較於 base branch (main/master) 已提交的變更，則取得 committed branch diff。
+    if raw.trim().is_empty() {
+        if let Some(mb) = resolve_diff_base(cwd) {
+            let mut cmd = Command::new("git");
+            cmd.arg("-C")
+                .arg(cwd)
+                .args(["diff", &format!("{mb}..HEAD")]);
+            if !clean_paths.is_empty() {
+                cmd.arg("--");
+                for p in &clean_paths {
+                    cmd.arg(p);
+                }
+            }
+            if let Ok(diff) = cmd.output() {
+                let diff_str = String::from_utf8_lossy(&diff.stdout);
+                if !diff_str.trim().is_empty() {
+                    raw.push_str(&diff_str);
+                    if !raw.ends_with('\n') {
+                        raw.push('\n');
+                    }
                 }
             }
         }

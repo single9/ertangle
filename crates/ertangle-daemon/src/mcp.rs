@@ -538,6 +538,17 @@ pub(crate) fn extract_prefixed_id<'a>(note: &'a str, prefix: &str) -> Option<&'a
     })
 }
 
+/// Injects `[Assigned task_id: <tid>]` at the beginning of an initial prompt if not already present.
+pub(crate) fn prepend_assigned_task_id(prompt: &str, task_id: Option<&str>) -> String {
+    if let Some(tid) = task_id {
+        let trimmed_tid = tid.trim();
+        if !trimmed_tid.is_empty() && !prompt.contains(trimmed_tid) {
+            return format!("[Assigned task_id: {trimmed_tid}]\n\n{prompt}");
+        }
+    }
+    prompt.to_string()
+}
+
 /// Formats an automatic parent report body for `ertangle_task_update` when `report` is provided (T99).
 pub(crate) fn format_task_parent_report(
     task_id: &str,
@@ -945,12 +956,34 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 })
                 .unwrap_or_default();
 
+            let mut bound_task_id = None;
+            if let Some(tid) = task_id_arg {
+                bound_task_id = Some(tid.to_string());
+            } else if let Some(title) = task_title_arg {
+                if let Ok(Frame::Ok {
+                    note: Some(task_note),
+                }) = roundtrip(&Request::TaskCreate {
+                    title: title.to_string(),
+                    detail: prompt.clone(),
+                    assignee: None,
+                    created_by: Some(session.to_string()),
+                    depends_on: depends_on.clone(),
+                }) {
+                    let tid = extract_prefixed_id(&task_note, "task_")
+                        .unwrap_or(&task_note)
+                        .to_string();
+                    bound_task_id = Some(tid);
+                }
+            }
+
+            let spawn_prompt = prepend_assigned_task_id(&prompt, bound_task_id.as_deref());
+
             let frame = roundtrip(&Request::Spawn(SpawnRequest {
                 kind,
                 cwd: None,
                 label,
                 role,
-                prompt: Some(prompt.clone()),
+                prompt: Some(spawn_prompt),
                 worktree,
                 transport: Transport::Auto,
                 permission,
@@ -971,28 +1004,20 @@ pub fn call_tool(session: &str, name: &str, args: &Value) -> Result<Value> {
                 .to_string();
             let mut out = json!({ "ok": true, "id": spawned_id, "note": note });
 
-            if let Some(tid) = task_id_arg {
+            if let Some(tid) = bound_task_id {
+                let status = if depends_on.is_empty() {
+                    Some(TaskStatus::Doing)
+                } else {
+                    None
+                };
                 if roundtrip(&Request::TaskUpdate {
-                    id: tid.to_string(),
-                    status: Some(TaskStatus::Doing),
+                    id: tid.clone(),
+                    status,
                     assignee: Some(spawned_id.clone()),
                     detail: None,
                 })
                 .is_ok()
                 {
-                    out["task_id"] = json!(tid);
-                }
-            } else if let Some(title) = task_title_arg {
-                if let Ok(Frame::Ok {
-                    note: Some(task_note),
-                }) = roundtrip(&Request::TaskCreate {
-                    title: title.to_string(),
-                    detail: prompt,
-                    assignee: Some(spawned_id.clone()),
-                    created_by: Some(session.to_string()),
-                    depends_on,
-                }) {
-                    let tid = extract_prefixed_id(&task_note, "task_").unwrap_or(&task_note);
                     out["task_id"] = json!(tid);
                 }
             }
@@ -1525,5 +1550,29 @@ mod merge_strategy_tests {
         let spawn_props = &spawn_tool["inputSchema"]["properties"];
         assert_eq!(spawn_props["task_id"]["type"], "string");
         assert_eq!(spawn_props["task_title"]["type"], "string");
+    }
+
+    #[test]
+    fn test_prepend_assigned_task_id() {
+        assert_eq!(
+            prepend_assigned_task_id("fix the bug", Some("task_123")),
+            "[Assigned task_id: task_123]\n\nfix the bug"
+        );
+        assert_eq!(
+            prepend_assigned_task_id(
+                "[Assigned task_id: task_123]\n\nfix the bug",
+                Some("task_123")
+            ),
+            "[Assigned task_id: task_123]\n\nfix the bug"
+        );
+        assert_eq!(
+            prepend_assigned_task_id("fix the bug (task_123)", Some("task_123")),
+            "fix the bug (task_123)"
+        );
+        assert_eq!(prepend_assigned_task_id("fix the bug", None), "fix the bug");
+        assert_eq!(
+            prepend_assigned_task_id("fix the bug", Some("   ")),
+            "fix the bug"
+        );
     }
 }

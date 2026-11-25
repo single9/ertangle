@@ -5719,3 +5719,47 @@ fn t103_godot_worktree_cache_provisioning_and_diff_folding() {
         "main repo .godot/imported asset must remain intact!"
     );
 }
+
+#[test]
+fn worktree_diff_shows_committed_branch_changes_when_clean() {
+    let repo = temp_repo("wt_diff_clean");
+    let sess = wt_session(&repo, "ses_clean");
+    let wt_dir = PathBuf::from(&sess.cwd);
+
+    // Commit a file on the worktree branch
+    fs::write(wt_dir.join("committed.txt"), "hello from branch\n").unwrap();
+    git(&wt_dir, &["add", "committed.txt"]);
+    git(&wt_dir, &["commit", "-m", "add committed.txt"]);
+
+    // Ensure working tree is clean
+    assert!(!crate::git::has_uncommitted(&wt_dir).unwrap());
+
+    // compute_worktree_diff should return the committed diff relative to main
+    let diff = crate::git::compute_worktree_diff(&wt_dir).unwrap();
+    assert!(
+        diff.contains("diff --git a/committed.txt b/committed.txt"),
+        "expected committed diff, got:\n{diff}"
+    );
+    assert!(
+        diff.contains("+hello from branch"),
+        "expected file contents in diff, got:\n{diff}"
+    );
+
+    // stat_only should also reflect the committed file
+    let stat = crate::git::compute_worktree_diff_with_options(
+        &wt_dir,
+        &crate::git::DiffOptions {
+            stat_only: true,
+            paths: vec![],
+            max_lines: None,
+            fold_generated: true,
+        },
+    )
+    .unwrap();
+    assert!(
+        stat.contains("committed.txt | +1 -0"),
+        "expected stat_only output, got:\n{stat}"
+    );
+
+    crate::git::remove_worktree(&repo, &sess, true).unwrap();
+}
