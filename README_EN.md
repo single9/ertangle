@@ -492,9 +492,9 @@ ertangle merge <session-or-label> [--dry-run] [--resolve] # Merge session branch
 ertangle pr <session-or-label> --title "PR title"  # Create GitHub Pull Request via gh
 ertangle gc [--session <id>]                       # Clean up merged worktrees safely
 
-# Polyglot Agent Efficiency Tools (Rust / Node / Vite / .NET Core / Python)
-ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python>] [--quick] [--max-lines <n>] [--json] # Low-token build, type, and test verifier
-ertangle outline [paths...] [--max-depth <n>] [--json] # Extract symbol outlines and exact line ranges (L<start>-L<end>)
+# Polyglot Agent Efficiency Tools (Rust / Node / Vite / .NET Core / Python / Godot)
+ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python|godot>] [--quick] [--max-lines <n>] [--json] # Low-token build, type, and test verifier
+ertangle outline [paths...] [--max-depth <n>] [--json] # Extract symbol outlines and exact line ranges (L<start>-L<end>) for .rs/.ts/.cs/.py/.gd/.tscn/.gdshader
 ertangle dev start [--cwd <dir>] [--port <port>] [--timeout-secs <n>] [--json] [-- <cmd...>] # Non-blocking background dev server with auto free port
 ertangle dev status [--cwd <dir>] [--json]         # Check status of the managed dev server in the workspace
 ertangle dev stop [--cwd <dir>] [--json]           # Stop the managed dev server process group

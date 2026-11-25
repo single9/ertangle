@@ -5607,7 +5607,11 @@ fn t100_worktree_provisions_and_cleans_polyglot_deps_and_env_files() {
 #[cfg(unix)]
 fn t103_godot_worktree_cache_provisioning_and_diff_folding() {
     let repo = temp_repo("t103_godot");
-    std::fs::write(repo.join("project.godot"), "[application]\nconfig/name=\"Game\"\n").unwrap();
+    std::fs::write(
+        repo.join("project.godot"),
+        "[application]\nconfig/name=\"Game\"\n",
+    )
+    .unwrap();
     git(&repo, &["add", "project.godot"]);
     git(&repo, &["commit", "-m", "add project.godot"]);
 
@@ -5644,9 +5648,7 @@ fn t103_godot_worktree_cache_provisioning_and_diff_folding() {
             .is_symlink(),
         ".godot/imported must be a symlink"
     );
-    assert!(wt_dir
-        .join(".godot/imported/hero.png-1234.ctex")
-        .is_file());
+    assert!(wt_dir.join(".godot/imported/hero.png-1234.ctex").is_file());
     assert!(wt_dir
         .join(".godot/global_script_class_cache.cfg")
         .is_file());

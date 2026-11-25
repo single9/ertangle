@@ -464,12 +464,12 @@ enum Cmd {
         #[command(subcommand)]
         cmd: SkillCmd,
     },
-    /// 執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python)
+    /// 執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python / Godot)
     Check {
         /// 目標專案目錄 (預設為目前目錄)
         #[arg(long)]
         cwd: Option<PathBuf>,
-        /// 指定技術堆疊：auto | rust | node | dotnet | python (預設 auto)
+        /// 指定技術堆疊：auto | rust | node | dotnet | python | godot (預設 auto)
         #[arg(long)]
         stack: Option<String>,
         /// 快速檢查模式 (僅執行編譯／型別檢查，略過單元測試)
@@ -481,7 +481,7 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// 列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python)
+    /// 列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python / Godot)
     Outline {
         /// 要分析的檔案或目錄路徑 (預設為目前目錄)
         paths: Vec<PathBuf>,

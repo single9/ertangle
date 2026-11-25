@@ -1,6 +1,6 @@
 # T103 — Godot Engine polyglot support across worktree provisioning, scoped diff, `ertangle check`, and `ertangle outline`
 
-Status: ready-for-agent
+Status: done
 
 Priority: P2　Scope: `ertangle-daemon`, `ertangle`　Depends on: T98, T100, T101, T102
 

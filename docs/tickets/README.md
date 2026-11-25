@@ -107,7 +107,7 @@
 | [T100](T100-polyglot-worktree-env-provisioning.md) | Polyglot worktree environment provisioning (Node/Vite `node_modules`, Python `.venv`, and .NET Core env) (已完成) | P2 | T46 |
 | [T101](T101-polyglot-ertangle-check-verifier.md) | `ertangle check`: polyglot low-token build, lint, and test verifier (Rust, Node/Vite, .NET Core, Python) (已完成) | P2 | T47, T100 |
 | [T102](T102-polyglot-outline-and-nonblocking-dev-server.md) | `ertangle outline` (polyglot code skeleton) and `ertangle dev` (non-blocking dev server manager) (已完成) | P2 | T32, T47, T100 |
-| [T103](T103-godot-engine-polyglot-support.md) | Godot Engine polyglot support across worktree provisioning, scoped diff, `ertangle check`, and `ertangle outline` | P2 | T98, T100, T101, T102 |
+| [T103](T103-godot-engine-polyglot-support.md) | Godot Engine polyglot support across worktree provisioning, scoped diff, `ertangle check`, and `ertangle outline` (已完成) | P2 | T98, T100, T101, T102 |
 
 ## Language convention
 

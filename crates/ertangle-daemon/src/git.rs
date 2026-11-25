@@ -301,10 +301,7 @@ fn fold_godot_scene_block(path: &str, block: &str) -> String {
     for line in block.lines() {
         let is_diff_change = (line.starts_with('+') && !line.starts_with("+++"))
             || (line.starts_with('-') && !line.starts_with("---"));
-        if is_diff_change
-            && line.len() > 300
-            && line.contains("Packed")
-            && line.contains("Array(")
+        if is_diff_change && line.len() > 300 && line.contains("Packed") && line.contains("Array(")
         {
             if let Some(arr_idx) = line.find("Array(") {
                 let prefix_end = (arr_idx + "Array(".len()).min(120);

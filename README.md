@@ -492,9 +492,9 @@ ertangle merge <session-or-label> [--dry-run] [--resolve] [--strategy merge|squa
 ertangle pr <session-or-label> --title "PR 標題"   # 透過 gh 建立 Pull Request
 ertangle gc [--session <id>]                       # 清理已結束且已合併的 worktrees
 
-# 跨語言 Agent 開發加速工具 (Rust / Node / Vite / .NET Core / Python)
-ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python>] [--quick] [--max-lines <n>] [--json] # 低雜訊建置、型別與測試檢查
-ertangle outline [paths...] [--max-depth <n>] [--json] # 提取原始碼檔案或目錄的符號骨架與起訖行號 (L<start>-L<end>)
+# 跨語言 Agent 開發加速工具 (Rust / Node / Vite / .NET Core / Python / Godot)
+ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python|godot>] [--quick] [--max-lines <n>] [--json] # 低雜訊建置、型別與測試檢查
+ertangle outline [paths...] [--max-depth <n>] [--json] # 提取原始碼與 Godot 場景 (.rs/.ts/.cs/.py/.gd/.tscn/.gdshader) 的符號骨架與起訖行號 (L<start>-L<end>)
 ertangle dev start [--cwd <dir>] [--port <port>] [--timeout-secs <n>] [--json] [-- <cmd...>] # 非阻塞背景啟動開發伺服器並自動分配連接埠
 ertangle dev status [--cwd <dir>] [--json]         # 查看目前工作區受管開發伺服器狀態
 ertangle dev stop [--cwd <dir>] [--json]           # 停止目前工作區受管開發伺服器處理程序群組
@@ -544,7 +544,7 @@ ertangle skill show
 - `[agent_spawn] auto_resume` (預設 `true`)：daemon 重啟時，自動接續當下正在執行回合的 session，並提示 agent 先用 `git status`／`git diff` 找回進度，不要重新探索整個專案。額度已滿、或上次自動接續後沒有任何進展的 session 不會再自動接續。
 - `[auto_compact] enabled` (預設 `true`)、`threshold_percent` (預設 `80`，限制在 10 到 95)：session 回到閒置且上下文用量達到門檻時，daemon 自動代送 `/compact`；僅對宣告支援 `compact` 斜線指令的 agent (如 Claude) 生效，只讀全域設定檔。也可在設定面板的「上下文」區調整。
 - `[agent_spawn] shared_cargo_target` (預設 `true`)：Cargo 專案裡，所有 worktree 的 agent 共用 `<repo>/.ertangle/target` 當 `CARGO_TARGET_DIR`。不用每個 worktree 各編一份，cargo 的目錄鎖也讓多個 worker 的編譯與測試自動排隊。已自行設定 `CARGO_TARGET_DIR` 時不覆寫。
-- `[agent_spawn] shared_worktree_deps` (預設 `true`)：在建立 git worktree 時，自動將主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除 `.example`/`.sample`/`.template`) 以及 .NET Core 的 `appsettings.Development.json` 建立符號連結 (symlink) 掛載至 worktree，並自動將 `node_modules/.bin` 與 `.venv/bin` 加入 `PATH`、注入 `DOTNET_NOLOGO=1` 與 `DOTNET_CLI_TELEMETRY_OPTOUT=1`。這些掛載連結不會被 `git status`、`ertangle_diff` 或自動 commit 誤收入分支，且在移除 worktree 時會安全卸載，不影響主工作區檔案。
+- `[agent_spawn] shared_worktree_deps` (預設 `true`)：在建立 git worktree 時，自動將主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除 `.example`/`.sample`/`.template`)、.NET Core 的 `appsettings.Development.json` 以及 Godot 專案的 `.godot/imported` (搭配複製 `global_script_class_cache.cfg` 與 `uid_cache.bin` 至獨立 `.godot/` 目錄) 建立符號連結 (symlink) 掛載至 worktree，並自動將 `node_modules/.bin` 與 `.venv/bin` 加入 `PATH`、注入 `DOTNET_NOLOGO=1` 與 `DOTNET_CLI_TELEMETRY_OPTOUT=1`。這些掛載連結不會被 `git status`、`ertangle_diff` 或自動 commit 誤收入分支，且在移除 worktree 時會安全卸載，不影響主工作區檔案。
 - 上述設定亦可在 `:settings` 或 `config.toml` 調整。
 
 ## 設定檔與環境變數

@@ -240,8 +240,8 @@ msgid "分享重要產出物 (檔案、PR 連結、測試報告等)"
 msgstr "Share an important artifact (a file, PR link, test report, etc.)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python)"
-msgstr "List symbol outlines and line ranges for source files or directories (Rust / TS / JS / Vue / C# / Python)"
+msgid "列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python / Godot)"
+msgstr "List symbol outlines and line ranges for source files or directories (Rust / TS / JS / Vue / C# / Python / Godot)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "列出所有 session"
@@ -352,8 +352,8 @@ msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生
 msgstr "Switch a session's model and/or effort at runtime (takes effect from the next turn)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python)"
-msgstr "Run low-noise polyglot build, type, and test verification (Rust / Node / Vite / .NET Core / Python)"
+msgid "執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python / Godot)"
+msgstr "Run low-noise polyglot build, type, and test verification (Rust / Node / Vite / .NET Core / Python / Godot)"
 
 #: src/cmd/helptext/help_strings.rs crates/ertangle-tui/src/commands.rs
 msgid "安裝到家目錄 (所有專案共用)"
@@ -464,8 +464,8 @@ msgid "指定 session id 或標籤 (未指定則列出所有 session)"
 msgstr "Target session ID or label (lists all sessions if omitted)"
 
 #: src/cmd/helptext/help_strings.rs
-msgid "指定技術堆疊：auto | rust | node | dotnet | python (預設 auto)"
-msgstr "Target stack: auto | rust | node | dotnet | python (default: auto)"
+msgid "指定技術堆疊：auto | rust | node | dotnet | python | godot (預設 auto)"
+msgstr "Target stack: auto | rust | node | dotnet | python | godot (default: auto)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "指定連接埠 (省略時自動分配空閒連接埠)"
@@ -4918,6 +4918,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python)"
+#~ msgstr "List symbol outlines and line ranges for source files or directories (Rust / TS / JS / Vue / C# / Python)"
+
+#~ msgid "執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python)"
+#~ msgstr "Run low-noise polyglot build, type, and test verification (Rust / Node / Vite / .NET Core / Python)"
+
+#~ msgid "指定技術堆疊：auto | rust | node | dotnet | python (預設 auto)"
+#~ msgstr "Target stack: auto | rust | node | dotnet | python (default: auto)"
 
 #~ msgid " (尚無 session，按 n 建立)"
 #~ msgstr " (no sessions yet, press n to create one)"

@@ -246,7 +246,7 @@ msgid "分享重要產出物 (檔案、PR 連結、測試報告等)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python)"
+msgid "列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python / Godot)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
@@ -358,7 +358,7 @@ msgid "執行期切換 session 的 model 與／或 effort (下一個回合起生
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python)"
+msgid "執行跨語言低雜訊建置、型別與測試檢查 (Rust / Node / Vite / .NET Core / Python / Godot)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs
@@ -470,7 +470,7 @@ msgid "指定 session id 或標籤 (未指定則列出所有 session)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
-msgid "指定技術堆疊：auto | rust | node | dotnet | python (預設 auto)"
+msgid "指定技術堆疊：auto | rust | node | dotnet | python | godot (預設 auto)"
 msgstr ""
 
 #: src/cmd/helptext/help_strings.rs src/cmd/helptext/help_strings.rs
