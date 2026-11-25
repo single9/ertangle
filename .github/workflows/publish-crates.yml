@@ -1,8 +1,14 @@
 name: publish-crates
 # 手動觸發：發佈無法撤回 (只能 yank)，所以不隨每次 release 自動執行。
-# 用法：gh workflow run publish-crates.yml --ref v0.8.0
+# 用法：gh workflow run publish-crates.yml --ref v1.5.0
+# 或從 main 補發：gh workflow run publish-crates.yml -f tag=v1.5.0
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v1.5.0). Defaults to current ref."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -12,22 +18,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: 確認 ref 是 release tag 且與 Cargo.toml 版本一致
+        id: ver
+        env:
+          TARGET_REF: ${{ inputs.tag || github.ref_name }}
         run: |
           ver=$(grep -m1 '^version = "' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
-          if [ "${GITHUB_REF_NAME}" != "v${ver}" ]; then
-            echo "ref ${GITHUB_REF_NAME} 與 Cargo.toml 版本 v${ver} 不一致，請用 --ref v${ver}" >&2
+          if [ "${TARGET_REF}" != "v${ver}" ]; then
+            echo "ref ${TARGET_REF} 與 Cargo.toml 版本 v${ver} 不一致，請用 --ref v${ver} 或 -f tag=v${ver}" >&2
             exit 1
           fi
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@stable
-      # 依相依順序發佈所有 workspace crate，並等待索引更新。
+      # 依相依順序發佈所有 workspace crate，並跳過已發佈的版本以便斷點續傳。
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
           if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
             echo "CARGO_REGISTRY_TOKEN is not set" >&2
             exit 1
           fi
-          cargo publish --workspace
+          for pkg in ertangle-core ertangle-protocol ertangle-adapter ertangle-daemon ertangle-tui ertangle; do
+            if curl -fsS -A "ertangle-release-ci" "https://crates.io/api/v1/crates/${pkg}/${VERSION}" >/dev/null 2>&1; then
+              echo "Skipping ${pkg}@${VERSION} (already published)"
+              continue
+            fi
+            echo "Publishing ${pkg}@${VERSION}..."
+            cargo publish -p "${pkg}" --locked
+          done
