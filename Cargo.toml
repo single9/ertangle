@@ -36,17 +36,17 @@ members = ["crates/*"]
 default-members = [".", "crates/*"]
 
 [workspace.package]
-version = "1.4.0"
+version = "1.5.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/single9/ertangle"
 
 [workspace.dependencies]
-ertangle-core = { path = "crates/ertangle-core", version = "1.4.0" }
-ertangle-protocol = { path = "crates/ertangle-protocol", version = "1.4.0" }
-ertangle-adapter = { path = "crates/ertangle-adapter", version = "1.4.0" }
-ertangle-daemon = { path = "crates/ertangle-daemon", version = "1.4.0" }
-ertangle-tui = { path = "crates/ertangle-tui", version = "1.4.0" }
+ertangle-core = { path = "crates/ertangle-core", version = "1.5.0" }
+ertangle-protocol = { path = "crates/ertangle-protocol", version = "1.5.0" }
+ertangle-adapter = { path = "crates/ertangle-adapter", version = "1.5.0" }
+ertangle-daemon = { path = "crates/ertangle-daemon", version = "1.5.0" }
+ertangle-tui = { path = "crates/ertangle-tui", version = "1.5.0" }
 ertangle-test-support = { path = "crates/ertangle-test-support" }
 
 serde = { version = "1", features = ["derive"] }

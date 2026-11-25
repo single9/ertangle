@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "ertangle"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "ertangle-adapter"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "ertangle-core",
@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "ertangle-core"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "rspolib",
  "serde",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "ertangle-daemon"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "ertangle-adapter",
@@ -522,7 +522,7 @@ dependencies = [
 
 [[package]]
 name = "ertangle-protocol"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "ertangle-core",
  "serde",
@@ -531,14 +531,14 @@ dependencies = [
 
 [[package]]
 name = "ertangle-test-support"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "tempfile",
 ]
 
 [[package]]
 name = "ertangle-tui"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "crossterm",

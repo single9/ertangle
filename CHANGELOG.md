@@ -1,6 +1,40 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.5.0] - 2026-11-25
+
+### 🚀 Features
+
+- *(daemon)* Implement scoped diff folding, atomic task report, and polyglot worktree deps (T98, T99, T100)
+- *(cli)* Implement polyglot ertangle check verifier (T101)
+- *(cli)* Implement polyglot ertangle outline and ertangle dev (T102)
+- *(cli)* Wire ertangle check, outline, dev and complete T98-T102
+- *(daemon)* Provision Godot .godot cache in worktrees and fold PackedArray diffs (T103)
+- *(cli)* Add Godot support to ertangle check and ertangle outline (T103)
+- *(godot)* Complete T103 Godot Engine support across worktree, diff, check, and outline
+
+### 🐛 Bug Fixes
+
+- *(daemon)* Inject task_id into spawn prompt and show committed worktree diffs
+
+### 📚 Documentation
+
+- *(tickets)* Add T98-T102 for polyglot agent efficiency tools
+- Update README, DESIGN.md, and ertangle-ade skill for T98-T102
+- *(readme)* Document workspace test command and temp dir cleanup
+- *(readme)* Summarize token-saving and polyglot efficiency features
+- *(tickets)* Add T103 for Godot Engine polyglot support
+- Document Godot Engine support (T103) across README, DESIGN.md, and skill
+- *(verification)* Record e2e verification of task_id injection and committed diff
+- *(readme)* Make English README primary and move zh-TW to README.zh-TW.md
+- *(readme)* Remove legacy termade migration section
+- *(readme)* Remove internal ticket IDs from READMEs
+
+### 🧪 Testing
+
+- *(daemon)* Disable gpgsign in test git helper and update VERIFICATION.md
+- Add TempDir guards and fix macOS path normalization
+
 ## [1.4.0] - 2026-11-24
 
 ### 🚀 Features
@@ -28,7 +62,6 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
-- *(tui)* Replace right-pane Bus display with live Flow graph (T82)
 - *(web)* Support markdown image syntax and artifact file preview
 - *(tui)* Add header Flow tab, filter 3p quotas, and adaptive 3-column Flow (T84, T85)
 - *(tui)* Confirm before resuming or waking on stopped session prompt (T88)
@@ -42,7 +75,6 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
-- *(quota)* Clear stale reached status once rate-limit windows reset
 - *(web,tui)* Fix markdown image attr escaping, sessions divider width, and wide-screen 3-col flow
 - *(web)* Support h1-h6 headings, preserve ol numbering, indented bullets, and relayout caret on image attach
 - *(web)* Prevent tool-call summary crushing and split whitespace-delimited tool names
@@ -64,7 +96,6 @@ All notable changes to this project will be documented in this file.
 
 ### 📚 Documentation
 
-- *(tickets)* Add T81 (stale quota reached) and T82 (right-pane flow graph)
 - *(tickets)* Add T83 (web image preview), T84 (header flow tab & quota filter), T85 (unified sidebar & adaptive flow)
 - *(tickets)* Add T86 (layout sync), T87 (sidebar keyboard nav), T88 (confirm resume on stopped prompt)
 - *(tickets)* Add T89 (split Flow+Bus right pane and orthogonal Flow links)
@@ -87,12 +118,18 @@ All notable changes to this project will be documented in this file.
 
 - *(daemon)* Add /clear to reset agent context without changing session identity
 - *(daemon)* Auto-compact idle sessions when context usage exceeds a configurable threshold
+- *(tui)* Replace right-pane Bus display with live Flow graph (T82)
 
 ### 🐛 Bug Fixes
 
 - *(adapter)* Keep claude session alive after user interrupt
 - *(quota)* Ignore inactive Antigravity third-party windows
 - *(bus)* Avoid waking quota-exhausted peers
+- *(quota)* Clear stale reached status once rate-limit windows reset
+
+### 📚 Documentation
+
+- *(tickets)* Add T81 (stale quota reached) and T82 (right-pane flow graph)
 
 ### Merge
 
@@ -103,14 +140,6 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
-- *(tui)* Add flow dashboard model contract and stubs (T76)
-- *(tui)* Implement pure flow model derivation (T76a)
-- *(tui)* Add Flow view renderer, key bindings and :flow command (T76b)
-- *(tui)* Wire flow model into Flow view, add i18n and integration test (T76)
-- *(tui)* Animated node graph for the Flow view (T77)
-- *(codex)* Offer Allow/Deny options for form-less MCP elicitation
-- *(tui)* W key jumps to the next session with a pending question or approval
-- *(tui)* Complete command subcommands and add project folder picker
 - *(tui)* Open folder browser as its own project action
 - *(tui)* List 'use current folder' first in the folder browser
 - *(tui)* Filter and ~ home shortcut in the folder browser
@@ -122,29 +151,37 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
-- *(tui)* Omit zero counts in flow summary so it fits narrow panes (T76)
-- *(bus)* Do not mark earlier unread messages read on filtered wait
-- *(codex)* Auto-approve ertangle MCP tools via mcp_servers config key
-- *(spawn)* Honor worker order and quota
 - *(daemon)* Strip (deleted) suffix from exe path given to agent MCP servers
 - *(tui)* Always open the launch directory instead of the last switched project
 
-### 📚 Documentation
-
-- *(ticket)* Add T76 TUI session flow dashboard plan
-- *(ticket)* Refine T76 flow dashboard design with verified code facts
-
 ## [1.0.1] - 2026-11-20
+
+### 🚀 Features
+
+- *(tui)* Add flow dashboard model contract and stubs (T76)
+- *(tui)* Implement pure flow model derivation (T76a)
+- *(tui)* Add Flow view renderer, key bindings and :flow command (T76b)
+- *(tui)* Wire flow model into Flow view, add i18n and integration test (T76)
+- *(tui)* Animated node graph for the Flow view (T77)
+- *(codex)* Offer Allow/Deny options for form-less MCP elicitation
+- *(tui)* W key jumps to the next session with a pending question or approval
+- *(tui)* Complete command subcommands and add project folder picker
 
 ### 🐛 Bug Fixes
 
 - *(tui)* Prevent thinking indicator from overwriting last line and update README
+- *(tui)* Omit zero counts in flow summary so it fits narrow panes (T76)
+- *(bus)* Do not mark earlier unread messages read on filtered wait
+- *(codex)* Auto-approve ertangle MCP tools via mcp_servers config key
+- *(spawn)* Honor worker order and quota
 
 ### 📚 Documentation
 
 - Streamline README title and move name origin to appendix
 - Clarify terminal-native philosophy vs desktop GUI in README
 - *(ticket)* Record T64 live web verification
+- *(ticket)* Add T76 TUI session flow dashboard plan
+- *(ticket)* Refine T76 flow dashboard design with verified code facts
 
 ### 🧪 Testing
 
