@@ -1,602 +1,580 @@
-# ertangle — 終端機原生的多 Agent 開發協作環境
+# ertangle — Terminal-Native Multi-Agent Development Environment
 
-[English](README_EN.md) | [繁體中文](README.md)
+[English](README.md) | [繁體中文](README.zh-TW.md)
 
-> **讓多個 Coding Agent 在同一個 Repo 內平行工作、自主溝通、互相協同開發的終端機環境**。
+> **Run multiple coding agents concurrently on the same git repository, communicating autonomously and collaborating safely inside your terminal.**
 
-`ertangle` 是一個以終端機為核心的多 Agent 協同開發平台。支援 **OpenCode**、**Claude Code**、**Codex** 與 **Antigravity** 等現代 Coding Agent，讓它們各自在獨立的 Git Worktree 內平行寫程式，透過 MCP 訊息匯流排與任務看板互相溝通，並由開發者透過鍵盤驅動的 TUI 介面進行即時審查與安全合併。
+`ertangle` is a terminal-native orchestrator and development environment for modern coding agents (such as **OpenCode**, **Claude Code**, **Codex**, and **Antigravity**). Each agent operates in an isolated Git Worktree, communicates with peers across an MCP message bus and task board, and allows developers to inspect changes, conduct line-by-line code reviews, and merge branches safely through a keyboard-driven TUI.
 
 ---
 
-## 畫面預覽與功能展示
+## Screenshots & Demo
 
 https://github.com/user-attachments/assets/4e86a5cd-e9fb-48d6-a9c8-f78826417eab
 
-![ertangle TUI 總覽：多 Agent Session 階層、即時串流與 Flow 拓撲圖](docs/images/tui-overview.png)
+![ertangle TUI Overview: Multi-Agent Session Tree, Live Streaming, and Flow Topology](docs/images/tui-overview.png)
 
 <details>
-<summary>查看更多畫面截圖 (任務看板、Diff 行內審查、額度監控)</summary>
+<summary>More Screenshots (Task Board, Inline Diff Review, Quota Monitor)</summary>
 
-### 任務看板與相依性 (`Tasks` 分頁)
-支援 `depends_on` 前置相依性；前置任務完成後會自動解鎖並喚醒負責人。
+### Shared Task Board with Dependencies (`Tasks` tab)
+Supports `depends_on` prerequisites; blocked tasks automatically unblock and wake their assignees once prerequisites complete.
 
-![ertangle 任務看板](docs/images/tui-tasks.png)
+![ertangle Task Board](docs/images/tui-tasks.png)
 
-### Git Diff 審查與行內註解 (`Diff` 分頁)
-在 TUI 檢視各 Worker Worktree 的彩色 Diff，按 `c` 即可對特定行留下審查意見並送回 Agent 修正，確認無誤後按 `M` 安全合併。
+### Git Diff & Inline Review Comments (`Diff` tab)
+Inspect colored diffs for each worker's isolated worktree, press `c` on any line to send a review comment back to the agent, and press `M` to merge safely.
 
-![ertangle Diff 審查與行內註解](docs/images/tui-diff-review.png)
+![ertangle Diff & Inline Review](docs/images/tui-diff-review.png)
 
-### Agent 額度監控 (`:quota`)
-即時追蹤各家 Agent 的 5 小時／7 天額度視窗與重置倒數。
+### Agent Quota Monitor (`:quota`)
+Real-time 5h / 7d quota tracking and reset countdowns across agents.
 
-![ertangle 額度監控面板](docs/images/tui-quota.png)
+![ertangle Quota Monitor](docs/images/tui-quota.png)
 
 </details>
 
 ---
 
-## 為什麼選擇 ertangle？ (終端機原生 vs. 桌面 GUI IDE)
+## Why ertangle? (Terminal-Native vs. Heavy Desktop GUI IDEs)
 
-相較於肥重的桌面 GUI 或 Electron 應用程式，`ertangle` 採用終端機原生與 Daemon 分離架構：將多 Agent 排程、Worktree 隔離與即時審查帶入你最熟悉的命令列，不僅常駐極輕量 (`< 20 MB`)，更能無縫支援 SSH 遠端開發與行動端隨身查閱：
+Instead of heavy desktop GUI or Electron-based IDEs, `ertangle` embraces a terminal-native, daemon-separated architecture: bringing multi-agent orchestration, worktree isolation, and real-time code review directly into your terminal workflow—ultra-lightweight (`< 20 MB`), frictionless over SSH, and instantly accessible via mobile web:
 
-| 特性 | 本專案的做法 |
+| Differentiator | How ertangle does it |
 | --- | --- |
-| **超輕量與極速** | Rust + Ratatui 開發，常駐記憶體成本 `< 20 MB`，瞬間啟動，SSH 遠端連線零卡頓 |
-| **Daemon 常駐架構** | Daemon 負責真正持有 Agent 子處理程序、訊息匯流排與狀態；TUI 只是隨時可重開、重新連線的顯示端 |
-| **平行作業不衝突** | 每個 Agent Session 自動配置獨立的 `git worktree` 與分支 (`ertangle/<session>`) |
-| **零相依原生通訊** | 優先採用各 Agent 的結構化協定 (ACP / stream-json / app-server)，無需額外 Wrapper；未安裝時自動退回 PTY 直通 |
-| **結構化協同機制** | 透過 Daemon 注入 MCP 伺服器，讓 Agent 能彼此通訊、委派任務、發布進度、排隊等待 |
-| **全鍵盤與腳本驅動** | 完整 TUI 快速鍵、Helix 風格選單 (which-key)、命令列，以及功能對等的 `ertangle` CLI |
+| **Ultra-Lightweight & Fast** | Written in Rust + Ratatui; resident daemon memory footprint `< 20 MB`; instant launch; flawless performance over remote SSH |
+| **Resident Daemon Architecture** | The daemon manages agent child processes, message bus, task boards, and worktree states; the TUI is a detachable, re-attachable interface |
+| **Zero Conflicts via Isolation** | Each agent session automatically operates in its own `git worktree` and isolated branch (`ertangle/<session>`) |
+| **Native Protocols with Zero Wrapper Overhead** | Prioritizes official structured protocols (ACP / stream-json / app-server); gracefully falls back to PTY pass-through if unavailable |
+| **Structured Agent Collaboration** | Automatically injects an MCP server into agents, enabling them to message peers, delegate tasks, broadcast status, and wait for events |
+| **Keyboard & Script Driven** | Full TUI keybindings, Helix-style which-key menu, `:` command-line, and a comprehensive, feature-complete `ertangle` CLI |
 
 ---
 
-## 支援的 Agent 與連線協定
+## Supported Agents & Protocols
 
-各家 Agent 均以其**官方原生、零額外相依**的結構化介面連接：
+Each agent communicates via its **official, native structured interface without external dependencies**:
 
-| Agent | 原生協定 | 預設啟動命令 | 傳輸標記 | 支援狀態與特性 |
+| Agent | Native Protocol | Default Launch Command | Transport | Status & Capabilities |
 | --- | --- | --- | --- | --- |
-| **OpenCode** | ACP | `opencode acp` | `acp` | ✅ 完整雙向結構化 (串流、工具呼叫、權限核准轉發、MCP 注入) |
-| **Antigravity** | ACP | `agy acp` | `acp` | ✅ 完整雙向結構化 (ACP 方言相容、MCP 注入) |
-| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ 逐字串流、工具呼叫、成本統計、5h/7d 額度回報、MCP 注入、逐項權限核准轉發 |
-| **Codex** | app-server | `codex app-server` | `app-server` | ⚠️ 握手與 Thread 已驗證；執行回合需先於本機執行 `codex login` |
-| **萬用後備** | PTY | 各 Agent 互動 CLI | `pty` | ✅ 找不到原生協定或未安裝時，`--transport auto` 自動退回 PTY 直通 |
+| **OpenCode** | ACP | `opencode acp` | `acp` | ✅ Full bidirectional structured mode (streaming, tool calls, permission forwarding, MCP injection) |
+| **Antigravity** | ACP | `agy acp` | `acp` | ✅ Full bidirectional structured mode (ACP dialect compatible, MCP injection) |
+| **Claude Code** | stream-json | `claude -p --input-format stream-json --output-format stream-json --verbose` | `stream-json` | ✅ Token streaming, tool calls, cost statistics, 5h/7d quota tracking, MCP injection, granular permission forwarding |
+| **Codex** | app-server | `codex app-server` | `app-server` | ⚠️ Handshake & thread verified; sending turns requires `codex login` on the local machine |
+| **Universal Fallback** | PTY | Interactive agent CLI | `pty` | ✅ Automatically falls back to PTY pass-through when native protocols are missing or uninstalled |
 
 > [!NOTE]
-> - **Codex 授權**：`codex app-server` 的通訊協定完整支援，但實際發送 prompt 需要有效的 OpenAI 登入。未授權時 session 會變更為 `failed` 並提示執行 `codex login`。
-> - **PTY 限制**：PTY 模式下全螢幕 TUI 輸出會去除 ANSI 控制碼作為盡力而為的文字記錄，建議優先使用結構化原生協定。
-> - 完整驗證紀錄與實機測試版本請參閱 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)；架構設計細節請見 [`docs/DESIGN.md`](docs/DESIGN.md)。
+> - **Codex Authorization**: `codex app-server` protocol is fully implemented, but running turns requires a valid OpenAI login. If unauthorized, the session transitions to `failed` and prompts the user to run `codex login`.
+> - **PTY Limitation**: In PTY mode, full-screen TUI outputs are stripped of ANSI escape sequences on a best-effort basis. Native structured protocols are strongly recommended.
+> - Detailed verification logs and tested agent versions are available in [`docs/VERIFICATION.md`](docs/VERIFICATION.md); architecture design specs are in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ---
 
 ---
 
-## 從 termade 遷移
+## Migrating from termade
 
-本專案已由 `termade` 正式更名為 `ertangle`。升級時請留意以下相容層與遷移事項：
+This project has been renamed from `termade` to `ertangle`. When upgrading, note the following compatibility and migration details:
 
-- **停止舊 Daemon**：首次執行 `ertangle` 前，請先停止舊的 `termade` daemon (`termade shutdown` 或關閉對應處理程序)。
-- **設定與狀態目錄**：首次啟動時，若新目錄尚不存在，系統會自動將 `~/.config/termade` 與 `~/.local/state/termade` 搬移至 `~/.config/ertangle` 與 `~/.local/state/ertangle`。
-- **專案設定檔**：Repo 內的 `.termade/config.toml` 在 v1.0 前仍會作為相容退路被讀取，但建議將目錄重新命名為 `.ertangle/`。
-- **環境變數**：`TERMADE_*` 系列環境變數仍會作為退路支援至 v1.0，建議改用 `ERTANGLE_*`。
-- **重新安裝 Skill**：請執行 `ertangle skill install` 重新安裝 agent skill (`ertangle skill uninstall` 也會一併清理舊的 `termade-ade`)。
-- **Git 分支**：既有的 `termade/*` 分支維持原樣，不受影響。
+- **Stop the old daemon**: Stop the running `termade` daemon before launching `ertangle` for the first time (`termade shutdown` or terminate the process).
+- **Config and state directories**: On first run, `~/.config/termade` and `~/.local/state/termade` are moved automatically to `~/.config/ertangle` and `~/.local/state/ertangle` if the new directories do not exist yet.
+- **Project config**: Repo-local `.termade/config.toml` is still read as a fallback until v1.0, but should be renamed to `.ertangle/`.
+- **Environment variables**: `TERMADE_*` environment variables remain accepted as fallbacks until v1.0. Please migrate to `ERTANGLE_*`.
+- **Reinstall skills**: Run `ertangle skill install` to reinstall the agent skill (`ertangle skill uninstall` also removes the legacy `termade-ade` skill).
+- **Git branches**: Existing `termade/*` branches are untouched.
 
-## 快速開始
+## Quick Start
 
-### 1. 安裝
+### 1. Installation
 
-**方式一：下載預編譯執行檔** (從 [Releases](https://github.com/single9/ertangle/releases/latest) 取得，支援 Linux x86_64 / arm64 與 macOS arm64 / x86_64 / universal)
+**Option 1: Download a prebuilt binary** (from [Releases](https://github.com/single9/ertangle/releases/latest); Linux x86_64 / arm64 and macOS arm64 / x86_64 / universal)
 
 ```bash
-# 以 Linux x86_64 為例，其他平台請替換檔名 (ertangle-linux-arm64、ertangle-macos-arm64 等)
+# Linux x86_64 shown; swap the asset name for other platforms (ertangle-linux-arm64, ertangle-macos-arm64, ...)
 curl -fsSL https://github.com/single9/ertangle/releases/latest/download/ertangle-linux-x86_64.tar.gz | tar -xz
 install -m 755 ertangle-linux-x86_64 ~/.local/bin/ertangle
 ```
 
-**方式二：直接從 git 安裝** (需要 Rust 工具鏈)
+**Option 2: Install directly from git** (requires a Rust toolchain)
 
 ```bash
 cargo install --git https://github.com/single9/ertangle
 
-# 指定版本
+# Pin a specific version
 cargo install --git https://github.com/single9/ertangle --tag v1.0.0
 ```
 
-**方式三：從原始碼建置**
+**Option 3: Build from source**
 
 ```bash
 git clone https://github.com/single9/ertangle && cd ertangle
-cargo install --path .        # 安裝至 ~/.cargo/bin
-# 或使用 Makefile 安裝至 ~/.local/bin/ertangle
+cargo install --path .        # installs to ~/.cargo/bin
+# or use the Makefile to install to ~/.local/bin/ertangle
 make install
 ```
 
-`make install` 會一併建立短別名 `ert` (指向 `ertangle` 的符號連結)。用 `cargo install` 安裝時，可自行設定：`ln -s ~/.cargo/bin/ertangle ~/.cargo/bin/ert` 或在 shell 加上 `alias ert=ertangle`。
+`make install` also creates the short alias `ert` (a symlink to `ertangle`). With `cargo install`, add it yourself: `ln -s ~/.cargo/bin/ertangle ~/.cargo/bin/ert` or `alias ert=ertangle` in your shell.
 
-**Shell 自動補齊** (支援 bash / zsh / fish，並能動態補齊 session label)
+**Shell completions** (bash / zsh / fish, with dynamic session label completion)
 
 ```bash
-make install-completions      # 於原始碼目錄執行，依目前 SHELL 自動安裝
-# 或手動輸出：ertangle completions <bash|zsh|fish>
+make install-completions      # run from the source checkout; detects your SHELL
+# or generate manually: ertangle completions <bash|zsh|fish>
 ```
 
-### 2. 啟動與第一個任務
+### 2. Launching Your First Agent Session
 
-在任何 Git 專案目錄下執行：
+Inside any Git repository directory:
 
 ```bash
 ertangle
 ```
 
-- 若 Daemon 尚未執行，`ertangle` 會**自動在背景啟動 Daemon** 並進入 TUI。
-- 在 TUI 中按下 **`n`**，依序選擇 Agent (如 `opencode`)、Model (如預設或建議模型)，並輸入提示：
+- If the daemon is not already running, `ertangle` **automatically launches the daemon in the background** and starts the TUI.
+- In the TUI, press **`n`** to spawn a new agent. Select the agent (e.g., `opencode`), choose a model, and type your prompt:
   ```
-  幫我把測試修好，並修正任何編譯錯誤
+  Fix all failing unit tests and resolve any compiler errors
   ```
-- Agent 會在專屬 Worktree (`ertangle/session-xxx`) 開始工作。你可以在中央視圖即時觀察 Markdown 串流逐字稿、切換到 Diff 視圖審查程式碼變更，並一鍵完成合併。
+- The agent starts working inside its dedicated worktree (`ertangle/session-xxx`). Watch live Markdown streaming in the Overview tab, switch to the Diff view to inspect modifications, and merge safely with one keypress.
 
 ---
 
-## 實戰案例：Coordinator + Worker 多 Agent 協同開發
+## Walkthrough: Coordinator + Worker Multi-Agent Collaboration
 
-當遇到跨模組的中大型需求時，你不需要自己手動開好幾個終端機視窗分別複製貼上。在 `ertangle` 中，你可以啟動一位 **Coordinator (協調者)**，讓它自動拆解任務、建立相依性看板、派生多個各自擁有獨立 Git Worktree 的 **Worker (實作者)** 平行開發，最後由你在 TUI 統一審查與合併。
+For medium-to-large features spanning multiple modules, you do not need to manually juggle multiple terminal windows. In `ertangle`, you can spawn a **Coordinator** session that decomposes requirements, schedules tasks with dependencies on the shared board, and spawns multiple isolated **Worker** sessions in dedicated Git Worktrees—while you review and merge everything from a single TUI.
 
-### 情境範例：同時開發後端 API 認證、前端登入表單與整合測試
+### Scenario: Building JWT Authentication (Backend API + Frontend UI + Integration Tests)
 
-#### 第一步：啟動 Coordinator (三種方式擇一)
+#### Step 1: Launch the Coordinator (Choose Any Method)
 
-**方式 A：在 TUI 互動啟動 (最常用)**
-1. 在 TUI 按下 **`n`**，選擇主力模型 (例如 `claude` 或 `opencode`)。
-2. 在輸入提示詞畫面，按 **`Ctrl-R`** 將角色切換為 **`coordinator`** (按 `Ctrl-W` 保持關閉 Worktree，讓 Coordinator 留在主目錄綜觀全局)。
-3. 輸入需求提示詞：
+**Method A: Interactive TUI Spawn (Recommended)**
+1. Press **`n`** in the TUI and select an agent (e.g., `claude` or `opencode`).
+2. In the prompt input step, press **`Ctrl-R`** to switch the role to **`coordinator`** (leave Worktree off via `Ctrl-W` so the coordinator stays on the main checkout).
+3. Enter the goal prompt:
    ```text
-   請擔任 Coordinator 完成「JWT 登入認證功能」：
-   1. 先用 ertangle_task_create 建立三個任務：
-      - T1：後端實作 /api/login 與 JWT middleware
-      - T2：前端實作登入表單與錯誤提示
-      - T3：撰寫端到端整合測試 (設定 depends_on 等待 T1 與 T2 完成)
-   2. 用 ertangle_spawn 派生兩個開啟 worktree 的 worker (worker-backend 與 worker-frontend) 平行執行 T1 與 T2。
-   3. 用 ertangle_wait 等待它們回報 TASK_DONE，檢查無誤後再派或喚醒 worker 執行 T3。
+   Act as Coordinator to deliver the "JWT Login Authentication" feature:
+   1. Use ertangle_task_create to create three tasks:
+      - T1: Implement /api/login endpoint and JWT middleware in backend
+      - T2: Build login form and error handling in frontend
+      - T3: Write end-to-end integration tests (set depends_on to wait for T1 and T2)
+   2. Use ertangle_spawn to launch two worktree-isolated workers (worker-backend and worker-frontend) in parallel for T1 and T2.
+   3. Call ertangle_wait to await their TASK_DONE reports, then assign or wake a worker to complete T3.
    ```
 
-**方式 B：使用 TUI 命令列單行啟動**
+**Method B: One-Line TUI Command**
 ```text
-:spawn --role coordinator claude:sonnet "請拆解 JWT 登入認證功能，建立任務看板並派生兩個 worktree worker 分頭實作前後端，完成後彙整向我回報"
+:spawn --role coordinator claude:sonnet "Decompose the JWT login feature, create tasks on the board, and spawn two worktree workers for backend and frontend in parallel."
 ```
 
-**方式 C：使用內建 Playbook 團隊範本一鍵啟動**
+**Method C: Launch a Built-in Playbook**
 ```text
-:playbook coord-review 實作 JWT 登入認證與前後端整合
+:playbook coord-review Implement JWT login authentication across backend and frontend
 ```
-(或按 `Space s b` 從選單挑選 `coord-review`、`tdd-pair`、`dual-review` 等範本)。
+(Or press `Space s b` to pick from `coord-review`, `tdd-pair`, `dual-review`, or your custom playbooks).
 
 ---
 
-#### 第二步：觀察 Coordinator 與 Worker 的自動協作過程
+#### Step 2: Watch Autonomous Multi-Agent Execution in the TUI
 
-一旦送出提示詞，`ertangle` 會在幕後自動完成以下協同流程，你只需在 TUI 旁觀或隨時介入：
+Once submitted, the agents coordinate over the MCP bus automatically:
 
 ```
-[Coordinator: coord] (主分支，負責規劃與調度)
-   ├── 1. 呼叫 ertangle_task_create 建立任務看板 (T1, T2 為 todo；T3 因 depends_on 自動設為 blocked)
-   ├── 2. 呼叫 ertangle_spawn 派生子 Agent
+[Coordinator: coord] (main checkout, planning & orchestration)
+   ├── 1. Calls ertangle_task_create (T1, T2 = todo; T3 = blocked via depends_on)
+   ├── 2. Calls ertangle_spawn to launch isolated workers
    │
-   ├─► ↳ [worker-backend]  (獨立分支 @ertangle/ses_a1 · .ertangle/wt/ses_a1)
-   │      ├── 呼叫 ertangle_task_update(T1, status="doing")
-   │      ├── 修改 src/auth.rs、執行 `ertangle check` 驗證測試
-   │      └── 呼叫 ertangle_task_update(T1, status="done", report="Implemented /api/login and JWT middleware") 一鍵更新看板並回報 TASK_DONE 後立即結束回合
+   ├─► ↳ [worker-backend]  (branch @ertangle/ses_a1 · .ertangle/wt/ses_a1)
+   │      ├── Calls ertangle_task_update(T1, status="doing")
+   │      ├── Edits src/auth.rs and runs unit tests
+   │      ├── Calls ertangle_task_update(T1, status="done")
+   │      └── Calls ertangle_send(to="coord", "TASK_DONE task_1 Implemented /api/login and JWT middleware") and stops immediately
    │
-   └─► ↳ [worker-frontend] (獨立分支 @ertangle/ses_b2 · .ertangle/wt/ses_b2)
-          ├── 呼叫 ertangle_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
-          ├── 修改 web/login.ts、完成表單驗證
-          └── 呼叫 ertangle_task_update(T2, status="done", report="Added login form and error handling") 一鍵更新看板並回報 TASK_DONE 後立即結束回合
+   └─► ↳ [worker-frontend] (branch @ertangle/ses_b2 · .ertangle/wt/ses_b2)
+          ├── Calls ertangle_ask(peer="worker-backend", "QUERY: What is the exact JSON schema for 401 errors?")
+          ├── Edits web/login.ts and form validation
+          ├── Calls ertangle_task_update(T2, status="done")
+          └── Calls ertangle_send(to="coord", "TASK_DONE task_2 Added login form and error handling") and stops immediately
 ```
 
-在 TUI 畫面上你會看到：
-- **左側 Sessions 欄**：自動呈現父子縮排階層 (`↳ worker-backend [worker]`)、各自所在的分支名稱，以及目前正在執行的工具摘要。
-- **中央 Tasks 視圖 (按 `Tab` 切換)**：即時看到 T1、T2 進入 `doing`；當 T1 與 T2 都標記為 `done` 的瞬間，原本處於 `blocked` (`⧗`) 的 T3 會**自動解鎖為 `todo` 並主動發信喚醒負責人**開工。
-- **零寒暄協定 (Zero Pleasantries)**：Agent 之間強制使用精簡英文結構化格式 (`TASK_DONE`、`TASK_BLOCKED`、`QUERY:`、`ANSWER:`) 溝通，Worker 送出 `TASK_DONE` 後立即終止回合，絕不互相客套說「Thank you」而消耗額外 Token。
+What you see in the TUI:
+- **Left Sessions Pane**: Displays the parent-child hierarchy (`↳ worker-backend [worker]`), worktree branch names, and active tool indicators.
+- **Center Tasks View (press `Tab`)**: Shows T1 and T2 in `doing`. As soon as both T1 and T2 reach `done`, the daemon automatically unlocks T3 from `blocked` (`⧗`) to `todo` and wakes its assignee.
+- **Token-Efficient Protocol**: Inter-agent messages follow a strict English protocol (`TASK_DONE`, `TASK_BLOCKED`, `QUERY:`, `ANSWER:`) with zero pleasantries—once a worker sends `TASK_DONE`, it terminates its turn immediately without wasting tokens on courtesy replies.
 
 ---
 
-#### 第三步：審查 Diff、處理衝突與安全合併
+#### Step 3: Review Diffs, Resolve Conflicts & Merge Safely
 
-當 Worker 們完成實作後，你可以逐一檢視成果並合入主分支：
-
-1. **檢視變更**：用 `j` / `k` 選取 `worker-backend`，按 **`Tab`** 切到 **Diff 視圖**。
-   - 按 `(` / `)` 在不同修改檔案間跳轉，按 `Enter` 將檢查完的檔案摺疊收起。
-   - 若某一行需要微調，直接將游標移到該行按 **`c`** 輸入審查意見 (如「Token 過期時間請改為由設定檔讀取」)，Worker 會自動被喚醒並針對該行修正。
-   - 若發現某個多餘的 debug 區塊，直接按 **`X`** (`:discard`) 將該 hunk 退回，不必再花一輪 Token。
-2. **安全合併回主分支**：
-   - 確認 `worker-backend` 的 Diff 無誤後，按 **`M`** (`:merge`) 將其自動 commit 並合併回 `main`。
-   - 接著選取 `worker-frontend` 按 **`M`**。若兩個 Worker 剛好改到同一個共用設定檔而發生 Git 衝突，只需執行 **`:merge --resolve`** (或按 `Space g r`)：`main` 主分支會保持乾淨，衝突標記會留在 `worker-frontend` 自己的 Worktree 中，並自動喚醒該 Worker 解完衝突與重跑測試。
-3. **清理與匯出報告**：
-   - 按 **`G`** (`:gc`) 一鍵清除已結束且已合併的 Worktree 分支。
-   - 在 Coordinator Session 上輸入 **`:export`**，即可將整棵父子協作樹的對話重點、各 Worker 花費與任務清單匯出為 Markdown 報告並自動複製到剪貼簿，直接貼上 GitHub PR 描述。
+1. **Inspect & Comment on Diffs**: Select `worker-backend` with `j` / `k` and press **`Tab`** to open the **Diff View**.
+   - Jump between files with `(` / `)` and fold reviewed files with `Enter`.
+   - Press **`c`** on any line to leave an inline review comment (e.g., "Read token expiration from config")—the comment is routed back to the worker to fix.
+   - Press **`X`** (`:discard`) on any unwanted debug hunk to revert it directly without spending another agent turn.
+2. **Merge & Delegate Conflicts**:
+   - Press **`M`** (`:merge`) on `worker-backend` to auto-commit and merge into `main`.
+   - Select `worker-frontend` and press **`M`**. If both workers touched a shared config file causing a conflict, run **`:merge --resolve`** (or press `Space g r`): `main` stays clean while conflict markers are placed inside `worker-frontend`'s isolated worktree, prompting the worker to resolve the conflict and re-verify tests.
+3. **Clean Up & Export Report**:
+   - Press **`G`** (`:gc`) to clean up completed and merged worktrees.
+   - Run **`:export`** on the coordinator session to export a full Markdown report (hierarchy, task summary, costs, and transcripts) to `.ertangle/exports/` and copy it to your system clipboard via OSC 52, ready to paste into a GitHub PR.
 
 ---
 
-## 核心功能與工作流程
+## Core Features & Workflow
 
-### 1. 工作區隔離與審查迴圈 (Review Loop)
+### 1. Worktree Isolation & Review Loop
 
-- **Worktree 獨立分支**：每個 session 使用專屬 `git worktree` 與 `ertangle/<session>` 分支，互不干擾。
-- **即時彩色 Diff**：在 TUI 按 `Tab` 切換至 Diff 視圖，按 `{` / `}` 跳轉 hunk，`(` / `)` 跳轉上／下一個檔案，`Enter` (或 `v`) 摺疊／展開單一檔案，按 `X` (或 `:discard`) 安全退回選取的 hunk 或整個檔案變更。
-- **行內註解審查 (Review Comment)**：在 Diff 視圖按 `c`，直接對該行留下修改建議 (例如：「請補上邊界條件檢查」)，系統會自動將註解送回該 Agent 要求修正。
-- **安全合併與衝突解決 (Merge & Conflict Resolution)**：按 `M` 或執行 `ertangle merge` 合併回主分支，策略可選 `merge` / `squash` / `rebase`。衝突時可用 `:merge --resolve` 委派 Agent 處理。
-- **清理 (GC)**：按 `G` 或執行 `ertangle gc`，自動清除已結束且已合併的 Worktree，絕不誤刪未合併成果。
+- **Dedicated Worktree & Branch**: Each session operates inside an independent `git worktree` and `ertangle/<session>` branch, eliminating file conflicts.
+- **Real-Time Color Diff**: Press `Tab` in the TUI to switch to the Diff view; navigate hunks with `{` / `}`, jump between files with `(` / `)`, fold/unfold individual files with `Enter` (or `v`), and revert a single hunk or entire file with `X` (or `:discard`).
+- **Inline Review Comments**: Press `c` on any diff line to submit inline feedback (e.g., "Add boundary checks here"). The comment is routed back to the agent for automated revision.
+- **Safe Merge & Conflict Resolution**: Press `M` or run `ertangle merge`. The system runs pre-flight safety checks (supports global `pre_merge_command` gate verification), commits uncommitted worktree changes automatically, and merges into the main branch. On conflicts, use `:merge --resolve` (or Which-key `Space g r`) to keep conflict markers isolated in the worktree while keeping `main` clean, delegating conflict resolution to the agent.
+- **Garbage Collection (GC)**: Press `G` or run `ertangle gc` to clean up merged and completed worktrees safely without deleting unmerged work.
 
-### 2. 跨 Agent 協作匯流排與任務看板 (MCP & Bus)
+### 2. Multi-Agent Bus & Task Board (MCP)
 
-Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdio MCP 伺服器：
+Every structured agent session is automatically injected with a stdio MCP server containing **16 collaboration tools**:
 
-| 類別 | 工具名稱 | 功能 |
+| Category | Tool Name | Description |
 | --- | --- | --- |
-| **自我與環境** | `ertangle_whoami`, `ertangle_peers` | 查詢自己的 session ID、工作區分支，以及其他同伴資訊 |
-| **訊息傳遞** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | 發送訊息、非同步讀取收件匣、阻塞等待新訊息、同步問答 |
-| **任務看板** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | 建立協作任務、指定負責人、支援 `depends_on` 前置相依性；`ertangle_task_update` 支援帶入 `report` 於 `done`/`blocked` 時一鍵向父 Session 發送 `TASK_DONE` / `TASK_BLOCKED` |
-| **衍生與產出** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | 派生子 Agent (支援 `task_title` / `task_id` 同步建立或綁定任務)、分享產出物、廣播進度狀態 |
-| **互動與核准** | `ertangle_question`, `ertangle_approve` | 提出互動式問題 (單選／複選／文字自填)、工具使用權限核准轉發 |
-| **Git 整合** | `ertangle_diff`, `ertangle_merge` | 查詢分支 diff (支援 `stat_only`、`paths`、`max_lines`，並預設摺疊 `package-lock.json`、`Cargo.lock`、`*.Designer.cs`、`*ModelSnapshot.cs` 等大型生成檔)、請求合併 |
+| **Self & Peers** | `ertangle_whoami`, `ertangle_peers` | Inspect own session ID, branch, worktree path, and peer agent details |
+| **Messaging** | `ertangle_send`, `ertangle_inbox`, `ertangle_wait`, `ertangle_ask` | Send direct/broadcast messages, non-blocking inbox reads, blocking wait, synchronous Q&A |
+| **Task Board** | `ertangle_task_list`, `ertangle_task_create`, `ertangle_task_update` | Create tasks, assign owners, specify `depends_on` prerequisite dependencies; pass `report` to `ertangle_task_update` (`done`/`blocked`) to atomically send `TASK_DONE` / `TASK_BLOCKED` to the parent session |
+| **Spawning & Output** | `ertangle_spawn`, `ertangle_artifact_share`, `ertangle_status` | Spawn sub-agents (supports `task_title` / `task_id` to atomically create or bind a board task), share artifacts (files, PR links), broadcast status summaries |
+| **Interaction & Approval** | `ertangle_question`, `ertangle_approve` | Ask interactive single/multi-select questions, forward tool permission approvals |
+| **Git Operations** | `ertangle_diff`, `ertangle_merge` | Query branch diff vs. main branch (supports `stat_only`, `paths`, `max_lines`, and auto-folds giant lock/generated files like `package-lock.json`, `Cargo.lock`, `*.Designer.cs`, `*ModelSnapshot.cs`), request worktree merge |
 
-- **空閒提醒 (Unread Nudge on Idle)**：
-  - 當 Agent 正忙於執行回合時，發來的直接訊息 (或廣播) 只會暫存在收件匣，**不打斷運算**。
-  - 當 Agent 結束回合回到 `idle` 且佇列中的指令處理完畢後，系統會將未讀訊息合併為一則提醒，每則訊息**僅提醒一次**。
-  - 已透過 `ertangle_wait` / `ertangle_ask` 取走或超過成本預算的 session 則不予打擾。
-- **任務相依性 (Task Dependencies)**：
-  - 建立任務時可帶 `--depends-on <id>`，在前置任務全數 `done` 之前，任務維持 `blocked` 且不打擾負責人。
-  - 前置任務完成後自動轉為 `todo`，並主動發信喚醒指派的負責人。
-- **信箱後備**：所有訊息同步寫入專案目錄下的 `.ertangle/mailbox/<session>.jsonl`。
+- **Unread Nudge on Idle**:
+  - Direct messages and broadcasts sent to busy agents are buffered in their mailbox **without interrupting active turns**.
+  - Once the recipient finishes its turn and returns to `idle` (and pending prompt queues are drained), buffered unread messages are consolidated into a single gentle reminder. Each message is nudged **only once**.
+  - Messages already retrieved via `ertangle_wait` / `ertangle_ask` or sessions exceeding budget limits are not nudged.
+- **Task Dependencies**:
+  - Tasks created with `--depends-on <id>` remain `blocked` until all prerequisites are marked `done`.
+  - Once unlocked, the task transitions to `todo` and notifies the assigned agent automatically.
+- **Mailbox Fallback**: All messages are simultaneously written to `<repo>/.ertangle/mailbox/<session>.jsonl`.
 
-### 3. 額度監控、智慧交接 (Handoff) 與接續 (Resume)
+### 3. Quota Tracking, Intelligent Handoff & Session Resume
 
-- **額度監視**：
-  - 即時解析 Agent 回報的額度狀態 (Claude 的 5 小時／7 天視窗與重置倒數；Codex 的 rateLimits)。
-  - 標題列即時標示最吃緊視窗 (`≥ 70%` 黃色、`≥ 90%` 紅色)；輸入 `:quota`、按 `Space s q` 或點擊標題列的額度摘要，會彈出額度面板，以 progress bar 列出本機已安裝 agent 的各視窗用量與重置倒數。
-- **智慧交接 (Handoff)**：
-  - 當 Agent 回報額度用完、被限流，或使用者手動要求 (`:handoff <agent> [備註]`)：
-  - 舊 Agent 停止執行，工作區未 commit 變更自動 commit；
-  - Daemon 彙整任務背景、指派任務、最後輸出與完整 Diff 生成交接簡報；
-  - 新 Agent **直接沿用同一個工作目錄與分支**接手；
-  - 之後發往舊 session 的直接訊息會**自動改投給新接手者**。
-- **對話接續 (Resume)**：
-  - 若 Agent 處理程序異常中斷或 Daemon 重啟，按下 `Space s r` 或執行 `ertangle resume <session> [prompt]`，即可喚回**原本的對話**。
-  - 利用各家原生的對話回復機制 (Claude `--resume`、Codex `thread/resume`、ACP `session/load`)，保持同一個 session ID、逐字稿與分支。
+- **Quota Monitoring**:
+  - Parses real-time quota data reported by agents (Claude 5-hour / 7-day rate limit windows and reset countdowns; Codex rate limits).
+  - Title bar displays the tightest window (`≥ 70%` yellow, `≥ 90%` red). Run `:quota` for detailed status.
+- **Intelligent Handoff**:
+  - When an agent runs out of quota or rate-limited, or when requested manually (`:handoff <agent> [note]`):
+  - The previous agent stops, and uncommitted worktree changes are committed automatically;
+  - The daemon synthesizes a comprehensive briefing (goals, tasks, last output, full git diff);
+  - The successor agent **takes over the exact same worktree and branch**;
+  - Messages sent to the old session ID/label are **automatically forwarded to the successor**.
+- **Session Resume**:
+  - If an agent process crashes or the daemon restarts, press `Space s r` or run `ertangle resume <session> [prompt]` to resume the **exact same conversation**.
+  - Leverages native resume mechanisms (Claude `--resume`, Codex `thread/resume`, ACP `session/load`), preserving session ID, transcript, and branch.
 
-### 4. 資源控管與休眠 (Budget & Limits)
+### 4. Resource Control, Budgeting & Idle Sleep
 
-- **成本上限設定**：
-  - 支援單一 session 預算 (`session_usd`)、子樹總額上限 (`tree_usd`)、Token 上限 (`session_tokens`)，以及最大子 Agent 數量與層級深度。
-  - 達到警戒線 (預設 80%) 黃色警告，超過上限立即阻斷執行並暫停排隊的 prompt，使用 `:budget <金額>` 調高後自動恢復。
-- **閒置休眠**：
-  - 按 `z` 或執行 `ertangle sleep <session>`，發送 `SIGSTOP` 暫停 Agent 處理程序節省系統資源；按 `z` 或收到訊息時發送 `SIGCONT` 自動喚醒。
+- **Cost & Token Limits**:
+  - Configure per-session USD limits (`session_usd`), parent-child tree budget (`tree_usd`), and token caps (`session_tokens`), as well as maximum sub-agent depth.
+  - When reaching threshold (default 80%), visual warnings trigger. Exceeding limits halts execution and holds pending prompts until budget is increased via `:budget <amount>`.
+- **Idle Process Suspension (Sleep/Wake)**:
+  - Press `z` or run `ertangle sleep <session>` to send `SIGSTOP`, freezing idle agent processes and freeing CPU. Press `z` or send a message to dispatch `SIGCONT` and wake them up.
 
-### 5. 權限政策與安全防護 (Policy Engine)
+### 5. Permission Policy & Rule Engine
 
-- 提供跨 Agent 的統一控制旋鈕 `--permission <ask|auto|bypass>`：
-  - `ask`：所有工具呼叫轉交由使用者在 TUI 逐一按 `a` (允許) / `A` (一律允許) / `d` (拒絕) 核准。
-  - `auto` (預設)：安全工具自動核准。
-  - `bypass`：跳過權限確認。
-- **規則引擎**：支援全域 `~/.config/ertangle/policy.toml` 與專案 `.ertangle/policy.toml`，以 `deny` (黑名單) → `allow` (白名單) → session 政策順序過濾指令。
-- **Claude 逐項核准轉發 (T33)**：非 `bypass` 模式下為 Claude 掛載 `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host`，使 Claude 的單一工具呼叫能受到 `policy.toml` 攔截並在 `ask` 模式下由 TUI 互動核准。
-- **全面秘密遮罩 (Secret Redaction, T33)**：所有 MCP 工具輸出 (包含 `ertangle_inbox`、`ertangle_wait`、`ertangle_ask`、`ertangle_diff` 等) 與事件紀錄在送出前均自動過濾常見 API Key 與 Token (`sk-...`、`ghp_...`、`AKIA...` 等)，遮罩為 `<REDACTED>`。
+- Cross-agent unified flag `--permission <ask|auto|bypass>`:
+  - `ask`: Tool calls require manual approval in the TUI (`a` allow once / `A` always allow / `d` deny).
+  - `auto` (default): Safe operations are approved automatically.
+  - `bypass`: Skips permission confirmation.
+- **Policy Engine**: Configured via `~/.config/ertangle/policy.toml` and `.ertangle/policy.toml` using `deny` (blacklist) → `allow` (whitelist) → session policy order.
+- **Claude Granular Approval Forwarding (T33)**: Mounts `--permission-prompt-tool mcp__ertangle__ertangle_approve --permission-prompts host` in non-`bypass` mode, enabling Claude's tool invocations to be filtered by `policy.toml` and approved interactively in TUI `ask` mode.
+- **Comprehensive Secret Redaction (T33)**: All MCP tool outputs (including `ertangle_inbox`, `ertangle_wait`, `ertangle_ask`, `ertangle_diff`, etc.) and event logs automatically sanitize sensitive credentials (`sk-...`, `ghp_...`, `AKIA...`, etc.) into `<REDACTED>` before delivery.
 
-### 6. 遠端連線、Tailscale 整合與斷線自動重連 (T28)
+### 6. Remote Connections, Tailscale Integration & Auto-Reconnect (T28)
 
-- **自動偵測 Tailscale 位址**：
-  - 支援 `ertangle daemon --listen tailscale`，自動呼叫本機 `tailscale ip -4` 解析點對點安全通道 IP，無需手動查詢輸入。
-  - 自動生成並持久化安全認證 Token 於 `~/.local/state/ertangle/remote.token` (檔案權限嚴格限制為 `0600`)。
-- **終端機連線資訊速查**：
-  - 執行 `ertangle daemon info` 即可一鍵印出目前本機與 Tailscale 遠端連線位址、Token 與連線指令。
-- **無縫斷線重連 (Auto-Reconnect)**：
-  - 當筆電休眠喚醒、跨 Wi-Fi 切換網路或短暫斷線時，TUI 會在背景以指數退避演算法自動重試。
-  - 連線恢復時自動發送帶有最後已知序列號的 `Request::Hello { since, epoch, token }`，無縫還原狀態並補齊離線期間遺漏的事件記錄。
+- **Automatic Tailscale Detection**:
+  - Start daemon with `ertangle daemon --listen tailscale` to auto-resolve your machine's peer-to-peer Tailscale IPv4 address via `tailscale ip -4`.
+  - Automatically generates and securely stores auth tokens at `~/.local/state/ertangle/remote.token` (file permission `0600`).
+- **Connection Info Quick Look**:
+  - Run `ertangle daemon info` to print local and Tailscale addresses, token path, and copy-paste connection commands.
+- **Resilient Auto-Reconnect**:
+  - When laptops wake from sleep, networks switch, or brief disconnects happen, the TUI automatically reconnects in the background with exponential backoff.
+  - Reconnects using `Request::Hello { since, epoch, token }` to seamlessly resume state and backfill missed events without interruption.
 
-### 7. TUI 多主機聚合視圖 (Multi-Host Aggregation, T29)
+### 7. Multi-Host Aggregation in TUI (T29)
 
-- **跨機統一儀表板**：
-  - 在 `config.toml` 中配置 `[remotes]` 或使用命令列參數 `ertangle --remote workstation:7420 --remote gpu-box:7420`。
-  - 單一 TUI 畫面即可聚合呈現本機與所有遠端伺服器上的 Agent Sessions。
-- **智慧路由與篩選**：
-  - Sessions 清單依主機顯示彩色來源標記 (`[workstation]`、`[gpu-box]`)。
-  - 發送 Prompt、審核權限或檢視 Diff 時，指令會自動透明路由至所屬的遠端主機。
-  - 按 `:` 輸入 `:host <名稱>` (或 `:host all`) 可隨時切換聚焦單一主機或全域視圖。
+- **Unified Multi-Machine Dashboard**:
+  - Configure `[remotes]` in `config.toml` or launch with `ertangle --remote workstation:7420 --remote gpu-box:7420`.
+  - View, monitor, and interact with agent sessions running across multiple machines from a single unified TUI dashboard.
+- **Transparent Routing & Filtering**:
+  - Sessions are tagged with colored host badges (`[workstation]`, `[gpu-box]`).
+  - Sending prompts, reviewing diffs, and approving tool executions are automatically routed to the owning host.
+  - Switch host views anytime using `:host <target>` or `:host all`.
 
-### 8. Web 版支援與行動介面 (Web Interface & Mobile PWA, T30)
+### 8. Web Interface & Mobile PWA (T30)
 
-- **隨身攜帶、買咖啡不中斷**：
-  - 離開座位時，無需在手機狹窄螢幕透過 SSH 艱苦操作終端機。可在 TUI 設定面板 (`:settings` 或 `Space ,`) 中直接切換啟用，或輸入 `:web on [位址]` (亦可從 CLI 啟動 `ertangle daemon --web tailscale`)。
-  - 終端機內建 **Unicode QR Code**，在 TUI 輸入 `:web qr` 或按 `Space w`，手機打開相機一掃即可在瀏覽器開啟專屬 PWA 介面。
-- **零相依原生 HTTP / WebSocket**：
-  - Daemon 內部以純 Rust 同步網路實作，不引入 Node.js 或額外 async 框架，維持單一執行檔與極低記憶體開銷。
-- **App 級大拇指原生設計**：
-  - **待審核懸浮橫幅與互動問答**：Agent 遇到工具執行或危險指令等待核准時，頂部即時彈出醒目核准卡片，單鍵 Allow / Always / Deny；支援互動式問題直接在卡片上點選或輸入文字回覆。
-  - **對話回合 (Turn)**：將逐字稿自動重構為結構化對話回合，收攏正文、摺疊 Agent 內部思考過程 (`⋯`) 與工具執行記錄。
-  - **即時思考動畫**：思考中的對話區塊具備動態呼吸指示器 (`⋯ 思考中`) 與最新思考片段預覽，完全無 emoji。
-  - **斜線命令面板與 Shell 執行**：輸入 `/` 即可喚出命令選單；輸入 `!<命令>` 或 `/sh <命令>` 可直接在該 session 工作目錄執行指令。
-  - **已結束 Session 收合與封存**：自動將已結束的對話摺疊至側欄底部，提供「清理已結束」按鈕與抽屜式封存列表隨時調閱。
-  - **對話 Markdown 與行內圖片預覽**：完整渲染 `h1`–`h6` 標題、保留編號的有序清單、縮排項目符號與引言，程式碼區塊附帶一鍵「複製」按鈕，並支援 `![alt](url)` 行內圖片預覽與嚴格來源 / 路徑安全驗證。
-  - **文字與圖片檔案即時預覽**：點擊對話中的檔案膠囊，直接在面板中即時預覽文字與程式碼內容 (含行號跳轉與高亮)，或直接檢視渲染圖片。
-  - **即時 Diff 審查與一鍵 Merge**：在手機端審視 Git 變更，確認無誤後單鍵完成合併。
+- **Mobile Review On The Go**:
+  - Step away from your desk without losing review flow. Enable it directly from the TUI settings panel (`:settings` or `Space ,`) or by typing `:web on [addr]` (or via CLI `ertangle daemon --web tailscale`).
+  - A clean **Unicode QR Code** can be displayed in your terminal with `:web qr` or `Space w` for instant camera scanning on mobile phones.
+- **Zero-Dependency Native HTTP / WebSocket**:
+  - Built directly into the single binary with pure Rust standard networking—no Node.js, npm, or heavy async dependencies required.
+- **Thumb-Friendly Native Mobile PWA**:
+  - **Approval Banner & Interactive Questions**: Pops up immediately when agents request tool execution permissions (Allow / Always / Deny) or ask interactive questions (single/multi-select options or freeform text).
+  - **Conversational Turns**: Restructures raw transcripts into clean turns, grouping messages, thought folds (`⋯`), and tool call results.
+  - **Live Thinking Animation**: Active reasoning blocks display an animated pulse indicator (`⋯ 思考中`) with the latest thought preview, completely emoji-free.
+  - **Slash Command Palette & Shell Execution**: Type `/` to open the command palette; type `!<cmd>` or `/sh <cmd>` to run shell commands in the session's workspace.
+  - **Folded Ended Sessions & Pruning**: Automatically folds ended sessions at the bottom of the sidebar, with a "Prune Ended" button and archived session drawer.
+  - **Full Markdown & Inline Image Previews**: Clean typography for `h1`–`h6` headings, preserved ordered list numbering, indented bullets, quotes, code blocks with a one-tap copy button, and `![alt](url)` inline image previews with strict origin/path validation.
+  - **Text & Image File Previews**: Tap interactive file pills to preview text/code files (with line jumping and highlights) or view images directly.
+  - **Git Diff Review & One-Tap Merge**: Review branch diffs and merge back to main directly from your phone.
 
-### 9. 節省 Token 與跨語言 Agent 開發加速 (Token Economy & Polyglot Tools)
+### 9. Token Economy & Polyglot Agent Efficiency
 
-- **低雜訊建置與測試驗證 (`ertangle check`, T101, T103)**：
-  - 自動偵測 Rust、Node / Vite、.NET Core、Python 與 Godot (`project.godot`) 專案並執行建置、型別檢查與測試。針對 Godot 執行 `--headless --quit` (若有 `addons/gut/gut_cmdln.gd` 則執行 GUT 測試)，並將多行 `SCRIPT ERROR:` 與接續的 `at: ... (res://path:line)` 合併為單行 `path:line: SCRIPT ERROR: ...` 診斷。
-  - 自動剝除 ANSI 色彩碼、摺疊 `node_modules/` 或非同步執行時期堆疊追蹤、去重重複診斷並限制輸出行數 (支援 `--quick`、`--max-lines`、`--json`)，只回傳可行動的錯誤摘要，大幅減少測試輸出佔用的 Token。
-- **程式碼骨架與精確行號提取 (`ertangle outline`, T102, T103)**：
-  - 免讀取整份原始碼，即可快速掃描 `.rs`、`.ts`/`.tsx`/`.js`/`.jsx`/`.vue`、`.cs`、`.py`、`.gd` (GDScript)、`.tscn` (Godot 場景節點樹 `[node]`、外部腳本 `[ext_resource]` 與 `[connection]` Signal 綁定，自動略過龐大的 `[sub_resource]`) 與 `.gdshader` (Godot Shader) 檔案或目錄，提取符號骨架與精確起訖行號 (`L<start>-L<end>`)。
-  - Coordinator 可在派工 Prompt 直接附上檔案與行號範圍，讓 Worker 精準定位編輯，避免重複探索與讀取整支大型檔案。
-- **非阻塞開發伺服器管理 (`ertangle dev`, T102)**：
-  - 透過 `ertangle dev start|status|stop` 自動偵測框架並分配空閒本機連接埠，在獨立處理程序群組於背景啟動開發伺服器，將輸出寫入 `.ertangle/dev-<port>.log` 並在連接埠就緒後立即回傳 URL 與 PID，避免 Agent 回合被前景伺服器阻塞或發生多 Worktree 連接埠衝突。
-- **範圍過濾 Diff 與生成檔自動摺疊 (`ertangle_diff` / `ertangle diff`, T98, T103)**：
-  - 支援 `stat_only` (僅列變更統計)、`paths` (過濾特定檔案或目錄) 與 `max_lines` (MCP 呼叫預設上限 800 行)。
-  - 未指定 `paths` 時，自動將 `Cargo.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`*.Designer.cs`、`*ModelSnapshot.cs`、`uv.lock`、`poetry.lock`、`go.sum`、`*.snap`、`*.min.js`、Godot 的 `*.import`、`*.uid`、`*.translation` 以及 `.tscn` / `.tres` 場景與資源檔中超過 300 字元的 `Packed*Array(...)` 資料行自動摺疊為單行摘要，避免數萬字元灌爆上下文。
-- **單回合原子性回報與派工綁定 (`ertangle_task_update` / `ertangle_spawn`, T99)**：
-  - `ertangle_task_update` 在設定 `done` 或 `blocked` 時可帶入 `report`，於同一回合原子性更新任務看板並向父 Session 發送 `TASK_DONE` / `TASK_BLOCKED`，省去額外一輪 `ertangle_send` 的全量上下文重讀。
-  - `ertangle_spawn` 支援 `task_title` / `task_id`，派生 Worker 時同步建立或綁定看板任務，減少 Coordinator 派工回合數。
-- **Worktree 共用相依套件與建置快取 (`shared_worktree_deps` / `shared_cargo_target`, T100, T103)**：
-  - 預設啟用共用 `<repo>/.ertangle/target` 作為 `CARGO_TARGET_DIR`，並以符號連結自動掛載主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除範例檔) 與 `appsettings.Development.json`；針對 Godot 專案 (`project.godot`)，在 Worktree 中建立獨立的 `.godot/` 目錄，以符號連結共用 `.godot/imported` 龐大資產匯入快取，並複製 `global_script_class_cache.cfg`、`uid_cache.bin` 與 `extension_list.cfg`，免去每個 Worktree 重複安裝相依套件與編譯，且不污染 `git status` 或 `ertangle_diff`。
-- **省 Token 提示注入、呼叫計數與自動壓縮 (`token_hints` / `N calls` / `auto_compact`, T47)**：
-  - 可在 `:settings` 開啟「把省 token 提示注入協作說明」(`[collab] token_hints = true`，預設關閉)，引導 Agent 平行批次呼叫與限制輸出長度，並透過 TUI 次要資訊列的 `N calls` 比較工具呼叫次數。
-  - 搭配 `[auto_compact]` (閒置且上下文達門檻時自動代送 `/compact`) 與零寒暄協定 (`Zero Pleasantries`)，有效壓低多回合協作的 Token 消耗。
-
----
-
-## TUI 終端機介面操作指南
-
-### 1. 版面與檢視
-
-- **版面模式**：寬螢幕 (`>= 130` 欄) 下預設自適應展開為「三欄」 (左側 `Projects & Sessions` + 中央 + 右側上下分割的 `Flow` 節點拓撲圖與 `Bus / Tasks`)；按 `L` 可手動鎖定並循環切換「兩欄」、「分頁」 (頂部 Tabs + 中央) 與「三欄」，輸入 `:layout auto` 可恢復自適應，按 `b` 可切換右側面板於 `Flow + Bus` 與 `Project` 之間。
-- **中央視圖**：按 `Tab` (或按 `F` 直達 Flow) 依序切換主要視圖：
-  1. **Overview**：即時串流逐字稿，支援 Markdown 渲染 (標題、清單、表格、程式碼區塊等)。
-  2. **Diff**：即時彩色 Git Diff 視圖，支援行級審查註解。
-  3. **Worktrees**：檢視目前所有由 ertangle 建立的 Git Worktree 狀態與磁碟路徑。
-  4. **Tasks**：協作看板視圖，任務依狀態 (doing、review、todo、blocked、done) 分組，顯示前置任務相依性 (`⧗`)。按 `Enter` 直達負責人 Session。
-  5. **Flow**：90 度正交節點拓撲圖與封包動畫，即時呈現 Coordinator 與 Worker 間的協作拓撲與訊息流向。
-- **版本識別**：`ert --version` 與 TUI 狀態列皆會顯示 `v<semver>+<short_hash>`，方便開發時辨識目前建置版本。
-
-### 2. 快速鍵速查表
-
-#### 導航、選單與核心動作
-
-| 按鍵 | 動作 |
-| --- | --- |
-| `Space` | 開啟 **Which-key 選單** (`s` session、`g` git、`v` 檢視、`m` 訊息、`?` 說明) |
-| `:` 或 `/` | 開啟**命令列** (支援 `Tab` 自動補齊) |
-| `!` | 進入 **Shell 命令模式** (在選取 Session 的工作目錄直接執行命令 `!<命令>`) |
-| `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；支援 `Ctrl-R` 切換角色、`Ctrl-W` 切換 Worktree、`Ctrl-F` 切換 Effort) |
-| `i` / `Enter` | 聚焦輸入框，對選取的 Session 發送 prompt (亦支援 `@peer` 或 `#channel` 傳訊) |
-| `j` / `k` 或 `↑` / `↓` | 在左側 `Projects & Sessions` 移動選取 Session 與摺疊列；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
-| `l` / `→` / `h` / `←` / `Space` | 在左側欄展開 (`l` / `→`) 或收合 (`h` / `←`) 已結束 (`▸ 已結束 (N)`) 與其他專案摺疊列 (`Space` 切換) |
-| `[` / `]` | 快速跳至上一個 / 下一個 Session |
-| `Ctrl-K` | **Jump-Anywhere**：依關鍵字模糊搜尋並跳轉 Session |
-| `Space ,` (或 `:settings`) | 開啟**設定面板** (即時切換預設 Agent、Model、Effort、Worktree、Web 版支援等) |
-| `Space w` (或 `:web qr`) | 彈出**Web 版網址與 QR Code** 彈窗 (手機掃描即開即用) |
-| `q` / `Q` | `q` 關閉 TUI (Daemon 與 Agent 續跑)；`Q` 關閉 Daemon (等同 `:shutdown`) |
-
-#### 逐字稿、搜尋與複製
-
-| 按鍵 | 動作 |
-| --- | --- |
-| `t` | 切換逐字稿顯示模式：Markdown 渲染 ↔ 原始文字 |
-| `T` (或 `:thoughts`) | 顯示 / 隱藏 Agent 的思考行 (⋯，預設摺疊為摘要以加速渲染並呈現動態動畫) |
-| `O` (或 `:tools`) | 展開 / 摺疊工具呼叫紀錄 (連續成功呼叫預設摺疊) |
-| `f` (或 `:find <文字>`) | **即時搜尋**逐字稿或 Diff (邊打邊找，`Enter` / `↓` 下一個、`↑` 上一個、`Esc` 退出) |
-| 滑鼠拖曳 | 在逐字稿中央區塊拖曳選取，放開即透過 **OSC 52** 複製至系統剪貼簿 |
-| `Y` (或 `/copy`) | 複製目前中央區塊的完整文字 (不含側欄與邊框) |
-| `F2` | 切換滑鼠擷取模式 (關閉後可使用終端機原生選取，或使用 `Shift`+拖曳) |
-| `PgUp` / `PgDn` | 向上 / 向下翻頁捲動逐字稿 (捲動時暫停自動跟隨) |
-| `Home` / `End` | 跳至頂部 / 回到底部並恢復跟隨最新輸出 (`▼ follow`) |
-| `P` | 切換專案範圍：只看本專案 (`here`) ↔ 顯示全部專案 Session (`all`) |
-
-#### Prompt 輸入與排隊
-
-| 按鍵 / 語法 | 功能說明 |
-| --- | --- |
-| `!<命令>` | **在 Session 工作目錄執行 Shell 命令** (不經過 agent，例如 `!cargo test`；亦可在 Normal mode 按 `!` 直達) |
-| `@檔名` | **檔案附件模糊搜尋**：輸入 `@` 片段，自動在專案內搜尋檔案並補齊，送出時自動內嵌文字 (上限 256 KB) 或圖片 (上限 5 MB) |
-| `Ctrl-V` | 貼上系統剪貼簿內的圖片 (Linux 需安裝 `wl-paste` 或 `xclip`) |
-| 拖曳檔案 | 直接將檔案從檔案總管拖進終端機，自動轉換為 `@路徑` 語法 |
-| `Shift-Enter` / `Ctrl-Enter` / `Ctrl-J` | 輸入框原生換行 (透過 Kitty 鍵盤增強協定支援，並保留 `Ctrl-J` 相容；輸入框隨行數自動伸展，最多 8 行) |
-| `Option` / `Cmd` 編輯快速鍵 | 支援 macOS / readline 游標與刪除操作 (`Option+←/→`、`Option+Backspace` / `Ctrl-W`、`Option+Delete`、`Cmd+←/→/Backspace`、`Ctrl-K`) |
-| 停止 Session 提示確認 | 對已結束、失敗或休眠中的 Session 送出提示詞時，彈出確認視窗後自動喚醒或恢復執行 (取消則保留草稿) |
-| `Alt-Enter` | **將 Prompt 排入佇列** (Session 忙碌時排入 Daemon 佇列，閒置時依序自動送出) |
-| `↑` / `↓` | 在空輸入框時切換歷史輸入指令 (持久化儲存於本機) |
-
-#### 建立 Session (Spawn 模式快速鍵)
-
-| 按鍵 | 功能說明 |
-| --- | --- |
-| `Ctrl-R` | 循環切換角色：`worker` ↔ `coordinator` ↔ `reviewer` (依角色自動調整協作提示詞) |
-| `Ctrl-W` | 切換是否啟用獨立 Git Worktree 分支 |
-| `Ctrl-E` | 循環切換權限政策：預設 (config) ↔ `ask` ↔ `auto` ↔ `bypass` |
-| `Ctrl-F` | 循環切換推論強度 Effort：預設 ↔ `low` ↔ `medium` ↔ `high` ↔ `max` |
-
-#### 審查、Git 與生命週期控制
-
-| 按鍵 | 動作 |
-| --- | --- |
-| `{` / `}` | (Diff 視圖) 跳至上一個 / 下一個 hunk (`@@`) |
-| `(` / `)` (或 `<` / `>`) | (Diff 視圖) 跳至上一個 / 下一個檔案 (`diff --git`) |
-| `Enter` / `v` | (Diff 視圖) 摺疊 / 展開目前游標所在的檔案 |
-| `X` (或 `:discard`) | (Diff 視圖) 退回游標所在的 hunk 或整個檔案變更 (再按一次 `X` 或 `:discard!` 確認) |
-| `c` | (Diff 視圖) 針對當前選取的行留下 Review 審查註解並送回 Agent 修改 |
-| `M` | 將選取 Session 的 Worktree 分支安全合併回主分支 (可先用 `:merge --dry-run` 預覽、`:merge --squash` 壓成單一提交，或 `:merge --resolve` 委派解衝突) |
-| `G` | 清理 (GC) 已結束且已合併的 Worktree |
-| `z` | 切換暫停休眠 (`SIGSTOP`) 與喚醒 (`SIGCONT`) |
-| `x` | 中斷 Agent 當前回合運算 (Cancel) |
-| `K` | 強制結束選取的 Agent 子處理程序 (Kill) |
-| `a` / `A` / `d` | 審核請求：允許一次 / 本回合一律允許 / 拒絕 |
-
-### 3. TUI 命令列 (`:command`) 速查
-
-按 `:` 進入命令列，支援 `Tab` 自動補齊：
-
-- `:spawn [--role <角色>] <agent>[:model] <prompt>` — 啟動新 Agent Session (如 `:spawn --role coordinator claude:opus "規劃架構"`)
-- `:playbook [<名稱> <目標需求>]` — 啟動多 Agent 團隊範本 (如 `:playbook tdd-pair 完成登入功能`)；不帶參數開選擇器 (也可按 `Space s b`)
-- `:export [路徑]` — 匯出目前 Session (含子 Session 樹)為 Markdown 至 `.ertangle/exports/<label>-<timestamp>.md`，並透過 OSC 52 複製到剪貼簿
-- `:exec <命令>` (或 `:sh`) — 在選取 Session 的工作目錄直接執行 shell 命令 (不經過 agent，亦可輸入 `!<命令>`)
-- `:handoff <agent> [備註]` — 將當前 Session 交接給另一位 Agent 接手
-- `:resume [prompt]` — 接續已結束或中斷的 Session 對話
-- `:restart` — 重新執行 Daemon 並自動接續正在運算中的 Session
-- `:merge [--dry-run] [--resolve] [--strategy merge|squash|rebase]` — 合併選取 Session 的 Worktree 回主分支 (亦可用 `--squash` / `--rebase` 簡寫，支援自動委派解衝突)
-- `:discard` / `:discard!` — (Diff 視圖) 退回游標所在的 hunk 或整個檔案變更
-- `:queue` / `:unqueue` / `:queue clear` — 檢視、取出或清空待送佇列
-- `:rm` / `:clean` — 移除已結束的 Session / 清除所有已結束項目
-- `:prune` — 封存所有已合併且已結束的 Worker Session，並清理其 Git Worktree
-- `:budget <金額>` — 查看或調高當前 Session 的美元預算上限
-- `:quota` — 彈出額度面板：已安裝 agent 的各視窗用量 (progress bar) 與重置倒數
-- `:task <標題>` / `:tasks` — 建立新任務 / 切換到任務看板視圖
-- `:task-status <todo|doing|blocked|review|done>` — 修改選取任務的狀態
-- `:host <目標|all>` — 切換多主機視圖篩選 (T29)
-- `:remote` — 顯示目前主機的遠端連線資訊、Tailscale IP 與行動端 Web 網址
-- `:notify on|off|test` — 開關桌面通知或測試發送
-- `:shutdown` — 關閉共用 Daemon 與所有專案的 Agent (安全保護：需輸入 `:shutdown!` 確認)
+- **Low-Token Polyglot Verifier (`ertangle check`, T101, T103)**:
+  - Auto-detects Rust, Node/Vite, .NET Core, Python, and Godot (`project.godot`) projects to run build, typecheck, and test commands. For Godot, it runs `--headless --quit` (and GUT tests if `addons/gut/gut_cmdln.gd` is present) and merges multi-line `SCRIPT ERROR:` + `at: ... (res://path:line)` into single-line `path:line: SCRIPT ERROR: ...` diagnostics.
+  - Strips ANSI codes, collapses `node_modules/` and async runtime stack frames, deduplicates identical diagnostics, and caps output lines (supports `--quick`, `--max-lines`, `--json`) to return only actionable error summaries.
+- **Code Skeleton & Line Range Extraction (`ertangle outline`, T102, T103)**:
+  - Scans `.rs`, `.ts`/`.tsx`/`.js`/`.jsx`/`.vue`, `.cs`, `.py`, `.gd` (GDScript), `.tscn` (Godot scene node tree `[node]`, external scripts `[ext_resource]`, and `[connection]` signal bindings, skipping massive `[sub_resource]`), and `.gdshader` (Godot Shader) files or directories without reading entire files, returning symbol outlines with exact `L<start>-L<end>` ranges.
+  - Enables coordinators to include exact file paths and line ranges in worker prompts so workers edit directly without re-exploring large files.
+- **Non-Blocking Dev Server Manager (`ertangle dev`, T102)**:
+  - `ertangle dev start|status|stop` auto-detects the stack, picks a free local TCP port, spawns the dev server in its own process group streaming logs to `.ertangle/dev-<port>.log`, and returns the URL and PID as soon as the port is ready—preventing blocked agent turns and multi-worktree port collisions.
+- **Scoped Diff & Generated File Folding (`ertangle_diff` / `ertangle diff`, T98, T103)**:
+  - Supports `stat_only` (file stats only), `paths` (path filtering), and `max_lines` (default 800 lines for MCP calls).
+  - When `paths` is omitted, automatically folds giant lock and generated files (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `*.Designer.cs`, `*ModelSnapshot.cs`, `uv.lock`, `poetry.lock`, `go.sum`, `*.snap`, `*.min.js`), Godot `*.import`, `*.uid`, `*.translation` files, and >300-character `Packed*Array(...)` lines inside `.tscn` / `.tres` scene and resource files into single-line summaries.
+- **Atomic Task Reporting & Spawn Binding (`ertangle_task_update` / `ertangle_spawn`, T99)**:
+  - Passing `report` to `ertangle_task_update` with `done` or `blocked` atomically updates the task board and sends `TASK_DONE` / `TASK_BLOCKED` to the parent session in a single turn.
+  - `ertangle_spawn` accepts `task_title` or `task_id` to create or bind a board task simultaneously, reducing coordinator dispatch turns.
+- **Shared Worktree Dependencies & Build Cache (`shared_worktree_deps` / `shared_cargo_target`, T100, T103)**:
+  - Shares `<repo>/.ertangle/target` as `CARGO_TARGET_DIR` across Cargo worktrees and symlinks untracked `node_modules`, `.venv`, `.env*` (excluding templates), and `appsettings.Development.json` into worktrees without polluting `git status` or `ertangle_diff`. For Godot projects (`project.godot`), creates an isolated `.godot/` directory in the worktree, symlinks `.godot/imported` to share heavy asset imports, and copies `global_script_class_cache.cfg`, `uid_cache.bin`, and `extension_list.cfg`.
+- **Optional Token Hints, Call Counter & Auto-Compact (`token_hints` / `N calls` / `auto_compact`, T47)**:
+  - Enable `[collab] token_hints = true` (off by default; also toggleable in `:settings`) to inject concise tool-batching and output-limiting hints, and monitor the `N calls` counter in the TUI session info bar.
+  - Combined with `[auto_compact]` (automatic `/compact` on idle when context reaches threshold) and the Zero Pleasantries protocol, multi-turn token overhead stays minimal.
 
 ---
 
-## CLI 命令參考
+## TUI User Guide
 
-`ertangle` 提供與 TUI 對等的完整 CLI 工具：
+### 1. Layouts and Views
+
+- **Layout Modes**: On wide terminals (`>= 130` cols), automatically expands to a "Three-pane" layout (`Projects & Sessions` on the left + Center + right split with `Flow` graph on top and `Bus / Tasks` below). Press `L` to pin and cycle through "Two-pane", "Tabs" (Top Session Tabs + Center), and "Three-pane"; run `:layout auto` to restore adaptive sizing, and press `b` to toggle the right pane between `Flow + Bus` and `Project`.
+- **Center Views**: Press `Tab` (or `F` for Flow) to cycle across the main views:
+  1. **Overview**: Real-time streaming transcript with Markdown rendering (headers, lists, tables, code blocks).
+  2. **Diff**: Real-time colored Git Diff view with inline review support.
+  3. **Worktrees**: List of all managed Git Worktree paths and disk states.
+  4. **Tasks**: Collaborative task board grouped by status (doing, review, todo, blocked, done) with dependency markers (`⧗`). Press `Enter` to jump to the assignee's session.
+  5. **Flow**: Orthogonal 90-degree node graph with packet animation showing real-time Coordinator/Worker topology and message flow.
+- **Version Identification**: Both `ert --version` and the TUI status bar display `v<semver>+<short_hash>` for easy build identification.
+
+### 2. Keybindings Cheat Sheet
+
+#### Navigation, Menu & Core Actions
+
+| Key | Action |
+| --- | --- |
+| `Space` | Open **Which-key menu** (`s` session, `g` git, `v` view, `m` message, `?` help) |
+| `:` or `/` | Open **Command-line** (supports `Tab` completion) |
+| `!` | Enter **Shell Command mode** (run shell commands directly in the selected session's workspace `!<cmd>`) |
+| `n` | Create new session (select Agent, Model, input Prompt; supports `Ctrl-R` for Role, `Ctrl-W` for Worktree, `Ctrl-F` for Effort) |
+| `i` / `Enter` | Focus input box to send prompt (supports `@peer` and `#channel` routing) |
+| `j` / `k` or `↑` / `↓` | Select sessions and collapsible groups in `Projects & Sessions`; move line cursor in Diff; select task in Tasks view |
+| `l` / `→` / `h` / `←` / `Space` | Expand (`l` / `→`) or collapse (`h` / `←`) ended (`▸ Ended (N)`) and other-project rows in the sidebar (`Space` toggles) |
+| `[` / `]` | Jump to previous / next session |
+| `Ctrl-K` | **Jump-Anywhere**: Fuzzy search and jump to any session |
+| `Space ,` (or `:settings`) | Open **Settings panel** (toggle default Agent, Model, Effort, Worktree, Web version support, etc.) |
+| `Space w` (or `:web qr`) | Display **Web version URL & QR Code** popup (scan and connect instantly) |
+| `q` / `Q` | `q` exit TUI (daemon and agents keep running); `Q` stop daemon (same as `:shutdown`) |
+
+#### Transcript, Search & Clipboard
+
+| Key | Action |
+| --- | --- |
+| `t` | Toggle transcript mode: Markdown rendering ↔ Raw text |
+| `T` (or `:thoughts`) | Toggle agent thought lines (`⋯`, folded by default with animated live spinner) |
+| `O` (or `:tools`) | Fold / unfold tool calls (consecutive successful calls are folded by default) |
+| `f` (or `:find <text>`) | **Incremental search** in transcript or diff (`Enter`/`↓` next, `↑` previous, `Esc` exit) |
+| Mouse Drag | Select text in center pane; release to copy via **OSC 52** |
+| `Y` (or `/copy`) | Copy current center pane content (excluding borders and sidebars) |
+| `F2` | Toggle mouse capture mode (disable to use native terminal selection, or use `Shift`+Drag) |
+| `PgUp` / `PgDn` | Scroll transcript up / down (pauses auto-scroll) |
+| `Home` / `End` | Jump to top / jump to bottom and resume auto-following (`▼ follow`) |
+| `P` | Toggle project scope: Current project only (`here`) ↔ All projects (`all`) |
+
+#### Prompt Input & Queuing
+
+| Key / Syntax | Description |
+| --- | --- |
+| `!<cmd>` | **Execute Shell Command in Session Workspace** (runs directly without agent intervention, e.g. `!cargo test`; or press `!` in Normal mode) |
+| `@filename` | **Fuzzy file attachment**: Type `@` to fuzzy search repo files; auto-attaches text (up to 256 KB) or images (up to 5 MB) |
+| `Ctrl-V` | Paste image from system clipboard (requires `wl-paste` or `xclip` on Linux) |
+| Drag & Drop | Drag files from file manager into terminal to auto-insert `@path` |
+| `Shift-Enter` / `Ctrl-Enter` / `Ctrl-J` | Native newline in prompt input (via Kitty keyboard enhancement with `Ctrl-J` fallback; expands up to 8 lines) |
+| `Option` / `Cmd` editing shortcuts | Supports macOS / readline cursor & delete shortcuts (`Option+Left/Right`, `Option+Backspace` / `Ctrl-W`, `Option+Delete`, `Cmd+Left/Right/Backspace`, `Ctrl-K`) |
+| Stopped-session send prompt | Confirms before sending a prompt to an exited, failed, or sleeping session, automatically resuming/waking it (preserving draft on cancel) |
+| `Alt-Enter` | **Queue prompt**: If session is busy, queues in daemon to send automatically when idle |
+| `↑` / `↓` | Cycle command and prompt input history (persisted across restarts) |
+
+#### Spawn Mode Shortcuts (Creating Sessions)
+
+| Key | Description |
+| --- | --- |
+| `Ctrl-R` | Cycle role: `worker` ↔ `coordinator` ↔ `reviewer` (customizes injected prompt per role) |
+| `Ctrl-W` | Toggle dedicated Git Worktree branch |
+| `Ctrl-E` | Cycle permission policy: default (config) ↔ `ask` ↔ `auto` ↔ `bypass` |
+| `Ctrl-F` | Cycle reasoning effort: default ↔ `low` ↔ `medium` ↔ `high` ↔ `max` |
+
+#### Review, Git & Session Lifecycle
+
+| Key | Action |
+| --- | --- |
+| `{` / `}` | (Diff view) Jump to previous / next hunk (`@@`) |
+| `(` / `)` (or `<` / `>`) | (Diff view) Jump to previous / next file (`diff --git`) |
+| `Enter` / `v` | (Diff view) Fold / unfold the file at cursor |
+| `X` (or `:discard`) | (Diff view) Revert the hunk or entire file at cursor (press `X` again or `:discard!` to confirm) |
+| `c` | (Diff view) Leave review comment on cursor line and route back to agent |
+| `M` | Safely merge selected session's worktree branch into main (`:merge --dry-run` to preview, `:merge --resolve` to delegate conflicts) |
+| `G` | Clean up (GC) completed and merged worktrees |
+| `z` | Toggle session pause (`SIGSTOP`) and wake (`SIGCONT`) |
+| `x` | Interrupt current agent turn (Cancel) |
+| `K` | Force kill selected agent child process (Kill) |
+| `a` / `A` / `d` | Permission request: Allow once / Always allow for this turn / Deny |
+
+### 3. TUI Command-Line (`:command`)
+
+Press `:` to open the command line with `Tab` completion:
+
+- `:spawn [--role <role>] <agent>[:model] <prompt>` — Spawn a new agent session (e.g., `:spawn --role coordinator claude:opus "plan architecture"`)
+- `:playbook [<name> <goal>]` — Launch a multi-agent team playbook (e.g., `:playbook tdd-pair implement login`); no args opens the picker (also `Space s b`)
+- `:export [path]` — Export the selected session (and its sub-session tree) as Markdown to `.ertangle/exports/<label>-<timestamp>.md` and copy it via OSC 52
+- `:exec <cmd>` (or `:sh`) — Execute a shell command in the session workspace directly (bypass agent; or type `!<cmd>`)
+- `:handoff <agent> [note]` — Hand over current session to another agent
+- `:resume [prompt]` — Reconnect to an exited session and continue dialogue
+- `:restart` — Re-execute daemon and automatically resume in-flight sessions
+- `:merge [--dry-run] [--resolve] [--strategy merge|squash|rebase]` — Merge session branch back to main
+- `:discard` / `:discard!` — (Diff view) Revert the hunk or entire file at cursor
+- `:queue` / `:unqueue` / `:queue clear` — View, pop, or clear prompt queue
+- `:rm` / `:clean` — Remove an exited session / purge all finished sessions
+- `:prune` — Archive merged and ended worker sessions and remove their worktrees
+- `:budget <amount>` — View or increase session USD budget cap
+- `:quota` — Display rate limit windows and reset countdowns for all agent accounts
+- `:task <title>` / `:tasks` — Create task / switch to Tasks board view
+- `:task-status <todo|doing|blocked|review|done>` — Update status of selected task
+- `:host <target|all>` — Filter sessions by host in multi-host mode (T29)
+- `:remote` — Display remote connection details, Tailscale IP, and Web version URL
+- `:notify on|off|test` — Toggle desktop notifications or send a test alert
+- `:shutdown` — Shut down daemon and all running agents (requires `:shutdown!` to confirm)
+
+---
+
+## CLI Reference
+
+`ertangle` provides a comprehensive CLI mirroring TUI capabilities:
 
 ```bash
-# Session 管理
-ertangle sessions [--json]                         # 列出所有 session (別名 ertangle peers)
-ertangle whoami [--session <id>] [--json]          # 查看當前 session 資訊
+# Session Management
+ertangle sessions [--json]                         # List all sessions (alias: ertangle peers)
+ertangle whoami [--session <id>] [--json]          # Show current session metadata
 ertangle spawn --kind <agent> [--label <label>] [--worktree] [--prompt <prompt>]
-ertangle resume <session-or-label> ["接續 prompt"] # 接續已中斷的 session
-ertangle restart                                   # 重啟 Daemon 並自動接續執行中的 session
-ertangle exec <session> <command...>               # 在指定 session 工作目錄執行命令 (別名 ertangle sh)
-ertangle handoff <session-or-label> --to <agent> [--note "交接補充"]
-ertangle sleep <session> ; ertangle wake <session>  # 暫停 / 喚醒 Agent 處理程序
-ertangle cancel <session> ; ertangle kill <session> # 中斷回合 / 強制中止處理程序
-ertangle rm <session> [--force]                    # 移除已結束的 session 紀錄
-ertangle prune [--project <path>]                  # 封存已合併且已結束的 worker 並清理 worktree
+ertangle resume <session-or-label> ["prompt"]      # Resume an exited session
+ertangle restart                                   # Restart daemon and auto-resume in-flight sessions
+ertangle exec <session> <command...>               # Run shell command in session workspace (alias: ertangle sh)
+ertangle handoff <session-or-label> --to <agent> [--note "Handoff notes"]
+ertangle sleep <session> ; ertangle wake <session>  # Suspend / wake agent processes
+ertangle cancel <session> ; ertangle kill <session> # Interrupt turn / kill process
+ertangle rm <session> [--force]                    # Remove exited session record
+ertangle prune [--project <path>]                  # Archive merged & ended workers and clean worktrees
 
-# 多 Agent 團隊範本與協作報告
-ertangle playbook <name> "<goal>"                  # 展開內建或自訂 playbook，一次啟動整個團隊
-ertangle export <session> [--tree] [--diff] [-o <path>] # 匯出 Markdown 報告 (-o 省略則印到 stdout)
+# Multi-Agent Playbooks & Collaboration Reports
+ertangle playbook <name> "<goal>"                  # Launch a whole team from a built-in or custom playbook
+ertangle export <session> [--tree] [--diff] [-o <path>] # Export a Markdown report (-o omitted prints to stdout)
 
-# 提示詞與佇列
-ertangle prompt [--queue] <session-or-label> "提示詞"
-ertangle queue <session-or-label> [--clear]        # 查看或清空待送佇列
+# Prompts & Queue
+ertangle prompt [--queue] <session-or-label> "prompt text"
+ertangle queue <session-or-label> [--clear]        # View or clear prompt queue
 
-# Worktree 與程式碼審查
-ertangle worktrees                                 # 列出所有由 ertangle 管理的 worktree
-ertangle diff <session-or-label> [--stat] [--max-lines <n>] [paths...] # 檢視指定 session 的 git diff (支援統計、路徑過濾與生成檔摺疊)
-ertangle review <session-or-label> --location <file>:<line> "審查意見"
-ertangle merge <session-or-label> [--dry-run] [--resolve] [--strategy merge|squash|rebase] # 合併分支回主工作區
-ertangle pr <session-or-label> --title "PR 標題"   # 透過 gh 建立 Pull Request
-ertangle gc [--session <id>]                       # 清理已結束且已合併的 worktrees
+# Worktree & Code Review
+ertangle worktrees                                 # List all managed git worktrees
+ertangle diff <session-or-label> [--stat] [--max-lines <n>] [paths...] # View git diff for a session (supports stats, path filters, and lock/designer folding)
+ertangle review <session-or-label> --location <file>:<line> "Review comment"
+ertangle merge <session-or-label> [--dry-run] [--resolve] # Merge session branch back to main
+ertangle pr <session-or-label> --title "PR title"  # Create GitHub Pull Request via gh
+ertangle gc [--session <id>]                       # Clean up merged worktrees safely
 
-# 跨語言 Agent 開發加速工具 (Rust / Node / Vite / .NET Core / Python / Godot)
-ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python|godot>] [--quick] [--max-lines <n>] [--json] # 低雜訊建置、型別與測試檢查
-ertangle outline [paths...] [--max-depth <n>] [--json] # 提取原始碼與 Godot 場景 (.rs/.ts/.cs/.py/.gd/.tscn/.gdshader) 的符號骨架與起訖行號 (L<start>-L<end>)
-ertangle dev start [--cwd <dir>] [--port <port>] [--timeout-secs <n>] [--json] [-- <cmd...>] # 非阻塞背景啟動開發伺服器並自動分配連接埠
-ertangle dev status [--cwd <dir>] [--json]         # 查看目前工作區受管開發伺服器狀態
-ertangle dev stop [--cwd <dir>] [--json]           # 停止目前工作區受管開發伺服器處理程序群組
+# Polyglot Agent Efficiency Tools (Rust / Node / Vite / .NET Core / Python / Godot)
+ertangle check [--cwd <dir>] [--stack <auto|rust|node|dotnet|python|godot>] [--quick] [--max-lines <n>] [--json] # Low-token build, type, and test verifier
+ertangle outline [paths...] [--max-depth <n>] [--json] # Extract symbol outlines and exact line ranges (L<start>-L<end>) for .rs/.ts/.cs/.py/.gd/.tscn/.gdshader
+ertangle dev start [--cwd <dir>] [--port <port>] [--timeout-secs <n>] [--json] [-- <cmd...>] # Non-blocking background dev server with auto free port
+ertangle dev status [--cwd <dir>] [--json]         # Check status of the managed dev server in the workspace
+ertangle dev stop [--cwd <dir>] [--json]           # Stop the managed dev server process group
 
-# 跨 Agent 訊息與任務看板
-ertangle send <session-or-label> "訊息內容"         # 發送訊息給指定 agent
-ertangle inbox [--session <id>]                    # 檢視收件匣
-ertangle tasks                                     # 列出所有任務與相依性狀態
-ertangle task "任務標題" [--assignee <label>] [--depends-on <id>]
-ertangle task-update <id> --status <status>        # 更新任務狀態 (todo/doing/blocked/review/done)
+# Cross-Agent Messaging & Tasks
+ertangle send <session-or-label> "message content" # Send message to target agent
+ertangle inbox [--session <id>]                    # Read session inbox
+ertangle tasks                                     # List tasks and dependency states
+ertangle task "Task title" [--assignee <label>] [--depends-on <id>]
+ertangle task-update <id> --status <status>        # Update task status (todo/doing/blocked/review/done)
 
-# 成本、額度與審核記錄
-ertangle quota [--json]                            # 查詢帳號額度視窗與重置倒數
-ertangle cost [--json]                             # 統計各 session 與整體 token / 美元花費
-ertangle budget <session-or-label> <金額>          # 設定或調高預算上限
-ertangle replay [--since <seq>] [--json]           # 重播與審核 events.jsonl 事件記錄
+# Cost, Quota & Event Replay
+ertangle quota [--json]                            # Query account quotas and reset times
+ertangle cost [--json]                             # Breakdown token and USD spend
+ertangle budget <session-or-label> <amount>        # Set or raise budget cap
+ertangle replay [--since <seq>] [--json]           # Audit and replay events.jsonl
 
-# 遠端 Daemon、多主機與 Web 版支援
-ertangle daemon --listen tailscale                 # 啟動 Daemon 並自動綁定 Tailscale 安全通道
-ertangle daemon --listen 127.0.0.1:7420            # 啟動 Daemon 並監聽 TCP (自動產生 token)
-ertangle daemon --web tailscale                    # 啟動 Web 版並印出終端機 QR Code (預設 port 7421)
-ertangle daemon --web tailscale --web-port 8080    # 啟動 Web 版並指定自訂 port (8080)
-ertangle daemon info                               # 查詢目前主機的 Tailscale 位址、Token 與連線指令
-ertangle --remote tailscale                        # 連線至本機 Tailscale Daemon
-ertangle --remote workstation:7420 --remote gpu:7420 # 同時連線多台主機並於單一 TUI 聚合呈現
-ertangle completions <bash|zsh|fish>               # 產生 Shell 自動補齊腳本
+# Remote Daemon, Multi-Host & Web Version Support
+ertangle daemon --listen tailscale                 # Start daemon bound to Tailscale WireGuard IP
+ertangle daemon --listen 127.0.0.1:7420            # Start daemon listening on TCP (auto-generates token)
+ertangle daemon --web tailscale                    # Start Web version and print terminal QR code (default port 7421)
+ertangle daemon --web tailscale --web-port 8080    # Start Web version with custom port (8080)
+ertangle daemon info                               # Print current Tailscale IP, token, and connection examples
+ertangle --remote tailscale                        # Connect to local Tailscale daemon
+ertangle --remote workstation:7420 --remote gpu:7420 # Aggregate multiple remote hosts into a single TUI
+ertangle completions <bash|zsh|fish>               # Generate shell completion script
 ```
 
 ---
 
-### 安裝 ertangle-ade skill
+## Configuration & Environment Variables
 
-內嵌的 `ertangle-ade` skill 說明通訊協定、省 token 規則與工作流程：
+### Configuration File: `config.toml`
 
-```bash
-ertangle skill install [--target claude|agents|codex] [--global|--project]
-ertangle skill uninstall [--target ...] [--global|--project]
-ertangle skill show
-```
-
-在 TUI 裡也可以用 `:skill install [claude|agents|codex] [global]` 安裝 (`:skill show` 查看狀態)。
-
-不想安裝時，可在 `:settings` 開啟「把 ertangle-ade skill 注入協作說明」，或在設定檔加入 `[collab] inject_skill = true`，把 skill 內文附加到每個 agent 的協作說明。同樣地，`:settings` 的「把省 token 提示注入協作說明」(`[collab] token_hints = true`，預設關閉) 會附加幾條節省 token 的工具使用建議 (獨立呼叫放在同一回合、合併唯讀探查、限制輸出長度)；session 次要資訊列的 `N calls` 可用來比較開關前後的工具呼叫數。額度達到 `[handoff] warn_percent` 時，agent 自行 spawn 會改用 `fallback` 或被拒絕，coordinator 也會收到 `QUOTA_WARN` 訊息；`[agent_spawn] max_live_children` (預設 3) 限制同時執行的子 session 數。Claude 回報 `allowed_warning` (例如 7 天視窗超過 75%) 時，coordinator 會先收到較溫和的 `QUOTA_NOTICE`，標題列與 `:quota` 也會標示「⚠ 接近上限」。
-
-### 中斷復原與編譯資源
-
-- `[agent_spawn] auto_resume` (預設 `true`)：daemon 重啟時，自動接續當下正在執行回合的 session，並提示 agent 先用 `git status`／`git diff` 找回進度，不要重新探索整個專案。額度已滿、或上次自動接續後沒有任何進展的 session 不會再自動接續。
-- `[auto_compact] enabled` (預設 `true`)、`threshold_percent` (預設 `80`，限制在 10 到 95)：session 回到閒置且上下文用量達到門檻時，daemon 自動代送 `/compact`；僅對宣告支援 `compact` 斜線指令的 agent (如 Claude) 生效，只讀全域設定檔。也可在設定面板的「上下文」區調整。
-- `[agent_spawn] shared_cargo_target` (預設 `true`)：Cargo 專案裡，所有 worktree 的 agent 共用 `<repo>/.ertangle/target` 當 `CARGO_TARGET_DIR`。不用每個 worktree 各編一份，cargo 的目錄鎖也讓多個 worker 的編譯與測試自動排隊。已自行設定 `CARGO_TARGET_DIR` 時不覆寫。
-- `[agent_spawn] shared_worktree_deps` (預設 `true`)：在建立 git worktree 時，自動將主工作區未進版控的 `node_modules`、`.venv`、`.env*` (排除 `.example`/`.sample`/`.template`)、.NET Core 的 `appsettings.Development.json` 以及 Godot 專案的 `.godot/imported` (搭配複製 `global_script_class_cache.cfg` 與 `uid_cache.bin` 至獨立 `.godot/` 目錄) 建立符號連結 (symlink) 掛載至 worktree，並自動將 `node_modules/.bin` 與 `.venv/bin` 加入 `PATH`、注入 `DOTNET_NOLOGO=1` 與 `DOTNET_CLI_TELEMETRY_OPTOUT=1`。這些掛載連結不會被 `git status`、`ertangle_diff` 或自動 commit 誤收入分支，且在移除 worktree 時會安全卸載，不影響主工作區檔案。
-- 上述設定亦可在 `:settings` 或 `config.toml` 調整。
-
-## 設定檔與環境變數
-
-### 設定檔：`config.toml`
-
-`ertangle` 依序讀取全域設定 (`~/.config/ertangle/config.toml`) 並由專案設定 (`<repo>/.ertangle/config.toml`) 覆寫：
+`ertangle` merges global settings (`~/.config/ertangle/config.toml`) with project-level overrides (`<repo>/.ertangle/config.toml`):
 
 ```toml
 [tui]
-language = "auto"                 # 介面語言："auto" (依 LANG) | "zh-TW" | "en"；只認全域設定
-layout = "two"                    # 預設版面："two" | "three" | "tabs"
-notify = ["bell", "command"]      # 通知方式："bell" | "osc9" | "command" (可複選)
+layout = "two"                    # Default layout: "two" | "three" | "tabs"
+notify = ["bell", "command"]      # Notification methods: "bell" | "osc9" | "command"
 notify_command = "notify-send ertangle \"$ERTANGLE_NOTIFY_TEXT\""
-notify_min_turn_secs = 10         # 短於此秒數的回合完成不觸發通知
+notify_min_turn_secs = 10         # Turns shorter than this threshold do not notify
 
 [web]
-# Web 版支援設定 (只認全域設定；亦可在 TUI :settings 中隨時切換)
-enabled = true                    # 是否啟用
-port = 7421                       # 自訂連接埠：預設 7421 (亦可直接於 addr 指定，例如 "127.0.0.1:8080")
-addr = "tailscale"                # 監聽位址："tailscale" (自動偵測 IP) | "127.0.0.1" | "0.0.0.0"
+# Web version settings (global only; can also be toggled in TUI :settings)
+enabled = true                    # Enable Web version
+port = 7421                       # Custom port: default 7421 (can also be specified in addr, e.g. "127.0.0.1:8080")
+addr = "tailscale"                # Listen address: "tailscale" (auto-detect IP) | "127.0.0.1" | "0.0.0.0"
 
 [remotes]
-# 跨主機聚合設定 (T29)
+# Multi-host aggregation (T29)
 workstation = { addr = "100.64.0.5:7420", token_file = "~/.config/ertangle/workstation.token" }
 gpu-box = { addr = "100.64.0.8:7420" }
 
 [limits]
-session_usd = 5.0                 # 單一 Session 成本上限 (美元)
-tree_usd = 15.0                   # 父子 Agent 樹累計成本上限
-warn_percent = 80                 # 成本與額度警告門檻百分比
-max_children = 5                  # 單一 Session 允許派生的最大子 Agent 數
-max_depth = 3                     # 子 Agent 派生深度上限
+session_usd = 5.0                 # Max USD budget per session
+tree_usd = 15.0                   # Max USD budget for parent-child tree
+warn_percent = 80                 # Warning threshold percentage
+max_children = 5                  # Max concurrent child sessions per parent
+max_depth = 3                     # Max sub-agent spawn hierarchy depth
 
 [handoff]
-warn_percent = 90                 # 額度消耗達 90% 時提示建議 :handoff
-auto = false                      # 額度用盡時是否自動交接 (預設 false 避免非預期費用)
+warn_percent = 90                 # Warn with :handoff suggestion at 90% quota
+auto = false                      # Automatically hand off on quota exhaustion (default false)
 fallback = ["codex", "claude:sonnet"]
 
 [collab]
-instructions = true               # 是否自動向 Agent 注入 ertangle 協作工具使用規範
-extra = "請優先遵循專案的 CONTRIBUTING.md 規範"
+instructions = true               # Inject ertangle collaboration rules into agent system prompt
+extra = "Follow guidelines in CONTRIBUTING.md closely"
 
 [playbooks.tdd]
-# 內建範本：coord-review、tdd-pair、dual-review；同名設定會覆寫內建範本，enabled = false 可停用
-description = "TDD 協作團隊 (Coordinator + Test Worker + Impl Worker)"
+# Built-in playbooks: coord-review, tdd-pair, dual-review. Same-name settings override built-ins,
+# and enabled = false hides a built-in playbook.
+description = "TDD team (Coordinator + Test Worker + Impl Worker)"
 enabled = true
 [[playbooks.tdd.sessions]]
 label = "coord"
 kind = "claude"
 role = "coordinator"
-prompt = "請協調團隊完成以下目標：{{goal}}"
+prompt = "Coordinate the team to achieve: {{goal}}"
 [[playbooks.tdd.sessions]]
 label = "reviewer"
 kind = "opencode"
@@ -604,64 +582,57 @@ role = "reviewer"
 worktree = true
 
 [git]
-# Git 與 worktree 設定 (安全起見只認全域設定，專案層不可覆寫)
-pre_merge_command = "cargo test"       # 合併前驗證指令；非 0 退出則中止合併
-merge_strategy = "squash"              # 合併策略：merge / squash / rebase
+# Git & worktree settings (read only from global config for security)
+pre_merge_command = "cargo test"       # Pre-merge validation command; non-zero exits abort merge
 ```
-
-`merge_strategy` 也可在 TUI 設定面板 (`:settings`) 切換；明確指定優先。
-
-> [!NOTE]
-> 介面語言也可以在設定面板 (`:settings`) 切換，立即生效。daemon 回傳的訊息跟 daemon 啟動時的語言走，切換後要重啟 daemon 才會一致。想協助翻譯請見 [翻譯指南](docs/TRANSLATING.md)。
 
 > [!TIP]
-> 專案內可建立 `.ertangle/instructions.md` (上限 8 KB)，內容會在啟動時自動附加至 Agent 的 System Prompt 底部。
+> If `<repo>/.ertangle/instructions.md` exists (up to 8 KB), its content is appended to the agent's system prompt during initialization.
 
-### 支援的環境變數
+### Environment Variables
 
-| 環境變數 | 預設值 | 說明 |
+| Variable | Default Value | Description |
 | --- | --- | --- |
-| `XDG_RUNTIME_DIR` | `/tmp/ertangle-$USER/` | Daemon Unix domain socket 存放目錄 |
-| `XDG_STATE_HOME` | `~/.local/state/` | 事件持久化日誌路徑 (`$XDG_STATE_HOME/ertangle/events.jsonl`) |
-| `ERTANGLE_LOG` | `warn` | Tracing 日誌過濾等級 (例如 `ERTANGLE_LOG=debug`) |
-| `ERTANGLE_TOKEN` | — | 遠端連線認證 Token (建議搭配 SSH 轉發避免明文傳輸) |
-| `ERTANGLE_REMOTE` | — | 預設遠端 Daemon 位址 (等同 `--remote` 參數) |
+| `XDG_RUNTIME_DIR` | `/tmp/ertangle-$USER/` | Directory storing daemon Unix domain socket |
+| `XDG_STATE_HOME` | `~/.local/state/` | Path for persistent events log (`$XDG_STATE_HOME/ertangle/events.jsonl`) |
+| `ERTANGLE_LOG` | `warn` | Tracing filter level (e.g., `ERTANGLE_LOG=debug`) |
+| `ERTANGLE_TOKEN` | — | Authentication token for remote daemon connections (use SSH tunneling for security) |
+| `ERTANGLE_REMOTE` | — | Default remote daemon address (equivalent to `--remote`) |
 
 ---
 
-## 開發與貢獻前檢查
+## Development & Pre-commit Verification
 
-為確保本地提交能穩定通過 CI 檢查，提交程式碼前可安裝 pre-commit hook 或執行一鍵驗證：
+To ensure local changes pass CI reliably, install the pre-commit hook or run one-command verification:
 
 ```bash
-make setup-hooks          # 自動安裝 .git/hooks/pre-commit
-make pre-commit           # 一鍵自動排版 (fmt)、跑 clippy 與檢查多國語系 (i18n)
-cargo test --workspace    # 執行完整測試；測試暫存目錄由 TempDir guard 自動清除
+make setup-hooks   # Automatically installs .git/hooks/pre-commit
+make pre-commit    # Auto-formats (fmt), runs clippy, and checks i18n catalogs
 ```
 
 ---
 
-## 進階架構與相關文件
+## Architecture & Reference Documents
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — 系統架構、事件同步協定、狀態機與 MCP 規格定義。
-- [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — 實機驗證成果、各家 Agent 相容性測試紀錄。
-- [`docs/MAINTAINING.md`](docs/MAINTAINING.md) — 開發者維護指南與修改同步檢查清單。
-- [`docs/tickets/`](docs/tickets/) — 系統重構、功能擴充與改善計畫票紀錄。
-
----
-
-## 授權條款
-
-本專案依 [MIT 授權條款](LICENSE) 開源。
+- [`docs/DESIGN.md`](docs/DESIGN.md) — Architectural design, event synchronization protocols, state machines, and MCP specifications.
+- [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — Verification results, test suites, and real-world agent compatibility logs.
+- [`docs/MAINTAINING.md`](docs/MAINTAINING.md) — Maintenance checklist for synchronizing keys, CLI commands, and protocols.
+- [`docs/tickets/`](docs/tickets/) — Improvement tickets, refactoring, and architectural evolution.
 
 ---
 
-## 致謝
+## License
 
-`ertangle` 的發想來自 [Orca](https://github.com/stablyai/orca) (MIT 授權)，其 full handoff 與 review 迴圈的概念啟發了本專案的設計。本專案為獨立實作，未複製其程式碼。
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-## 命名由來
+## Acknowledgements
 
-專案名稱 `ertangle` (念作 er-tangle) 由 ER (愛因斯坦-羅森橋) 與 entangle (糾纏) 組成，靈感源自 Maldacena 與 Susskind 提出的 ER=EPR 猜想 (量子糾纏等於愛因斯坦-羅森橋)。在 `ertangle` 中，每個 Agent 各自生活在獨立的宇宙 (Git Worktree)，並透過量子糾纏 (MCP 訊息匯流排) 相互連通與協同工作。本專案為 [erbridge](https://github.com/single9/erbridge) 的姊妹專案。
+`ertangle` was inspired by [Orca](https://github.com/stablyai/orca) (MIT licensed); its full-handoff and review-loop concepts informed this design. This is an independent implementation and does not copy its code.
+
+---
+
+## Name Origin
+
+The name `ertangle` (pronounced "er-tangle") combines ER (Einstein-Rosen bridge) and entangle, inspired by the Maldacena–Susskind ER=EPR conjecture (entanglement = Einstein-Rosen bridges). In `ertangle`, each agent lives in its own universe (a git worktree) and connects through entanglement (the MCP message bus). It is a sibling project of [erbridge](https://github.com/single9/erbridge).
