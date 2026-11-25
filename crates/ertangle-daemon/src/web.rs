@@ -779,6 +779,7 @@ fn handle_ws_session(
                                     authenticated = true;
                                 } else {
                                     std::thread::sleep(AUTH_FAIL_DELAY);
+                                    // 認證失敗通知 client；若 WebSocket 已斷開則忽略
                                     let _ = tx.send(Frame::error(tr!(
                                         "遠端認證失敗：請提供正確的 Token"
                                     )));
@@ -786,6 +787,7 @@ fn handle_ws_session(
                                 }
                             } else {
                                 std::thread::sleep(AUTH_FAIL_DELAY);
+                                // 認證失敗通知 client；若 WebSocket 已斷開則忽略
                                 let _ = tx.send(Frame::error(tr!(
                                     "未認證的連線：請先發送 Hello 帶 token"
                                 )));
@@ -795,16 +797,19 @@ fn handle_ws_session(
                         shared.handle(&tx, req);
                     }
                     Err(e) => {
+                        // JSON 解析錯誤通知 client；若 WebSocket 已斷開則忽略
                         let _ = tx.send(Frame::error(tr!("無法解析 JSON：{e}", e = e)));
                     }
                 }
             }
             // Ping -> 回應 Pong
             9 => {
+                // 回應 Pong 訊框；若 WebSocket 已斷開則忽略
                 let _ = send_ws_frame(&mut write_stream, 10, &payload);
             }
             // Close frame
             8 => {
+                // 回應 Close 訊框；若 WebSocket 已斷開則忽略
                 let _ = send_ws_frame(&mut write_stream, 8, &[]);
                 break;
             }

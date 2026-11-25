@@ -214,6 +214,7 @@ pub(crate) fn cmd_complete_sessions() -> Result<()> {
     // 連線與讀取都放在另一條執行緒，主執行緒只等到時限；逾時就直接結束行程。
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
+        // 主執行緒可能在逾時後退出，通道關閉時無需處理
         let _ = tx.send(fetch_session_names());
     });
     if let Ok(Some(names)) = rx.recv_timeout(Duration::from_millis(timeout)) {

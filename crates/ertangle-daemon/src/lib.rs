@@ -205,6 +205,7 @@ pub(crate) struct SessionEntry {
 impl ConnStream {
     /// 關閉連線兩個方向 (用於踢掉卡住的 client)。
     pub(crate) fn shutdown(&self) {
+        // 若連線已關閉或中斷則忽略錯誤
         let _ = match self {
             ConnStream::Unix(u) => u.shutdown(std::net::Shutdown::Both),
             ConnStream::Tcp(t) => t.shutdown(std::net::Shutdown::Both),
@@ -240,11 +241,16 @@ pub(crate) fn client_channel(closer: Option<ConnStream>) -> (ClientTx, ClientRx)
 }
 
 impl ClientTx {
-    fn send(&self, frame: Frame) -> Result<(), mpsc::SendError<Frame>> {
+    /// 傳送 frame 至 client；若接收端已中斷則回傳 false。
+    fn send(&self, frame: Frame) -> bool {
         self.pending.fetch_add(1, Ordering::SeqCst);
-        self.tx.send(frame).inspect_err(|_| {
+        if self.tx.send(frame).is_err() {
+            // 寫入失敗代表 client 通道已關閉，扣回計數即可，無需處理
             self.pending.fetch_sub(1, Ordering::SeqCst);
-        })
+            false
+        } else {
+            true
+        }
     }
 
     /// 廣播用：佇列已滿則回傳 false，並關閉連線讓 client 重連補齊。
@@ -256,7 +262,7 @@ impl ClientTx {
             }
             return false;
         }
-        self.send(frame).is_ok()
+        self.send(frame)
     }
 }
 

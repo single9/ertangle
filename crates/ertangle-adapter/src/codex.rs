@@ -113,6 +113,11 @@ struct Conn {
 }
 
 impl Conn {
+    fn emit(&self, ev: AgentEvent) {
+        // 寫入失敗代表接收端通道已關閉，無需處理
+        let _ = self.tx.send(ev);
+    }
+
     fn write(&self, v: &Value) -> Result<()> {
         let mut line = serde_json::to_string(v)?;
         line.push('\n');
@@ -150,7 +155,7 @@ impl Conn {
             .unwrap_or_else(|e| e.into_inner())
             .flush();
         if !text.is_empty() {
-            let _ = self.tx.send(AgentEvent::Output(text));
+            self.emit(AgentEvent::Output(text));
         }
     }
 
@@ -169,6 +174,7 @@ impl Conn {
                     .unwrap_or_else(|e| e.into_inner())
                     .remove(&id)
                 {
+                    // 等待回應者若已逾時放棄則忽略傳送結果
                     let _ = s.send(msg);
                 }
                 return;
@@ -205,7 +211,7 @@ impl Conn {
                             answers: Arc::clone(&shared_answers),
                         },
                     );
-                    let _ = self.tx.send(AgentEvent::Question(q));
+                    self.emit(AgentEvent::Question(q));
                 }
                 return;
             }
@@ -235,7 +241,7 @@ impl Conn {
                             answers: Arc::clone(&shared_answers),
                         },
                     );
-                    let _ = self.tx.send(AgentEvent::Question(q));
+                    self.emit(AgentEvent::Question(q));
                 }
                 return;
             }
@@ -279,6 +285,7 @@ impl Conn {
             other => {
                 // Always return an error for unrecognized requests to prevent Codex from hanging.
                 let id = msg.get("id").cloned().unwrap_or(Value::Null);
+                // 若 agent stdin 已關閉則忽略回應寫入錯誤
                 let _ = self.write(&json!({
                     "jsonrpc":"2.0","id":id,
                     "error":{"code":-32601,"message":format!("ertangle 不支援 {other}")}
@@ -292,7 +299,7 @@ impl Conn {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(req.clone(), json!({"id": id, "kind": kind.as_str()}));
-        let _ = self.tx.send(AgentEvent::Permission(PermissionRequest {
+        self.emit(AgentEvent::Permission(PermissionRequest {
             req,
             session: self.session_id.clone(),
             title,
@@ -310,7 +317,7 @@ impl Conn {
                         .unwrap_or_else(|e| e.into_inner())
                         .push("msg", d);
                     if !out.is_empty() {
-                        let _ = self.tx.send(AgentEvent::Output(out));
+                        self.emit(AgentEvent::Output(out));
                     }
                 }
             }
@@ -327,7 +334,7 @@ impl Conn {
                         .unwrap_or_else(|e| e.into_inner())
                         .push("think", d);
                     if !out.is_empty() {
-                        let _ = self.tx.send(AgentEvent::Output(out));
+                        self.emit(AgentEvent::Output(out));
                     }
                 }
             }
@@ -336,7 +343,7 @@ impl Conn {
                     *self.turn.lock().unwrap_or_else(|e| e.into_inner()) = id.to_string();
                 }
                 *self.last_error.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
+                self.emit(AgentEvent::Status(SessionStatus::Busy));
             }
             "turn/completed" => {
                 self.flush_stream();
@@ -344,7 +351,7 @@ impl Conn {
                 if failed {
                     self.report_error(&p["turn"]["error"]);
                 }
-                let _ = self.tx.send(AgentEvent::Status(if failed {
+                self.emit(AgentEvent::Status(if failed {
                     SessionStatus::Failed
                 } else {
                     SessionStatus::Idle
@@ -354,7 +361,7 @@ impl Conn {
             "thread/tokenUsage/updated" => {
                 let last = &p["tokenUsage"]["last"];
                 if let Some(used) = last["totalTokens"].as_u64() {
-                    let _ = self.tx.send(AgentEvent::Context {
+                    self.emit(AgentEvent::Context {
                         used,
                         window: p["tokenUsage"]["modelContextWindow"].as_u64(),
                     });
@@ -365,11 +372,11 @@ impl Conn {
                     input_tokens: total["inputTokens"].as_u64().unwrap_or(0),
                     output_tokens: total["outputTokens"].as_u64().unwrap_or(0),
                 };
-                let _ = self.tx.send(AgentEvent::Cost(cost));
+                self.emit(AgentEvent::Cost(cost));
             }
             "account/rateLimits/updated" => {
                 if let Some(q) = parse_rate_limits(&p["rateLimits"]) {
-                    let _ = self.tx.send(AgentEvent::Quota(q));
+                    self.emit(AgentEvent::Quota(q));
                 }
             }
             "thread/started" => {
@@ -401,22 +408,22 @@ impl Conn {
             *last = Some(text.clone());
         }
         if ertangle_core::looks_like_limit(&text) {
-            let _ = self.tx.send(AgentEvent::Limited(text));
+            self.emit(AgentEvent::Limited(text));
             return;
         }
         let mut note = tr!("codex 錯誤：{text}", text = text);
         if is_auth_error(err) {
             note.push_str(&tr!("(請執行 `codex login`)"));
         }
-        let _ = self.tx.send(AgentEvent::Output(format!("⚠ {note}\n")));
-        let _ = self.tx.send(AgentEvent::Note(note));
+        self.emit(AgentEvent::Output(format!("⚠ {note}\n")));
+        self.emit(AgentEvent::Note(note));
     }
 
     fn on_item_completed(&self, item: &Value) {
         match item["type"].as_str().unwrap_or("") {
             "commandExecution" => {
                 self.flush_stream();
-                let _ = self.tx.send(AgentEvent::ToolCall {
+                self.emit(AgentEvent::ToolCall {
                     name: "Bash".to_string(),
                     input: item["command"].as_str().unwrap_or("").to_string(),
                     ok: item["exitCode"].as_i64().map(|c| c == 0),
@@ -425,7 +432,7 @@ impl Conn {
             }
             "fileChange" => {
                 self.flush_stream();
-                let _ = self.tx.send(AgentEvent::ToolCall {
+                self.emit(AgentEvent::ToolCall {
                     name: "Edit".to_string(),
                     input: item["changes"].to_string(),
                     ok: Some(item["status"].as_str() == Some("completed")),
@@ -450,7 +457,7 @@ impl Conn {
                         Some(texts.join("\n"))
                     }
                 });
-                let _ = self.tx.send(AgentEvent::ToolCall {
+                self.emit(AgentEvent::ToolCall {
                     name,
                     input: item["arguments"].to_string(),
                     ok,
@@ -532,7 +539,7 @@ impl AgentControl for CodexControl {
 
     fn send_input_with(&self, text: &str, atts: &[ertangle_core::Attachment]) -> Result<()> {
         let thread_id = self.thread_id()?;
-        let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
+        self.conn.emit(AgentEvent::Status(SessionStatus::Busy));
         let mut params = json!({
             "threadId": thread_id,
             "input": turn_input(text, atts)
@@ -592,6 +599,7 @@ impl AgentControl for CodexControl {
 
     fn kill(&self) -> Result<()> {
         let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
+        // 終止處理程序群組或處理程序，忽略訊號發送錯誤
         let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
         self.child
             .lock()
@@ -902,6 +910,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             if let Some(t) = &stderr_tail {
                 t.report_exit(code, &tx);
             }
+            // 接收端若已關閉則忽略退出事件
             let _ = tx.send(AgentEvent::Exited(code));
         });
     }
@@ -928,16 +937,20 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .with_context(|| tr!("`{method}` 未回傳 thread id", method = method))?
         .to_string();
     *conn.thread.lock().unwrap_or_else(|e| e.into_inner()) = tid.clone();
+    // 接收端若已關閉則忽略事件傳送
     let _ = tx.send(AgentEvent::NativeId(tid));
     if let Some(model) = started["model"].as_str() {
+        // 接收端若已關閉則忽略
         let _ = tx.send(AgentEvent::Model(model.to_string()));
     }
     // Query account quota once on startup (skipped if not logged in or unsupported by older codex versions).
     if let Ok(r) = conn.call("account/rateLimits/read", json!({}), CALL_TIMEOUT) {
         if let Some(q) = parse_rate_limits(&r["rateLimits"]) {
+            // 接收端若已關閉則忽略
             let _ = tx.send(AgentEvent::Quota(q));
         }
     }
+    // 接收端若已關閉則忽略
     let _ = tx.send(AgentEvent::Status(SessionStatus::Idle));
 
     let control = CodexControl {
@@ -965,7 +978,7 @@ pub(crate) fn parse_rate_limits(snap: &Value) -> Option<ertangle_core::Quota> {
                 .map(ertangle_core::window_name)
                 .unwrap_or_else(|| key.to_string()),
             used_percent: pct as f32,
-            resets_at_ms: w["resetsAt"].as_u64().map(|s| s * 1000),
+            resets_at_ms: w["resetsAt"].as_u64().map(|s| s.saturating_mul(1000)),
         });
     }
     if windows.is_empty() {

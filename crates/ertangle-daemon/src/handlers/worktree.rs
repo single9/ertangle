@@ -155,6 +155,7 @@ pub(crate) fn handle_merge(
                         if resolve {
                             let wt_dir = Path::new(&s.cwd);
                             let prep_res = if strategy == MergeStrategy::Rebase {
+                                // 在 worktree 中觸發 rebase 衝突，忽略非零結束碼
                                 let _ = git_output(wt_dir, &["rebase", &conflict.target]);
                                 let conflicts = if !conflict.files.is_empty() {
                                     conflict.files.clone()
@@ -238,6 +239,7 @@ pub(crate) fn handle_merge(
                                             } else {
                                                 "merge"
                                             };
+                                            // 還原失敗的中斷指令，忽略可能的錯誤
                                             let _ = Command::new("git")
                                                 .arg("-C")
                                                 .arg(wt_dir)
@@ -256,6 +258,7 @@ pub(crate) fn handle_merge(
                                     } else {
                                         "merge"
                                     };
+                                    // 還原失敗的中斷指令，忽略可能的錯誤
                                     let _ = Command::new("git")
                                         .arg("-C")
                                         .arg(wt_dir)
@@ -411,6 +414,7 @@ pub(crate) fn handle_comment(
         let prompt = format!(
             "[ertangle 程式碼審查註解]\n位置：{location}\n意見：{comment}\n請針對上述位置與審查意見修正程式碼。"
         );
+        // 若目標 session 已結束或無法接收輸入則忽略
         let _ = ctl.send_input(&prompt);
     }
     let _ = reply.send(Frame::ok_note(tr!("已送出審查註解")));

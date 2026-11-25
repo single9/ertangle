@@ -289,6 +289,7 @@ pub(crate) fn stop_dev(dir: &Path) -> Result<bool> {
             wait_dead(st.pid, Duration::from_secs(2));
         }
     }
+    // 移除狀態檔，若不存在則忽略
     let _ = fs::remove_file(state_path(dir));
     Ok(alive)
 }
@@ -353,6 +354,7 @@ pub(crate) fn start_dev(
         }
         if Instant::now() >= deadline {
             signal_group(pid, "-KILL");
+            // 等待逾時被強制終止的子處理程序結束
             let _ = child.wait();
             bail!(
                 "dev server not ready after {}s:\n{}",
@@ -376,7 +378,7 @@ pub(crate) fn start_dev(
         serde_json::to_string_pretty(&st.to_json())?,
     )
     .context("write dev-server.json")?;
-    // Reap the child when it exits so it never lingers as a zombie in this process.
+    // 在背景執行緒回收子處理程序結束狀態，避免產生殭屍行程
     std::thread::spawn(move || {
         let _ = child.wait();
     });

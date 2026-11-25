@@ -123,6 +123,11 @@ struct Conn {
 }
 
 impl Conn {
+    fn emit(&self, ev: AgentEvent) {
+        // 寫入失敗代表接收端通道已關閉，無需處理
+        let _ = self.tx.send(ev);
+    }
+
     fn write(&self, v: &Value) -> Result<()> {
         let mut line = serde_json::to_string(v)?;
         line.push('\n');
@@ -133,10 +138,12 @@ impl Conn {
     }
 
     fn respond(&self, id: &Value, result: Value) {
+        // 若 agent stdin 已關閉則忽略回應寫入錯誤
         let _ = self.write(&json!({"jsonrpc":"2.0","id":id,"result":result}));
     }
 
     fn respond_error(&self, id: &Value, code: i64, message: &str) {
+        // 若 agent stdin 已關閉則忽略回應寫入錯誤
         let _ = self.write(&json!({
             "jsonrpc":"2.0","id":id,
             "error":{"code":code,"message":message}
@@ -178,17 +185,17 @@ impl Conn {
         // Any session/update arriving before the first session/prompt on a resumed session is
         // asynchronous history replay from session/load; stop discarding only once we prompt.
         self.loading.store(false, Ordering::SeqCst);
-        let _ = self.tx.send(AgentEvent::Status(SessionStatus::Busy));
+        self.emit(AgentEvent::Status(SessionStatus::Busy));
         let res = self.call(
             "session/prompt",
             json!({ "sessionId": sid, "prompt": prompt_blocks(&effective, atts, self.image_ok.load(Ordering::SeqCst)) }),
             PROMPT_TIMEOUT,
         );
         self.flush_stream();
-        let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
+        self.emit(AgentEvent::Status(SessionStatus::Idle));
         if res.is_ok() {
             if let Some(q) = recovered_quota(&self.agent, &self.limited) {
-                let _ = self.tx.send(AgentEvent::Quota(q));
+                self.emit(AgentEvent::Quota(q));
             }
         }
         res.map(|_| ())
@@ -198,7 +205,7 @@ impl Conn {
     fn report_rate_limit(&self, error_text: &str) {
         if let Some(q) = rate_limit_quota(&self.agent, error_text) {
             self.limited.store(true, Ordering::SeqCst);
-            let _ = self.tx.send(AgentEvent::Quota(q));
+            self.emit(AgentEvent::Quota(q));
         }
     }
 
@@ -226,7 +233,7 @@ impl Conn {
             if let Some(raw) = query_agy_quota(&prog, &env) {
                 let reached = conn.limited.load(Ordering::SeqCst);
                 if let Some(q) = parse_agy_quota_json(&raw, reached) {
-                    let _ = conn.tx.send(AgentEvent::Quota(q));
+                    conn.emit(AgentEvent::Quota(q));
                 }
             }
         });
@@ -244,12 +251,12 @@ impl Conn {
                     .filter_map(|c| c["name"].as_str())
                     .map(|n| n.trim_start_matches('/').to_string())
                     .collect();
-                let _ = self.tx.send(AgentEvent::Commands(names));
+                self.emit(AgentEvent::Commands(names));
             }
             "usage_update" => {
                 // ACP: `used` (current context tokens) and `size` (window size).
                 if let Some(used) = update["used"].as_u64() {
-                    let _ = self.tx.send(AgentEvent::Context {
+                    self.emit(AgentEvent::Context {
                         used,
                         window: update["size"].as_u64(),
                     });
@@ -266,6 +273,7 @@ impl Conn {
                         .unwrap_or_else(|e| e.into_inner())
                         .push_chunk("msg", t);
                     self.send_chunk(chunk);
+                    // 串流提示喚醒失敗則忽略
                     let _ = self.stream_poke.send(());
                 }
             }
@@ -277,6 +285,7 @@ impl Conn {
                         .unwrap_or_else(|e| e.into_inner())
                         .push_chunk("think", t);
                     self.send_chunk(chunk);
+                    // 串流提示喚醒失敗則忽略
                     let _ = self.stream_poke.send(());
                 }
             }
@@ -304,11 +313,11 @@ impl Conn {
                                     answers: Arc::clone(&shared_answers),
                                 },
                             );
-                            let _ = self.tx.send(AgentEvent::Question(q));
+                            self.emit(AgentEvent::Question(q));
                         }
                     }
                 }
-                let _ = self.tx.send(AgentEvent::ToolCall {
+                self.emit(AgentEvent::ToolCall {
                     name,
                     input,
                     ok: None,
@@ -324,7 +333,7 @@ impl Conn {
                 };
                 let name = tool_name(update);
                 let output = tool_result_text(update);
-                let _ = self.tx.send(AgentEvent::ToolCall {
+                self.emit(AgentEvent::ToolCall {
                     name,
                     input: String::new(),
                     ok: Some(ok),
@@ -365,7 +374,7 @@ impl Conn {
         } else {
             AgentEvent::Output(chunk.text)
         };
-        let _ = self.tx.send(ev);
+        self.emit(ev);
     }
 
     fn on_permission(&self, msg: &Value) {
@@ -384,7 +393,7 @@ impl Conn {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(req.clone(), (jid, options));
-        let _ = self.tx.send(AgentEvent::Permission(PermissionRequest {
+        self.emit(AgentEvent::Permission(PermissionRequest {
             req,
             session: self.session_id.clone(),
             title,
@@ -436,7 +445,7 @@ impl Conn {
                     option_values,
                 },
             );
-            let _ = self.tx.send(AgentEvent::Question(q));
+            self.emit(AgentEvent::Question(q));
         }
     }
 
@@ -503,7 +512,7 @@ impl Conn {
                 }
                 if list.len() >= total {
                     let ans_str = list.join("\n");
-                    let _ = self.tx.send(AgentEvent::Output(format!("↳ {ans_str}\n")));
+                    self.emit(AgentEvent::Output(format!("↳ {ans_str}\n")));
                 }
             }
         }
@@ -670,11 +679,12 @@ fn reader_loop(conn: Arc<Conn>, stdout: impl BufRead) {
                 .unwrap_or_else(|e| e.into_inner())
                 .remove(&id)
             {
+                // 等待回應者若已逾時放棄則忽略傳送結果
                 let _ = s.send(msg);
             }
         }
     }
-    let _ = conn.tx.send(AgentEvent::Exited(None));
+    conn.emit(AgentEvent::Exited(None));
 }
 
 struct AcpControl {
@@ -697,7 +707,7 @@ impl AgentControl for AcpControl {
             if let Err(e) = conn.prompt(&text, &atts) {
                 tracing::warn!("ACP prompt 失敗：{e}");
                 if ertangle_core::looks_like_limit(&e.to_string()) {
-                    let _ = conn.tx.send(AgentEvent::Limited(e.to_string()));
+                    conn.emit(AgentEvent::Limited(e.to_string()));
                 }
                 conn.report_rate_limit(&e.to_string());
             }
@@ -766,6 +776,7 @@ impl AgentControl for AcpControl {
 
     fn kill(&self) -> Result<()> {
         let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
+        // 終止處理程序群組或處理程序，忽略訊號發送錯誤
         let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
         self.child
             .lock()
@@ -1014,6 +1025,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             if let Some(t) = &stderr_tail {
                 t.report_exit(code, &tx);
             }
+            // 接收端若已關閉則忽略退出事件
             let _ = tx.send(AgentEvent::Exited(code));
         });
     }
@@ -1085,6 +1097,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
                 REPLAY_MAX_WAIT,
             );
             conn.loading.store(false, Ordering::SeqCst);
+            // 等待重播結束後刷新緩衝區，若無資料則忽略
             let _ = conn
                 .stream
                 .lock()
@@ -1107,6 +1120,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     };
     *conn.acp_session.lock().unwrap_or_else(|e| e.into_inner()) = sid.clone();
     if can_load {
+        // 接收端若已關閉則忽略事件傳送
         let _ = tx.send(AgentEvent::NativeId(sid.clone()));
     }
     // When resuming, model/effort already exist in agent conversation; do not reset if response lacks configOptions.
@@ -1119,6 +1133,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             CALL_TIMEOUT,
         )
         .with_context(|| tr!("設定 model `{value}` 失敗", value = value))?;
+        // 接收端若已關閉則忽略事件傳送
         let _ = tx.send(AgentEvent::Model(value));
     }
     if let Some(e) = spec.effort.as_ref().filter(|_| has_options) {
@@ -1134,6 +1149,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .initial_prompt
         .as_deref()
         .is_some_and(|p| !p.trim().is_empty());
+    // 接收端若已關閉則忽略事件傳送
     let _ = tx.send(AgentEvent::Status(if has_initial_prompt {
         SessionStatus::Busy
     } else {
@@ -1357,6 +1373,7 @@ fn query_agy_quota(prog: &std::path::Path, env: &[(String, String)]) -> Option<S
                 std::thread::sleep(Duration::from_millis(50));
             }
             _ => {
+                // 查詢額度逾時強制終止子處理程序並回收，忽略錯誤
                 let _ = child.kill();
                 let _ = child.wait();
                 return None;
@@ -1485,7 +1502,11 @@ pub(crate) fn parse_rfc3339_utc_ms(s: &str) -> Option<u64> {
     let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146097 + doe - 719468;
-    let secs = days * 86_400 + hh * 3_600 + mm * 60 + ss;
+    let secs = days
+        .checked_mul(86_400)?
+        .checked_add(hh.checked_mul(3_600)?)?
+        .checked_add(mm.checked_mul(60)?)?
+        .checked_add(ss)?;
     u64::try_from(secs).ok()?.checked_mul(1_000)
 }
 

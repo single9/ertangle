@@ -306,7 +306,10 @@ pub fn parse_etime(s: &str) -> u64 {
         ),
         _ => (0, 0, 0),
     };
-    days * 86400 + h * 3600 + m * 60 + sec
+    days.saturating_mul(86400)
+        .saturating_add(h.saturating_mul(3600))
+        .saturating_add(m.saturating_mul(60))
+        .saturating_add(sec)
 }
 
 #[cfg(test)]

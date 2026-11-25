@@ -1161,6 +1161,7 @@ msgstr ""
 msgid "take writer 失敗"
 msgstr ""
 
+#. 接收端若已關閉則忽略輸出事件
 #: crates/ertangle-adapter/src/stderr.rs
 msgid "⚠ 處理程序以結束碼 {code} 結束，stderr 最後 {count} 行：\n"
 "{lines}\n"
@@ -2073,6 +2074,7 @@ msgstr ""
 msgid "額度用完，但 [handoff] fallback 沒有可用的 agent；請手動 :handoff"
 msgstr ""
 
+#. 認證失敗通知 client；若連線已關閉則忽略
 #: crates/ertangle-daemon/src/server.rs
 msgid "遠端認證失敗：請設定正確的 ERTANGLE_TOKEN"
 msgstr ""
@@ -2081,10 +2083,12 @@ msgstr ""
 msgid "未認證的遠端連線：請先送 Hello 帶 token"
 msgstr ""
 
+#. 伺服器內部錯誤通知 client；若連線已關閉則忽略
 #: crates/ertangle-daemon/src/server.rs
 msgid "daemon 處理請求時發生內部錯誤"
 msgstr ""
 
+#. 請求解析失敗通知 client；若連線已關閉則忽略
 #: crates/ertangle-daemon/src/server.rs
 msgid "無法解析請求：{e}"
 msgstr ""
@@ -2225,14 +2229,17 @@ msgstr ""
 msgid "綁定 Web 伴侶服務位址 {addr} 失敗"
 msgstr ""
 
+#. 認證失敗通知 client；若 WebSocket 已斷開則忽略
 #: crates/ertangle-daemon/src/web.rs
 msgid "遠端認證失敗：請提供正確的 Token"
 msgstr ""
 
+#. 認證失敗通知 client；若 WebSocket 已斷開則忽略
 #: crates/ertangle-daemon/src/web.rs
 msgid "未認證的連線：請先發送 Hello 帶 token"
 msgstr ""
 
+#. JSON 解析錯誤通知 client；若 WebSocket 已斷開則忽略
 #: crates/ertangle-daemon/src/web.rs
 msgid "無法解析 JSON：{e}"
 msgstr ""

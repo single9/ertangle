@@ -77,6 +77,7 @@ impl StderrTail {
                     .push_text(&text);
             }
             shared.lock().unwrap_or_else(|e| e.into_inner()).end_line();
+            // 讀取執行緒結束通知，接收端逾時放棄時忽略
             let _ = done_tx.send(());
         });
         Arc::new(StderrTail {
@@ -98,6 +99,7 @@ impl StderrTail {
 
     /// 處理程序結束後呼叫：短暫等讀取執行緒收尾；非 0 結束且有內容時送出 `Output`。
     pub fn report_exit(&self, code: Option<i32>, tx: &Sender<AgentEvent>) {
+        // 等待背景 stderr 讀取結束，逾時或無訊息皆繼續回報
         let _ = self
             .done
             .lock()
@@ -110,6 +112,7 @@ impl StderrTail {
         if lines.is_empty() {
             return;
         }
+        // 接收端若已關閉則忽略輸出事件
         let _ = tx.send(AgentEvent::Output(tr!(
             "⚠ 處理程序以結束碼 {code} 結束，stderr 最後 {count} 行：\n{lines}\n",
             code = code.unwrap_or(-1),

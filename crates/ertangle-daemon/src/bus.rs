@@ -369,6 +369,7 @@ impl Shared {
         }
 
         for (cwd, sid) in mailbox_dirs {
+            // 信箱追加失敗不中斷訊息傳遞
             let _ = append_mailbox(&cwd, &sid, &message);
         }
 
@@ -389,6 +390,7 @@ impl Shared {
                 message.kind.id(),
                 message.body,
             );
+            // 喚醒提示送出失敗（如處理程序已結束）則忽略
             let _ = ctl.send_input(&nudge);
         }
 

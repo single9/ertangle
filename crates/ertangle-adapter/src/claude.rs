@@ -39,6 +39,11 @@ struct Conn {
 }
 
 impl Conn {
+    fn emit(&self, ev: AgentEvent) {
+        // 寫入失敗代表接收端通道已關閉，無需處理
+        let _ = self.tx.send(ev);
+    }
+
     fn send_raw(&self, v: &Value) -> Result<()> {
         let mut line = serde_json::to_string(v)?;
         line.push('\n');
@@ -55,7 +60,7 @@ impl Conn {
             .unwrap_or_else(|e| e.into_inner())
             .flush();
         if !text.is_empty() {
-            let _ = self.tx.send(AgentEvent::Output(text));
+            self.emit(AgentEvent::Output(text));
         }
     }
 
@@ -72,7 +77,7 @@ impl Conn {
             "result" => self.on_result(&msg),
             "rate_limit_event" => {
                 if let Some(q) = parse_rate_limit_event(&msg) {
-                    let _ = self.tx.send(AgentEvent::Quota(q));
+                    self.emit(AgentEvent::Quota(q));
                 }
             }
             // hook_started / hook_response / rate_limit_event / system.status…
@@ -83,7 +88,7 @@ impl Conn {
     fn on_system(&self, msg: &Value) {
         if msg["subtype"].as_str() == Some("init") {
             if let Some(model) = msg["model"].as_str() {
-                let _ = self.tx.send(AgentEvent::Model(model.to_string()));
+                self.emit(AgentEvent::Model(model.to_string()));
             }
             if let Some(cmds) = msg["slash_commands"].as_array() {
                 let names: Vec<String> = cmds
@@ -91,12 +96,12 @@ impl Conn {
                     .filter_map(|c| c.as_str().map(str::to_string))
                     .collect();
                 if !names.is_empty() {
-                    let _ = self.tx.send(AgentEvent::Commands(names));
+                    self.emit(AgentEvent::Commands(names));
                 }
             }
             // Send every time: after resuming the ID may change; the latest takes precedence.
             if let Some(id) = msg["session_id"].as_str().filter(|s| !s.is_empty()) {
-                let _ = self.tx.send(AgentEvent::NativeId(id.to_string()));
+                self.emit(AgentEvent::NativeId(id.to_string()));
             }
             // Status is set to Idle by the daemon upon startup completion and restored to Idle by `result` at turn end;
             // do not emit Idle here, otherwise the UI would appear idle while the initial prompt is still being processed.
@@ -122,7 +127,7 @@ impl Conn {
                                 .unwrap_or_else(|e| e.into_inner())
                                 .push("msg", t);
                             if !out.is_empty() {
-                                let _ = self.tx.send(AgentEvent::Output(out));
+                                self.emit(AgentEvent::Output(out));
                             }
                         }
                     }
@@ -134,7 +139,7 @@ impl Conn {
                                 .unwrap_or_else(|e| e.into_inner())
                                 .push("think", t);
                             if !out.is_empty() {
-                                let _ = self.tx.send(AgentEvent::Output(out));
+                                self.emit(AgentEvent::Output(out));
                             }
                         }
                     }
@@ -164,7 +169,7 @@ impl Conn {
                     } else {
                         let text = block["text"].as_str().unwrap_or("");
                         if !text.is_empty() {
-                            let _ = self.tx.send(AgentEvent::Output(format!("{text}\n")));
+                            self.emit(AgentEvent::Output(format!("{text}\n")));
                         }
                     }
                 }
@@ -172,7 +177,7 @@ impl Conn {
                     self.flush_stream();
                     let name = block["name"].as_str().unwrap_or("tool").to_string();
                     let input = block["input"].to_string();
-                    let _ = self.tx.send(AgentEvent::ToolCall {
+                    self.emit(AgentEvent::ToolCall {
                         name,
                         input,
                         ok: None,
@@ -186,11 +191,13 @@ impl Conn {
         // Context usage = input tokens for this assistant message (including cache); window size is only known at `result`.
         let u = &msg["message"]["usage"];
         if !u.is_null() {
-            let used = u["input_tokens"].as_u64().unwrap_or(0)
-                + u["cache_creation_input_tokens"].as_u64().unwrap_or(0)
-                + u["cache_read_input_tokens"].as_u64().unwrap_or(0);
+            let used = u["input_tokens"]
+                .as_u64()
+                .unwrap_or(0)
+                .saturating_add(u["cache_creation_input_tokens"].as_u64().unwrap_or(0))
+                .saturating_add(u["cache_read_input_tokens"].as_u64().unwrap_or(0));
             if used > 0 {
-                let _ = self.tx.send(AgentEvent::Context { used, window: None });
+                self.emit(AgentEvent::Context { used, window: None });
             }
         }
         // Do not emit per-message usage here: it only has tokens for a single message, which would overwrite
@@ -218,7 +225,7 @@ impl Conn {
                     .join("\n"),
                 other => other.to_string(),
             };
-            let _ = self.tx.send(AgentEvent::ToolCall {
+            self.emit(AgentEvent::ToolCall {
                 name: String::new(),
                 input: String::new(),
                 ok: Some(ok),
@@ -234,30 +241,30 @@ impl Conn {
             .and_then(|m| m.values().filter_map(|v| v["contextWindow"].as_u64()).max())
         {
             // Reuse usage from the latest assistant message; here only fill in the window size.
-            let _ = self.tx.send(AgentEvent::Context {
+            self.emit(AgentEvent::Context {
                 used: 0,
                 window: Some(window),
             });
         }
         if let Some(cost) = result_cost(msg) {
-            let _ = self.tx.send(AgentEvent::Cost(cost));
+            self.emit(AgentEvent::Cost(cost));
         }
         let was_interrupted = self.interrupted.swap(false, Ordering::SeqCst);
         if is_interrupt_result(msg, was_interrupted) {
             // A user interrupt makes Claude report an errored result; the session itself is still healthy.
-            let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
+            self.emit(AgentEvent::Status(SessionStatus::Idle));
         } else if msg["is_error"].as_bool().unwrap_or(false) {
             let detail = msg["result"].as_str().unwrap_or("").to_string();
             if ertangle_core::looks_like_limit(&detail) {
-                let _ = self.tx.send(AgentEvent::Limited(detail));
+                self.emit(AgentEvent::Limited(detail));
             } else if !detail.trim().is_empty() {
                 let note = tr!("claude 錯誤：{detail}", detail = detail.trim());
-                let _ = self.tx.send(AgentEvent::Output(format!("⚠ {note}\n")));
-                let _ = self.tx.send(AgentEvent::Note(note));
+                self.emit(AgentEvent::Output(format!("⚠ {note}\n")));
+                self.emit(AgentEvent::Note(note));
             }
-            let _ = self.tx.send(AgentEvent::Status(SessionStatus::Failed));
+            self.emit(AgentEvent::Status(SessionStatus::Failed));
         } else {
-            let _ = self.tx.send(AgentEvent::Status(SessionStatus::Idle));
+            self.emit(AgentEvent::Status(SessionStatus::Idle));
         }
     }
 }
@@ -293,7 +300,7 @@ pub(crate) fn parse_rate_limit_event(msg: &Value) -> Option<ertangle_core::Quota
             windows.push(ertangle_core::QuotaWindow {
                 name,
                 used_percent: used,
-                resets_at_ms: w["resetsAt"].as_u64().map(|s| s * 1000),
+                resets_at_ms: w["resetsAt"].as_u64().map(|s| s.saturating_mul(1000)),
             });
         }
     }
@@ -316,8 +323,10 @@ fn result_cost(msg: &Value) -> Option<Cost> {
     let usage = &msg["usage"];
     Some(Cost {
         usd,
-        input_tokens: usage["input_tokens"].as_u64().unwrap_or(0)
-            + usage["cache_read_input_tokens"].as_u64().unwrap_or(0),
+        input_tokens: usage["input_tokens"]
+            .as_u64()
+            .unwrap_or(0)
+            .saturating_add(usage["cache_read_input_tokens"].as_u64().unwrap_or(0)),
         output_tokens: usage["output_tokens"].as_u64().unwrap_or(0),
     })
 }
@@ -355,7 +364,7 @@ impl AgentControl for ClaudeControl {
     }
 
     fn send_input_with(&self, text: &str, atts: &[ertangle_core::Attachment]) -> Result<()> {
-        let _ = self.conn.tx.send(AgentEvent::Status(SessionStatus::Busy));
+        self.conn.emit(AgentEvent::Status(SessionStatus::Busy));
         self.conn.send_raw(&json!({
             "type": "user",
             "message": { "role": "user", "content": user_content(text, atts) }
@@ -379,6 +388,7 @@ impl AgentControl for ClaudeControl {
 
     fn kill(&self) -> Result<()> {
         let pid = self.child.lock().unwrap_or_else(|e| e.into_inner()).id();
+        // 終止處理程序群組或處理程序，忽略訊號發送錯誤
         let _ = crate::signal_pgid(pid, "-KILL").or_else(|_| crate::signal_pid(pid, "-KILL"));
         self.child
             .lock()
@@ -602,6 +612,7 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
             if let Some(t) = &stderr_tail {
                 t.report_exit(code, &tx);
             }
+            // 接收端若已關閉則忽略退出事件
             let _ = tx.send(AgentEvent::Exited(code));
         });
     }

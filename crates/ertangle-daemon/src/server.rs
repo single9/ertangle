@@ -25,6 +25,7 @@ pub(crate) fn handle_conn(
                     if writer.write_all(line.as_bytes()).is_err() {
                         break;
                     }
+                    // 每次寫入 frame 後刷新緩衝區，若連線已斷開由外層迴圈偵測
                     let _ = writer.flush();
                 }
                 Err(_) => break,
@@ -52,6 +53,7 @@ pub(crate) fn handle_conn(
                         } else {
                             // 失敗後延遲回覆再關閉連線，拖慢暴力嘗試。
                             std::thread::sleep(AUTH_FAIL_DELAY);
+                            // 認證失敗通知 client；若連線已關閉則忽略
                             let _ = tx.send(Frame::error(tr!(
                                 "遠端認證失敗：請設定正確的 ERTANGLE_TOKEN"
                             )));
@@ -59,6 +61,7 @@ pub(crate) fn handle_conn(
                         }
                     } else {
                         std::thread::sleep(AUTH_FAIL_DELAY);
+                        // 認證失敗通知 client；若連線已關閉則忽略
                         let _ =
                             tx.send(Frame::error(tr!("未認證的遠端連線：請先送 Hello 帶 token")));
                         break;
@@ -70,11 +73,13 @@ pub(crate) fn handle_conn(
                 }));
                 if handled.is_err() {
                     tracing::error!("處理請求時 panic，中斷此連線");
+                    // 伺服器內部錯誤通知 client；若連線已關閉則忽略
                     let _ = tx.send(Frame::error(tr!("daemon 處理請求時發生內部錯誤")));
                     break;
                 }
             }
             Err(e) => {
+                // 請求解析失敗通知 client；若連線已關閉則忽略
                 let _ = tx.send(Frame::error(tr!("無法解析請求：{e}", e = e)));
             }
         }
@@ -298,6 +303,7 @@ pub fn get_or_create_default_token() -> Result<String> {
     }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
+        // 確保父目錄權限為私有，若非 unix 環境或失敗則忽略
         let _ = ensure_private_dir(parent);
     }
     let token = generate_secure_token();
@@ -535,6 +541,7 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
                 )
             );
         }
+        // 移除舊的孤兒 socket 檔；若檔案不存在則忽略
         let _ = fs::remove_file(&sock);
     }
     let listener = UnixListener::bind(&sock)
@@ -570,6 +577,7 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
                     Ok(s) => {
                         let shared = shared_tcp.clone();
                         std::thread::spawn(move || {
+                            // 處理連線結束或錯誤已於 handle_conn 內部處理或記錄
                             let _ = handle_conn(shared, ConnStream::Tcp(s), true);
                         });
                     }
@@ -604,6 +612,7 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
             Err(e) => tracing::warn!("accept 失敗：{e}"),
         }
     }
+    // daemon 結束時清理 socket 檔；若檔案已被移除則忽略
     let _ = fs::remove_file(&sock);
     Ok(())
 }

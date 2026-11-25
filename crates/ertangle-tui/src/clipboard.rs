@@ -83,6 +83,7 @@ fn try_command(program: &str, args: &[&str], text: &str) -> bool {
 
     if let Some(mut stdin) = child.stdin.take() {
         if stdin.write_all(text.as_bytes()).is_err() {
+            // 寫入失敗強制終止剪貼簿輔助處理程序並回收
             let _ = child.kill();
             let _ = child.wait();
             return false;

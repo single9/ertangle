@@ -725,12 +725,14 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                         addr: None,
                     },
                 )?;
+                // 更新設定檔，若失敗則維持目前狀態
                 let _ = ertangle_daemon::config::Config::set_toml(
                     &config_p,
                     &["web"],
                     "enabled",
                     Some(ertangle_daemon::config::TomlValue::Boolean(false)),
                 );
+                // 重設 addr 設定值
                 let _ =
                     ertangle_daemon::config::Config::set_toml(&config_p, &["web"], "addr", None);
                 app.status = tr!("已關閉 Web 版並儲存至設定檔");
@@ -761,6 +763,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                         addr: Some(addr.clone()),
                     },
                 )?;
+                // 更新設定檔，若失敗則維持目前狀態
                 let _ = ertangle_daemon::config::Config::set_toml(
                     &config_p,
                     &["web"],
@@ -768,6 +771,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                     Some(ertangle_daemon::config::TomlValue::Boolean(true)),
                 );
                 if let Ok(port) = addr.parse::<u16>() {
+                    // 更新連接埠設定值
                     let _ = ertangle_daemon::config::Config::set_toml(
                         &config_p,
                         &["web"],
@@ -775,6 +779,7 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
                         Some(ertangle_daemon::config::TomlValue::Integer(port as i64)),
                     );
                 } else {
+                    // 更新位址設定值
                     let _ = ertangle_daemon::config::Config::set_toml(
                         &config_p,
                         &["web"],
@@ -1603,6 +1608,7 @@ fn set_default_command(app: &mut App, rest: &str) {
         }
         "web" => {
             if value.is_empty() || value == "off" {
+                // 停用 Web 設定，前置設定失敗則直接覆寫 addr
                 let _ = ertangle_daemon::config::Config::set_toml(
                     &path,
                     &["web"],
@@ -1611,6 +1617,7 @@ fn set_default_command(app: &mut App, rest: &str) {
                 );
                 ertangle_daemon::config::Config::set_toml(&path, &["web"], "addr", None)
             } else if let Ok(port) = value.parse::<u16>() {
+                // 啟用 Web 設定，設定失敗則繼續設定連接埠
                 let _ = ertangle_daemon::config::Config::set_toml(
                     &path,
                     &["web"],
@@ -1624,6 +1631,7 @@ fn set_default_command(app: &mut App, rest: &str) {
                     Some(ertangle_daemon::config::TomlValue::Integer(port as i64)),
                 )
             } else {
+                // 啟用 Web 設定，設定失敗則繼續設定位址
                 let _ = ertangle_daemon::config::Config::set_toml(
                     &path,
                     &["web"],

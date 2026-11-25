@@ -66,6 +66,7 @@ fn drain<R: std::io::Read + Send + 'static>(pipe: Option<R>) -> std::sync::mpsc:
     if let Some(mut pipe) = pipe {
         std::thread::spawn(move || {
             let mut bytes = Vec::new();
+            // 盡可能讀取管線剩餘資料，忽略讀取與傳送錯誤
             let _ = pipe.read_to_end(&mut bytes);
             let _ = tx.send(String::from_utf8_lossy(&bytes).into_owned());
         });
@@ -100,6 +101,7 @@ fn capture(
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
             _ => {
+                // 執行逾時強制終止子處理程序並回收，忽略錯誤
                 let _ = child.kill();
                 let _ = child.wait();
                 return Err(CaptureError::Timeout);

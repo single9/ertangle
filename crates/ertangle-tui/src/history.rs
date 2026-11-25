@@ -53,6 +53,7 @@ impl History {
         }
         if let Some(p) = &self.path {
             if let Some(dir) = p.parent() {
+                // 目錄建立失敗後續開啟檔案會處理
                 let _ = std::fs::create_dir_all(dir);
             }
             if let Ok(mut f) = std::fs::OpenOptions::new()
@@ -60,6 +61,7 @@ impl History {
                 .append(true)
                 .open(p)
             {
+                // 歷史記錄寫入失敗不影響主流程
                 let _ = writeln!(f, "{}", serde_json::Value::String(t.to_string()));
             }
         }

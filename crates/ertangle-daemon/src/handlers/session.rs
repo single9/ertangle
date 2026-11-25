@@ -211,7 +211,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
         let inner = lock(&shared.inner);
         if spawn.inherit_from.is_none() {
             let depth = if inner.state.sessions.contains_key(pid) {
-                inner.state.session_depth(pid) + 1
+                inner.state.session_depth(pid).saturating_add(1)
             } else {
                 1
             };
@@ -418,6 +418,7 @@ pub(crate) fn handle_spawn(shared: &Arc<Shared>, reply: &ClientTx, spawn: SpawnR
                     .as_deref()
                     .map(PathBuf::from)
                     .unwrap_or_else(|| shared.default_cwd());
+                // 清理建立失敗的 worktree，若目錄不存在則忽略
                 let _ = crate::git::remove_worktree(&repo, &session, true);
             }
             shared.emit(Event::SessionRemoved {
@@ -610,8 +611,8 @@ fn launch_session(shared: &Arc<Shared>, launch: Launch) -> anyhow::Result<()> {
             }
             if let AgentEvent::Cost(c) = &mut ev {
                 c.usd += cost_base.usd;
-                c.input_tokens += cost_base.input_tokens;
-                c.output_tokens += cost_base.output_tokens;
+                c.input_tokens = c.input_tokens.saturating_add(cost_base.input_tokens);
+                c.output_tokens = c.output_tokens.saturating_add(cost_base.output_tokens);
             }
             shared_worker.ingest(&id, ev);
         }
@@ -795,6 +796,7 @@ pub(crate) fn clear_session(
         );
     }
     shared.wake_if_sleeping(&sid, &ctl);
+    // 清除 session 時終止舊處理程序，忽略終止錯誤
     let _ = ctl.kill();
     // 先拿掉控制把手：舊處理程序遲到的事件 (含 Exited)會被 launch_session 的 run 世代檢查擋掉。
     lock(&shared.inner).sessions.remove(&sid);
@@ -1097,6 +1099,7 @@ pub(crate) fn run_shell_in_timeout(
     let out_reader = std::thread::spawn(move || {
         let mut bytes = Vec::new();
         if let Some(mut pipe) = stdout {
+            // 讀取管線剩餘資料至 EOF，若管線已關閉或中斷則忽略
             let _ = pipe.read_to_end(&mut bytes);
         }
         bytes
@@ -1104,6 +1107,7 @@ pub(crate) fn run_shell_in_timeout(
     let err_reader = std::thread::spawn(move || {
         let mut bytes = Vec::new();
         if let Some(mut pipe) = stderr {
+            // 讀取管線剩餘資料至 EOF，若管線已關閉或中斷則忽略
             let _ = pipe.read_to_end(&mut bytes);
         }
         bytes
@@ -1118,11 +1122,13 @@ pub(crate) fn run_shell_in_timeout(
                 #[cfg(unix)]
                 {
                     if ertangle_adapter::signal_pgid(child.id(), "-KILL").is_err() {
+                        // 指令逾時強制終止子處理程序，忽略終止結果
                         let _ = child.kill();
                     }
                 }
                 #[cfg(not(unix))]
                 {
+                    // 指令逾時強制終止子處理程序，忽略終止結果
                     let _ = child.kill();
                 }
                 break child.wait().ok();
@@ -1400,6 +1406,7 @@ pub(crate) fn handle_handoff(
                 task.updated_ms = now_millis();
                 shared.emit(Event::TaskChanged { task: task.clone() });
                 let body = format!("TASK_BLOCKED {} promoted to coordinator by user", task.id);
+                // 提拔 session 為 coordinator 時通知父層，若父層已不存在則忽略
                 let _ = shared.deliver_message(
                     Some(sid.clone()),
                     Target::Direct(parent_id.clone()),
@@ -1413,6 +1420,7 @@ pub(crate) fn handle_handoff(
 
     // 舊 agent 還在跑就先停掉，避免兩個 agent 同時改同一個目錄。
     if let Some((_, ctl)) = shared.control(&sid) {
+        // 提拔前終止舊 agent 處理程序，忽略終止錯誤
         let _ = ctl.kill();
         shared.emit(Event::SessionExited {
             session: sid.clone(),
@@ -1566,6 +1574,7 @@ pub(crate) fn handle_budget(
 pub(crate) fn handle_cancel(shared: &Arc<Shared>, reply: &ClientTx, session: String) {
     match shared.control(&session) {
         Some((_, ctl)) => {
+            // 取消 session 執行；若處理程序已結束則忽略
             let _ = ctl.cancel();
             let _ = reply.send(Frame::ok());
         }
@@ -1653,6 +1662,7 @@ pub(crate) fn stop_session(
     session: &str,
 ) -> Option<ertangle_core::SessionId> {
     let (sid, ctl) = shared.control(session)?;
+    // 終止 session 處理程序；若處理程序已結束則忽略
     let _ = ctl.kill();
     // 立刻拿掉控制把手：處理程序的結束事件要過一會才到，這段期間送來的 prompt
     // 不該再寫進已經被殺掉的處理程序 (會把剛標成結束的 session 又變回 busy，擋住接續)。
@@ -1723,6 +1733,7 @@ pub(crate) fn handle_kill_bg_proc(
     } else {
         // pid: None 代表清理該 Session 工具指令啟動的所有處理程序 (不含 MCP 伺服器等基礎設施)
         for dpid in crate::procs::killable_pids(root_pid) {
+            // 清理背景處理程序，忽略終止訊號發送錯誤
             let _ = ertangle_adapter::signal_pid(dpid, sig);
         }
     }
@@ -1842,6 +1853,7 @@ pub(crate) fn handle_permission(
     // MCP 核准請求：把決定交給等待中的 `handle_approval_ask`。
     let waiter = lock(&shared.inner).approval_waiters.remove(&req);
     if let Some(tx) = waiter {
+        // 交付核准決定給等待者，若等待者已逾時退出則忽略
         let _ = tx.send(decision);
         shared.emit(Event::PermissionResolved {
             session: shared.resolve_session(&session),
@@ -2023,6 +2035,7 @@ pub(crate) fn handle_answer_question(
     let sid = shared.resolve_session(&session);
     let waiter = lock(&shared.inner).question_waiters.remove(&id);
     if let Some(tx) = waiter {
+        // 交付問題回答給等待者，若等待者已逾時退出則忽略
         let _ = tx.send(answers.clone());
         shared.emit(Event::QuestionResolved {
             session: sid,

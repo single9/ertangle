@@ -131,7 +131,7 @@ pub(crate) fn check_spawn_quota(
         .map(|r| {
             format!(
                 " Resets in {}.",
-                ertangle_core::format_remaining(r - now_ms)
+                ertangle_core::format_remaining(r.saturating_sub(now_ms))
             )
         })
         .unwrap_or_default();
@@ -193,7 +193,7 @@ impl Shared {
             .unwrap_or(crate::config::DEFAULT_BUDGET_WARN_PERCENT);
 
         // 1) 單一 session 上限：沒有美金數字 (usd == 0 且有 token)時改看 session_tokens，否則看 USD。
-        let total_tokens = s.cost.input_tokens + s.cost.output_tokens;
+        let total_tokens = s.cost.input_tokens.saturating_add(s.cost.output_tokens);
         let usd_limit = s
             .budget_usd
             .or_else(|| cfg.resolve_budget_usd(&s.role, None));
@@ -215,6 +215,7 @@ impl Shared {
                 }
                 if total_tokens >= tok_limit {
                     if let Some((_, ctl)) = self.control(sid) {
+                        // 取消已超額 session；若處理程序已結束則忽略
                         let _ = ctl.cancel();
                     }
                     self.emit(Event::SessionOverBudget {
@@ -242,6 +243,7 @@ impl Shared {
             }
             if spent >= limit {
                 if let Some((_, ctl)) = self.control(sid) {
+                    // 取消已超額 session；若處理程序已結束則忽略
                     let _ = ctl.cancel();
                 }
                 self.emit(Event::SessionOverBudget {
@@ -272,6 +274,7 @@ impl Shared {
             };
             for (tid, already_over, ctl) in to_stop {
                 if let Some(ctl) = ctl {
+                    // 取消已超額 session；若處理程序已結束則忽略
                     let _ = ctl.cancel();
                 }
                 if !already_over {
@@ -330,6 +333,7 @@ impl Shared {
             };
             let body = quota_notice_body(&quota.agent, used);
             for rid in coordinators {
+                // 額度通知訊息派送失敗（如目標已不存在）則忽略
                 let _ = self.deliver_message(
                     Some("ertangle".into()),
                     ertangle_core::Target::Direct(rid),
@@ -363,6 +367,7 @@ impl Shared {
         };
         let body = quota_warn_body(&quota.agent, used);
         for rid in recipients {
+            // 額度通知訊息派送失敗（如目標已不存在）則忽略
             let _ = self.deliver_message(
                 Some("ertangle".into()),
                 ertangle_core::Target::Direct(rid),

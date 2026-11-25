@@ -213,6 +213,7 @@ pub(crate) fn spawn_host_thread(
                             };
                             if new_client.send(&hello).is_ok() {
                                 if let Ok(new_writer) = new_client.try_clone_stream() {
+                                    // 接收端若已關閉則忽略
                                     let _ = tx.send(HostEvent::Reconnected {
                                         host: host_name.clone(),
                                         writer: new_writer,
@@ -255,6 +256,7 @@ pub(crate) fn spawn_host_thread(
                         }
                     }
                     Err(_) => {
+                        // 接收端若已關閉則忽略
                         let _ = tx.send(HostEvent::Disconnected {
                             host: host_name.clone(),
                         });

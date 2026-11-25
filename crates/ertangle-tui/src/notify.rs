@@ -365,6 +365,7 @@ impl Notifier {
                         // 不等待結果；另開執行緒回收子處理程序，避免留下殭屍。
                         Ok(mut child) => {
                             std::thread::spawn(move || {
+                                // 回收子處理程序，忽略回收結果
                                 let _ = child.wait();
                             });
                         }

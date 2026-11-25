@@ -87,6 +87,7 @@ impl LogWriter {
         if self.ok.swap(false, Ordering::SeqCst) {
             tracing::error!("event log 寫入失敗 ({:?})：{e}；之後定期重試", self.path);
             if let Some(tx) = &self.health_tx {
+                // 若接收端已關閉則忽略
                 let _ = tx.send(false);
             }
         }
@@ -106,6 +107,7 @@ impl LogWriter {
                 if !self.ok.swap(true, Ordering::SeqCst) {
                     tracing::info!("event log 已恢復寫入");
                     if let Some(tx) = &self.health_tx {
+                        // 若接收端已關閉則忽略
                         let _ = tx.send(true);
                     }
                 }
@@ -127,8 +129,10 @@ impl LogWriter {
         }
         let keep = self.cfg.keep.max(1);
         self.file = None;
+        // 舊檔若不存在則忽略刪除錯誤
         let _ = fs::remove_file(rotated_log_path(&self.path, keep));
         for n in (1..keep).rev() {
+            // 輪替前序日誌檔，檔案不存在時忽略錯誤
             let _ = fs::rename(
                 rotated_log_path(&self.path, n),
                 rotated_log_path(&self.path, n + 1),
@@ -189,6 +193,7 @@ pub(crate) fn spawn_log_writer(
             match msg {
                 LogMsg::Rec(rec) => w.handle(&rec),
                 LogMsg::Flush(done) => {
+                    // 若請求端已超時或放棄等待則忽略
                     let _ = done.send(());
                 }
             }

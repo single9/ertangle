@@ -98,6 +98,7 @@ fn notify_assignee(shared: &Arc<Shared>, task: &Task) -> Option<String> {
             Err(e) => Some(dead_assignee_warning(shared, &target, &e.to_string())),
         };
     }
+    // 派送交接訊息失敗（如目標 session 已不存在）則忽略
     let _ = shared.deliver_message(
         task.created_by.clone(),
         Target::Direct(target),
@@ -151,6 +152,7 @@ fn notify_reviewer_on_review(shared: &Arc<Shared>, task: &Task) {
             worker_label = worker_label,
             worker_branch = worker_branch,
         );
+        // 派送審查訊息失敗（如 reviewer 已結束）則忽略
         let _ = shared.deliver_message(
             task.assignee.clone(),
             Target::Direct(target),

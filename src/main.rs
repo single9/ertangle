@@ -775,6 +775,7 @@ fn main() -> Result<()> {
 fn init_tracing() {
     use tracing_subscriber::EnvFilter;
     let filter = EnvFilter::try_from_env("ERTANGLE_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
+    // 初始化全域 tracing 記錄器，若已被其他模組初始化則忽略
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)

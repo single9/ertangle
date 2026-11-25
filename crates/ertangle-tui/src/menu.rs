@@ -1963,6 +1963,7 @@ pub(crate) fn handle_pick_key(app: &mut App, writer: &mut HostRouter, key: KeyEv
                         AgentKind::OpenCode | AgentKind::Antigravity | AgentKind::Codex
                     ) {
                         std::thread::spawn(move || {
+                            // 主介面若已關閉或放棄選單則忽略
                             let _ =
                                 tx.send(ertangle_adapter::models::query_raw_models_detailed(&k));
                         });
