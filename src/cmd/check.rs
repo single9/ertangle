@@ -391,6 +391,18 @@ fn godot_messages_ok(messages: &[String]) -> bool {
     })
 }
 
+/// Wrap gdUnit4 with `xvfb-run -a` when no display server is present.
+fn gdunit4_command(has_display: bool, has_xvfb: bool) -> (&'static str, &'static [&'static str]) {
+    if !has_display && has_xvfb {
+        (
+            "xvfb-run",
+            &["-a", "sh", "addons/gdUnit4/runtest.sh", "-a", "test"],
+        )
+    } else {
+        ("sh", &["addons/gdUnit4/runtest.sh", "-a", "test"])
+    }
+}
+
 /// Inspect gdUnit4 `Statistics` summary lines (`0 errors` and `0 failures`).
 fn gdunit4_stats_ok(messages: &[String]) -> bool {
     !messages.iter().any(|line| {
@@ -671,12 +683,10 @@ fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> 
                 summary.push("gut".to_owned());
             }
             if !quick && dir.join("addons/gdUnit4/runtest.sh").is_file() {
-                let test = execute_with_env(
-                    dir,
-                    "sh",
-                    &["addons/gdUnit4/runtest.sh", "-a", "test"],
-                    &[("GODOT_BIN", &godot_bin)],
-                )?;
+                let has_display = std::env::var_os("DISPLAY").is_some_and(|v| !v.is_empty())
+                    || std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty());
+                let (prog, args) = gdunit4_command(has_display, on_path("xvfb-run"));
+                let test = execute_with_env(dir, prog, args, &[("GODOT_BIN", &godot_bin)])?;
                 let messages = dehydrate_godot_output(&combined(&test), dir);
                 success &= test.status.success()
                     && godot_messages_ok(&messages)
@@ -901,6 +911,16 @@ RID allocations of type 'N10RendererRD' leaked\n\
         assert!(!godot_messages_ok(&[
             "scripts/a.gd:10: SCRIPT ERROR: Invalid call".to_owned(),
         ]));
+        assert_eq!(
+            gdunit4_command(false, true).0,
+            "xvfb-run",
+            "headless without DISPLAY should wrap with xvfb-run"
+        );
+        assert_eq!(
+            gdunit4_command(true, true).0,
+            "sh",
+            "existing DISPLAY should run sh directly"
+        );
     }
 
     #[test]

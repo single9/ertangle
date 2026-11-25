@@ -669,8 +669,8 @@ fn is_godot_import_noise(dir: &Path, status_line: &str) -> bool {
     false
 }
 
-/// 目錄內是否有未 commit 的變更 (忽略 `.ertangle/`、provisioned 連結與 Godot import 雜訊)。
-pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
+/// 列出工作區中真正待提交的檔案路徑 (忽略 `.ertangle/`、provisioned 連結與 Godot import/UID 雜訊)。
+fn pending_uncommitted_paths(dir: &Path) -> Result<Vec<String>> {
     let out = git_output(dir, &["status", "--porcelain"])?;
     if !out.status.success() {
         bail!(
@@ -681,12 +681,24 @@ pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
             )
         );
     }
-    Ok(String::from_utf8_lossy(&out.stdout).lines().any(|l| {
-        !l.trim().is_empty()
-            && !is_ertangle_status_line(l)
-            && !is_provisioned_path(dir, l.get(3..).unwrap_or(l).trim())
-            && !is_godot_import_noise(dir, l)
-    }))
+    let mut paths = Vec::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        if line.trim().is_empty() || is_ertangle_status_line(line) {
+            continue;
+        }
+        let raw_path = line.get(3..).unwrap_or(line).trim().trim_matches('"');
+        let path = raw_path.rsplit(" -> ").next().unwrap_or(raw_path);
+        if is_provisioned_path(dir, path) || is_godot_import_noise(dir, line) {
+            continue;
+        }
+        paths.push(path.to_owned());
+    }
+    Ok(paths)
+}
+
+/// 目錄內是否有未 commit 的變更 (忽略 `.ertangle/`、provisioned 連結與 Godot import 雜訊)。
+pub(crate) fn has_uncommitted(dir: &Path) -> Result<bool> {
+    Ok(!pending_uncommitted_paths(dir)?.is_empty())
 }
 
 /// 合併衝突資訊。
@@ -833,20 +845,12 @@ pub(crate) fn auto_commit_worktree(wt_dir: &Path, label: &str) -> Result<()> {
         bail!("{}", tr!("工作區仍有未解決的合併衝突標記"));
     }
 
-    if !has_uncommitted(wt_dir)? {
+    let pending_paths = pending_uncommitted_paths(wt_dir)?;
+    if pending_paths.is_empty() {
         return Ok(());
     }
-    let provisioned = read_provisioned_links(wt_dir);
-    let mut add_args: Vec<String> = vec![
-        "add".to_string(),
-        "-A".to_string(),
-        "--".to_string(),
-        ".".to_string(),
-        ":(exclude).ertangle".to_string(),
-    ];
-    for p in provisioned {
-        add_args.push(format!(":(exclude){p}"));
-    }
+    let mut add_args: Vec<String> = vec!["add".to_string(), "-A".to_string(), "--".to_string()];
+    add_args.extend(pending_paths);
     let add_refs: Vec<&str> = add_args.iter().map(|s| s.as_str()).collect();
     let add = git_output(wt_dir, &add_refs)?;
     if !add.status.success() {
@@ -967,16 +971,11 @@ pub(crate) fn merge_worktree_strategy_with(
     let wt_dir = Path::new(&session.cwd);
     if dry_run {
         // 乾跑：不改動 repo，回報會 commit 的檔案與是否可快轉。
-        let mut pending_files = Vec::new();
-        if wt_dir.is_dir() {
-            if let Ok(st) = git_output(wt_dir, &["status", "--porcelain"]) {
-                for line in String::from_utf8_lossy(&st.stdout).lines() {
-                    if !line.trim().is_empty() && !is_ertangle_status_line(line) {
-                        pending_files.push(line.get(3..).unwrap_or(line).trim().to_string());
-                    }
-                }
-            }
-        }
+        let pending_files = if wt_dir.is_dir() {
+            pending_uncommitted_paths(wt_dir).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let can_ff = git_output(main_repo, &["merge-base", "--is-ancestor", "HEAD", branch])
             .map(|o| o.status.success())
             .unwrap_or(false);
