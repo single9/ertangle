@@ -9,6 +9,9 @@ readme = "README.md"
 # 開發用文件與代理設定不需要發佈到 crates.io
 exclude = ["/docs/tickets/", "/.agents/", "/.gemini/", "/.github/", "/AGENTS.md"]
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "ertangle"
 path = "src/main.rs"
@@ -64,6 +67,21 @@ unicode-width = "0.2.3"
 # `internal::set_translator` 是 doc(hidden) API，鎖定版本避免小版號變動。
 tr = { version = "=0.1.11", default-features = false }
 rspolib = "0.1.2"
+
+# Safe Rust 規範 (docs/agents/rust-conventions.md)。clippy 以 `-D warnings` 執行，
+# warn 即視為錯誤；測試內的放行設定見 clippy.toml。
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+# 待既有 300+ 處索引/切片重構完成後再啟用：
+# indexing_slicing = "warn"
 
 [profile.release]
 opt-level = 3

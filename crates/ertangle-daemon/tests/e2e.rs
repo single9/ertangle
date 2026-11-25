@@ -1,6 +1,13 @@
 //! daemon 端到端：啟動 daemon → spawn (假 claude)→ prompt → 收到輸出 → shutdown。
 //! 不需要真實 agent 或網路。環境變數是行程全域的，所以整個流程放在單一測試裡。
 
+#![expect(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "整合測試檔案內的輔助函式"
+)]
+
 use ertangle_core::{AgentKind, Event};
 use ertangle_daemon::{replay_log, Client};
 use ertangle_protocol::{Frame, Request, SpawnRequest, Transport};

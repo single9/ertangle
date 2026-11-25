@@ -1,0 +1,6 @@
+# Safe Rust 規範 (docs/agents/rust-conventions.md)：測試以 panic 表示失敗，
+# unwrap / expect / panic / 索引在 #[test] 與 #[cfg(test)] 內放行。
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true

@@ -15,6 +15,10 @@ thread_local! {
 pub fn temp_dir(tag: &str) -> PathBuf {
     // This crate is only used as a dev-dependency; failing to create a test
     // directory should fail the test loudly instead of silently sharing state.
+    #[expect(
+        clippy::expect_used,
+        reason = "測試專用 crate，建立暫存目錄失敗應直接中止測試"
+    )]
     let dir = tempfile::Builder::new()
         .prefix(&format!("{tag}_"))
         .tempdir()

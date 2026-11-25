@@ -8,8 +8,8 @@ All git commit messages **MUST** be written in **English** following standard Co
 
 All Rust code in this repo **MUST** follow [docs/agents/rust-conventions.md](docs/agents/rust-conventions.md). Summary:
 
-1. **No panicking unwrap/expect in production code**: handle `Option` / `Result` with `?`, `match`, `if let`, `let-else`, `ok_or_else`, or safe defaults. `unwrap()` / `expect()` are allowed only in `#[cfg(test)]` modules and `tests/`, or for proven-infallible constants with a written reason. For poisoned `Mutex`, prefer `lock().unwrap_or_else(|e| e.into_inner())`.
-2. **No `unsafe` by default**: prefer safe crates (e.g. `nix`) or refactor first. If unavoidable, keep the block minimal and add a `// SAFETY:` comment explaining every invariant; document the reason in the commit message.
+1. **No panicking unwrap/expect/indexing in production code**: enforced via `[workspace.lints]` in `Cargo.toml` and `clippy.toml` (`unsafe_code = "forbid"`, `unwrap_used`/`expect_used`/`panic`/`todo`/`unimplemented`/`unreachable`). Handle `Option` / `Result` with `?`, `match`, `if let`, `let-else`, `ok_or_else`, or safe defaults; don't silently discard `Result` with `let _ =` without a comment; use `.get()` instead of indexing/slicing and `checked_*`/`saturating_*` for overflow-prone integer math; never panic in `Drop`. Exceptions require `#[expect(clippy::<lint>, reason = "...")]` (never `#[allow]`). For poisoned `Mutex`, prefer `lock().unwrap_or_else(|e| e.into_inner())`.
+2. **No `unsafe` (`unsafe_code = "forbid"`)**: prefer safe crates (e.g. `nix`) or refactor first. If FFI makes it unavoidable, document the case in `docs/agents/rust-conventions.md` first, keep the block minimal with a `// SAFETY:` comment explaining every invariant, and document the reason in the commit message.
 3. **Clean Code**: small focused functions, meaningful names, early returns over deep nesting, minimal `clone()`, comments that explain why, Rustdoc on public APIs.
 4. **Tests**: every behavior change needs unit tests, including error paths; run `make pre-commit` and `cargo test -p <crate>` before committing.
 

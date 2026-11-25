@@ -142,7 +142,7 @@ fn catalog(lang: Language, src: &'static str) -> Result<Arc<Catalog>, String> {
     static EN: OnceLock<Result<Arc<Catalog>, String>> = OnceLock::new();
     let cell = match lang {
         Language::En => &EN,
-        Language::ZhTw => unreachable!("繁體中文沒有翻譯檔"),
+        Language::ZhTw => return Err("繁體中文沒有翻譯檔".to_string()),
     };
     cell.get_or_init(|| Catalog::parse(src).map(Arc::new))
         .clone()
