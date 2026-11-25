@@ -630,20 +630,14 @@ fn strip_godot_uid_tokens(line: &str) -> String {
     out.join(" ")
 }
 
-/// Godot 專案自動匯入產生的雜訊變更 (`*.import`、`*.uid`，或僅改動 `uid=` / `unique_id=` 的 `.tscn`/`.tres`)。
-fn is_godot_import_noise(dir: &Path, status_line: &str) -> bool {
+/// Godot 專案自動匯入產生的雜訊變更 (僅限已追蹤且被修改的 `*.import`、`*.uid`，或僅改動 `uid=` / `unique_id=` 的 `.tscn`/`.tres`)。
+/// 未追蹤 (`??`) 或新增 (`A`) 的 `*.import` / `*.uid` 必須保留，避免遺漏新檔。
+fn is_godot_import_noise(dir: &Path, status: &str, path: &str) -> bool {
     if !dir.join("project.godot").is_file() {
         return false;
     }
-    let status = status_line.get(..2).unwrap_or("");
-    let raw_path = status_line
-        .get(3..)
-        .unwrap_or(status_line)
-        .trim()
-        .trim_matches('"');
-    let path = raw_path.rsplit(" -> ").next().unwrap_or(raw_path);
     if path.ends_with(".import") || path.ends_with(".uid") {
-        return true;
+        return status != "??" && !status.contains('A');
     }
     if (path.ends_with(".tscn") || path.ends_with(".tres")) && status != "??" {
         if let Ok(out) = git_output(dir, &["diff", "-U0", "--", path]) {
@@ -669,9 +663,12 @@ fn is_godot_import_noise(dir: &Path, status_line: &str) -> bool {
     false
 }
 
-/// 列出工作區中真正待提交的檔案路徑 (忽略 `.ertangle/`、provisioned 連結與 Godot import/UID 雜訊)。
+/// 列出工作區中真正待提交的檔案路徑 (使用 `-z` 並關閉 `core.quotePath`，忽略 `.ertangle/`、provisioned 連結與 Godot import/UID 雜訊)。
 fn pending_uncommitted_paths(dir: &Path) -> Result<Vec<String>> {
-    let out = git_output(dir, &["status", "--porcelain"])?;
+    let out = git_output(
+        dir,
+        &["-c", "core.quotePath=false", "status", "--porcelain", "-z"],
+    )?;
     if !out.status.success() {
         bail!(
             "{}",
@@ -682,13 +679,23 @@ fn pending_uncommitted_paths(dir: &Path) -> Result<Vec<String>> {
         );
     }
     let mut paths = Vec::new();
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
-        if line.trim().is_empty() || is_ertangle_status_line(line) {
+    let mut entries = out.stdout.split(|&b| b == 0);
+    while let Some(raw) = entries.next() {
+        if raw.is_empty() {
             continue;
         }
-        let raw_path = line.get(3..).unwrap_or(line).trim().trim_matches('"');
-        let path = raw_path.rsplit(" -> ").next().unwrap_or(raw_path);
-        if is_provisioned_path(dir, path) || is_godot_import_noise(dir, line) {
+        let entry = String::from_utf8_lossy(raw);
+        let status = entry.get(..2).unwrap_or("");
+        let path = entry.get(3..).unwrap_or(&entry);
+        // `-z` 模式下，重新命名或複製 (R/C) 會在下一筆附帶原路徑，需消耗掉。
+        if status.contains('R') || status.contains('C') {
+            let _ = entries.next();
+        }
+        if path == ".ertangle"
+            || path.starts_with(".ertangle/")
+            || is_provisioned_path(dir, path)
+            || is_godot_import_noise(dir, status, path)
+        {
             continue;
         }
         paths.push(path.to_owned());
@@ -739,14 +746,20 @@ fn collect_conflicts(dir: &Path) -> Vec<String> {
         );
     }
     if files.is_empty() {
-        if let Ok(st) = git_output(dir, &["status", "--porcelain"]) {
-            for line in String::from_utf8_lossy(&st.stdout).lines() {
-                let bytes = line.as_bytes();
-                if bytes.len() >= 4 {
-                    if let Some(code) = bytes.get(0..2) {
+        if let Ok(st) = git_output(
+            dir,
+            &["-c", "core.quotePath=false", "status", "--porcelain", "-z"],
+        ) {
+            let mut entries = st.stdout.split(|&b| b == 0);
+            while let Some(raw) = entries.next() {
+                if raw.len() >= 4 {
+                    if let Some(code) = raw.get(0..2) {
+                        if code.contains(&b'R') || code.contains(&b'C') {
+                            let _ = entries.next();
+                        }
                         if matches!(code, b"UU" | b"AA" | b"UD" | b"DU" | b"DD" | b"AU" | b"UA") {
-                            if let Some(path) = line.get(3..) {
-                                files.push(path.trim().to_string());
+                            if let Some(path) = raw.get(3..) {
+                                files.push(String::from_utf8_lossy(path).into_owned());
                             }
                         }
                     }
@@ -1357,33 +1370,118 @@ mod tests {
         let repo = ertangle_test_support::temp_dir("godot_uncommitted");
         fs::write(repo.join("project.godot"), "config_version=5\n").expect("write project.godot");
         fs::write(
-            repo.join("scene.tscn"),
+            repo.join("地圖.tscn"),
             "[gd_scene load_steps=1 format=3]\n[node name=\"Root\" type=\"Node2D\"]\n",
         )
-        .expect("write scene");
+        .expect("write non-ascii scene");
+        fs::write(repo.join("icon.png.import"), "[remap]\n").expect("write import");
+        fs::write(repo.join("script.gd.uid"), "uid://abc\n").expect("write uid");
         git(&repo, &["init"]);
         git(&repo, &["add", "."]);
         git(&repo, &["commit", "-m", "init"]);
 
-        // *.import and *.uid noise should be ignored
-        fs::write(repo.join("icon.png.import"), "[remap]\n").expect("write import");
-        fs::write(repo.join("script.gd.uid"), "uid://abc\n").expect("write uid");
-        assert!(!has_uncommitted(&repo).expect("has_uncommitted"));
+        // Modified *.import and *.uid (tracked) should be ignored
+        fs::write(repo.join("icon.png.import"), "[remap]\nv=2\n").expect("modify import");
+        fs::write(repo.join("script.gd.uid"), "uid://def\n").expect("modify uid");
+        assert!(!has_uncommitted(&repo).expect("has_uncommitted modified import/uid"));
 
-        // uid-only diff in .tscn should be ignored
+        // Non-ASCII uid-only diff in 地圖.tscn should be ignored (requires core.quotePath=false -z)
         fs::write(
-            repo.join("scene.tscn"),
+            repo.join("地圖.tscn"),
             "[gd_scene load_steps=1 format=3 uid=\"uid://xyz\"]\n[node name=\"Root\" type=\"Node2D\" unique_id=12345]\n",
         )
-        .expect("write uid-only scene");
-        assert!(!has_uncommitted(&repo).expect("has_uncommitted uid-only"));
+        .expect("write uid-only non-ascii scene");
+        assert!(!has_uncommitted(&repo).expect("has_uncommitted non-ascii uid-only"));
 
-        // Real content change in .tscn must still count as uncommitted
+        // Untracked (??) *.uid and staged (A) *.import must NOT be ignored
+        fs::write(repo.join("new.gd.uid"), "uid://new\n").expect("write new uid");
+        assert!(has_uncommitted(&repo).expect("untracked .uid must be pending"));
+        assert_eq!(
+            pending_uncommitted_paths(&repo).expect("pending"),
+            vec!["new.gd.uid".to_string()]
+        );
+
+        fs::write(repo.join("new.png.import"), "[remap]\n").expect("write new import");
+        git(&repo, &["add", "new.png.import"]);
+        let pending = pending_uncommitted_paths(&repo).expect("pending staged");
+        assert!(pending.contains(&"new.png.import".to_string()));
+        assert!(pending.contains(&"new.gd.uid".to_string()));
+        assert!(!pending.contains(&"icon.png.import".to_string()));
+        assert!(!pending.contains(&"地圖.tscn".to_string()));
+
+        // Real content change in 地圖.tscn must still count as uncommitted
         fs::write(
-            repo.join("scene.tscn"),
+            repo.join("地圖.tscn"),
             "[gd_scene load_steps=1 format=3 uid=\"uid://xyz\"]\n[node name=\"Other\" type=\"Node2D\" unique_id=12345]\n",
         )
         .expect("write real change");
-        assert!(has_uncommitted(&repo).expect("has_uncommitted real change"));
+        let pending2 = pending_uncommitted_paths(&repo).expect("pending real");
+        assert!(pending2.contains(&"地圖.tscn".to_string()));
+    }
+
+    #[test]
+    fn merge_dry_run_excludes_godot_import_and_uid_only_noise() {
+        let main_repo = ertangle_test_support::temp_dir("godot_dry_run_main");
+        fs::write(main_repo.join("project.godot"), "config_version=5\n")
+            .expect("write project.godot");
+        fs::write(
+            main_repo.join("地圖.tscn"),
+            "[gd_scene load_steps=1 format=3]\n[node name=\"Root\" type=\"Node2D\"]\n",
+        )
+        .expect("write scene");
+        fs::write(main_repo.join("icon.png.import"), "[remap]\n").expect("write import");
+        git(&main_repo, &["init"]);
+        git(&main_repo, &["add", "."]);
+        git(&main_repo, &["commit", "-m", "init"]);
+
+        let wt = ertangle_test_support::temp_dir("godot_dry_run_wt");
+        let wt_str = wt.to_string_lossy().into_owned();
+        git(
+            &main_repo,
+            &["worktree", "add", "-b", "ertangle/ses_test", &wt_str],
+        );
+
+        fs::write(wt.join("icon.png.import"), "[remap]\nv=2\n").expect("modify import");
+        fs::write(
+            wt.join("地圖.tscn"),
+            "[gd_scene load_steps=1 format=3 uid=\"uid://xyz\"]\n[node name=\"Root\" type=\"Node2D\" unique_id=123]\n",
+        )
+        .expect("uid-only");
+        fs::write(wt.join("new.gd.uid"), "uid://new\n").expect("new uid");
+
+        let session = Session {
+            id: "ses_test".into(),
+            label: "worker/test".into(),
+            kind: ertangle_core::AgentKind::OpenCode,
+            role: ertangle_core::Role::Worker,
+            cwd: wt_str,
+            branch: Some("ertangle/ses_test".into()),
+            repo_root: None,
+            parent: None,
+            model: None,
+            effort: None,
+            permission: Default::default(),
+            budget_usd: None,
+            status: ertangle_core::SessionStatus::Idle,
+            created_ms: 0,
+            ended_ms: None,
+            handed_off_to: None,
+            transport: "mock".to_string(),
+            native_id: None,
+            status_note: None,
+            cost: Default::default(),
+            context: None,
+            over_budget: false,
+            slash_commands: Vec::new(),
+            active_tools: Vec::new(),
+            bg_procs: Vec::new(),
+            tool_calls: 0,
+        };
+
+        let report = merge_worktree_strategy(&main_repo, &session, MergeStrategy::Merge, true)
+            .expect("dry run");
+        assert!(report.contains("new.gd.uid"), "report={report}");
+        assert!(!report.contains("icon.png.import"), "report={report}");
+        assert!(!report.contains("地圖.tscn"), "report={report}");
     }
 }
