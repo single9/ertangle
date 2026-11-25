@@ -314,8 +314,23 @@ fn is_godot_shutdown_noise(line: &str) -> bool {
         || line.contains("pages in use by")
 }
 
+fn is_godot_progress_noise(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix('[') else {
+        return false;
+    };
+    let Some((inner, _)) = rest.split_once(']') else {
+        return false;
+    };
+    let trimmed = inner.trim();
+    trimmed == "DONE"
+        || trimmed
+            .strip_suffix('%')
+            .is_some_and(|pct| !pct.is_empty() && pct.trim().chars().all(|c| c.is_ascii_digit()))
+}
+
 fn is_godot_noise(line: &str) -> bool {
     is_godot_shutdown_noise(line)
+        || is_godot_progress_noise(line)
         || godot_location(line)
             .is_some_and(|(path, _)| path.starts_with("core/") || path.starts_with("servers/"))
         || [
@@ -355,27 +370,43 @@ fn normalize_godot_line(line: &str, workspace_root: &Path) -> String {
     normalize_path(&line.replace("res://", ""), workspace_root)
 }
 
-/// Godot executable: `ERTANGLE_GODOT_BIN`, else `godot` / `godot4` on `PATH`, else `godot`.
+/// Godot executable: `ERTANGLE_GODOT_BIN`, else full path of `godot` / `godot4` on `PATH`, else `"godot"`.
 fn resolve_godot_bin() -> String {
     if let Ok(bin) = std::env::var("ERTANGLE_GODOT_BIN") {
-        if !bin.trim().is_empty() {
-            return bin;
+        let trimmed = bin.trim();
+        if !trimmed.is_empty() {
+            if !trimmed.contains('/') && !trimmed.contains('\\') {
+                if let Some(found) = find_on_path(trimmed) {
+                    return found.to_string_lossy().into_owned();
+                }
+            }
+            return trimmed.to_owned();
         }
     }
     ["godot", "godot4"]
         .into_iter()
-        .find(|name| on_path(name))
-        .unwrap_or("godot")
-        .to_owned()
+        .find_map(find_on_path)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "godot".to_owned())
+}
+
+fn find_on_path(name: &str) -> Option<std::path::PathBuf> {
+    let paths = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&paths) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        let exe = candidate.with_extension("exe");
+        if exe.is_file() {
+            return Some(exe);
+        }
+    }
+    None
 }
 
 fn on_path(name: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths).any(|dir| {
-            let candidate = dir.join(name);
-            candidate.is_file() || candidate.with_extension("exe").is_file()
-        })
-    })
+    find_on_path(name).is_some()
 }
 
 /// Godot may exit 0 even when scripts fail to parse, so inspect the messages too.
@@ -694,6 +725,9 @@ fn run_stack(stack: ProjectStack, dir: &Path, quick: bool, max_lines: usize) -> 
                 outputs.extend(messages);
                 summary.push("gdunit4".to_owned());
             }
+            if success {
+                outputs.clear();
+            }
         }
     }
     if success && outputs.is_empty() {
@@ -897,6 +931,9 @@ ERROR: Capture not registered: 'beehave'\n\
 core/io/resource.cpp:810: ERROR: 3 resources still in use at exit\n\
 WARNING: ObjectDB instances leaked at exit\n\
 RID allocations of type 'N10RendererRD' leaked\n\
+[  12% ] Importing...\n\
+[ 100% ] Saving...\n\
+[ DONE ] Editor layout\n\
 | 0 errors | 0 failures |\n";
         let lines = dehydrate_godot_output(raw, &root);
         assert_eq!(lines, vec!["| 0 errors | 0 failures |"]);
