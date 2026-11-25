@@ -132,18 +132,25 @@ pub(crate) fn base64_encode(data: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
+        let b0 = chunk.first().copied().unwrap_or(0);
         let b1 = chunk.get(1).copied().unwrap_or(0);
         let b2 = chunk.get(2).copied().unwrap_or(0);
-        let n = ((chunk[0] as u32) << 16) | ((b1 as u32) << 8) | b2 as u32;
-        out.push(TABLE[(n >> 18) as usize & 63] as char);
-        out.push(TABLE[(n >> 12) as usize & 63] as char);
+        let n = ((b0 as u32) << 16) | ((b1 as u32) << 8) | b2 as u32;
+        if let Some(&c) = TABLE.get(((n >> 18) as usize) & 63) {
+            out.push(c as char);
+        }
+        if let Some(&c) = TABLE.get(((n >> 12) as usize) & 63) {
+            out.push(c as char);
+        }
         out.push(if chunk.len() > 1 {
-            TABLE[(n >> 6) as usize & 63] as char
+            TABLE
+                .get(((n >> 6) as usize) & 63)
+                .map_or('=', |&c| c as char)
         } else {
             '='
         });
         out.push(if chunk.len() > 2 {
-            TABLE[n as usize & 63] as char
+            TABLE.get((n as usize) & 63).map_or('=', |&c| c as char)
         } else {
             '='
         });
@@ -235,10 +242,18 @@ pub(crate) fn copy_main_pane(app: &mut App, message: Option<usize>) {
                 );
                 return;
             }
-            Some(n) => (msgs[n - 1].join("\n"), tr!("第 {n} 則訊息", n = n)),
+            Some(n) => (
+                msgs.get(n.saturating_sub(1))
+                    .map_or_else(String::new, |m| m.join("\n")),
+                tr!("第 {n} 則訊息", n = n),
+            ),
             None => {
                 let n = msgs.len();
-                (msgs[n - 1].join("\n"), tr!("最新訊息 (第 {n} 則)", n = n))
+                (
+                    msgs.get(n.saturating_sub(1))
+                        .map_or_else(String::new, |m| m.join("\n")),
+                    tr!("最新訊息 (第 {n} 則)", n = n),
+                )
             }
         }
     } else {

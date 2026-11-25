@@ -64,7 +64,7 @@ fn build_diff_file(
     let mut has_dev_null_old = false;
     let mut in_header = true;
 
-    for l in &raw_lines[start_line..end_line] {
+    for l in raw_lines.get(start_line..end_line).unwrap_or(&[]) {
         if l.starts_with("@@") {
             in_header = false;
             continue;
@@ -138,9 +138,11 @@ pub(crate) fn rebuild_visible_diff(app: &mut App) {
         app.diff_raw_lines.clone()
     } else {
         let mut out = Vec::new();
-        let first_start = app.diff_files[0].start_line;
+        let first_start = app.diff_files.first().map_or(0, |f| f.start_line);
         if first_start > 0 && first_start <= app.diff_raw_lines.len() {
-            out.extend_from_slice(&app.diff_raw_lines[..first_start]);
+            if let Some(slice) = app.diff_raw_lines.get(..first_start) {
+                out.extend_from_slice(slice);
+            }
         }
         for f in &app.diff_files {
             if app.diff_collapsed.contains(&f.path) {
@@ -153,7 +155,9 @@ pub(crate) fn rebuild_visible_diff(app: &mut App) {
             } else {
                 let end = f.end_line.min(app.diff_raw_lines.len());
                 if f.start_line < end {
-                    out.extend_from_slice(&app.diff_raw_lines[f.start_line..end]);
+                    if let Some(slice) = app.diff_raw_lines.get(f.start_line..end) {
+                        out.extend_from_slice(slice);
+                    }
                 }
             }
         }
@@ -197,18 +201,21 @@ pub(crate) fn current_file_progress(app: &App) -> Option<(usize, usize, String)>
         return None;
     }
     let ranges = visible_file_ranges(&cow_files, &app.diff_collapsed);
-    let cur = app.diff_cursor.min(app.diff_lines.len() - 1);
+    let cur = app.diff_cursor.min(app.diff_lines.len().saturating_sub(1));
     let idx = ranges
         .iter()
         .position(|&(s, e)| cur >= s && cur < e)
         .unwrap_or_else(|| {
-            if cur < ranges[0].0 {
+            if ranges.first().is_some_and(|r| cur < r.0) {
                 0
             } else {
-                ranges.len() - 1
+                ranges.len().saturating_sub(1)
             }
         });
-    Some((idx + 1, cow_files.len(), cow_files[idx].path.clone()))
+    let path = cow_files
+        .get(idx)
+        .map_or_else(String::new, |f| f.path.clone());
+    Some((idx + 1, cow_files.len(), path))
 }
 
 /// 在 Diff 視圖跳到上一個／下一個檔案 (`diff --git` 或已摺疊摘要行)。
@@ -224,23 +231,28 @@ pub(crate) fn jump_file(app: &mut App, forward: bool) {
     }
     let ranges = visible_file_ranges(&app.diff_files, &app.diff_collapsed);
     let n = app.diff_lines.len();
-    let cur = app.diff_cursor.min(n - 1);
+    let cur = app.diff_cursor.min(n.saturating_sub(1));
     let target_idx = if forward {
-        (0..ranges.len()).find(|&idx| ranges[idx].0 > cur)
+        (0..ranges.len()).find(|&idx| ranges.get(idx).is_some_and(|r| r.0 > cur))
     } else {
-        (0..ranges.len()).rev().find(|&idx| ranges[idx].0 < cur)
+        (0..ranges.len())
+            .rev()
+            .find(|&idx| ranges.get(idx).is_some_and(|r| r.0 < cur))
     };
     if let Some(idx) = target_idx {
-        app.diff_cursor = ranges[idx].0;
-        let f = &app.diff_files[idx];
-        app.status = tr!(
-            "[{idx}/{total}] {path} (+{added} -{removed})",
-            idx = idx + 1,
-            total = ranges.len(),
-            path = f.path,
-            added = f.added,
-            removed = f.removed
-        );
+        if let Some(r) = ranges.get(idx) {
+            app.diff_cursor = r.0;
+        }
+        if let Some(f) = app.diff_files.get(idx) {
+            app.status = tr!(
+                "[{idx}/{total}] {path} (+{added} -{removed})",
+                idx = idx + 1,
+                total = ranges.len(),
+                path = f.path,
+                added = f.added,
+                removed = f.removed
+            );
+        }
     } else {
         app.status = tr!("沒有更多檔案");
     }
@@ -256,11 +268,14 @@ pub(crate) fn toggle_collapse_current_file(app: &mut App) {
         return;
     }
     let ranges = visible_file_ranges(&app.diff_files, &app.diff_collapsed);
-    let cur = app.diff_cursor.min(app.diff_lines.len() - 1);
+    let cur = app.diff_cursor.min(app.diff_lines.len().saturating_sub(1));
     let Some(file_idx) = ranges.iter().position(|&(s, e)| cur >= s && cur < e) else {
         return;
     };
-    let path = app.diff_files[file_idx].path.clone();
+    let Some(f) = app.diff_files.get(file_idx) else {
+        return;
+    };
+    let path = f.path.clone();
     let collapsed = if app.diff_collapsed.contains(&path) {
         app.diff_collapsed.remove(&path);
         false
@@ -306,21 +321,21 @@ pub(crate) fn extract_current_hunk_patch(app: &App) -> Option<(String, Option<St
         return None;
     }
     let ranges = visible_file_ranges(&cow_files, &app.diff_collapsed);
-    let cur = app.diff_cursor.min(app.diff_lines.len() - 1);
+    let cur = app.diff_cursor.min(app.diff_lines.len().saturating_sub(1));
     let file_idx = ranges.iter().position(|&(s, e)| cur >= s && cur < e)?;
-    let file = &cow_files[file_idx];
+    let file = cow_files.get(file_idx)?;
 
     if app.diff_collapsed.contains(&file.path) || file.is_untracked {
         return Some((file.path.clone(), None));
     }
 
-    let (vis_start, _) = ranges[file_idx];
+    let (vis_start, _) = *ranges.get(file_idx)?;
     let end = file.end_line.min(raw_lines.len());
     if file.start_line >= end {
         return Some((file.path.clone(), None));
     }
-    let file_lines = &raw_lines[file.start_line..end];
-    let rel_cur = (cur - vis_start).min(file_lines.len() - 1);
+    let file_lines = raw_lines.get(file.start_line..end).unwrap_or(&[]);
+    let rel_cur = (cur - vis_start).min(file_lines.len().saturating_sub(1));
 
     let Some(first_hunk) = file_lines.iter().position(|l| l.starts_with("@@")) else {
         return Some((file.path.clone(), None));
@@ -332,19 +347,23 @@ pub(crate) fn extract_current_hunk_patch(app: &App) -> Option<(String, Option<St
 
     let hunk_start = (first_hunk..=rel_cur)
         .rev()
-        .find(|&i| file_lines[i].starts_with("@@"))?;
+        .find(|&i| file_lines.get(i).is_some_and(|l| l.starts_with("@@")))?;
     let hunk_end = ((hunk_start + 1)..file_lines.len())
-        .find(|&i| file_lines[i].starts_with("@@"))
+        .find(|&i| file_lines.get(i).is_some_and(|l| l.starts_with("@@")))
         .unwrap_or(file_lines.len());
 
     let mut patch_lines: Vec<&str> = Vec::new();
-    for l in &file_lines[..first_hunk] {
-        if l.starts_with("diff --git ") || l.starts_with("--- ") || l.starts_with("+++ ") {
-            patch_lines.push(l.as_str());
+    if let Some(head_slice) = file_lines.get(..first_hunk) {
+        for l in head_slice {
+            if l.starts_with("diff --git ") || l.starts_with("--- ") || l.starts_with("+++ ") {
+                patch_lines.push(l.as_str());
+            }
         }
     }
-    for l in &file_lines[hunk_start..hunk_end] {
-        patch_lines.push(l.as_str());
+    if let Some(hunk_slice) = file_lines.get(hunk_start..hunk_end) {
+        for l in hunk_slice {
+            patch_lines.push(l.as_str());
+        }
     }
     let mut patch = patch_lines.join("\n");
     patch.push('\n');
@@ -358,8 +377,8 @@ pub(crate) fn jump_hunk(app: &mut App, forward: bool) {
     }
     app.diff_discard_armed = None;
     let n = app.diff_lines.len();
-    let cur = app.diff_cursor.min(n - 1);
-    let is_hunk = |i: usize| app.diff_lines[i].starts_with("@@");
+    let cur = app.diff_cursor.min(n.saturating_sub(1));
+    let is_hunk = |i: usize| app.diff_lines.get(i).is_some_and(|l| l.starts_with("@@"));
     if forward {
         if let Some(i) = ((cur + 1)..n).find(|&i| is_hunk(i)) {
             app.diff_cursor = i;

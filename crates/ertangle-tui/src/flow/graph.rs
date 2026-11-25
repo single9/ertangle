@@ -45,7 +45,10 @@ fn parents_of(nodes: &[FlowNode]) -> Vec<Option<usize>> {
     let mut stack: Vec<usize> = Vec::new();
     let mut parents = Vec::with_capacity(nodes.len());
     for (i, n) in nodes.iter().enumerate() {
-        while stack.last().is_some_and(|&p| nodes[p].depth >= n.depth) {
+        while stack
+            .last()
+            .is_some_and(|&p| nodes.get(p).is_some_and(|node| node.depth >= n.depth))
+        {
             stack.pop();
         }
         parents.push(stack.last().copied());
@@ -63,19 +66,31 @@ pub(super) fn layout(nodes: &[FlowNode], area: Rect) -> Option<GraphLayout> {
     let n = nodes.len();
     let mut level = vec![0usize; n];
     for i in 0..n {
-        level[i] = parents[i].map_or(0, |p| level[p] + 1);
+        let val = parents
+            .get(i)
+            .copied()
+            .flatten()
+            .map_or(0, |p| level.get(p).copied().unwrap_or(0) + 1);
+        if let Some(elem) = level.get_mut(i) {
+            *elem = val;
+        }
     }
     // Children always follow their parent, so a reverse pass sums leaf counts bottom-up.
     let mut leaves = vec![0usize; n];
     for i in (0..n).rev() {
-        leaves[i] = leaves[i].max(1);
-        if let Some(p) = parents[i] {
-            leaves[p] += leaves[i];
+        if let Some(elem) = leaves.get_mut(i) {
+            *elem = (*elem).max(1);
+        }
+        let leaf_i = leaves.get(i).copied().unwrap_or(1);
+        if let Some(p) = parents.get(i).copied().flatten() {
+            if let Some(elem) = leaves.get_mut(p) {
+                *elem += leaf_i;
+            }
         }
     }
     let total_leaves: usize = (0..n)
-        .filter(|&i| parents[i].is_none())
-        .map(|i| leaves[i])
+        .filter(|&i| parents.get(i).copied().flatten().is_none())
+        .filter_map(|i| leaves.get(i).copied())
         .sum();
     let slot = f64::from(area.width) / total_leaves as f64;
     if slot < f64::from(MIN_BOX_W + 1) {
@@ -98,29 +113,39 @@ pub(super) fn layout(nodes: &[FlowNode], area: Rect) -> Option<GraphLayout> {
     let mut next_root = 0usize;
     let mut rects = Vec::with_capacity(n);
     for i in 0..n {
-        let s = match parents[i] {
+        let leaf_i = leaves.get(i).copied().unwrap_or(1);
+        let s = match parents.get(i).copied().flatten() {
             Some(p) => {
-                let s = next_child[p];
-                next_child[p] += leaves[i];
+                let s = next_child.get(p).copied().unwrap_or(0);
+                if let Some(elem) = next_child.get_mut(p) {
+                    *elem += leaf_i;
+                }
                 s
             }
             None => {
                 let s = next_root;
-                next_root += leaves[i];
+                next_root += leaf_i;
                 s
             }
         };
-        start[i] = s;
-        next_child[i] = s;
-        let span = slot * leaves[i] as f64;
-        let want = (nodes[i].label.width() + 4) as u16;
+        if let Some(elem) = start.get_mut(i) {
+            *elem = s;
+        }
+        if let Some(elem) = next_child.get_mut(i) {
+            *elem = s;
+        }
+        let span = slot * leaf_i as f64;
+        let want = nodes
+            .get(i)
+            .map_or(0, |node| (node.label.width() + 4) as u16);
         let w = want
             .clamp(MIN_BOX_W, MAX_BOX_W)
             .min((span as u16).saturating_sub(1));
         let center = slot * s as f64 + span / 2.0;
         let x = (center - f64::from(w) / 2.0).max(0.0) as u16;
         let x = x.min(area.width.saturating_sub(w));
-        let y = level[i] as u16 * (BOX_H + gap);
+        let lvl = level.get(i).copied().unwrap_or(0);
+        let y = lvl as u16 * (BOX_H + gap);
         rects.push(Rect::new(area.x + x, area.y + y, w, BOX_H));
     }
     Some(GraphLayout { rects, parents })
@@ -273,7 +298,7 @@ pub(super) struct Elbow {
 impl Elbow {
     #[inline]
     pub(super) fn as_slice(&self) -> &[(f64, f64)] {
-        &self.pts[..self.len]
+        self.pts.get(..self.len).unwrap_or(&[])
     }
 }
 
@@ -327,35 +352,39 @@ pub(super) fn elbow_points(a: (f64, f64), b: (f64, f64)) -> Elbow {
 }
 
 pub(super) fn point_along_polyline(pts: &[(f64, f64)], t: f64) -> (f64, f64) {
-    if pts.is_empty() {
+    let Some(&first) = pts.first() else {
         return (0.0, 0.0);
-    }
+    };
     if pts.len() == 1 {
-        return pts[0];
+        return first;
     }
     let t = t.clamp(0.0, 1.0);
     let mut total_len = 0.0;
     for w in pts.windows(2) {
-        total_len += ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt();
+        if let (Some(&w0), Some(&w1)) = (w.first(), w.get(1)) {
+            total_len += ((w1.0 - w0.0).powi(2) + (w1.1 - w0.1).powi(2)).sqrt();
+        }
     }
     if total_len <= 0.0001 {
-        return pts[0];
+        return first;
     }
     let target = total_len * t;
     let mut accum = 0.0;
     for w in pts.windows(2) {
-        let seg_len = ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt();
-        if accum + seg_len >= target || (target - (accum + seg_len)).abs() < 1e-9 {
-            let seg_t = if seg_len > 0.0001 {
-                ((target - accum) / seg_len).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            return lerp(w[0], w[1], seg_t);
+        if let (Some(&w0), Some(&w1)) = (w.first(), w.get(1)) {
+            let seg_len = ((w1.0 - w0.0).powi(2) + (w1.1 - w0.1).powi(2)).sqrt();
+            if accum + seg_len >= target || (target - (accum + seg_len)).abs() < 1e-9 {
+                let seg_t = if seg_len > 0.0001 {
+                    ((target - accum) / seg_len).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                return lerp(w0, w1, seg_t);
+            }
+            accum += seg_len;
         }
-        accum += seg_len;
     }
-    *pts.last().unwrap_or(&pts[0])
+    pts.last().copied().unwrap_or(first)
 }
 
 fn line(ctx: &mut Context<'_>, a: (f64, f64), b: (f64, f64), color: Color) {
@@ -386,12 +415,14 @@ fn draw_orthogonal(
 ) {
     let pts = elbow_points(a, b);
     for w in pts.windows(2) {
-        let p0 = to_canvas(area, w[0]);
-        let p1 = to_canvas(area, w[1]);
-        if is_dashed {
-            dashed(ctx, p0, p1, color);
-        } else {
-            line(ctx, p0, p1, color);
+        if let (Some(&w0), Some(&w1)) = (w.first(), w.get(1)) {
+            let p0 = to_canvas(area, w0);
+            let p1 = to_canvas(area, w1);
+            if is_dashed {
+                dashed(ctx, p0, p1, color);
+            } else {
+                line(ctx, p0, p1, color);
+            }
         }
     }
 }
@@ -504,7 +535,8 @@ fn border_style(status: SessionStatus, now_ms: u64) -> Style {
     match status {
         SessionStatus::Busy => {
             let phase = (now_ms / 120) as usize % BREATH.len();
-            Style::default().fg(Color::Indexed(BREATH[phase]))
+            let idx = BREATH.get(phase).copied().unwrap_or(22);
+            Style::default().fg(Color::Indexed(idx))
         }
         SessionStatus::WaitingApproval if (now_ms / 500).is_multiple_of(2) => {
             Style::default().fg(Color::Yellow)

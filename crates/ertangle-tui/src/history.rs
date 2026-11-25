@@ -75,13 +75,13 @@ impl History {
         let next = match self.pos {
             None => {
                 self.draft = current.to_string();
-                self.entries.len() - 1
+                self.entries.len().saturating_sub(1)
             }
             Some(0) => 0,
-            Some(i) => i - 1,
+            Some(i) => i.saturating_sub(1),
         };
         self.pos = Some(next);
-        Some(self.entries[next].clone())
+        self.entries.get(next).cloned()
     }
 
     /// 往後一筆 (較新)；越過最新一筆就回到草稿。
@@ -89,7 +89,7 @@ impl History {
         let i = self.pos?;
         if i + 1 < self.entries.len() {
             self.pos = Some(i + 1);
-            Some(self.entries[i + 1].clone())
+            self.entries.get(i + 1).cloned()
         } else {
             self.pos = None;
             Some(std::mem::take(&mut self.draft))

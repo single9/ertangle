@@ -434,7 +434,7 @@ fn url_at_display_col(text: &str, col: usize) -> Option<String> {
     let mut starts = Vec::new();
     let mut i = 0usize;
     while i + 7 < chars.len() {
-        let s: String = chars[i..].iter().take(8).collect();
+        let s: String = chars.get(i..).unwrap_or(&[]).iter().take(8).collect();
         if s.starts_with("https://") || s.starts_with("http://") || s.starts_with("file://") {
             starts.push(i);
         }
@@ -443,14 +443,14 @@ fn url_at_display_col(text: &str, col: usize) -> Option<String> {
     for start in starts {
         let mut end = start;
         while end < chars.len() {
-            let ch = chars[end];
+            let Some(&ch) = chars.get(end) else { break };
             if ch.is_whitespace() || matches!(ch, '"' | '\'' | '<' | '>' | '`') {
                 break;
             }
             end += 1;
         }
         while end > start {
-            let ch = chars[end - 1];
+            let Some(&ch) = chars.get(end - 1) else { break };
             if matches!(
                 ch,
                 '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}' | '\'' | '"'
@@ -463,8 +463,18 @@ fn url_at_display_col(text: &str, col: usize) -> Option<String> {
                         '}' => '{',
                         _ => ' ',
                     };
-                    let closes = chars[start..end].iter().filter(|&&c| c == ch).count();
-                    let opens = chars[start..end].iter().filter(|&&c| c == open).count();
+                    let closes = chars
+                        .get(start..end)
+                        .unwrap_or(&[])
+                        .iter()
+                        .filter(|&&c| c == ch)
+                        .count();
+                    let opens = chars
+                        .get(start..end)
+                        .unwrap_or(&[])
+                        .iter()
+                        .filter(|&&c| c == open)
+                        .count();
                     if closes <= opens {
                         break;
                     }
@@ -502,7 +512,7 @@ fn url_at_display_col(text: &str, col: usize) -> Option<String> {
             to = dc;
         }
         if col >= from && col < to {
-            return Some(chars[start..end].iter().collect());
+            return Some(chars.get(start..end).unwrap_or(&[]).iter().collect());
         }
     }
     None

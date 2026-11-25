@@ -200,7 +200,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &App) {
             let title = if idx == 0 {
                 tr!("全部")
             } else {
-                app.quota_agents[idx - 1].clone()
+                app.quota_agents.get(idx - 1).cloned().unwrap_or_default()
             };
             let style = if idx == active {
                 Style::default()
@@ -218,7 +218,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &App) {
         let visible: Vec<&String> = if active == 0 {
             app.quota_agents.iter().collect()
         } else {
-            vec![&app.quota_agents[active - 1]]
+            app.quota_agents.get(active - 1).into_iter().collect()
         };
         for (i, agent) in visible.iter().enumerate() {
             if i > 0 {

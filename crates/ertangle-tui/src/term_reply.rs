@@ -55,22 +55,24 @@ pub(crate) fn strip_terminal_replies(events: Vec<Event>) -> Vec<Event> {
     let mut out: Vec<Event> = Vec::with_capacity(events.len());
     let mut i = 0;
     while i < events.len() {
-        if plain_char(&events[i]).is_none() {
-            out.push(events[i].clone());
+        let Some(ev) = events.get(i) else { break };
+        if plain_char(ev).is_none() {
+            out.push(ev.clone());
             i += 1;
             continue;
         }
-        let end = events[i..]
-            .iter()
-            .position(|e| plain_char(e).is_none())
+        let end = events
+            .get(i..)
+            .and_then(|slice| slice.iter().position(|e| plain_char(e).is_none()))
             .map_or(events.len(), |n| i + n);
-        let run: String = events[i..end].iter().filter_map(plain_char).collect();
+        let slice = events.get(i..end).unwrap_or(&[]);
+        let run: String = slice.iter().filter_map(plain_char).collect();
         if is_device_attributes_reply(&run) {
             if out.last().is_some_and(is_plain_esc) {
                 out.pop();
             }
         } else {
-            out.extend(events[i..end].iter().cloned());
+            out.extend(slice.iter().cloned());
         }
         i = end;
     }

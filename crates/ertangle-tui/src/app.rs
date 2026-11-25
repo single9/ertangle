@@ -788,8 +788,8 @@ impl App {
             Some(curr) => {
                 let idx = names.iter().position(|n| n == curr);
                 match idx {
-                    Some(i) if i + 1 < names.len() => Some(names[i + 1].clone()),
-                    _ => None,
+                    Some(i) => names.get(i + 1).cloned(),
+                    None => None,
                 }
             }
         };
@@ -1029,9 +1029,12 @@ impl App {
             .collect();
         let ids = self.session_ids();
         let n = ids.len();
+        if n == 0 {
+            return None;
+        }
         (1..=n)
-            .map(|step| &ids[(self.selected + step) % n.max(1)])
-            .find(|id| waiting.contains(id))
+            .filter_map(|step| ids.get((self.selected + step) % n))
+            .find(|id| waiting.contains(*id))
             .cloned()
     }
 
@@ -1415,21 +1418,25 @@ impl App {
         if self.diff_lines.is_empty() {
             return "diff".into();
         }
-        let idx = self.diff_cursor.min(self.diff_lines.len() - 1);
+        let idx = self
+            .diff_cursor
+            .min(self.diff_lines.len().saturating_sub(1));
         let current_file = if let Some((_, _, path)) = crate::diff::current_file_progress(self) {
             path
         } else {
             let mut file = "unknown";
-            for l in &self.diff_lines[..=idx] {
-                if let Some(rest) = l.strip_prefix("+++ b/") {
-                    file = rest.trim();
-                } else if let Some(rest) = l.strip_prefix("diff --git ") {
-                    file = rest.trim();
+            if let Some(slice) = self.diff_lines.get(..=idx) {
+                for l in slice {
+                    if let Some(rest) = l.strip_prefix("+++ b/") {
+                        file = rest.trim();
+                    } else if let Some(rest) = l.strip_prefix("diff --git ") {
+                        file = rest.trim();
+                    }
                 }
             }
             file.to_string()
         };
-        let line_text = self.diff_lines[idx].trim();
+        let line_text = self.diff_lines.get(idx).map_or("", |l| l.as_str()).trim();
         format!("{current_file} (L{}: {})", idx + 1, truncate(line_text, 48))
     }
 
@@ -1798,7 +1805,10 @@ pub(crate) fn project_color(root: &str) -> ratatui::style::Color {
     let h = root
         .bytes()
         .fold(5381u32, |h, b| h.wrapping_mul(33).wrapping_add(b as u32));
-    PALETTE[h as usize % PALETTE.len()]
+    PALETTE
+        .get(h as usize % PALETTE.len())
+        .copied()
+        .unwrap_or(Color::LightBlue)
 }
 
 /// Toggles the Flow view, remembering the view to return to (T76).

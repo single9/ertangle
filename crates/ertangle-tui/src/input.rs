@@ -476,7 +476,9 @@ pub(crate) fn handle_input_mode(
                 return Ok(());
             }
             KeyCode::Tab => {
-                accept_at_candidate(app, start, &cands[app.at_sel.1.min(n - 1)]);
+                if let Some(cand) = cands.get(app.at_sel.1.min(n.saturating_sub(1))) {
+                    accept_at_candidate(app, start, cand);
+                }
                 return Ok(());
             }
             _ => {}
@@ -774,7 +776,7 @@ fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
 fn complete_attachment_path(app: &mut App) {
     let chars: Vec<char> = app.input.chars().collect();
     let cur = app.input_cursor.min(chars.len());
-    let before: String = chars[..cur].iter().collect();
+    let before: String = chars.get(..cur).unwrap_or(&[]).iter().collect();
     let Some(at) = before.rfind('@') else { return };
     if at > 0 && !before[..at].ends_with(char::is_whitespace) {
         return;
@@ -790,7 +792,7 @@ fn complete_attachment_path(app: &mut App) {
     }
     let common = crate::attach::common_prefix(&cands);
     let new_prefix = if cands.len() == 1 {
-        cands[0].clone()
+        cands.first().cloned().unwrap_or_default()
     } else {
         common
     };
@@ -836,7 +838,8 @@ fn complete_command(app: &mut App) {
     match cands.len() {
         0 => {}
         1 => {
-            app.input = format!("{lead}{} ", cands[0]);
+            let cand = cands.first().map_or("", |s| s.as_str());
+            app.input = format!("{lead}{cand} ");
             app.input_cursor = app.input.chars().count();
         }
         _ => {
@@ -916,10 +919,10 @@ pub(crate) fn delete_input(app: &mut App) {
 /// Previous word boundary (char index) before `cur`: skip spaces/newlines, then the word.
 fn prev_word_start(chars: &[char], cur: usize) -> usize {
     let mut i = cur.min(chars.len());
-    while i > 0 && chars[i - 1].is_whitespace() {
+    while i > 0 && chars.get(i - 1).is_some_and(|c| c.is_whitespace()) {
         i -= 1;
     }
-    while i > 0 && !chars[i - 1].is_whitespace() {
+    while i > 0 && chars.get(i - 1).is_some_and(|c| !c.is_whitespace()) {
         i -= 1;
     }
     i
@@ -928,10 +931,10 @@ fn prev_word_start(chars: &[char], cur: usize) -> usize {
 /// Next word boundary (char index) after `cur`: skip spaces/newlines, then the word.
 fn next_word_end(chars: &[char], cur: usize) -> usize {
     let mut i = cur.min(chars.len());
-    while i < chars.len() && chars[i].is_whitespace() {
+    while i < chars.len() && chars.get(i).is_some_and(|c| c.is_whitespace()) {
         i += 1;
     }
-    while i < chars.len() && !chars[i].is_whitespace() {
+    while i < chars.len() && chars.get(i).is_some_and(|c| !c.is_whitespace()) {
         i += 1;
     }
     i

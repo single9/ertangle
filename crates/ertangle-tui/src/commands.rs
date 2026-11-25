@@ -1168,7 +1168,10 @@ pub(crate) fn launch_playbook(
             return Ok(());
         }
     }
-    let main_label = spawns[0].label.clone().unwrap_or_default();
+    let main_label = spawns
+        .first()
+        .and_then(|req| req.label.clone())
+        .unwrap_or_default();
     let count = spawns.len();
     for (i, mut req) in spawns.drain(..).enumerate() {
         if i > 0 {
