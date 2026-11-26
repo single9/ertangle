@@ -210,6 +210,11 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
         EnableFocusChange
     )?;
     write!(stdout, "\x1b[?1007h")?;
+    // tmux (3.2–3.4) 在 `extended-keys on` 模式下不認得 Kitty `\x1b[>1u`，
+    // 需要 xterm modifyOtherKeys (`\x1b[>4;2m`) 才會為該 pane 啟用 extended-keys。
+    if std::env::var_os("TMUX").is_some() {
+        write!(stdout, "\x1b[>4;2m")?;
+    }
     // 視窗標題帶上專案名，在有 window manager 的環境可辨識是哪個專案。
     // 先 push (XTWINOPS 22) 原標題，離開時 pop 還原。
     write!(stdout, "\x1b[22;0t\x1b]0;ertangle\x07")?;
@@ -220,6 +225,9 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let backend = terminal.backend_mut();
+    if std::env::var_os("TMUX").is_some() {
+        write!(backend, "\x1b[>4;0m")?;
+    }
     write!(backend, "\x1b[?1007l\x1b[23;0t")?;
     execute!(
         backend,
