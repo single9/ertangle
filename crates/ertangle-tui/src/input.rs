@@ -497,6 +497,16 @@ pub(crate) fn handle_input_mode(
             app.pending_prompt_draft = None;
             app.pending_spawn_attachments.clear();
         }
+        // Ctrl-W 已讓給「刪除前一個字」(readline)，worktree 切換改用 Ctrl-T。
+        KeyCode::Char('t')
+            if key.modifiers.contains(KeyModifiers::CONTROL) && app.mode == Mode::Spawn =>
+        {
+            app.spawn_worktree = !app.spawn_worktree;
+            app.status = tr!(
+                "worktree = {state}",
+                state = if app.spawn_worktree { "on" } else { "off" }
+            );
+        }
         KeyCode::Char('e')
             if key.modifiers.contains(KeyModifiers::CONTROL) && app.mode == Mode::Spawn =>
         {

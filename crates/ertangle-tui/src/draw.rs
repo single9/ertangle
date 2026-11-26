@@ -2283,7 +2283,7 @@ pub(crate) fn draw_worktrees(f: &mut TuiFrame, area: Rect, app: &App) {
     let mut lines: Vec<Line> = Vec::new();
     if app.worktrees.is_empty() {
         lines.push(Line::styled(
-            tr!("(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"),
+            tr!("(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-T)"),
             Style::default().fg(Color::DarkGray),
         ));
     } else {
@@ -2489,7 +2489,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &mut App) {
         },
         Mode::Spawn => match &app.spawn_target {
             Some((kind, model)) => tr!(
-                " spawn → {target} · role={role} · worktree={worktree} · 權限={permission} · Ctrl-R role · Ctrl-F effort ",
+                " spawn → {target} · role={role} · worktree={worktree} · 權限={permission} · Ctrl-T worktree · Ctrl-R role · Ctrl-E 權限 · Ctrl-F effort ",
                 target = format!(
                     "{}{}{}",
                     kind.id(),
@@ -2508,7 +2508,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     .spawn_permission
                     .map_or_else(|| tr!("預設"), |p| p.id().to_string()),
             ),
-            None => tr!(" spawn：<agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "),
+            None => tr!(" spawn：<agent[:model]> <prompt> · Ctrl-T worktree · Ctrl-R role · Ctrl-E 權限 · Ctrl-F effort "),
         },
         Mode::Menu => tr!(" 選單 "),
         Mode::Pick => tr!(" 選擇 (Enter 確認 · Esc 取消) "),

@@ -3056,6 +3056,29 @@ fn spawn_mode_ctrl_r_cycles_role() {
 }
 
 #[test]
+fn spawn_mode_ctrl_t_toggles_worktree_and_ctrl_w_still_deletes_word() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = test_app();
+    let (mut w, _) = pair_writer();
+    app.mode = Mode::Spawn;
+    app.spawn_worktree = false;
+
+    let ctrl_t = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    crate::input::handle_key(&mut app, &mut w, ctrl_t).unwrap();
+    assert!(app.spawn_worktree);
+    assert!(app.status.contains("on"));
+    crate::input::handle_key(&mut app, &mut w, ctrl_t).unwrap();
+    assert!(!app.spawn_worktree);
+
+    app.input = "fix bug".into();
+    app.input_cursor = app.input.chars().count();
+    let ctrl_w = KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL);
+    crate::input::handle_key(&mut app, &mut w, ctrl_w).unwrap();
+    assert_eq!(app.input, "fix ");
+    assert!(!app.spawn_worktree);
+}
+
+#[test]
 fn visible_transcript_with_active_tool_and_subagent() {
     use ertangle_core::ActiveTool;
     let now = ertangle_core::now_millis();

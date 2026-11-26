@@ -136,7 +136,7 @@ ertangle
 
 **方式 A：在 TUI 互動啟動 (最常用)**
 1. 在 TUI 按下 **`n`**，選擇主力模型 (例如 `claude` 或 `opencode`)。
-2. 在輸入提示詞畫面，按 **`Ctrl-R`** 將角色切換為 **`coordinator`** (按 `Ctrl-W` 保持關閉 Worktree，讓 Coordinator 留在主目錄綜觀全局)。
+2. 在輸入提示詞畫面，按 **`Ctrl-R`** 將角色切換為 **`coordinator`** (按 `Ctrl-T` 保持關閉 Worktree，讓 Coordinator 留在主目錄綜觀全局)。
 3. 輸入需求提示詞：
    ```text
    請擔任 Coordinator 完成「JWT 登入認證功能」：
@@ -354,7 +354,7 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 | `Space` | 開啟 **Which-key 選單** (`s` session、`g` git、`v` 檢視、`m` 訊息、`?` 說明) |
 | `:` 或 `/` | 開啟**命令列** (支援 `Tab` 自動補齊) |
 | `!` | 進入 **Shell 命令模式** (在選取 Session 的工作目錄直接執行命令 `!<命令>`) |
-| `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；支援 `Ctrl-R` 切換角色、`Ctrl-W` 切換 Worktree、`Ctrl-F` 切換 Effort) |
+| `n` | 建立新 Session (依序選擇 Agent、Model 與輸入 Prompt；支援 `Ctrl-R` 切換角色、`Ctrl-T` 切換 Worktree、`Ctrl-F` 切換 Effort) |
 | `i` / `Enter` | 聚焦輸入框，對選取的 Session 發送 prompt (亦支援 `@peer` 或 `#channel` 傳訊) |
 | `j` / `k` 或 `↑` / `↓` | 在左側 `Projects & Sessions` 移動選取 Session 與摺疊列；在 Diff 視圖移動行游標；在 Tasks 視圖移動任務游標 |
 | `l` / `→` / `h` / `←` / `Space` | 在左側欄展開 (`l` / `→`) 或收合 (`h` / `←`) 已結束 (`▸ 已結束 (N)`) 與其他專案摺疊列 (`Space` 切換) |
@@ -398,7 +398,7 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
 | 按鍵 | 功能說明 |
 | --- | --- |
 | `Ctrl-R` | 循環切換角色：`worker` ↔ `coordinator` ↔ `reviewer` (依角色自動調整協作提示詞) |
-| `Ctrl-W` | 切換是否啟用獨立 Git Worktree 分支 |
+| `Ctrl-T` | 切換是否啟用獨立 Git Worktree 分支 |
 | `Ctrl-E` | 循環切換權限政策：預設 (config) ↔ `ask` ↔ `auto` ↔ `bypass` |
 | `Ctrl-F` | 循環切換推論強度 Effort：預設 ↔ `low` ↔ `medium` ↔ `high` ↔ `max` |
 

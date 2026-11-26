@@ -378,7 +378,7 @@ TUI 斷線重連時帶 `since`，daemon 從 event log 補齊 → 畫面無縫重
 | `{` / `}` | (Diff 視圖)跳到上一個 / 下一個 hunk (`@@`) |
 | `i` / `Enter` | 對選取 session 送 prompt (支援 `@peer 訊息`、`#channel 訊息`、`/命令`) |
 | `←` / `→`、`Home` / `End`、`Delete` | 在輸入框移動游標 / 跳到頭尾 / 刪除字元 (支援中文等寬字元與 bracketed paste) |
-| `n` | 建立 session：`<agent> <prompt>`(`Ctrl-W` 切換是否開 worktree) |
+| `n` | 建立 session：`<agent> <prompt>`(`Ctrl-T` 切換是否開 worktree) |
 | `m` | 送訊息到匯流排 (agent 之間溝通) |
 | `c` | (Diff 視圖)對目前選取的 diff 行下審查註解並送回 agent 修改 |
 | `M` / `G` | 合併選取 session 的 worktree 分支回主工作區 / 清理已結束 worktree |

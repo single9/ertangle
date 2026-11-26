@@ -136,7 +136,7 @@ For medium-to-large features spanning multiple modules, you do not need to manua
 
 **Method A: Interactive TUI Spawn (Recommended)**
 1. Press **`n`** in the TUI and select an agent (e.g., `claude` or `opencode`).
-2. In the prompt input step, press **`Ctrl-R`** to switch the role to **`coordinator`** (leave Worktree off via `Ctrl-W` so the coordinator stays on the main checkout).
+2. In the prompt input step, press **`Ctrl-R`** to switch the role to **`coordinator`** (leave Worktree off via `Ctrl-T` so the coordinator stays on the main checkout).
 3. Enter the goal prompt:
    ```text
    Act as Coordinator to deliver the "JWT Login Authentication" feature:
@@ -354,7 +354,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 | `Space` | Open **Which-key menu** (`s` session, `g` git, `v` view, `m` message, `?` help) |
 | `:` or `/` | Open **Command-line** (supports `Tab` completion) |
 | `!` | Enter **Shell Command mode** (run shell commands directly in the selected session's workspace `!<cmd>`) |
-| `n` | Create new session (select Agent, Model, input Prompt; supports `Ctrl-R` for Role, `Ctrl-W` for Worktree, `Ctrl-F` for Effort) |
+| `n` | Create new session (select Agent, Model, input Prompt; supports `Ctrl-R` for Role, `Ctrl-T` for Worktree, `Ctrl-F` for Effort) |
 | `i` / `Enter` | Focus input box to send prompt (supports `@peer` and `#channel` routing) |
 | `j` / `k` or `↑` / `↓` | Select sessions and collapsible groups in `Projects & Sessions`; move line cursor in Diff; select task in Tasks view |
 | `l` / `→` / `h` / `←` / `Space` | Expand (`l` / `→`) or collapse (`h` / `←`) ended (`▸ Ended (N)`) and other-project rows in the sidebar (`Space` toggles) |
@@ -398,7 +398,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 | Key | Description |
 | --- | --- |
 | `Ctrl-R` | Cycle role: `worker` ↔ `coordinator` ↔ `reviewer` (customizes injected prompt per role) |
-| `Ctrl-W` | Toggle dedicated Git Worktree branch |
+| `Ctrl-T` | Toggle dedicated Git Worktree branch |
 | `Ctrl-E` | Cycle permission policy: default (config) ↔ `ask` ↔ `auto` ↔ `bypass` |
 | `Ctrl-F` | Cycle reasoning effort: default ↔ `low` ↔ `medium` ↔ `high` ↔ `max` |
 

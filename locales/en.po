@@ -3458,8 +3458,8 @@ msgid "(尚無 diff 資料，按 r 重新載入)"
 msgstr "(no diff data yet, press r to reload)"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"
-msgstr "(no separate worktrees; use --worktree or Ctrl-W when creating a session)"
+msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-T)"
+msgstr "(no separate worktrees; use --worktree or Ctrl-T when creating a session)"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "⏸ 提問 "
@@ -3534,12 +3534,12 @@ msgid " prompt (排隊 {n} 則 · Alt-Enter 再排) "
 msgstr " prompt ({n} queued · Alt-Enter to queue more) "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " spawn → {target} · role={role} · worktree={worktree} · 權限={permission} · Ctrl-R role · Ctrl-F effort "
-msgstr " spawn → {target} · role={role} · worktree={worktree} · permission={permission} · Ctrl-R role · Ctrl-F effort "
+msgid " spawn → {target} · role={role} · worktree={worktree} · 權限={permission} · Ctrl-T worktree · Ctrl-R role · Ctrl-E 權限 · Ctrl-F effort "
+msgstr " spawn → {target} · role={role} · worktree={worktree} · permission={permission} · Ctrl-T worktree · Ctrl-R role · Ctrl-E permission · Ctrl-F effort "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " spawn：<agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "
-msgstr " spawn: <agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "
+msgid " spawn：<agent[:model]> <prompt> · Ctrl-T worktree · Ctrl-R role · Ctrl-E 權限 · Ctrl-F effort "
+msgstr " spawn: <agent[:model]> <prompt> · Ctrl-T worktree · Ctrl-R role · Ctrl-E permission · Ctrl-F effort "
 
 #: crates/ertangle-tui/src/draw.rs
 msgid " 選單 "
@@ -4028,6 +4028,10 @@ msgstr "Selection cleared"
 #: crates/ertangle-tui/src/input.rs
 msgid "逐字稿：已到最前"
 msgstr "Transcript: at the beginning"
+
+#: crates/ertangle-tui/src/input.rs
+msgid "worktree = {state}"
+msgstr "worktree = {state}"
 
 #: crates/ertangle-tui/src/input.rs
 msgid "權限 = {permission}"
@@ -4934,6 +4938,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"
+#~ msgstr "(no separate worktrees; use --worktree or Ctrl-W when creating a session)"
+
+#~ msgid " spawn → {target} · role={role} · worktree={worktree} · 權限={permission} · Ctrl-R role · Ctrl-F effort "
+#~ msgstr " spawn → {target} · role={role} · worktree={worktree} · permission={permission} · Ctrl-R role · Ctrl-F effort "
+
+#~ msgid " spawn：<agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "
+#~ msgstr " spawn: <agent[:model]> <prompt> · Ctrl-R role · Ctrl-F effort "
 
 #~ msgid "列出原始碼檔案或目錄的符號骨架與起訖行號 (Rust / TS / JS / Vue / C# / Python)"
 #~ msgstr "List symbol outlines and line ranges for source files or directories (Rust / TS / JS / Vue / C# / Python)"
