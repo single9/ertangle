@@ -111,6 +111,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
     }
     cmd.cwd(&spec.cwd);
     cmd.env("TERM", "xterm-256color");
+    for k in crate::env_removals(&spec.kind) {
+        cmd.env_remove(k);
+    }
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }

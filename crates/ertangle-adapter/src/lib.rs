@@ -253,6 +253,26 @@ mod signal_tests {
     }
 }
 
+/// SSH 相關的環境變數；agy 看到任一個就判定為 SSH session。
+const SSH_ENV_VARS: &[&str] = &["SSH_CLIENT", "SSH_CONNECTION", "SSH_TTY"];
+
+/// 啟動該 agent 前應從環境移除的變數。
+///
+/// agy 偵測到 SSH session 時會改用檔案儲存 token，讀不到桌面 keyring 裡的登入，於是一直回報
+/// 「未登入」。daemon 從 SSH 終端機啟動時會繼承這些變數，所以在 keyring 可用 (有 D-Bus session)
+/// 時移除它們，讓 agy 照常讀 keyring。
+pub fn env_removals(kind: &AgentKind) -> &'static [&'static str] {
+    let has_dbus = std::env::var_os("DBUS_SESSION_BUS_ADDRESS").is_some_and(|v| !v.is_empty());
+    env_removals_for(kind, has_dbus)
+}
+
+fn env_removals_for(kind: &AgentKind, has_dbus: bool) -> &'static [&'static str] {
+    match kind {
+        AgentKind::Antigravity if has_dbus => SSH_ENV_VARS,
+        _ => &[],
+    }
+}
+
 /// Probes whether an executable exists and returns its absolute path.
 pub fn which(prog: &str) -> Option<PathBuf> {
     if prog.contains('/') {
@@ -486,5 +506,21 @@ mod tests {
         assert!(!is_installed_with(&AgentKind::Custom("foo".into()), |_| {
             true
         }));
+    }
+}
+
+#[cfg(test)]
+mod env_removal_tests {
+    use super::*;
+
+    #[test]
+    fn agy_drops_ssh_vars_only_when_keyring_reachable() {
+        assert_eq!(
+            env_removals_for(&AgentKind::Antigravity, true),
+            SSH_ENV_VARS
+        );
+        assert!(env_removals_for(&AgentKind::Antigravity, false).is_empty());
+        assert!(env_removals_for(&AgentKind::OpenCode, true).is_empty());
+        assert!(env_removals_for(&AgentKind::Codex, true).is_empty());
     }
 }

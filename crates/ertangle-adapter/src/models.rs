@@ -77,14 +77,20 @@ fn drain<R: std::io::Read + Send + 'static>(pipe: Option<R>) -> std::sync::mpsc:
 /// 在 `timeout` 內執行指令並取回 stdout、stderr 與結束碼。
 /// 必須一邊等處理程序一邊把輸出讀走：`codex debug models` 的輸出可達數百 KB，
 /// 若等處理程序結束才讀，pipe 被填滿後處理程序會卡住，直到逾時被殺掉而得到空清單。
+/// `remove` 列出的環境變數不會傳給子處理程序。
 fn capture(
     bin: &str,
     args: &[&str],
+    remove: &[&str],
     timeout: std::time::Duration,
 ) -> Result<Captured, CaptureError> {
     use std::process::Stdio;
 
-    let mut child = std::process::Command::new(bin)
+    let mut command = std::process::Command::new(bin);
+    for k in remove {
+        command.env_remove(k);
+    }
+    let mut child = command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -236,7 +242,7 @@ pub fn query_raw_models_detailed(kind: &AgentKind) -> ModelQuery {
         .chain(args.iter().copied())
         .collect::<Vec<_>>()
         .join(" ");
-    let result = capture(bin, args, QUERY_TIMEOUT);
+    let result = capture(bin, args, crate::env_removals(kind), QUERY_TIMEOUT);
     let models = match (&result, kind) {
         (Ok(c), AgentKind::Codex) => parse_codex_models(&c.stdout),
         (Ok(c), _) => parse_models(&c.stdout),
@@ -371,6 +377,7 @@ mod tests {
         let out = capture(
             "sh",
             &["-c", "yes x | head -c 200000; yes y | head -c 200000 >&2"],
+            &[],
             std::time::Duration::from_secs(8),
         )
         .expect("命令應成功執行");
@@ -390,7 +397,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn capture_reports_timeout() {
-        let r = capture("sleep", &["5"], std::time::Duration::from_millis(200));
+        let r = capture("sleep", &["5"], &[], std::time::Duration::from_millis(200));
         assert!(matches!(r, Err(CaptureError::Timeout)));
     }
 
@@ -399,9 +406,22 @@ mod tests {
         let r = capture(
             "ertangle-no-such-binary",
             &[],
+            &[],
             std::time::Duration::from_secs(1),
         );
         assert!(matches!(r, Err(CaptureError::Spawn(_))));
+    }
+
+    #[test]
+    fn capture_removes_listed_env_vars() {
+        let out = capture(
+            "sh",
+            &["-c", "echo ${HOME-unset}"],
+            &["HOME"],
+            std::time::Duration::from_secs(8),
+        )
+        .expect("命令應成功執行");
+        assert_eq!(out.stdout.trim(), "unset");
     }
 
     fn ok(stdout: &str, stderr: &str, code: i32) -> Result<Captured, CaptureError> {

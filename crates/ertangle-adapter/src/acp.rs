@@ -1067,6 +1067,9 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    for k in crate::env_removals(&spec.kind) {
+        cmd.env_remove(k);
+    }
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }
@@ -1574,6 +1577,9 @@ fn query_agy_quota(prog: &std::path::Path, env: &[(String, String)]) -> Option<S
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    for k in crate::env_removals(&ertangle_core::AgentKind::Antigravity) {
+        cmd.env_remove(k);
+    }
     for (k, v) in env {
         cmd.env(k, v);
     }
