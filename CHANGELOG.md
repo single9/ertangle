@@ -1,6 +1,43 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.5.1] - 2026-11-26
+
+### 🐛 Bug Fixes
+
+- *(godot)* Filter shutdown noise, add gdunit4/gdscript check, ignore import/uid diffs
+- *(godot)* Exclude import/uid noise from merge and wrap gdUnit4 with xvfb-run
+- *(godot)* Resolve absolute bin path, filter progress noise, concise pass output
+- *(godot)* Judge gdUnit4 by exit/stats only and condense failure output
+- *(godot)* Put gdUnit4 failures first with full Report blocks
+- *(git)* Use status -z with quotePath=false and keep untracked/added import/uid files
+- *(git,check)* Use -z/quotePath=false in changed_gd_files and filter noise in git_status_summary
+- *(tui)* Exclude thought and tool lines when copying transcript
+- *(acp)* Keep busy status across concurrent prompts and warn on stalled turns
+- *(tui)* Restore spawn worktree toggle on Ctrl-T
+- *(adapter)* Drop SSH env vars when launching agy with a keyring
+- *(tui)* Support up/down cursor movement across all multiline modes
+- *(tui,daemon)* Prevent empty bus targets and add directory browsing to @ attachment picker
+- *(tui)* Support spaced directory names and address code review findings
+
+### 🚜 Refactor
+
+- *(lint)* Audit Drop and migrate allow attributes to expect with reasons
+- Audit let _ result discards and arithmetic overflow safety
+- *(daemon)* Eliminate clippy indexing_slicing warnings
+- *(core,adapter,cli)* Eliminate clippy indexing_slicing warnings
+- *(tui)* Eliminate clippy indexing_slicing warnings in ertangle-tui
+
+### 📚 Documentation
+
+- *(mcp)* Clarify ertangle_merge strategy defaults to config
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Make publish-crates idempotent and support tag input
+- *(lint)* Enforce safe-rust workspace lints and update conventions
+- *(lint)* Enable indexing_slicing workspace lint
+
 ## [1.5.0] - 2026-11-25
 
 ### 🚀 Features
