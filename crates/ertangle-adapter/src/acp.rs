@@ -18,7 +18,7 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tr::tr;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -30,6 +30,63 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(180);
 const REPLAY_QUIET: Duration = Duration::from_millis(800);
 /// Upper bound on waiting for the post-load replay to go quiet.
 const REPLAY_MAX_WAIT: Duration = Duration::from_secs(20);
+/// A turn with no `session/update` for this long is reported as possibly stalled.
+/// (agy has been observed accepting `session/prompt` and then never calling the model.)
+const STALL_AFTER: Duration = Duration::from_secs(180);
+/// How often the stall watchdog checks in-flight turns.
+const STALL_POLL: Duration = Duration::from_secs(15);
+
+/// Tracks in-flight `session/prompt` turns.
+///
+/// ACP agents such as agy accept a second `session/prompt` while one is still running and may
+/// answer it immediately; status must only return to Idle once *every* turn has finished,
+/// otherwise a hung first turn is hidden behind a false Idle.
+#[derive(Debug, Default)]
+struct TurnTracker {
+    inflight: usize,
+    /// When the oldest still-running turn started (reset when all turns finish).
+    started: Option<Instant>,
+    /// When the stall warning was last emitted for the current quiet period.
+    warned_at: Option<Instant>,
+}
+
+impl TurnTracker {
+    fn begin(&mut self, now: Instant) {
+        if self.inflight == 0 {
+            self.started = Some(now);
+        }
+        self.inflight = self.inflight.saturating_add(1);
+    }
+
+    /// Ends one turn. Returns `None` while other turns are still running, otherwise
+    /// `Some(warned)` where `warned` tells whether a stall warning should be cleared.
+    fn end(&mut self) -> Option<bool> {
+        self.inflight = self.inflight.saturating_sub(1);
+        if self.inflight > 0 {
+            return None;
+        }
+        self.started = None;
+        Some(self.warned_at.take().is_some())
+    }
+
+    /// Returns how long the agent has been silent if a turn is running, has been quiet for at
+    /// least `threshold`, and no warning was issued yet for this quiet period.
+    fn stalled(
+        &mut self,
+        now: Instant,
+        last_update: Instant,
+        threshold: Duration,
+    ) -> Option<Duration> {
+        let started = self.started?;
+        let quiet_since = started.max(last_update);
+        let quiet = now.saturating_duration_since(quiet_since);
+        if quiet < threshold || self.warned_at.is_some_and(|w| w >= quiet_since) {
+            return None;
+        }
+        self.warned_at = Some(now);
+        Some(quiet)
+    }
+}
 
 /// Collected answers for a multi-field elicitation: field key -> (multi-select, answers).
 type ElicitationAnswers = Arc<Mutex<HashMap<String, (bool, Vec<String>)>>>;
@@ -121,6 +178,8 @@ struct Conn {
     loading: std::sync::atomic::AtomicBool,
     /// When the last `session/update` arrived (including discarded replay updates).
     last_update: Mutex<std::time::Instant>,
+    /// In-flight prompt turns (see [`TurnTracker`]).
+    turns: Mutex<TurnTracker>,
     /// Permission policy: directly auto-approved by adapter when `Auto` / `Bypass`.
     tx: Sender<AgentEvent>,
 }
@@ -188,20 +247,62 @@ impl Conn {
         // Any session/update arriving before the first session/prompt on a resumed session is
         // asynchronous history replay from session/load; stop discarding only once we prompt.
         self.loading.store(false, Ordering::SeqCst);
+        self.turns
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .begin(Instant::now());
         self.emit(AgentEvent::Status(SessionStatus::Busy));
         let res = self.call(
             "session/prompt",
             json!({ "sessionId": sid, "prompt": prompt_blocks(&effective, atts, self.image_ok.load(Ordering::SeqCst)) }),
             PROMPT_TIMEOUT,
         );
-        self.flush_stream();
-        self.emit(AgentEvent::Status(SessionStatus::Idle));
+        let ended = self.turns.lock().unwrap_or_else(|e| e.into_inner()).end();
+        if let Some(warned) = ended {
+            self.flush_stream();
+            if warned {
+                self.emit(AgentEvent::Note(String::new()));
+            }
+            self.emit(AgentEvent::Status(SessionStatus::Idle));
+        }
         if res.is_ok() {
             if let Some(q) = recovered_quota(&self.agent, &self.limited) {
                 self.emit(AgentEvent::Quota(q));
             }
         }
         res.map(|_| ())
+    }
+
+    /// Warns (once per quiet period) when a running turn has produced no `session/update` for
+    /// [`STALL_AFTER`]. Skipped while waiting on the user for a permission or question.
+    fn check_stall(&self, now: Instant) {
+        let waiting_on_user = !self
+            .perms
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
+            || !self
+                .questions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_empty();
+        if waiting_on_user {
+            return;
+        }
+        let last = *self.last_update.lock().unwrap_or_else(|e| e.into_inner());
+        let quiet = self
+            .turns
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .stalled(now, last, STALL_AFTER);
+        let Some(quiet) = quiet else { return };
+        self.flush_stream();
+        let note = tr!(
+            "agent 已 {mins} 分鐘沒有任何回應，可能卡住；可用 /cancel 中斷本回合後重送",
+            mins = quiet.as_secs() / 60
+        );
+        self.emit(AgentEvent::Output(format!("⚠ {note}\n")));
+        self.emit(AgentEvent::Note(note));
     }
 
     /// If the error text indicates rate limiting, emits `reached=true` and sets flag (subsequent successful turns will clear it).
@@ -738,6 +839,11 @@ impl AgentControl for AcpControl {
                 tracing::warn!("ACP prompt 失敗：{e}");
                 if ertangle_core::looks_like_limit(&e.to_string()) {
                     conn.emit(AgentEvent::Limited(e.to_string()));
+                } else {
+                    // Otherwise the failure is only in the daemon log and the turn looks silently dropped.
+                    let note = tr!("ACP prompt 失敗：{err}", err = e);
+                    conn.emit(AgentEvent::Output(format!("⚠ {note}\n")));
+                    conn.emit(AgentEvent::Note(note));
                 }
                 conn.report_rate_limit(&e.to_string());
             }
@@ -1005,8 +1111,21 @@ pub fn start(spec: SessionSpec, tx: Sender<AgentEvent>) -> Result<Box<dyn AgentC
         image_ok: std::sync::atomic::AtomicBool::new(false),
         loading: std::sync::atomic::AtomicBool::new(false),
         last_update: Mutex::new(std::time::Instant::now()),
+        turns: Mutex::new(TurnTracker::default()),
         tx: tx.clone(),
     });
+
+    {
+        let weak = Arc::downgrade(&conn);
+        std::thread::spawn(move || {
+            // Exits once the connection is dropped (session ended).
+            loop {
+                std::thread::sleep(STALL_POLL);
+                let Some(c) = weak.upgrade() else { return };
+                c.check_stall(Instant::now());
+            }
+        });
+    }
 
     {
         let weak = Arc::downgrade(&conn);
@@ -1222,6 +1341,62 @@ fn wait_until_quiet(
             return;
         }
         std::thread::sleep((quiet - idle).min(max - waited));
+    }
+}
+
+#[cfg(test)]
+mod turn_tracker_tests {
+    use super::*;
+
+    const T: Duration = Duration::from_secs(180);
+
+    #[test]
+    fn idle_only_after_last_concurrent_turn_ends() {
+        let mut t = TurnTracker::default();
+        let now = Instant::now();
+        t.begin(now);
+        t.begin(now);
+        assert_eq!(
+            t.end(),
+            None,
+            "second turn finishing early must not report Idle"
+        );
+        assert_eq!(t.end(), Some(false));
+    }
+
+    #[test]
+    fn end_without_begin_does_not_underflow() {
+        let mut t = TurnTracker::default();
+        assert_eq!(t.end(), Some(false));
+    }
+
+    #[test]
+    fn no_stall_when_no_turn_running() {
+        let mut t = TurnTracker::default();
+        let now = Instant::now();
+        assert_eq!(t.stalled(now + T * 2, now, T), None);
+    }
+
+    #[test]
+    fn warns_once_per_quiet_period_and_rearms_after_activity() {
+        let mut t = TurnTracker::default();
+        let start = Instant::now();
+        t.begin(start);
+        assert_eq!(t.stalled(start + T / 2, start, T), None);
+        assert_eq!(t.stalled(start + T, start, T), Some(T));
+        assert_eq!(t.stalled(start + T * 2, start, T), None, "already warned");
+        let activity = start + T * 3;
+        assert_eq!(t.stalled(activity + T, activity, T), Some(T));
+        assert_eq!(t.end(), Some(true), "warning must be cleared on Idle");
+    }
+
+    #[test]
+    fn quiet_period_counts_from_turn_start_not_stale_update() {
+        let mut t = TurnTracker::default();
+        let old_update = Instant::now();
+        let start = old_update + T * 5;
+        t.begin(start);
+        assert_eq!(t.stalled(start + T / 2, old_update, T), None);
     }
 }
 

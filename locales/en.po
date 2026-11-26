@@ -965,6 +965,10 @@ msgstr "`{method}` failed: {err}"
 msgid "session 尚未就緒"
 msgstr "session is not ready yet"
 
+#: crates/ertangle-adapter/src/acp.rs
+msgid "agent 已 {mins} 分鐘沒有任何回應，可能卡住；可用 /cancel 中斷本回合後重送"
+msgstr "agent has not responded for {mins} min and may be stuck; use /cancel to abort this turn and resend"
+
 #: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
 msgid "未知的核准請求：{req}"
 msgstr "Unknown approval request: {req}"
@@ -972,6 +976,11 @@ msgstr "Unknown approval request: {req}"
 #: crates/ertangle-adapter/src/acp.rs crates/ertangle-adapter/src/codex.rs
 msgid "未知的問題請求：{id}"
 msgstr "Unknown question request: {id}"
+
+#. Otherwise the failure is only in the daemon log and the turn looks silently dropped.
+#: crates/ertangle-adapter/src/acp.rs
+msgid "ACP prompt 失敗：{err}"
+msgstr "ACP prompt failed: {err}"
 
 #: crates/ertangle-adapter/src/acp.rs
 msgid "設定 {what} `{value}` 失敗"
