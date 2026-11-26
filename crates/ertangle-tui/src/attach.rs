@@ -150,6 +150,42 @@ fn project_dirs(files: &[String]) -> Vec<String> {
     dirs.into_iter().collect()
 }
 
+/// 依分數降冪、路徑長度升冪、字典序排序並取前 `limit` 筆。
+fn sort_and_take(mut scored: Vec<(i64, String)>, limit: usize) -> Vec<String> {
+    scored.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then(a.1.len().cmp(&b.1.len()))
+            .then(a.1.cmp(&b.1))
+    });
+    scored.into_iter().take(limit).map(|(_, f)| f).collect()
+}
+
+/// 瀏覽本機絕對路徑 (`/`) 或家目錄路徑 (`~` / `~/`)，並依尾端名稱模糊過濾。
+fn local_path_suggestions(query: &str, limit: usize) -> Vec<String> {
+    if query == "~" {
+        return list_dir_entries(&resolve("~/"), "~/", false)
+            .into_iter()
+            .take(limit)
+            .collect();
+    }
+    let (dir_part, name_part) = match query.rfind('/') {
+        Some(i) => (&query[..=i], &query[i + 1..]),
+        None => ("", query),
+    };
+    let entries = list_dir_entries(&resolve(dir_part), dir_part, name_part.starts_with('.'));
+    if name_part.is_empty() {
+        return entries.into_iter().take(limit).collect();
+    }
+    let scored = entries
+        .into_iter()
+        .filter_map(|e| {
+            let tail = e.get(dir_part.len()..).unwrap_or(&e);
+            fuzzy_score(name_part, tail).map(|s| (s, e))
+        })
+        .collect();
+    sort_and_take(scored, limit)
+}
+
 /// 專案檔案瀏覽與模糊搜尋：
 /// * `query` 為空或以 `/` 結尾時，列出該目錄下的資料夾與檔案 (資料夾優先)。
 /// * `query` 為 `/` 或 `~` 開頭時，瀏覽本機路徑並依尾端名稱模糊過濾。
@@ -161,34 +197,8 @@ pub(crate) fn suggestions(root: &Path, query: &str, limit: usize) -> Vec<String>
             .take(limit)
             .collect();
     }
-    if query == "~" {
-        return list_dir_entries(&resolve("~/"), "~/", false)
-            .into_iter()
-            .take(limit)
-            .collect();
-    }
-    if query.starts_with('/') || query.starts_with("~/") {
-        let (dir_part, name_part) = match query.rfind('/') {
-            Some(i) => (&query[..=i], &query[i + 1..]),
-            None => ("", query),
-        };
-        let entries = list_dir_entries(&resolve(dir_part), dir_part, name_part.starts_with('.'));
-        if name_part.is_empty() {
-            return entries.into_iter().take(limit).collect();
-        }
-        let mut scored: Vec<(i64, String)> = entries
-            .into_iter()
-            .filter_map(|e| {
-                let tail = e.get(dir_part.len()..).unwrap_or(&e);
-                fuzzy_score(name_part, tail).map(|s| (s, e))
-            })
-            .collect();
-        scored.sort_by(|a, b| {
-            b.0.cmp(&a.0)
-                .then(a.1.len().cmp(&b.1.len()))
-                .then(a.1.cmp(&b.1))
-        });
-        return scored.into_iter().take(limit).map(|(_, f)| f).collect();
+    if query == "~" || query.starts_with('/') || query.starts_with("~/") {
+        return local_path_suggestions(query, limit);
     }
     if query.ends_with('/') {
         let sub = root.join(query);
@@ -201,33 +211,38 @@ pub(crate) fn suggestions(root: &Path, query: &str, limit: usize) -> Vec<String>
     }
     let files = project_files(root);
     let dirs = project_dirs(&files);
-    let mut scored: Vec<(i64, String)> = files
+    let scored = files
         .into_iter()
         .chain(dirs)
         .filter_map(|f| fuzzy_score(query, &f).map(|s| (s, f)))
         .collect();
-    scored.sort_by(|a, b| {
-        b.0.cmp(&a.0)
-            .then(a.1.len().cmp(&b.1.len()))
-            .then(a.1.cmp(&b.1))
-    });
-    scored.into_iter().take(limit).map(|(_, f)| f).collect()
+    sort_and_take(scored, limit)
 }
 
-/// 游標前正在輸入的 `@token`：回傳 (`@` 的字元索引, 不含 `@` 的內容)。引號內有空白的 token 不處理。
+/// 游標前正在輸入的 `@token`：回傳 (`@` 的字元索引, 不含 `@` 的內容)。
+/// 支援未閉合的引號路徑 `@"dir with spaces/...`；已閉合的引號 token 回傳 `None`。
 pub(crate) fn current_at_token(input: &str, cursor: usize) -> Option<(usize, String)> {
     let chars: Vec<char> = input.chars().collect();
     let cur = cursor.min(chars.len());
+    // 先檢查游標前是否處於未閉合的 `@"..."` 路徑中。
+    let before = chars.get(..cur).unwrap_or(&[]);
+    if let Some(q_idx) = before.iter().rposition(|&c| c == '"') {
+        if q_idx >= 1
+            && before.get(q_idx - 1) == Some(&'@')
+            && (q_idx == 1 || before.get(q_idx - 2).is_some_and(|c| c.is_whitespace()))
+        {
+            let tok: String = before.get(q_idx + 1..).unwrap_or(&[]).iter().collect();
+            return Some((q_idx - 1, tok));
+        }
+        // 若在 `@"` 之後已有另一個 `"` 閉合，表示這個引號路徑已完成，不應觸發未閉合搜尋。
+    }
     let mut i = cur;
     while i > 0 && chars.get(i - 1).is_some_and(|c| !c.is_whitespace()) {
         i -= 1;
     }
     if i < cur && chars.get(i) == Some(&'@') {
         let tok: String = chars.get(i + 1..cur).unwrap_or(&[]).iter().collect();
-        return Some((i, tok));
-    }
-    if i == cur && cur > 0 {
-        return None;
+        return (!tok.starts_with('"')).then_some((i, tok));
     }
     None
 }

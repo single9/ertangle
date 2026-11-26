@@ -755,15 +755,12 @@ fn at_token_text(app: &App) -> String {
         .unwrap_or_default()
 }
 
-/// 在 Prompt／Spawn／Message 輸入 `@` 或 `@xxx` 時的檔案瀏覽與模糊搜尋建議 (引號內路徑不搜尋)。
+/// 在 Prompt／Spawn／Message 輸入 `@` 或 `@xxx` 時的檔案瀏覽與模糊搜尋建議。
 pub(crate) fn at_candidates(app: &App) -> Option<(usize, Vec<String>)> {
     if !matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) {
         return None;
     }
     let (start, tok) = crate::attach::current_at_token(&app.input, app.input_cursor)?;
-    if tok.starts_with('"') {
-        return None;
-    }
     let c = crate::attach::suggestions(&app.search_root(), &tok, 100);
     (!c.is_empty()).then_some((start, c))
 }
@@ -772,7 +769,11 @@ pub(crate) fn at_candidates(app: &App) -> Option<(usize, Vec<String>)> {
 fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
     let is_dir = path.ends_with('/');
     let rep = if is_dir {
-        format!("@{path}")
+        if path.contains(char::is_whitespace) {
+            format!("@\"{path}")
+        } else {
+            format!("@{path}")
+        }
     } else if path.contains(char::is_whitespace) {
         format!("@\"{path}\" ")
     } else {

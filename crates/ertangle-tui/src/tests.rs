@@ -7366,4 +7366,37 @@ fn at_suggestions_browse_directories_and_fuzzy_filter() {
     .unwrap();
     assert_eq!(app.mode, Mode::Prompt);
     assert_eq!(app.input, "@src/");
+
+    // 本機絕對路徑 `/` 瀏覽與模糊過濾，以及含空白資料夾路徑瀏覽 (使用新目錄避免命中 5 秒 FILE_CACHE)
+    let d2 = temp_dir_with(&[("top.txt", b"t")]);
+    std::fs::create_dir_all(d2.join("my dir")).unwrap();
+    std::fs::write(d2.join("my dir/hello world.txt"), "hi").unwrap();
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = d2.to_string_lossy().to_string();
+    }
+    let abs_prefix = format!("{}/", d2.display());
+    let abs_hits = crate::attach::suggestions(&d2, &abs_prefix, 50);
+    assert!(
+        abs_hits.iter().any(|h| h.ends_with("my dir/")),
+        "{abs_hits:?}"
+    );
+    let abs_filtered = crate::attach::suggestions(&d2, &format!("{abs_prefix}top"), 50);
+    assert_eq!(abs_filtered, vec![format!("{abs_prefix}top.txt")]);
+
+    app.input = "@my".into();
+    app.input_cursor = 3;
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.input, "@\"my dir/");
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.input, "@\"my dir/hello world.txt\" ");
 }

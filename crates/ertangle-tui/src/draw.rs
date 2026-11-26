@@ -261,26 +261,31 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
     );
 }
 
+/// 計算 `@` 檔案建議浮層的可見視窗範圍 `(sel, offset, shown)`。
+fn suggestion_window(app: &App, total: usize, max_rows: usize) -> (usize, usize, usize) {
+    let current_tok = crate::attach::current_at_token(&app.input, app.input_cursor)
+        .map(|(_, t)| t)
+        .unwrap_or_default();
+    let sel = if app.at_sel.0 == current_tok {
+        app.at_sel.1.min(total.saturating_sub(1))
+    } else {
+        0
+    };
+    let shown = total.min(max_rows);
+    let offset = sel
+        .saturating_sub(shown / 2)
+        .min(total.saturating_sub(shown));
+    (sel, offset, shown)
+}
+
 /// `@` 檔案建議浮層：貼在輸入框上方左側，支援目錄瀏覽與模糊搜尋捲動列表。
 pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &App) {
     let Some((_, cands)) = crate::input::at_candidates(app) else {
         return;
     };
     let total = cands.len();
-    let sel = if app.at_sel.0
-        == crate::attach::current_at_token(&app.input, app.input_cursor)
-            .map(|(_, t)| t)
-            .unwrap_or_default()
-    {
-        app.at_sel.1.min(total - 1)
-    } else {
-        0
-    };
     let max_rows = (input_area.y.saturating_sub(2) as usize).clamp(1, 12);
-    let shown = total.min(max_rows);
-    let offset = sel
-        .saturating_sub(shown / 2)
-        .min(total.saturating_sub(shown));
+    let (sel, offset, shown) = suggestion_window(app, total, max_rows);
     let visible: Vec<(usize, &String)> =
         cands.iter().enumerate().skip(offset).take(shown).collect();
     let text_w = visible

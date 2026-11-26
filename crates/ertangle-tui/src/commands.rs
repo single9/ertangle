@@ -139,7 +139,6 @@ pub(crate) fn exec_shell_command(
     Ok(())
 }
 
-/// 把一則 prompt 排進選取 session 的佇列 (交由 daemon 管理)；session 已閒置就直接送。
 /// 判斷是否為 `@peer ...` 或 `#channel ...` 匯流排訊息 (須有非空的對象名稱，且開頭不是 `@存在的檔案`)。
 fn is_routed_bus_message(trimmed: &str, root: &std::path::Path) -> bool {
     let Some(first) = trimmed.split_whitespace().next() else {
@@ -154,6 +153,7 @@ fn is_routed_bus_message(trimmed: &str, root: &std::path::Path) -> bool {
     }
 }
 
+/// 把一則 prompt 排進選取 session 的佇列 (交由 daemon 管理)；session 已閒置就直接送。
 /// 只處理一般 prompt (含 `@檔案` 附件)；`/命令`、`@peer`、`#channel` 不排隊。
 pub(crate) fn queue_prompt(app: &mut App, writer: &mut HostRouter, text: &str) -> Result<()> {
     let trimmed = text.trim();
