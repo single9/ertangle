@@ -7278,3 +7278,92 @@ fn t96_no_session_routed_commands_do_not_open_picker() {
         );
     }
 }
+
+#[test]
+fn bare_at_or_hash_prompt_is_not_routed_to_bus() {
+    use std::io::{BufRead, BufReader};
+    for input in ["@ 選擇附檔", "# 說明"] {
+        let mut app = sample_app(&[]);
+        let (mut w, peer) = pair_writer();
+        crate::commands::submit_prompt_or_route(&mut app, &mut w, input).unwrap();
+        let mut line = String::new();
+        BufReader::new(peer).read_line(&mut line).unwrap();
+        match ertangle_protocol::decode_line(&line).unwrap() {
+            Request::Prompt { session, text, .. } => {
+                assert_eq!(session, "ses_test");
+                assert_eq!(text, input);
+            }
+            other => panic!("expected Prompt for {input:?}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn at_suggestions_browse_directories_and_fuzzy_filter() {
+    let d = temp_dir_with(&[("top.txt", b"t")]);
+    std::fs::create_dir_all(d.join("src/deep")).unwrap();
+    std::fs::write(d.join("src/deep/needle.rs"), "fn x(){}").unwrap();
+    std::fs::write(d.join("src/other.rs"), "").unwrap();
+
+    // 空查詢列出根目錄：資料夾在前、檔案在後
+    let root_entries = crate::attach::suggestions(&d, "", 50);
+    assert_eq!(root_entries, vec!["src/", "top.txt"]);
+
+    // 資料夾結尾 `/` 列出該層子項目
+    let src_entries = crate::attach::suggestions(&d, "src/", 50);
+    assert_eq!(src_entries, vec!["src/deep/", "src/other.rs"]);
+
+    // 模糊搜尋同時包含目錄與檔案
+    let deep_hits = crate::attach::suggestions(&d, "deep", 50);
+    assert!(
+        deep_hits.contains(&"src/deep/".to_string()),
+        "{deep_hits:?}"
+    );
+
+    // Tab 採用資料夾時不補空白以利繼續瀏覽，採用檔案時補空白
+    let mut app = sample_app(&[]);
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = d.to_string_lossy().to_string();
+    }
+    let (mut w, _peer) = pair_writer();
+    app.mode = Mode::Prompt;
+    app.input = "@".into();
+    app.input_cursor = 1;
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.input, "@src/");
+
+    // 再按一次 Tab 進入 `src/deep/`
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.input, "@src/deep/");
+
+    // 再按一次 Tab 選取 `src/deep/needle.rs` 並補空白
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.input, "@src/deep/needle.rs ");
+
+    // Enter 在建議浮層開啟時也應進入資料夾／選取檔案，而非直接送出 `@`
+    app.input = "@".into();
+    app.input_cursor = 1;
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.input, "@src/");
+}

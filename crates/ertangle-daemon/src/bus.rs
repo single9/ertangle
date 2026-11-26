@@ -247,6 +247,9 @@ impl Shared {
                 .unwrap_or_else(|| "human".into());
             let resolved_to = match to {
                 Target::Direct(t) => {
+                    if t.trim().is_empty() {
+                        return Err(tr!("收件者不可為空"));
+                    }
                     let mut sid = inner
                         .state
                         .resolve_session_id(&t)
@@ -284,8 +287,16 @@ impl Shared {
                                     .push(tr!("對方 {sid} 已結束，訊息不會被讀取", sid = sid));
                             }
                         }
+                    } else if !inner.state.sessions.contains_key(&sid) {
+                        route_notes.push(tr!("找不到收件者 {sid}，訊息不會被讀取", sid = sid));
                     }
                     Target::Direct(sid)
+                }
+                Target::Channel(ch) => {
+                    if ch.trim().is_empty() {
+                        return Err(tr!("頻道名稱不可為空"));
+                    }
+                    Target::Channel(ch)
                 }
                 other => other,
             };

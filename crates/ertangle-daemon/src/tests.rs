@@ -5763,3 +5763,29 @@ fn worktree_diff_shows_committed_branch_changes_when_clean() {
 
     crate::git::remove_worktree(&repo, &sess, true).unwrap();
 }
+
+#[test]
+fn deliver_message_rejects_empty_target_and_notes_missing_peer() {
+    let shared = test_shared();
+    for target in [
+        Target::Direct(String::new()),
+        Target::Direct("   ".into()),
+        Target::Channel(String::new()),
+    ] {
+        let res = shared.deliver_message_noted(None, target, MsgKind::Chat, "hi".into(), None);
+        assert!(res.is_err(), "empty target should be rejected");
+    }
+    let (_, notes) = shared
+        .deliver_message_noted(
+            None,
+            Target::Direct("missing_peer".into()),
+            MsgKind::Chat,
+            "hi".into(),
+            None,
+        )
+        .unwrap();
+    assert!(
+        notes.iter().any(|n| n.contains("missing_peer")),
+        "expected missing peer note, got {notes:?}"
+    );
+}

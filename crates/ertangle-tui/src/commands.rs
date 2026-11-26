@@ -29,10 +29,8 @@ pub(crate) fn submit_prompt_or_route(
     if let Some(cmd) = trimmed.strip_prefix('!') {
         return exec_shell_command(app, writer, cmd);
     }
-    // `@存在的檔案` 是附件，不是 `@peer` 訊息。
-    if (trimmed.starts_with('@') && !crate::attach::leads_with_file(trimmed, &app.search_root()))
-        || trimmed.starts_with('#')
-    {
+    // `@存在的檔案` 是附件，不是 `@peer` 訊息；僅有 `@` 或 `#` 而無對象名稱時視為一般 prompt。
+    if is_routed_bus_message(trimmed, &app.search_root()) {
         let mut parts = trimmed.splitn(2, char::is_whitespace);
         let target_str = parts.next().unwrap_or("");
         let body = parts.next().unwrap_or("").trim();
@@ -142,16 +140,27 @@ pub(crate) fn exec_shell_command(
 }
 
 /// 把一則 prompt 排進選取 session 的佇列 (交由 daemon 管理)；session 已閒置就直接送。
+/// 判斷是否為 `@peer ...` 或 `#channel ...` 匯流排訊息 (須有非空的對象名稱，且開頭不是 `@存在的檔案`)。
+fn is_routed_bus_message(trimmed: &str, root: &std::path::Path) -> bool {
+    let Some(first) = trimmed.split_whitespace().next() else {
+        return false;
+    };
+    if let Some(target) = first.strip_prefix('@') {
+        !target.is_empty() && !crate::attach::leads_with_file(trimmed, root)
+    } else if let Some(ch) = first.strip_prefix('#') {
+        !ch.is_empty()
+    } else {
+        false
+    }
+}
+
 /// 只處理一般 prompt (含 `@檔案` 附件)；`/命令`、`@peer`、`#channel` 不排隊。
 pub(crate) fn queue_prompt(app: &mut App, writer: &mut HostRouter, text: &str) -> Result<()> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return Ok(());
     }
-    let routed = trimmed.starts_with('/')
-        || trimmed.starts_with('#')
-        || (trimmed.starts_with('@')
-            && !crate::attach::leads_with_file(trimmed, &app.search_root()));
+    let routed = trimmed.starts_with('/') || is_routed_bus_message(trimmed, &app.search_root());
     let Some(id) = app.selected_id() else {
         app.status = tr!("沒有選取的 session");
         return Ok(());

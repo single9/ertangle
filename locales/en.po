@@ -1409,6 +1409,10 @@ msgid "{prefix}target quota is exhausted; message queued but the peer will not b
 msgstr "{prefix}target quota is exhausted; message queued but the peer will not be woken"
 
 #: crates/ertangle-daemon/src/bus.rs
+msgid "收件者不可為空"
+msgstr "Recipient cannot be empty"
+
+#: crates/ertangle-daemon/src/bus.rs
 msgid "收件者 {t} 已交接，訊息改投給接手的 {succ_label} ({succ})"
 msgstr "Recipient {t} was handed off; message redirected to its successor {succ_label} ({succ})"
 
@@ -1419,6 +1423,14 @@ msgstr "The target agent quota is exhausted; the message remains in the mailbox 
 #: crates/ertangle-daemon/src/bus.rs
 msgid "對方 {sid} 已結束，訊息不會被讀取"
 msgstr "{sid} has ended; the message will not be read"
+
+#: crates/ertangle-daemon/src/bus.rs
+msgid "找不到收件者 {sid}，訊息不會被讀取"
+msgstr "Recipient {sid} not found; the message will not be read"
+
+#: crates/ertangle-daemon/src/bus.rs
+msgid "頻道名稱不可為空"
+msgstr "Channel name cannot be empty"
 
 #: crates/ertangle-daemon/src/client.rs
 msgid "無法連線遠端 daemon ({remote})"
@@ -3270,8 +3282,12 @@ msgid " 命令 (Tab 自動完成) "
 msgstr " Commands (Tab to complete) "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " 專案檔案 (Tab 採用) "
-msgstr " Project files (Tab to accept) "
+msgid " 檔案瀏覽 ({pos}/{total} · Enter/Tab 進入/採用) "
+msgstr " File browser ({pos}/{total} · Enter/Tab to open/select) "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " 檔案瀏覽 (Enter/Tab 進入/採用) "
+msgstr " File browser (Enter/Tab to open/select) "
 
 #: crates/ertangle-tui/src/draw.rs
 msgid " 說明 (Esc 關閉) "
@@ -4052,6 +4068,10 @@ msgstr "role = {role}"
 #: crates/ertangle-tui/src/input.rs
 msgid "已貼上剪貼簿圖片"
 msgstr "Pasted image from clipboard"
+
+#: crates/ertangle-tui/src/input.rs
+msgid "瀏覽 {path}"
+msgstr "Browsing {path}"
 
 #: crates/ertangle-tui/src/input.rs
 msgid "已選 {path}"
@@ -4938,6 +4958,15 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid " 檔案瀏覽 ({pos}/{total} · Tab 進入/採用) "
+#~ msgstr " File browser ({pos}/{total} · Tab to open/select) "
+
+#~ msgid " 檔案瀏覽 (Tab 進入/採用) "
+#~ msgstr " File browser (Tab to open/select) "
+
+#~ msgid " 專案檔案 (Tab 採用) "
+#~ msgstr " Project files (Tab to accept) "
 
 #~ msgid "(目前沒有獨立 worktree；建立 session 時開啟 --worktree 或按 Ctrl-W)"
 #~ msgstr "(no separate worktrees; use --worktree or Ctrl-W when creating a session)"

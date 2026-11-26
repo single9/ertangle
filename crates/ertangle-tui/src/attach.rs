@@ -72,8 +72,12 @@ fn walk(root: &Path, dir: &Path, depth: usize, out: &mut Vec<String>) {
 /// 不符合回傳 `None`。
 pub(crate) fn fuzzy_score(query: &str, path: &str) -> Option<i64> {
     let q: Vec<char> = query.to_lowercase().chars().collect();
+    let trimmed = path.trim_end_matches('/');
     let p: Vec<char> = path.to_lowercase().chars().collect();
-    let base_start = path.rfind('/').map_or(0, |i| path[..=i].chars().count());
+    let base_start = trimmed
+        .rfind('/')
+        .map_or(0, |i| trimmed[..=i].chars().count());
+    let base_end = trimmed.chars().count();
     let mut score = 0i64;
     let mut qi = 0usize;
     let mut last: Option<usize> = None;
@@ -98,7 +102,7 @@ pub(crate) fn fuzzy_score(query: &str, path: &str) -> Option<i64> {
         return None;
     }
     // 完整檔名／字首命中給大加分
-    let base: String = p.get(base_start..).unwrap_or(&[]).iter().collect();
+    let base: String = p.get(base_start..base_end).unwrap_or(&[]).iter().collect();
     let ql: String = q.iter().collect();
     if base == ql {
         score += 200;
@@ -110,13 +114,96 @@ pub(crate) fn fuzzy_score(query: &str, path: &str) -> Option<i64> {
     Some(score - p.len() as i64 / 4)
 }
 
-/// 依模糊分數排序的前 `limit` 個專案檔案。`query` 為空時回傳空清單。
+/// 列出目錄下的直接子項目 (資料夾在前、結尾加 `/`；檔案在後，依名稱排序)。
+fn list_dir_entries(dir: &Path, prefix: &str, show_hidden: bool) -> Vec<String> {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut entries: Vec<(bool, String, String)> = rd
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            if !show_hidden && (name.starts_with('.') || name == "target" || name == "node_modules")
+            {
+                return None;
+            }
+            let is_dir = e.path().is_dir();
+            let display = format!("{prefix}{name}{}", if is_dir { "/" } else { "" });
+            Some((!is_dir, name.to_lowercase(), display))
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    entries.into_iter().map(|(_, _, d)| d).collect()
+}
+
+/// 從專案檔案清單萃取出所有不重複的目錄前綴 (結尾含 `/`)。
+fn project_dirs(files: &[String]) -> Vec<String> {
+    let mut dirs = std::collections::BTreeSet::new();
+    for f in files {
+        let mut idx = 0;
+        while let Some(pos) = f[idx..].find('/') {
+            let end = idx + pos + 1;
+            dirs.insert(f[..end].to_string());
+            idx = end;
+        }
+    }
+    dirs.into_iter().collect()
+}
+
+/// 專案檔案瀏覽與模糊搜尋：
+/// * `query` 為空或以 `/` 結尾時，列出該目錄下的資料夾與檔案 (資料夾優先)。
+/// * `query` 為 `/` 或 `~` 開頭時，瀏覽本機路徑並依尾端名稱模糊過濾。
+/// * 其餘情況對專案內所有目錄與檔案做模糊比對，依分數排序回傳前 `limit` 筆。
 pub(crate) fn suggestions(root: &Path, query: &str, limit: usize) -> Vec<String> {
     if query.is_empty() {
-        return Vec::new();
+        return list_dir_entries(root, "", false)
+            .into_iter()
+            .take(limit)
+            .collect();
     }
-    let mut scored: Vec<(i64, String)> = project_files(root)
+    if query == "~" {
+        return list_dir_entries(&resolve("~/"), "~/", false)
+            .into_iter()
+            .take(limit)
+            .collect();
+    }
+    if query.starts_with('/') || query.starts_with("~/") {
+        let (dir_part, name_part) = match query.rfind('/') {
+            Some(i) => (&query[..=i], &query[i + 1..]),
+            None => ("", query),
+        };
+        let entries = list_dir_entries(&resolve(dir_part), dir_part, name_part.starts_with('.'));
+        if name_part.is_empty() {
+            return entries.into_iter().take(limit).collect();
+        }
+        let mut scored: Vec<(i64, String)> = entries
+            .into_iter()
+            .filter_map(|e| {
+                let tail = e.get(dir_part.len()..).unwrap_or(&e);
+                fuzzy_score(name_part, tail).map(|s| (s, e))
+            })
+            .collect();
+        scored.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then(a.1.len().cmp(&b.1.len()))
+                .then(a.1.cmp(&b.1))
+        });
+        return scored.into_iter().take(limit).map(|(_, f)| f).collect();
+    }
+    if query.ends_with('/') {
+        let sub = root.join(query);
+        if sub.is_dir() {
+            return list_dir_entries(&sub, query, false)
+                .into_iter()
+                .take(limit)
+                .collect();
+        }
+    }
+    let files = project_files(root);
+    let dirs = project_dirs(&files);
+    let mut scored: Vec<(i64, String)> = files
         .into_iter()
+        .chain(dirs)
         .filter_map(|f| fuzzy_score(query, &f).map(|s| (s, f)))
         .collect();
     scored.sort_by(|a, b| {

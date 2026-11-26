@@ -1404,6 +1404,10 @@ msgid "{prefix}target quota is exhausted; message queued but the peer will not b
 msgstr ""
 
 #: crates/ertangle-daemon/src/bus.rs
+msgid "收件者不可為空"
+msgstr ""
+
+#: crates/ertangle-daemon/src/bus.rs
 msgid "收件者 {t} 已交接，訊息改投給接手的 {succ_label} ({succ})"
 msgstr ""
 
@@ -1413,6 +1417,14 @@ msgstr ""
 
 #: crates/ertangle-daemon/src/bus.rs
 msgid "對方 {sid} 已結束，訊息不會被讀取"
+msgstr ""
+
+#: crates/ertangle-daemon/src/bus.rs
+msgid "找不到收件者 {sid}，訊息不會被讀取"
+msgstr ""
+
+#: crates/ertangle-daemon/src/bus.rs
+msgid "頻道名稱不可為空"
 msgstr ""
 
 #: crates/ertangle-daemon/src/client.rs
@@ -3254,7 +3266,11 @@ msgid " 命令 (Tab 自動完成) "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " 專案檔案 (Tab 採用) "
+msgid " 檔案瀏覽 ({pos}/{total} · Enter/Tab 進入/採用) "
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " 檔案瀏覽 (Enter/Tab 進入/採用) "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -4035,6 +4051,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/input.rs
 msgid "已貼上剪貼簿圖片"
+msgstr ""
+
+#: crates/ertangle-tui/src/input.rs
+msgid "瀏覽 {path}"
 msgstr ""
 
 #: crates/ertangle-tui/src/input.rs

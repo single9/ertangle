@@ -261,39 +261,62 @@ pub(crate) fn draw_command_hints(f: &mut TuiFrame, input_area: Rect, app: &App) 
     );
 }
 
-/// `@` 檔案建議浮層：貼在輸入框上方左側，列出專案內模糊搜尋到的檔案。
+/// `@` 檔案建議浮層：貼在輸入框上方左側，支援目錄瀏覽與模糊搜尋捲動列表。
 pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &App) {
     let Some((_, cands)) = crate::input::at_candidates(app) else {
         return;
     };
+    let total = cands.len();
     let sel = if app.at_sel.0
         == crate::attach::current_at_token(&app.input, app.input_cursor)
             .map(|(_, t)| t)
             .unwrap_or_default()
     {
-        app.at_sel.1.min(cands.len() - 1)
+        app.at_sel.1.min(total - 1)
     } else {
         0
     };
-    let text_w = cands
+    let max_rows = (input_area.y.saturating_sub(2) as usize).clamp(1, 12);
+    let shown = total.min(max_rows);
+    let offset = sel
+        .saturating_sub(shown / 2)
+        .min(total.saturating_sub(shown));
+    let visible: Vec<(usize, &String)> =
+        cands.iter().enumerate().skip(offset).take(shown).collect();
+    let text_w = visible
         .iter()
-        .map(|c| UnicodeWidthStr::width(c.as_str()))
+        .map(|(_, c)| UnicodeWidthStr::width(c.as_str()))
         .max()
         .unwrap_or(10);
-    let w = (text_w + 6).min(f.area().width as usize).max(38) as u16;
-    let h = (cands.len() as u16 + 2).min(input_area.y);
+    let title = if total > shown {
+        tr!(
+            " 檔案瀏覽 ({pos}/{total} · Enter/Tab 進入/採用) ",
+            pos = sel + 1,
+            total = total
+        )
+    } else {
+        tr!(" 檔案瀏覽 (Enter/Tab 進入/採用) ")
+    };
+    let title_w = UnicodeWidthStr::width(title.as_str()) + 2;
+    let w = (text_w + 6)
+        .max(title_w)
+        .min(f.area().width as usize)
+        .max(42) as u16;
+    let h = (shown as u16 + 2).min(input_area.y);
     let area = Rect::new(f.area().x, input_area.y.saturating_sub(h), w, h);
-    let lines: Vec<Line> = cands
-        .iter()
-        .enumerate()
+    let lines: Vec<Line> = visible
+        .into_iter()
         .map(|(i, c)| {
+            let style = if i == sel {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else if c.ends_with('/') {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default()
+            };
             Line::from(Span::styled(
                 format!("{} {c}", if i == sel { "▸" } else { " " }),
-                if i == sel {
-                    Style::default().fg(Color::Black).bg(Color::Cyan)
-                } else {
-                    Style::default()
-                },
+                style,
             ))
         })
         .collect();
@@ -303,7 +326,7 @@ pub(crate) fn draw_file_suggestions(f: &mut TuiFrame, input_area: Rect, app: &Ap
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
-                .title(tr!(" 專案檔案 (Tab 採用) ")),
+                .title(title),
         ),
         area,
     );

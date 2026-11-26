@@ -475,7 +475,7 @@ pub(crate) fn handle_input_mode(
                 app.at_sel.1 = (app.at_sel.1 + n - 1) % n;
                 return Ok(());
             }
-            KeyCode::Tab => {
+            KeyCode::Tab | KeyCode::Enter if key.modifiers.is_empty() => {
                 if let Some(cand) = cands.get(app.at_sel.1.min(n.saturating_sub(1))) {
                     accept_at_candidate(app, start, cand);
                 }
@@ -755,22 +755,25 @@ fn at_token_text(app: &App) -> String {
         .unwrap_or_default()
 }
 
-/// 在 Prompt／Spawn／Message 輸入 `@xxx` 時的專案內模糊搜尋建議 (相對路徑或 `~`、`/` 開頭的字面路徑不搜尋)。
+/// 在 Prompt／Spawn／Message 輸入 `@` 或 `@xxx` 時的檔案瀏覽與模糊搜尋建議 (引號內路徑不搜尋)。
 pub(crate) fn at_candidates(app: &App) -> Option<(usize, Vec<String>)> {
     if !matches!(app.mode, Mode::Prompt | Mode::Spawn | Mode::Message) {
         return None;
     }
     let (start, tok) = crate::attach::current_at_token(&app.input, app.input_cursor)?;
-    if tok.is_empty() || tok.starts_with(['/', '~', '"']) {
+    if tok.starts_with('"') {
         return None;
     }
-    let c = crate::attach::suggestions(&app.search_root(), &tok, 8);
+    let c = crate::attach::suggestions(&app.search_root(), &tok, 100);
     (!c.is_empty()).then_some((start, c))
 }
 
-/// 用選取的建議取代游標前的 `@token` (路徑含空白時加引號)，後面補一個空白。
+/// 用選取的建議取代游標前的 `@token`：資料夾僅補上 `/` 以繼續瀏覽，檔案則補空白結束選取。
 fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
-    let rep = if path.contains(char::is_whitespace) {
+    let is_dir = path.ends_with('/');
+    let rep = if is_dir {
+        format!("@{path}")
+    } else if path.contains(char::is_whitespace) {
         format!("@\"{path}\" ")
     } else {
         format!("@{path} ")
@@ -779,7 +782,12 @@ fn accept_at_candidate(app: &mut App, start: usize, path: &str) {
     let e = byte_index(&app.input, app.input_cursor);
     app.input.replace_range(s..e, &rep);
     app.input_cursor = start + rep.chars().count();
-    app.status = tr!("已選 {path}", path = path);
+    if is_dir {
+        app.at_sel = (path.to_string(), 0);
+        app.status = tr!("瀏覽 {path}", path = path);
+    } else {
+        app.status = tr!("已選 {path}", path = path);
+    }
 }
 
 /// 游標前的 `@路徑` 做 Tab 自動完成：唯一符合就補完，多個則補到共同前綴並列出候選。
