@@ -582,9 +582,9 @@ pub(crate) fn handle_input_mode(
                 Err(e) => app.status = e,
             }
         }
-        KeyCode::Up | KeyCode::Down if matches!(app.mode, Mode::Prompt | Mode::Command) => {
+        KeyCode::Up | KeyCode::Down if is_multiline(app.mode) || app.mode == Mode::Command => {
             let up = key.code == KeyCode::Up;
-            if !move_cursor_row(app, up) {
+            if !move_cursor_row(app, up) && matches!(app.mode, Mode::Prompt | Mode::Command) {
                 recall_history(app, up);
             }
         }

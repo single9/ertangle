@@ -386,7 +386,7 @@ fn event_loop(
 /// 處理一個 crossterm 事件。
 fn handle_event(app: &mut App, writer: &mut HostRouter, ev: CtEvent) -> Result<()> {
     match ev {
-        CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
+        CtEvent::Key(key) if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) => {
             if let Err(e) = handle_key(app, writer, key) {
                 // 連線已斷時，送出請求失敗不該讓整個 TUI 崩掉。
                 if app.disconnected {

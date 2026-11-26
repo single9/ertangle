@@ -83,7 +83,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
             ("P", tr_noop!("只看本專案／顯示全部專案 (session、Bus、任務)")),
             ("E", tr_noop!("展開／摺疊側欄底部「已結束」群組")),
             (
-                "Ctrl-J / Shift-Enter",
+                "Shift-Enter / Ctrl-J",
                 tr_noop!("(輸入 prompt 時)換行；輸入框隨行數長高，貼上保留換行"),
             ),
             (

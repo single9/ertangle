@@ -6804,6 +6804,39 @@ fn t94_shift_enter_and_ctrl_enter_newline() {
 }
 
 #[test]
+fn multiline_arrow_keys_move_rows_in_all_multiline_modes() {
+    let mut app = sample_app(&[]);
+    let (mut w, _peer) = pair_writer();
+    app.input_inner_w = 40;
+    for mode in [Mode::Prompt, Mode::Spawn, Mode::Message, Mode::Review] {
+        app.mode = mode;
+        app.input = "first\nsecond".into();
+        app.input_cursor = 12; // end of "second"
+
+        handle_key(&mut app, &mut w, kev(KeyCode::Up)).unwrap();
+        assert_eq!(
+            app.input_cursor, 5,
+            "Up should move to end of first line in {mode:?}"
+        );
+
+        handle_key(&mut app, &mut w, kev(KeyCode::Down)).unwrap();
+        assert_eq!(
+            app.input_cursor, 11,
+            "Down should preserve column 5 on second line in {mode:?}"
+        );
+    }
+
+    // Repeat events should also move cursor rows
+    app.mode = Mode::Prompt;
+    app.input = "first\nsecond".into();
+    app.input_cursor = 12;
+    let mut repeat_up = kev(KeyCode::Up);
+    repeat_up.kind = crossterm::event::KeyEventKind::Repeat;
+    handle_event(&mut app, &mut w, CtEvent::Key(repeat_up)).unwrap();
+    assert_eq!(app.input_cursor, 5);
+}
+
+#[test]
 fn t94_option_left_right_and_b_f() {
     let mut app = sample_app(&[]);
     let (mut w, _peer) = pair_writer();
