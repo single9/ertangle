@@ -764,4 +764,63 @@ mod tests {
         };
         assert_eq!(f_ans, vec!["Accepted"]);
     }
+
+    #[test]
+    fn web_spawn_handoff_permission_and_task_wire_shapes() {
+        // Web UI sends kind: "claude", optional null prompt/role, and PascalCase/alias enum strings.
+        let req: Request = decode_line(
+            r#"{"op":"spawn","cwd":null,"kind":"claude","label":null,"model":null,"effort":null,"permission":"auto","budget_usd":null,"worktree":false,"prompt":null,"role":null,"transport":"auto"}"#,
+        )
+        .unwrap();
+        let Request::Spawn(sp) = req else {
+            panic!("expected Spawn")
+        };
+        assert_eq!(sp.kind, Some(AgentKind::ClaudeCode));
+        assert!(sp.prompt.is_none());
+        assert!(sp.role.is_none());
+
+        let handoff: Request =
+            decode_line(r#"{"op":"handoff","session":"ses_1","kind":"claude","note":null}"#)
+                .unwrap();
+        let Request::Handoff { kind, .. } = handoff else {
+            panic!("expected Handoff")
+        };
+        assert_eq!(kind, AgentKind::ClaudeCode);
+
+        for (raw, expected) in [
+            ("allow", Decision::Allow),
+            ("Allow", Decision::Allow),
+            ("allow_always", Decision::AllowAlways),
+            ("Always", Decision::AllowAlways),
+            ("deny", Decision::Deny),
+            ("Deny", Decision::Deny),
+        ] {
+            let perm: Request = decode_line(&format!(
+                r#"{{"op":"permission","session":"ses_1","req":"perm_1","decision":"{raw}"}}"#
+            ))
+            .unwrap();
+            let Request::Permission { decision, .. } = perm else {
+                panic!("expected Permission")
+            };
+            assert_eq!(decision, expected);
+        }
+
+        for (raw, expected) in [
+            ("todo", TaskStatus::Todo),
+            ("Todo", TaskStatus::Todo),
+            ("doing", TaskStatus::Doing),
+            ("Doing", TaskStatus::Doing),
+            ("done", TaskStatus::Done),
+            ("Done", TaskStatus::Done),
+        ] {
+            let tu: Request = decode_line(&format!(
+                r#"{{"op":"task_update","id":"task_1","status":"{raw}"}}"#
+            ))
+            .unwrap();
+            let Request::TaskUpdate { status, .. } = tu else {
+                panic!("expected TaskUpdate")
+            };
+            assert_eq!(status, Some(expected));
+        }
+    }
 }

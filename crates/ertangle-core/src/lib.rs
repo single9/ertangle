@@ -101,9 +101,13 @@ pub type Seq = u64;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentKind {
+    #[serde(alias = "opencode", alias = "OpenCode")]
     OpenCode,
+    #[serde(alias = "claude", alias = "claude-code", alias = "ClaudeCode")]
     ClaudeCode,
+    #[serde(alias = "Codex")]
     Codex,
+    #[serde(alias = "agy", alias = "gemini", alias = "Antigravity")]
     Antigravity,
     /// Custom user agent: specifies executable directly.
     Custom(String),
@@ -508,10 +512,15 @@ impl BusMessage {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
+    #[serde(alias = "Todo")]
     Todo,
+    #[serde(alias = "Doing")]
     Doing,
+    #[serde(alias = "Blocked")]
     Blocked,
+    #[serde(alias = "Review")]
     Review,
+    #[serde(alias = "Done")]
     Done,
 }
 
@@ -716,9 +725,12 @@ impl std::fmt::Display for PermissionPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Decision {
+    #[serde(alias = "Allow")]
     Allow,
     /// Always allows similar requests within this session.
+    #[serde(alias = "always", alias = "Always", alias = "AllowAlways")]
     AllowAlways,
+    #[serde(alias = "Deny")]
     Deny,
 }
 

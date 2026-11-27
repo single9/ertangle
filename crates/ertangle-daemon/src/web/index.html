@@ -1916,6 +1916,17 @@
           </div>
         </div>
 
+        <!-- 角色 (Role) 分段切換器 -->
+        <div class="form-group">
+          <label class="form-label">角色 (Role)</label>
+          <div class="segmented-grid" id="new-role-segments">
+            <button class="seg-btn active" onclick="setNewRole('', this)">預設</button>
+            <button class="seg-btn" onclick="setNewRole('coordinator', this)">coordinator</button>
+            <button class="seg-btn" onclick="setNewRole('worker', this)">worker</button>
+            <button class="seg-btn" onclick="setNewRole('reviewer', this)">reviewer</button>
+          </div>
+        </div>
+
         <!-- 自訂模型選擇清單 -->
         <div class="form-group">
           <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1966,8 +1977,8 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">初始 Prompt</label>
-          <textarea id="new-prompt" class="sheet-input" rows="3" placeholder="請描述想要指派給此 Agent 的工作任務…"></textarea>
+          <label class="form-label">初始 Prompt (選填)</label>
+          <textarea id="new-prompt" class="sheet-input" rows="3" placeholder="可留空直接啟動，或輸入想要指派給此 Agent 的初始任務…"></textarea>
         </div>
 
         <div class="sheet-btn-row">
@@ -2345,10 +2356,12 @@
     let newSessionState = {
       cwd: "",
       kind: "opencode",
+      role: "",
       model: "",
       effort: "",
       permission: "auto"
     };
+    let pendingSelectSpawned = false;
 
     let manageSessionState = {
       model: "",
@@ -2734,6 +2747,10 @@
         if (state.archived_sessions) delete state.archived_sessions[event.session.id];
         state.sessions[event.session.id] = event.session;
         if (!state.transcripts[event.session.id]) state.transcripts[event.session.id] = [];
+        if (pendingSelectSpawned && !event.session.parent) {
+          pendingSelectSpawned = false;
+          activeSession = event.session.id;
+        }
       } else if (kind === "session_status") {
         const x = state.sessions[event.session];
         if (x) {
@@ -3660,9 +3677,9 @@
       const urgentActionRow = document.getElementById("urgent-action-row");
       const chatQuestionSlot = document.getElementById("chat-question-slot");
       const permissionActions = `
-            <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
-            <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
-            <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>`;
+            <button class="btn-pill btn-allow" onclick="submitPermission('allow')">Allow 放行</button>
+            <button class="btn-pill btn-always" onclick="submitPermission('allow_always')">Always 總是</button>
+            <button class="btn-pill btn-deny" onclick="submitPermission('deny')">Deny 拒絕</button>`;
       const inlineQuestion = !!activeQuestion && currentTab === "chat" && activeQuestion.session === activeSession;
       chatQuestionSlot.style.display = inlineQuestion ? "block" : "none";
       if (!inlineQuestion) setCardHtml(chatQuestionSlot, "", "");
@@ -3706,9 +3723,9 @@
             <div style="color:var(--yellow); font-weight:600; margin-bottom:4px;">${escapeHtml(req.title)}</div>
             <div style="font-family:var(--font-mono); font-size:12px; margin-bottom:8px;">${escapeHtml(req.detail)}</div>
             <div class="btn-row">
-              <button class="btn-pill btn-allow" onclick="submitPermission('Allow')">Allow 放行</button>
-              <button class="btn-pill btn-always" onclick="submitPermission('Always')">Always 總是</button>
-              <button class="btn-pill btn-deny" onclick="submitPermission('Deny')">Deny 拒絕</button>
+              <button class="btn-pill btn-allow" onclick="submitPermission('allow')">Allow 放行</button>
+              <button class="btn-pill btn-always" onclick="submitPermission('allow_always')">Always 總是</button>
+              <button class="btn-pill btn-deny" onclick="submitPermission('deny')">Deny 拒絕</button>
             </div>
           </div>
         `;
@@ -4996,6 +5013,12 @@
       });
     }
 
+    function setNewRole(role, btnEl) {
+      newSessionState.role = role;
+      document.querySelectorAll("#new-role-segments .seg-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
     function setNewEffort(effort, btnEl) {
       newSessionState.effort = effort;
       document.querySelectorAll("#new-effort-segments .seg-btn").forEach(b => b.classList.remove("active"));
@@ -5094,10 +5117,15 @@
       document.getElementById("new-worktree").checked = false;
       document.getElementById("new-model-custom").style.display = "none";
       newSessionState.kind = "opencode";
+      newSessionState.role = "";
       newSessionState.model = "";
       newSessionState.effort = "";
       newSessionState.permission = "auto";
       newSessionState.cwd = "";
+
+      const roleSegs = document.querySelectorAll("#new-role-segments .seg-btn");
+      roleSegs.forEach(b => b.classList.remove("active"));
+      if (roleSegs[0]) roleSegs[0].classList.add("active");
 
       // 渲染專案選擇分段按鈕
       const projectSegs = document.getElementById("new-project-segments");
@@ -5129,14 +5157,18 @@
     }
 
     function submitDetailedSession() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showToast("尚未連線至 daemon，請稍候重試", true);
+        return;
+      }
       const promptText = document.getElementById("new-prompt").value.trim();
-      if (!promptText || !ws) return;
 
       const label = document.getElementById("new-label").value.trim() || null;
       const budgetVal = parseFloat(document.getElementById("new-budget").value);
       const budgetUsd = !isNaN(budgetVal) && budgetVal > 0 ? budgetVal : null;
       const worktree = document.getElementById("new-worktree").checked;
 
+      pendingSelectSpawned = true;
       ws.send(JSON.stringify({
         op: "spawn",
         cwd: newSessionState.cwd || null,
@@ -5147,12 +5179,12 @@
         permission: newSessionState.permission || null,
         budget_usd: budgetUsd,
         worktree: worktree,
-        prompt: promptText,
-        role: "worker",
+        prompt: promptText || null,
+        role: newSessionState.role || null,
         transport: "auto"
       }));
       closeSheet("sheet-new-session");
-      showToast("已建立新 Agent Session…");
+      showToast("正在建立新 Agent Session…");
     }
 
     let targetManageSessionId = null;
@@ -5337,8 +5369,8 @@
     }
     function cycleTaskStatus(taskId, currentStatus) {
       if (!ws) return;
-      const cycle = { Todo: "Doing", Doing: "Done", Done: "Todo", Blocked: "Doing", Review: "Done" };
-      const next = cycle[currentStatus] || "Doing";
+      const cycle = { todo: "doing", doing: "done", done: "todo", blocked: "doing", review: "done" };
+      const next = cycle[(currentStatus || "").toLowerCase()] || "doing";
       ws.send(JSON.stringify({ op: "task_update", id: taskId, status: next }));
     }
 

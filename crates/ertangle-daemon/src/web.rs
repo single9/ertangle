@@ -1527,6 +1527,16 @@ mod tests {
         assert!(!resp.contains("Access-Control-Allow-Origin"));
     }
 
+    /// T109: Web UI new-session sheet supports optional initial prompt and role selector.
+    #[test]
+    fn web_new_session_allows_empty_prompt_and_role_selection() {
+        assert!(INDEX_HTML.contains("id=\"new-role-segments\""));
+        assert!(INDEX_HTML.contains("function setNewRole("));
+        assert!(INDEX_HTML.contains("prompt: promptText || null"));
+        assert!(INDEX_HTML.contains("role: newSessionState.role || null"));
+        assert!(!INDEX_HTML.contains("if (!promptText || !ws) return;"));
+    }
+
     mod hex {
         pub fn encode(bytes: [u8; 20]) -> String {
             bytes.iter().map(|b| format!("{b:02x}")).collect()
