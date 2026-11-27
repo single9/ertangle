@@ -70,12 +70,35 @@ impl Renderer {
         width: usize,
     ) -> Vec<LineWithLinks> {
         self.in_fence = false;
+        let mut prompt_color: Option<Color> = None;
         let mut out = Vec::with_capacity(src.len());
         let mut i = 0usize;
         while i < src.len() {
             let Some(line) = src.get(i).map(|s| s.as_ref()) else {
                 break;
             };
+
+            if let Some(color) = prompt_color {
+                if let Some(rest) = line.strip_prefix("  ") {
+                    if rest.trim().is_empty() {
+                        out.push((Line::raw(String::new()), Vec::new()));
+                    } else {
+                        out.push(prefixed_with_links("  ", rest, color, false));
+                    }
+                    i += 1;
+                    continue;
+                }
+                prompt_color = None;
+            }
+
+            if !self.in_fence {
+                if let Some((from, _)) = ertangle_core::parse_prompt_line(line) {
+                    prompt_color = Some(if from.is_none() { PROMPT } else { PEER_PROMPT });
+                    out.push(render_line_with_links(line, width));
+                    i += 1;
+                    continue;
+                }
+            }
 
             if self.in_fence {
                 if fence(line).is_some() {
@@ -1117,6 +1140,28 @@ mod tests {
         assert_eq!(contents(&out[0]).join(""), "» [coord/a] do it");
         assert_eq!(fg(&out[0], "do it"), Some(PEER_PROMPT));
         assert_eq!(fg(&out[1], "mine"), Some(PROMPT));
+    }
+
+    #[test]
+    fn multiline_user_prompt_keeps_prompt_style_and_ignores_block_markdown() {
+        let fg = |l: &Line<'_>, text: &str| {
+            l.spans
+                .iter()
+                .find(|s| s.content.contains(text))
+                .and_then(|s| s.style.fg)
+        };
+        let mut r = Renderer::new();
+        let out = r.render(
+            &plain("❯ first line\n  # not heading\n  - not bullet\n  ```\n  \n  after blank\nassistant reply"),
+            80,
+        );
+        assert_eq!(fg(&out[0], "first line"), Some(PROMPT));
+        assert_eq!(fg(&out[1], "# not heading"), Some(PROMPT));
+        assert_eq!(fg(&out[2], "- not bullet"), Some(PROMPT));
+        assert_eq!(fg(&out[3], "  "), Some(PROMPT));
+        assert!(!r.in_fence);
+        assert_eq!(fg(&out[5], "after blank"), Some(PROMPT));
+        assert_eq!(fg(&out[6], "assistant reply"), None);
     }
 
     #[test]

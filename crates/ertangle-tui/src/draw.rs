@@ -1631,19 +1631,36 @@ pub(crate) fn find_safe_boundary(buf: &std::collections::VecDeque<String>) -> us
     }
 
     let mut in_fence = false;
+    let mut in_prompt = false;
     let mut fence_after = Vec::with_capacity(len);
+    let mut prompt_after = Vec::with_capacity(len);
     for l in buf.iter() {
-        if crate::markdown::fence(l).is_some() {
+        if in_prompt {
+            if l.starts_with("  ") {
+                fence_after.push(in_fence);
+                prompt_after.push(true);
+                continue;
+            }
+            in_prompt = false;
+        }
+        if !in_fence && ertangle_core::parse_prompt_line(l).is_some() {
+            in_prompt = true;
+        } else if crate::markdown::fence(l).is_some() {
             in_fence = !in_fence;
         }
         fence_after.push(in_fence);
+        prompt_after.push(in_prompt);
     }
 
     let search_end = len.saturating_sub(2);
 
-    // 優先找 code fence 之外的空白行：空白行必非工具行、非表格、非段落中斷，且會 flush 工具摺疊
+    // 優先找 code fence 與多行 prompt 之外的空白行：空白行必非工具行、非表格、非段落中斷，且會 flush 工具摺疊
     for i in (1..=search_end).rev() {
-        if !fence_after.get(i - 1).copied().unwrap_or(false)
+        let in_f = fence_after.get(i - 1).copied().unwrap_or(false);
+        let in_p = prompt_after.get(i - 1).copied().unwrap_or(false)
+            && buf.get(i).is_some_and(|l| l.starts_with("  "));
+        if !in_f
+            && !in_p
             && buf.get(i - 1).is_some_and(|l| l.trim().is_empty())
             && !buf.get(i).is_some_and(|l| l.starts_with("  ✓"))
         {
@@ -1651,9 +1668,12 @@ pub(crate) fn find_safe_boundary(buf: &std::collections::VecDeque<String>) -> us
         }
     }
 
-    // 若無空白行，找 code fence 之外的獨立普通行
+    // 若無空白行，找 code fence 與多行 prompt 之外的獨立普通行
     for i in (1..=search_end).rev() {
-        if fence_after.get(i - 1).copied().unwrap_or(false) {
+        let in_f = fence_after.get(i - 1).copied().unwrap_or(false);
+        let in_p = prompt_after.get(i - 1).copied().unwrap_or(false)
+            && buf.get(i).is_some_and(|l| l.starts_with("  "));
+        if in_f || in_p {
             continue;
         }
         let prev = buf.get(i - 1).map_or("", |s| s.as_str());
