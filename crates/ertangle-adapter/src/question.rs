@@ -236,6 +236,10 @@ pub fn parse_acp_elicitations(session: &str, params: &Value) -> Vec<(UserQuestio
             } else if let Some(variants) = v
                 .get("oneOf")
                 .or_else(|| v.get("anyOf"))
+                .or_else(|| {
+                    v.get("items")
+                        .and_then(|i| i.get("oneOf").or_else(|| i.get("anyOf")))
+                })
                 .and_then(|value| value.as_array())
             {
                 for variant in variants {
@@ -494,6 +498,59 @@ mod tests {
         assert_eq!(list[0].0.options[0].label, "Postgres");
         assert_eq!(list[0].0.options[0].value.as_deref(), Some("1"));
         assert_eq!(list[0].0.options[1].value.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn parses_acp_multi_select_items_one_of_options() {
+        let params = json!({
+            "message": "The agent has 2 questions.",
+            "requestedSchema": {
+                "type": "object",
+                "properties": {
+                    "q1": {
+                        "type": "array",
+                        "title": "Which scripts?",
+                        "items": {
+                            "oneOf": [
+                                {"const": "a.sh", "title": "a.sh", "description": "Script A"},
+                                {"const": "b.ps1", "title": "b.ps1"}
+                            ]
+                        }
+                    },
+                    "q2": {
+                        "type": "array",
+                        "title": "Which improvements?",
+                        "items": {
+                            "anyOf": [
+                                {"const": "1", "title": "Option 1"}
+                            ]
+                        }
+                    }
+                }
+            }
+        });
+        let list = parse_acp_elicitations("ses_1", &params);
+        assert_eq!(list.len(), 2);
+        let q1 = list
+            .iter()
+            .find(|(_, k)| k == "q1")
+            .map(|(q, _)| q)
+            .expect("q1");
+        assert!(q1.multi_select);
+        assert_eq!(q1.options.len(), 2);
+        assert_eq!(q1.options[0].label, "a.sh");
+        assert_eq!(q1.options[0].description.as_deref(), Some("Script A"));
+        assert_eq!(q1.options[1].label, "b.ps1");
+
+        let q2 = list
+            .iter()
+            .find(|(_, k)| k == "q2")
+            .map(|(q, _)| q)
+            .expect("q2");
+        assert!(q2.multi_select);
+        assert_eq!(q2.options.len(), 1);
+        assert_eq!(q2.options[0].label, "Option 1");
+        assert_eq!(q2.options[0].value.as_deref(), Some("1"));
     }
 
     #[test]

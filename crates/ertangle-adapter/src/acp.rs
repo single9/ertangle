@@ -547,9 +547,6 @@ impl Conn {
         let shared_answers = Arc::new(Mutex::new(HashMap::new()));
         let mut q_map = self.questions.lock().unwrap_or_else(|e| e.into_inner());
         for (q, key) in list {
-            let mut answers = shared_answers.lock().unwrap_or_else(|e| e.into_inner());
-            answers.insert(key.clone(), (q.multi_select, Vec::new()));
-            drop(answers);
             let option_values = q
                 .options
                 .iter()
