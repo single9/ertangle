@@ -1,6 +1,22 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.6.0] - 2026-11-27
+
+### 🚀 Features
+
+- *(tui)* Add Grid View click/slot selection, monitoring titles, and transcript cache (T104)
+- *(daemon,tui)* Add custom worktree symlinks (T105), Diff editor launch (T106), and auto merge queue (T107)
+
+### 🐛 Bug Fixes
+
+- *(tui)* Enable xterm modifyOtherKeys inside tmux for Shift-Enter
+- *(tui)* Preserve prompt style across multiline user prompts in markdown renderer
+
+### 🧪 Testing
+
+- *(dev)* Retry port bind in free_port_is_usable to avoid TOCTOU flake
+
 ## [1.5.1] - 2026-11-26
 
 ### 🐛 Bug Fixes
