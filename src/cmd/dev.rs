@@ -470,9 +470,17 @@ mod tests {
 
     #[test]
     fn free_port_is_usable() {
-        let p = allocate_free_port().unwrap();
-        assert!(p > 0);
-        assert!(TcpListener::bind(("127.0.0.1", p)).is_ok());
+        // allocate_free_port() 釋放後才由呼叫端重新 bind，平行測試時可能有極短暫 TOCTOU 競態，重試幾次。
+        let mut bound = false;
+        for _ in 0..5 {
+            let p = allocate_free_port().unwrap();
+            assert!(p > 0);
+            if TcpListener::bind(("127.0.0.1", p)).is_ok() {
+                bound = true;
+                break;
+            }
+        }
+        assert!(bound, "failed to bind allocated free port after retries");
     }
 
     #[test]
