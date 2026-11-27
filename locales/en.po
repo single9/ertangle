@@ -3594,8 +3594,8 @@ msgid "  i 輸入  ? 說明  Space 選單  : 命令  q 離開"
 msgstr "  i type  ? help  Space menu  : command  q quit"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  ? 說明  c 註解  M 合併  q 離開"
-msgstr "  ? help  c comment  M merge  q quit"
+msgid "  ? 說明  e 編輯  c 註解  M 合併  q 離開"
+msgstr "  ? help  e edit  c comment  M merge  q quit"
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "  ? 說明  M 合併  G 清理  q 離開"
@@ -4020,6 +4020,14 @@ msgstr "Leave a review comment on `{loc}` (Enter sends it to the agent)"
 #: crates/ertangle-tui/src/input.rs
 msgid "命令 (Tab 自動完成)：spawn rm clean kill merge diff gc task …"
 msgstr "Command (Tab to complete): spawn rm clean kill merge diff gc task …"
+
+#: crates/ertangle-tui/src/input.rs
+msgid "找不到檔案：{path}"
+msgstr "File not found: {path}"
+
+#: crates/ertangle-tui/src/input.rs
+msgid "目前位置沒有可編輯的檔案"
+msgstr "No editable file at cursor"
 
 #: crates/ertangle-tui/src/input.rs
 msgid "輸入要送給選取 session 的訊息"
@@ -4956,8 +4964,23 @@ msgid "daemon 連線已中斷 (可能被關閉了)。畫面是最後的狀態，
 msgstr "Lost connection to the daemon (it may have been shut down). The screen shows the last state; press q to quit and restart"
 
 #: crates/ertangle-tui/src/lib.rs
+msgid "已關閉編輯器"
+msgstr "Closed editor"
+
+#: crates/ertangle-tui/src/lib.rs
+msgid "編輯器退出碼：{code}"
+msgstr "Editor exited with {code}"
+
+#: crates/ertangle-tui/src/lib.rs
+msgid "啟動編輯器失敗：{e}"
+msgstr "Failed to launch editor: {e}"
+
+#: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "  ? 說明  c 註解  M 合併  q 離開"
+#~ msgstr "  ? help  c comment  M merge  q quit"
 
 #~ msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
 #~ msgstr "  Select a session to switch panes (4 per page)  Enter/V back to single transcript  ? help"

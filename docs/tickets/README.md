@@ -109,6 +109,9 @@
 | [T102](T102-polyglot-outline-and-nonblocking-dev-server.md) | `ertangle outline` (polyglot code skeleton) and `ertangle dev` (non-blocking dev server manager) (已完成) | P2 | T32, T47, T100 |
 | [T103](T103-godot-engine-polyglot-support.md) | Godot Engine polyglot support across worktree provisioning, scoped diff, `ertangle check`, and `ertangle outline` (已完成) | P2 | T98, T100, T101, T102 |
 | [T104](T104-grid-view-interaction-and-cache.md) | Grid View interaction (`1`–`4` / mouse click), monitoring titles, and transcript cache (已完成) | P2 | T41 |
+| [T105](T105-custom-worktree-symlinks.md) | Custom worktree `symlink_paths` and `.worktreeinclude` (已完成) | P2 | T100 |
+| [T106](T106-tui-diff-open-in-editor.md) | Open Diff file at cursor line in `$EDITOR` (`e` key) (已完成) | P3 | T35 |
+| [T107](T107-automated-merge-queue.md) | Automated Merge Queue with verification gate (`auto_merge_queue`) (已完成) | P2 | T56, T99, T101 |
 
 ## Language convention
 

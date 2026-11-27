@@ -5789,3 +5789,185 @@ fn deliver_message_rejects_empty_target_and_notes_missing_peer() {
         "expected missing peer note, got {notes:?}"
     );
 }
+
+#[test]
+fn t105_custom_worktree_symlinks_and_worktreeinclude() {
+    let dir = ertangle_test_support::temp_dir("ertangle-t105");
+    let repo = dir.join("repo");
+    let wt = dir.join("wt");
+    std::fs::create_dir_all(repo.join("extra")).unwrap();
+    std::fs::create_dir_all(&wt).unwrap();
+
+    // Initialize git repo with one tracked file.
+    assert!(std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(&repo)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::write(repo.join("tracked.txt"), "tracked").unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["add", "tracked.txt"])
+        .current_dir(&repo)
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new("git")
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@e",
+            "commit",
+            "-m",
+            "init"
+        ])
+        .current_dir(&repo)
+        .status()
+        .unwrap()
+        .success());
+
+    // Untracked local files & .worktreeinclude (including invalid/tracked entries).
+    std::fs::write(repo.join("local.secret"), "s3cr3t").unwrap();
+    std::fs::write(repo.join("extra/cfg.toml"), "k = 1").unwrap();
+    std::fs::write(
+        repo.join(".worktreeinclude"),
+        "# comment\n\nlocal.secret\n../escape\n/etc/passwd\ntracked.txt\n",
+    )
+    .unwrap();
+
+    crate::git::provision_worktree_deps_with_paths(&repo, &wt, &["extra/cfg.toml".into()]);
+
+    assert!(wt.join("local.secret").is_symlink());
+    assert!(wt.join("extra/cfg.toml").is_symlink());
+    assert!(!wt.join("tracked.txt").exists());
+    let links = crate::git::read_provisioned_links(&wt);
+    assert!(links.contains(&"local.secret".to_string()), "{links:?}");
+    assert!(links.contains(&"extra/cfg.toml".to_string()), "{links:?}");
+
+    crate::git::cleanup_provisioned_links(&wt);
+    assert!(!wt.join("local.secret").exists());
+    assert!(!wt.join("extra/cfg.toml").exists());
+}
+
+#[test]
+fn t107_auto_merge_queue_config_and_run_auto_merge() {
+    let default_cfg = crate::config::GitCfg::default();
+    assert!(!default_cfg.auto_merge_queue());
+
+    let parsed: crate::config::Config = toml::from_str("[git]\nauto_merge_queue = true\n").unwrap();
+    assert!(parsed.git.auto_merge_queue());
+
+    let dir = ertangle_test_support::temp_dir("ertangle-t107");
+    let repo = dir.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(&repo)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::write(repo.join("README.md"), "init\n").unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["add", "README.md"])
+        .current_dir(&repo)
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new("git")
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@e",
+            "commit",
+            "-m",
+            "init"
+        ])
+        .current_dir(&repo)
+        .status()
+        .unwrap()
+        .success());
+    let shared = test_shared();
+
+    let parent_id: SessionId = "ses_coord".into();
+    shared.emit(Event::SessionStarted {
+        session: Session {
+            id: parent_id.clone(),
+            kind: AgentKind::ClaudeCode,
+            label: "coord".into(),
+            cwd: repo.to_string_lossy().to_string(),
+            branch: None,
+            role: Role::Coordinator,
+            status: SessionStatus::Idle,
+            model: None,
+            cost: Default::default(),
+            parent: None,
+            created_ms: 1,
+            transport: String::new(),
+            status_note: None,
+            repo_root: None,
+            permission: PermissionPolicy::Auto,
+            context: None,
+            native_id: None,
+            budget_usd: None,
+            over_budget: false,
+            handed_off_to: None,
+            effort: None,
+            slash_commands: Vec::new(),
+            active_tools: Vec::new(),
+            bg_procs: Vec::new(),
+            tool_calls: 0,
+            ended_ms: None,
+        },
+    });
+
+    let wt_sid: SessionId = "ses_worker".into();
+    let (wt_dir, branch) = crate::git::make_worktree(&repo, &wt_sid).unwrap();
+    std::fs::write(wt_dir.join("feature.txt"), "done\n").unwrap();
+    shared.emit(Event::SessionStarted {
+        session: Session {
+            id: wt_sid.clone(),
+            kind: AgentKind::ClaudeCode,
+            label: "worker/w1".into(),
+            cwd: wt_dir.to_string_lossy().to_string(),
+            branch: Some(branch),
+            role: Role::Worker,
+            status: SessionStatus::Idle,
+            model: None,
+            cost: Default::default(),
+            parent: Some(parent_id.clone()),
+            created_ms: 2,
+            transport: String::new(),
+            status_note: None,
+            repo_root: Some(repo.to_string_lossy().to_string()),
+            permission: PermissionPolicy::Auto,
+            context: None,
+            native_id: None,
+            budget_usd: None,
+            over_budget: false,
+            handed_off_to: None,
+            effort: None,
+            slash_commands: Vec::new(),
+            active_tools: Vec::new(),
+            bg_procs: Vec::new(),
+            tool_calls: 0,
+            ended_ms: None,
+        },
+    });
+
+    let msg = crate::handlers::worktree::run_auto_merge(
+        &shared,
+        &wt_sid,
+        ertangle_protocol::MergeStrategy::Merge,
+    )
+    .unwrap();
+    assert!(!msg.is_empty());
+    assert!(repo.join("feature.txt").is_file());
+    let inner = lock(&shared.inner);
+    assert!(inner
+        .state
+        .messages
+        .iter()
+        .any(|m| m.body.contains("MERGE_DONE worker/w1")));
+}

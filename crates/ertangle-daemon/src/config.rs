@@ -72,6 +72,8 @@ pub struct AgentSpawnCfg {
     pub shared_cargo_target: Option<bool>,
     /// Provision polyglot worktree dependencies (`node_modules`, `.venv`, and untracked `.env*` / `appsettings.Development.json`) via symlinks (default true).
     pub shared_worktree_deps: Option<bool>,
+    /// Additional repo-relative paths to symlink into new worktrees (merged with `.worktreeinclude`).
+    pub symlink_paths: Vec<String>,
 }
 
 pub(crate) struct WorkerQuotaSnapshot<'a> {
@@ -520,12 +522,18 @@ pub struct GitCfg {
     pub pre_merge_command: Option<String>,
     /// worktree 合併的預設策略；CLI／TUI／MCP 明確指定時覆蓋此值。
     pub merge_strategy: Option<MergeStrategy>,
+    /// Automatically verify and merge worker worktree branches when their task completes (default false).
+    pub auto_merge_queue: Option<bool>,
 }
 
 impl GitCfg {
     /// 明確指定優先，其次全域設定，最後回退到 `merge`。
     pub fn merge_strategy(&self, explicit: Option<MergeStrategy>) -> MergeStrategy {
         explicit.or(self.merge_strategy).unwrap_or_default()
+    }
+
+    pub fn auto_merge_queue(&self) -> bool {
+        self.auto_merge_queue.unwrap_or(false)
     }
 }
 
@@ -741,9 +749,17 @@ impl Config {
         if local.tui.notify_min_turn_secs.is_some() {
             out.tui.notify_min_turn_secs = local.tui.notify_min_turn_secs;
         }
+        for p in local.agent_spawn.symlink_paths {
+            if !out.agent_spawn.symlink_paths.contains(&p) {
+                out.agent_spawn.symlink_paths.push(p);
+            }
+        }
         // pre_merge_command 只認全域設定：repo 內的設定檔不可信，不能讓它決定要執行的 shell 指令。
         if local.git.merge_strategy.is_some() {
             out.git.merge_strategy = local.git.merge_strategy;
+        }
+        if local.git.auto_merge_queue.is_some() {
+            out.git.auto_merge_queue = local.git.auto_merge_queue;
         }
         for (name, pb) in local.playbooks {
             out.playbooks.insert(name, pb);

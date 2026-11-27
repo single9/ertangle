@@ -7457,3 +7457,32 @@ fn t104_grid_click_slot_keys_titles_and_cache() {
     .unwrap();
     assert_eq!(app.selected_id().as_deref(), Some("ses_b"));
 }
+
+#[test]
+fn t106_diff_e_sets_pending_editor_with_exact_line() {
+    let d = temp_dir_with(&[("top.txt", b"line1\nline2\n")]);
+    let mut app = sample_app(&[]);
+    if let Some(s) = app.state.sessions.get_mut("ses_test") {
+        s.cwd = d.to_string_lossy().to_string();
+    }
+    app.view = CenterView::Diff;
+    app.diff_lines = vec![
+        "diff --git a/top.txt b/top.txt".into(),
+        "--- a/top.txt".into(),
+        "+++ b/top.txt".into(),
+        "@@ -10,2 +10,3 @@".into(),
+        " context".into(),
+        "-deleted".into(),
+        "+added".into(),
+    ];
+    app.diff_cursor = 6; // `+added` -> new-file line 11
+
+    let (mut w, _peer) = pair_writer();
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.pending_editor, Some((d.join("top.txt"), Some(11))));
+}

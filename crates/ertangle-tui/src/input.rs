@@ -330,6 +330,19 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             toggle_collapse_current_file(app)
         }
         KeyCode::Char('X') if app.view == CenterView::Diff => discard_diff(app, writer, false)?,
+        KeyCode::Char('e') if app.view == CenterView::Diff => {
+            if let Some((rel, line)) = crate::diff::current_file_and_line(app) {
+                let root = app.search_root();
+                let full = root.join(&rel);
+                if full.is_file() {
+                    app.pending_editor = Some((full, line));
+                } else {
+                    app.status = tr!("找不到檔案：{path}", path = rel);
+                }
+            } else {
+                app.status = tr!("目前位置沒有可編輯的檔案");
+            }
+        }
         KeyCode::Enter | KeyCode::Char('i') => {
             if let Some(q) = app.selected_question() {
                 crate::menu::start_question_picker(app, &q);

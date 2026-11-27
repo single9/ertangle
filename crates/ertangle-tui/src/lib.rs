@@ -384,8 +384,67 @@ fn event_loop(
             }
         }
 
+        if let Some((path, line)) = app.pending_editor.take() {
+            launch_external_editor(terminal, &mut app, &path, line)?;
+            if app.view == crate::app::CenterView::Diff {
+                let _ = request_selected_diff(&mut app, writer);
+            }
+            dirty = true;
+        }
+
         if app.should_quit {
             break;
+        }
+    }
+    Ok(())
+}
+
+/// Suspends the TUI, runs `$VISUAL` / `$EDITOR` / `vi` on `path` (at `line`), and restores the TUI (T106).
+fn launch_external_editor(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+    path: &std::path::Path,
+    line: Option<usize>,
+) -> Result<()> {
+    restore_terminal(terminal)?;
+    let editor = std::env::var("VISUAL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            std::env::var("EDITOR")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+        })
+        .unwrap_or_else(|| "vi".to_string());
+    let mut parts = editor.split_whitespace();
+    let bin = parts.next().unwrap_or("vi");
+    let mut cmd = std::process::Command::new(bin);
+    cmd.args(parts);
+    if let Some(n) = line {
+        let base = std::path::Path::new(bin)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        if base.starts_with("code") {
+            cmd.arg("--goto").arg(format!("{}:{n}", path.display()));
+        } else {
+            cmd.arg(format!("+{n}")).arg(path);
+        }
+    } else {
+        cmd.arg(path);
+    }
+    let res = cmd.status();
+    *terminal = setup_terminal()?;
+    terminal.clear()?;
+    match res {
+        Ok(st) if st.success() => {
+            app.status = tr!("已關閉編輯器");
+        }
+        Ok(st) => {
+            app.status = tr!("編輯器退出碼：{code}", code = st);
+        }
+        Err(e) => {
+            app.status = tr!("啟動編輯器失敗：{e}", e = e);
         }
     }
     Ok(())

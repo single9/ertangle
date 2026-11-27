@@ -2616,7 +2616,7 @@ pub(crate) fn draw_input(f: &mut TuiFrame, area: Rect, app: &mut App) {
 pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
     let hints = match app.view {
         CenterView::Transcript => tr!("  i 輸入  ? 說明  Space 選單  : 命令  q 離開"),
-        CenterView::Diff => tr!("  ? 說明  c 註解  M 合併  q 離開"),
+        CenterView::Diff => tr!("  ? 說明  e 編輯  c 註解  M 合併  q 離開"),
         CenterView::Worktrees => tr!("  ? 說明  M 合併  G 清理  q 離開"),
         CenterView::Tasks => tr!("  j/k 選任務  Enter 跳到負責人  :task-status <狀態>  ? 說明"),
         CenterView::Flow => {

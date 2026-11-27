@@ -25,11 +25,9 @@ pub(crate) fn make_worktree(repo: &Path, id: &str) -> Result<(PathBuf, String)> 
     if !out.status.success() {
         bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
-    if crate::config::Config::load(&crate::paths::config_dir(), repo)
-        .agent_spawn
-        .shared_worktree_deps()
-    {
-        provision_worktree_deps(repo, &dir);
+    let cfg = crate::config::Config::load(&crate::paths::config_dir(), repo);
+    if cfg.agent_spawn.shared_worktree_deps() {
+        provision_worktree_deps_with_paths(repo, &dir, &cfg.agent_spawn.symlink_paths);
     }
     Ok((dir, branch))
 }
@@ -39,9 +37,67 @@ fn is_git_tracked(repo: &Path, rel: &str) -> bool {
     git_output(repo, &["ls-files", "--error-unmatch", "--", rel]).is_ok_and(|o| o.status.success())
 }
 
-/// Symlinks polyglot untracked dependencies (`node_modules`, `.venv`) and untracked local config
-/// files (`.env*`, `appsettings.Development.json`) from `repo` into `wt_dir` (T100).
-pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
+/// Reads relative paths from `<repo>/.worktreeinclude` (ignoring blank lines and `#` comments).
+fn read_worktreeinclude(repo: &Path) -> Vec<String> {
+    let Ok(raw) = fs::read_to_string(repo.join(".worktreeinclude")) else {
+        return Vec::new();
+    };
+    raw.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Validates and symlinks custom repo-relative paths into `wt_dir` (T105).
+fn provision_custom_symlinks(
+    repo: &Path,
+    wt_dir: &Path,
+    paths: &[String],
+    provisioned: &mut Vec<String>,
+) {
+    for raw in paths {
+        let rel = raw.trim().trim_start_matches("./").trim_end_matches('/');
+        if rel.is_empty() || rel == ".git" || rel.starts_with(".git/") {
+            continue;
+        }
+        let rel_path = Path::new(rel);
+        if rel_path.is_absolute()
+            || rel_path.components().any(|c| {
+                matches!(
+                    c,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            continue;
+        }
+        let src = repo.join(rel_path);
+        let dst = wt_dir.join(rel_path);
+        if !src.exists() || fs::symlink_metadata(&dst).is_ok() || is_git_tracked(repo, rel) {
+            continue;
+        }
+        if let Some(parent) = dst.parent() {
+            if fs::create_dir_all(parent).is_err() {
+                continue;
+            }
+        }
+        if std::os::unix::fs::symlink(&src, &dst).is_ok() && !provisioned.iter().any(|p| p == rel) {
+            provisioned.push(rel.to_string());
+        }
+    }
+}
+
+/// Symlinks polyglot untracked dependencies (`node_modules`, `.venv`), untracked local config
+/// files (`.env*`, `appsettings.Development.json`), and custom `extra_paths` / `.worktreeinclude`
+/// from `repo` into `wt_dir` (T100, T105).
+pub(crate) fn provision_worktree_deps_with_paths(
+    repo: &Path,
+    wt_dir: &Path,
+    extra_paths: &[String],
+) {
     let mut provisioned: Vec<String> = Vec::new();
 
     // 1) Shared dependency directories (`node_modules`, `.venv`).
@@ -162,6 +218,14 @@ pub(crate) fn provision_worktree_deps(repo: &Path, wt_dir: &Path) {
         }
         provisioned.push(".godot".to_string());
     }
+
+    let mut custom_paths = read_worktreeinclude(repo);
+    for p in extra_paths {
+        if !custom_paths.contains(p) {
+            custom_paths.push(p.clone());
+        }
+    }
+    provision_custom_symlinks(repo, wt_dir, &custom_paths, &mut provisioned);
 
     if !provisioned.is_empty() {
         let meta_path = wt_dir.join(PROVISIONED_LINKS_FILE);

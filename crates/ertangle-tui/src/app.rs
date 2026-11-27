@@ -351,6 +351,8 @@ pub(crate) struct App {
     pub(crate) grid_areas: Vec<(Rect, SessionId)>,
     /// Per-pane transcript render cache for Grid view.
     pub(crate) grid_cache: std::collections::HashMap<SessionId, GridCellCache>,
+    /// Pending external editor launch from Diff view: `(file_path, optional_line)` (T106).
+    pub(crate) pending_editor: Option<(std::path::PathBuf, Option<usize>)>,
     /// 通知設定與狀態 (T15)。
     pub(crate) notify: crate::notify::Notifier,
     /// 任務視圖：游標 (`tasks::visible_task_ids` 的索引)與清單捲動起點。
@@ -494,6 +496,7 @@ impl App {
             tab_areas: Vec::new(),
             grid_areas: Vec::new(),
             grid_cache: std::collections::HashMap::new(),
+            pending_editor: None,
             notify: crate::notify::Notifier::from_cfg(&cfg.tui),
             task_cursor: 0,
             flow_cursor: 0,

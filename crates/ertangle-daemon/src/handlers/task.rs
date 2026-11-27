@@ -295,6 +295,9 @@ pub(crate) fn handle_update(
             }
             if now_done && !was_done {
                 unblock_dependents(shared, &task_id);
+                if let Some(assignee) = task.assignee.as_ref() {
+                    super::worktree::spawn_auto_merge_if_enabled(shared, assignee);
+                }
             }
             if now_review && !was_review {
                 notify_reviewer_on_review(shared, &task);

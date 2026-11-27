@@ -3578,7 +3578,7 @@ msgid "  i 輸入  ? 說明  Space 選單  : 命令  q 離開"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  ? 說明  c 註解  M 合併  q 離開"
+msgid "  ? 說明  e 編輯  c 註解  M 合併  q 離開"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -4003,6 +4003,14 @@ msgstr ""
 
 #: crates/ertangle-tui/src/input.rs
 msgid "命令 (Tab 自動完成)：spawn rm clean kill merge diff gc task …"
+msgstr ""
+
+#: crates/ertangle-tui/src/input.rs
+msgid "找不到檔案：{path}"
+msgstr ""
+
+#: crates/ertangle-tui/src/input.rs
+msgid "目前位置沒有可編輯的檔案"
 msgstr ""
 
 #: crates/ertangle-tui/src/input.rs
@@ -4937,6 +4945,18 @@ msgstr ""
 
 #: crates/ertangle-tui/src/lib.rs
 msgid "daemon 連線已中斷 (可能被關閉了)。畫面是最後的狀態，按 q 離開後重新啟動"
+msgstr ""
+
+#: crates/ertangle-tui/src/lib.rs
+msgid "已關閉編輯器"
+msgstr ""
+
+#: crates/ertangle-tui/src/lib.rs
+msgid "編輯器退出碼：{code}"
+msgstr ""
+
+#: crates/ertangle-tui/src/lib.rs
+msgid "啟動編輯器失敗：{e}"
 msgstr ""
 
 #: crates/ertangle-tui/src/lib.rs

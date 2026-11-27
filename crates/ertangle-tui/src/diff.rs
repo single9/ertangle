@@ -218,6 +218,55 @@ pub(crate) fn current_file_progress(app: &App) -> Option<(usize, usize, String)>
     Some((idx + 1, cow_files.len(), path))
 }
 
+/// Parses the new-file start line from a unified diff hunk header (`@@ -old +new[,count] @@`).
+fn parse_hunk_new_start(line: &str) -> Option<usize> {
+    let rest = line.strip_prefix("@@ ")?;
+    let plus_pos = rest.find('+')?;
+    let after_plus = rest.get(plus_pos + 1..)?;
+    let num_str: String = after_plus
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    num_str.parse().ok()
+}
+
+/// Returns the file path and 1-based new-file line number under `diff_cursor` (T106).
+pub(crate) fn current_file_and_line(app: &App) -> Option<(String, Option<usize>)> {
+    let (_, _, path) = current_file_progress(app)?;
+    if path.is_empty() {
+        return None;
+    }
+    let cur = app.diff_cursor.min(app.diff_lines.len().saturating_sub(1));
+    let mut hunk_idx = None;
+    let mut new_start = None;
+    let mut idx = cur;
+    while let Some(l) = app.diff_lines.get(idx) {
+        if l.starts_with("@@ ") {
+            new_start = parse_hunk_new_start(l);
+            hunk_idx = Some(idx);
+            break;
+        }
+        if l.starts_with("diff --git ") || idx == 0 {
+            break;
+        }
+        idx -= 1;
+    }
+    let line_num = match (hunk_idx, new_start) {
+        (Some(hi), Some(start)) if cur > hi => {
+            let mut n = start;
+            for l in app.diff_lines.get(hi + 1..cur).unwrap_or(&[]) {
+                if !l.starts_with('-') && !l.starts_with('\\') {
+                    n += 1;
+                }
+            }
+            Some(n)
+        }
+        (_, Some(start)) => Some(start),
+        _ => None,
+    };
+    Some((path, line_num))
+}
+
 /// 在 Diff 視圖跳到上一個／下一個檔案 (`diff --git` 或已摺疊摘要行)。
 pub(crate) fn jump_file(app: &mut App, forward: bool) {
     if app.view != CenterView::Diff || app.diff_lines.is_empty() {

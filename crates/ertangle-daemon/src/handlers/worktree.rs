@@ -122,6 +122,73 @@ pub(crate) fn handle_discard(
     }
 }
 
+static AUTO_MERGE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Serializes an automatic merge for a worker whose task just completed when
+/// `[git] auto_merge_queue` is enabled (T107).
+pub(crate) fn spawn_auto_merge_if_enabled(shared: &Arc<Shared>, sid: &str) {
+    let Some(s) = lock(&shared.inner).state.sessions.get(sid).cloned() else {
+        return;
+    };
+    if s.branch.is_none() {
+        return;
+    }
+    let repo = session_repo(&shared.default_cwd(), &s);
+    let cfg = crate::config::Config::load(&crate::paths::config_dir(), &repo);
+    if !cfg.git.auto_merge_queue() {
+        return;
+    }
+    let strategy = cfg.git.merge_strategy(None);
+    let sh = shared.clone();
+    let sid = sid.to_string();
+    std::thread::spawn(move || {
+        let _ = run_auto_merge(&sh, &sid, strategy);
+    });
+}
+
+/// Executes one serialized auto-merge inside `AUTO_MERGE_LOCK` (also callable directly in tests).
+pub(crate) fn run_auto_merge(
+    shared: &Arc<Shared>,
+    sid: &str,
+    strategy: MergeStrategy,
+) -> std::result::Result<String, String> {
+    let _guard = AUTO_MERGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(s) = lock(&shared.inner).state.sessions.get(sid).cloned() else {
+        return Err("session not found".to_string());
+    };
+    if s.branch.is_none() {
+        return Err("session has no dedicated worktree branch".to_string());
+    }
+    let repo = session_repo(&shared.default_cwd(), &s);
+    match merge_worktree_strategy(&repo, &s, strategy, false) {
+        Ok(msg) => {
+            shared.sweep_workers();
+            if let Some(parent) = s.parent.clone() {
+                let _ = shared.deliver_message(
+                    Some(s.id.clone()),
+                    Target::Direct(parent),
+                    ertangle_core::MsgKind::Status,
+                    format!("MERGE_DONE {} {msg}", s.label),
+                    None,
+                );
+            }
+            Ok(msg)
+        }
+        Err(e) => {
+            let reason = e.to_string();
+            let target = s.parent.clone().unwrap_or_else(|| s.id.clone());
+            let _ = shared.deliver_message(
+                Some(s.id.clone()),
+                Target::Direct(target),
+                ertangle_core::MsgKind::Chat,
+                format!("MERGE_FAILED {} {reason}", s.label),
+                None,
+            );
+            Err(reason)
+        }
+    }
+}
+
 pub(crate) fn handle_merge(
     shared: &Arc<Shared>,
     reply: &ClientTx,
