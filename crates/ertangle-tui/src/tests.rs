@@ -7486,3 +7486,111 @@ fn t106_diff_e_sets_pending_editor_with_exact_line() {
     .unwrap();
     assert_eq!(app.pending_editor, Some((d.join("top.txt"), Some(11))));
 }
+
+fn ended_session(id: &str, label: &str, created_ms: u64, ended_ms: Option<u64>) -> Session {
+    let mut s = sample_app(&[]).state.sessions.remove("ses_test").unwrap();
+    s.id = id.into();
+    s.label = label.into();
+    s.branch = None;
+    s.status = SessionStatus::Exited;
+    s.native_id = Some(format!("nav_{id}"));
+    s.created_ms = created_ms;
+    s.ended_ms = ended_ms;
+    s
+}
+
+#[test]
+fn resume_picker_sorts_by_ended_time_and_shows_summary() {
+    let mut app = test_app();
+    let (mut w, _peer) = pair_writer();
+    let now = ertangle_core::now_millis();
+    // 較早建立但最近才結束的 session 應排在前面
+    let mut early = ended_session(
+        "ses_early",
+        "worker/early",
+        now - 500_000,
+        Some(now - 1_000),
+    );
+    early.status_note = Some("  整理   README\n文件  ".into());
+    let mut late = ended_session("ses_late", "worker/late", now - 100_000, Some(now - 90_000));
+    // 通用的 :resume 重啟提示應被忽略，改用 transcript 中最後一則 prompt
+    late.status_note = Some("daemon 重啟中斷，可用 :resume 接續".into());
+    let plain = ended_session(
+        "ses_plain",
+        "worker/plain",
+        now - 300_000,
+        Some(now - 200_000),
+    );
+    app.state.sessions.insert(early.id.clone(), early);
+    app.state.sessions.insert(late.id.clone(), late);
+    app.state.sessions.insert(plain.id.clone(), plain);
+    let long_prompt = "x".repeat(60);
+    app.state.transcripts.insert(
+        "ses_late".into(),
+        [
+            "❯ 第一則".to_string(),
+            "回覆".to_string(),
+            format!("❯ 修正 parser {long_prompt}"),
+            "完成".to_string(),
+        ]
+        .into_iter()
+        .collect(),
+    );
+
+    let items = crate::menu::rebuild_resume_items(&app, crate::menu::ResumeScope::All);
+    let ids: Vec<&str> = items.iter().map(|(_, id)| id.as_str()).collect();
+    assert_eq!(ids, ["ses_early", "ses_late", "ses_plain"]);
+    assert!(
+        items[0].0.ends_with("  — 整理 README 文件"),
+        "{}",
+        items[0].0
+    );
+    let expected: String = format!("修正 parser {long_prompt}")
+        .chars()
+        .take(48)
+        .collect();
+    assert!(
+        items[1].0.ends_with(&format!("  — {expected}…")),
+        "{}",
+        items[1].0
+    );
+    assert!(items[2].0.ends_with("  ↻"), "{}", items[2].0);
+
+    // 選擇器可用摘要文字過濾
+    crate::menu::start_resume_picker(&mut app);
+    for c in "readme".chars() {
+        handle_key(&mut app, &mut w, kev(KeyCode::Char(c))).unwrap();
+    }
+    let p = app.picker.as_ref().unwrap();
+    assert_eq!(p.visible().len(), 1);
+    assert_eq!(p.visible()[0].1, "ses_early");
+}
+
+#[test]
+fn rename_and_label_commands_send_session_label() {
+    for cmd in ["rename", "label"] {
+        let mut app = sample_app(&["hi"]);
+        let (mut w, mut peer) = pair_writer();
+        peer.set_read_timeout(Some(std::time::Duration::from_secs(2)))
+            .unwrap();
+        crate::commands::execute_command(&mut app, &mut w, cmd).unwrap();
+        assert!(app.status.contains(":rename"), "{}", app.status);
+
+        crate::commands::execute_command(&mut app, &mut w, &format!("{cmd} 新名稱")).unwrap();
+        assert!(app.status.contains("新名稱"));
+        let mut line = String::new();
+        std::io::BufRead::read_line(&mut std::io::BufReader::new(&mut peer), &mut line).unwrap();
+        let req: Request = serde_json::from_str(line.trim()).unwrap();
+        match req {
+            Request::SessionLabel { session, label } => {
+                assert_eq!(session, "ses_test");
+                assert_eq!(label, "新名稱");
+            }
+            other => panic!("應送出 SessionLabel，得到 {other:?}"),
+        }
+    }
+    let mut app = test_app();
+    let (mut w, _peer) = pair_writer();
+    crate::commands::execute_command(&mut app, &mut w, "rename x").unwrap();
+    assert!(app.status.contains("沒有選取"));
+}

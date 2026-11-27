@@ -817,7 +817,7 @@ msgstr ""
 msgid "已清空排隊"
 msgstr ""
 
-#: src/cmd/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs
+#: src/cmd/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs crates/ertangle-daemon/src/handlers/worktree.rs
 msgid "找不到 session {session}"
 msgstr ""
 
@@ -1955,6 +1955,14 @@ msgid "問題回覆失敗：{e}"
 msgstr ""
 
 #: crates/ertangle-daemon/src/handlers/session.rs
+msgid "標籤不可為空"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs crates/ertangle-tui/src/commands.rs
+msgid "已重新命名為 {label}"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已分享產出 {id}"
 msgstr ""
 
@@ -2465,7 +2473,7 @@ msgstr ""
 msgid "已送出 prompt"
 msgstr ""
 
-#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/ps.rs
 msgid "沒有選取的 session"
 msgstr ""
 
@@ -2539,6 +2547,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 時接續選取的 session"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "<新名稱>  重新命名選取的 session (亦可用 :label)"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs
@@ -2739,6 +2751,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "已送出結束"
+msgstr ""
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "用法：:rename <新名稱>"
 msgstr ""
 
 #: crates/ertangle-tui/src/commands.rs

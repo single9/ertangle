@@ -2073,6 +2073,43 @@ pub(crate) fn handle_answer_question(
     }
 }
 
+/// Renames a live, ended, or archived session's display label.
+pub(crate) fn handle_label(shared: &Arc<Shared>, reply: &ClientTx, session: String, label: String) {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        let _ = reply.send(Frame::error(tr!("標籤不可為空")));
+        return;
+    }
+    let sid = {
+        let inner = lock(&shared.inner);
+        inner
+            .state
+            .resolve_session_id(&session)
+            .or_else(|| {
+                inner
+                    .state
+                    .resolve_resumable_session(&session)
+                    .map(|(s, _)| s.id)
+            })
+            .filter(|id| {
+                inner.state.sessions.contains_key(id)
+                    || inner.state.archived_sessions.contains_key(id)
+            })
+    };
+    let Some(sid) = sid else {
+        let _ = reply.send(Frame::error(tr!(
+            "找不到 session {session}",
+            session = session
+        )));
+        return;
+    };
+    shared.emit(Event::SessionLabel {
+        session: sid,
+        label: trimmed.to_string(),
+    });
+    let _ = reply.send(Frame::ok_note(tr!("已重新命名為 {label}", label = trimmed)));
+}
+
 pub(crate) fn handle_note(shared: &Arc<Shared>, reply: &ClientTx, session: String, note: String) {
     let sid = shared.resolve_session(&session);
     shared.emit(Event::SessionNote { session: sid, note });

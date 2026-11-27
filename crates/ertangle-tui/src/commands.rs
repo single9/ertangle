@@ -308,6 +308,7 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "resume",
         ertangle_core::tr_noop!("[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 時接續選取的 session"),
     ),
+    ("rename", ertangle_core::tr_noop!("<新名稱>  重新命名選取的 session (亦可用 :label)")),
     (
         "clear",
         ertangle_core::tr_noop!("[force]  重設選取 session 的上下文 (同一個 id、worktree 與任務，agent 以全新對話重啟)"),
@@ -562,6 +563,24 @@ pub(crate) fn execute_command(app: &mut App, writer: &mut HostRouter, raw: &str)
         }
         "resume" => {
             resume_command(app, writer, rest)?;
+        }
+        "rename" | "label" => {
+            if rest.is_empty() {
+                app.status = tr!("用法：:rename <新名稱>");
+                return Ok(());
+            }
+            if let Some(session) = app.selected_id() {
+                send(
+                    writer,
+                    &Request::SessionLabel {
+                        session,
+                        label: rest.to_string(),
+                    },
+                )?;
+                app.status = tr!("已重新命名為 {label}", label = rest);
+            } else {
+                app.status = tr!("沒有選取的 session");
+            }
         }
         "clear" => {
             if let Some(id) = app.selected_id() {

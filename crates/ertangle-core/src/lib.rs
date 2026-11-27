@@ -1294,6 +1294,8 @@ impl State {
             Event::SessionLabel { session, label } => {
                 if let Some(s) = self.sessions.get_mut(session) {
                     s.label = label.clone();
+                } else if let Some(s) = self.archived_sessions.get_mut(session) {
+                    s.label = label.clone();
                 }
             }
             Event::SessionNote { session, note } => {

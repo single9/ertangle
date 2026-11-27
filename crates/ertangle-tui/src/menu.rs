@@ -1361,6 +1361,40 @@ pub(crate) fn format_compact_age(now_ms: u64, created_ms: u64) -> String {
     }
 }
 
+/// Max chars of the summary snippet shown in a resume picker row.
+const RESUME_SUMMARY_MAX: usize = 48;
+
+/// Picks a one-line summary for a resume picker row: the status note (unless it is a generic
+/// `:resume` restart note), otherwise the session's latest user prompt from the transcript.
+pub(crate) fn resume_summary(app: &App, s: &ertangle_core::Session) -> Option<String> {
+    let from_note = s
+        .status_note
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty() && !n.contains(":resume"))
+        .map(str::to_string);
+    let raw = from_note.or_else(|| {
+        let lines = app.state.transcripts.get(&s.id).or_else(|| {
+            app.hosts
+                .values()
+                .find_map(|h| h.state.transcripts.get(&s.id))
+        })?;
+        lines.iter().rev().find_map(|line| {
+            ertangle_core::parse_prompt_line(line)
+                .map(|(_, t)| t.trim())
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+        })
+    })?;
+    let collapsed = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() > RESUME_SUMMARY_MAX {
+        let cut: String = collapsed.chars().take(RESUME_SUMMARY_MAX).collect();
+        Some(format!("{cut}…"))
+    } else {
+        Some(collapsed)
+    }
+}
+
 /// Rebuild resume picker items: filter by scope, add parent annotation and project prefix.
 pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String, String)> {
     let mut ended: Vec<(&ertangle_core::Session, bool)> = Vec::new();
@@ -1437,7 +1471,7 @@ pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String
         ended.retain(|(s, _)| s.project_root() == app.home_project);
     }
 
-    ended.sort_by_key(|(a, _)| std::cmp::Reverse(a.created_ms));
+    ended.sort_by_key(|(a, _)| std::cmp::Reverse(a.ended_or_created_ms()));
     let now_ms = ertangle_core::now_millis();
     ended
         .into_iter()
@@ -1446,7 +1480,10 @@ pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String
                 Some(m) if !m.is_empty() => format!("{}:{}", s.kind.id(), m),
                 _ => s.kind.id().to_string(),
             };
-            let age = format_compact_age(now_ms, s.created_ms);
+            let age = format_compact_age(now_ms, s.ended_or_created_ms());
+            let summary_suffix = resume_summary(app, s)
+                .map(|snippet| format!("  — {snippet}"))
+                .unwrap_or_default();
             let resumable = if s.native_id.is_some() { "↻" } else { "–" };
             let parent_suffix = match &s.parent {
                 Some(pid) => {
@@ -1471,7 +1508,7 @@ pub(crate) fn rebuild_resume_items(app: &App, scope: ResumeScope) -> Vec<(String
                 String::new()
             };
             let label = format!(
-                "{proj_prefix}{} {}{tag_part}  {}  {}  {}{parent_suffix}",
+                "{proj_prefix}{} {}{tag_part}  {}  {}  {}{parent_suffix}{summary_suffix}",
                 s.status.glyph(),
                 s.label,
                 kind_model,

@@ -170,6 +170,9 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
             id,
             answers,
         } => session::handle_answer_question(shared, reply, session, id, answers),
+        Request::SessionLabel { session, label } => {
+            session::handle_label(shared, reply, session, label)
+        }
         Request::SessionNote { session, note } => {
             session::handle_note(shared, reply, session, note)
         }

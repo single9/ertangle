@@ -5971,3 +5971,87 @@ fn t107_auto_merge_queue_config_and_run_auto_merge() {
         .iter()
         .any(|m| m.body.contains("MERGE_DONE worker/w1")));
 }
+
+#[test]
+fn prune_keeps_ended_coordinators_and_parents_of_remaining_children() {
+    let shared = test_shared();
+    let now = now_millis();
+    let old = now.saturating_sub(7200 * 1000);
+    let mk = |id: &str, role: Role, parent: Option<&str>| {
+        let mut s = restart_session(id, SessionStatus::Exited);
+        s.created_ms = old;
+        s.role = role;
+        s.parent = parent.map(str::to_string);
+        s
+    };
+    for s in [
+        mk("ses-coord", Role::Coordinator, None),
+        mk("ses-parent", Role::Worker, None),
+        mk("ses-child", Role::Worker, Some("ses-parent")),
+        mk("ses-plain", Role::Worker, None),
+    ] {
+        shared.emit(Event::SessionStarted { session: s });
+    }
+    // 子 session 本身已結束且過期，但父 session 仍因被引用而保留
+    shared.prune_ended_sessions(now, &HashSet::new());
+    let inner = lock(&shared.inner);
+    assert!(inner.state.sessions.contains_key("ses-coord"));
+    assert!(inner.state.sessions.contains_key("ses-parent"));
+    assert!(!inner.state.sessions.contains_key("ses-child"));
+    assert!(!inner.state.sessions.contains_key("ses-plain"));
+}
+
+#[test]
+fn session_label_request_renames_live_and_archived_sessions() {
+    let shared = test_shared();
+    shared.emit(Event::SessionStarted {
+        session: restart_session("ses-a", SessionStatus::Idle),
+    });
+    let mut gone = restart_session("ses-gone", SessionStatus::Exited);
+    gone.native_id = Some("nat-gone".into());
+    shared.emit(Event::SessionStarted { session: gone });
+    shared.emit(Event::SessionRemoved {
+        session: "ses-gone".into(),
+    });
+    let (tx, rx) = client_channel(None);
+
+    shared.handle(
+        &tx,
+        Request::SessionLabel {
+            session: "ses-a".into(),
+            label: "  新名稱 ".into(),
+        },
+    );
+    assert!(matches!(rx.rx.recv().unwrap(), Frame::Ok { note: Some(_) }));
+    shared.handle(
+        &tx,
+        Request::SessionLabel {
+            session: "ses-gone".into(),
+            label: "歷史".into(),
+        },
+    );
+    assert!(matches!(rx.rx.recv().unwrap(), Frame::Ok { note: Some(_) }));
+    shared.handle(
+        &tx,
+        Request::SessionLabel {
+            session: "ses-a".into(),
+            label: "   ".into(),
+        },
+    );
+    assert!(matches!(rx.rx.recv().unwrap(), Frame::Error { .. }));
+    shared.handle(
+        &tx,
+        Request::SessionLabel {
+            session: "ses-missing".into(),
+            label: "x".into(),
+        },
+    );
+    assert!(matches!(rx.rx.recv().unwrap(), Frame::Error { .. }));
+
+    let inner = lock(&shared.inner);
+    assert_eq!(inner.state.sessions.get("ses-a").unwrap().label, "新名稱");
+    assert_eq!(
+        inner.state.archived_sessions.get("ses-gone").unwrap().label,
+        "歷史"
+    );
+}

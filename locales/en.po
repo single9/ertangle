@@ -1970,6 +1970,15 @@ msgid "問題回覆失敗：{e}"
 msgstr "Failed to reply to question: {e}"
 
 #: crates/ertangle-daemon/src/handlers/session.rs
+msgid "標籤不可為空"
+msgstr "Label cannot be empty"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
+#: crates/ertangle-tui/src/commands.rs
+msgid "已重新命名為 {label}"
+msgstr "Renamed to {label}"
+
+#: crates/ertangle-daemon/src/handlers/session.rs
 msgid "已分享產出 {id}"
 msgstr "Shared artifact {id}"
 
@@ -2558,6 +2567,10 @@ msgid "[prompt]  不帶參數開選擇器 (Tab 切換專案範圍)；有 prompt 
 msgstr "[prompt]  Without args open picker (Tab toggles scope); with prompt resume selected session"
 
 #: crates/ertangle-tui/src/commands.rs
+msgid "<新名稱>  重新命名選取的 session (亦可用 :label)"
+msgstr "<new name>  rename the selected session (alias :label)"
+
+#: crates/ertangle-tui/src/commands.rs
 msgid "[force]  重設選取 session 的上下文 (同一個 id、worktree 與任務，agent 以全新對話重啟)"
 msgstr "[force]  Reset the selected session's context (same id, worktree and tasks; agent restarts with a fresh conversation)"
 
@@ -2756,6 +2769,10 @@ msgstr "Enter the goal and press Enter to start playbook {name}"
 #: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/input.rs
 msgid "已送出結束"
 msgstr "Kill sent"
+
+#: crates/ertangle-tui/src/commands.rs
+msgid "用法：:rename <新名稱>"
+msgstr "Usage: :rename <new name>"
 
 #: crates/ertangle-tui/src/commands.rs
 msgid "已要求重設上下文"

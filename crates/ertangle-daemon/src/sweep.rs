@@ -156,14 +156,23 @@ impl Shared {
 
     /// Archives ended sessions without a worktree once they have been ended for an hour.
     /// Orphans interrupted by this restart (`orphan_ids`) stay for auto or manual resume.
+    /// Coordinators and parents of sessions still in the sidebar are kept so the tree stays intact.
     pub(crate) fn prune_ended_sessions(&self, now_ms: u64, orphan_ids: &HashSet<SessionId>) {
         let mut inner = lock(&self.inner);
+        let active_parents: HashSet<&str> = inner
+            .state
+            .sessions
+            .values()
+            .filter_map(|s| s.parent.as_deref())
+            .collect();
         let stale: Vec<SessionId> = inner
             .state
             .sessions
             .values()
             .filter(|s| {
                 !orphan_ids.contains(&s.id)
+                    && s.role != ertangle_core::Role::Coordinator
+                    && !active_parents.contains(s.id.as_str())
                     && !s.status.is_live()
                     && s.branch.is_none()
                     && now_ms.saturating_sub(s.ended_or_created_ms()) > KEEP_ENDED_MS

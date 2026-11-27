@@ -330,6 +330,11 @@ pub enum Request {
         #[serde(default)]
         detail: Option<String>,
     },
+    /// 重新命名指定 session 的顯示標籤 (`label`)。
+    SessionLabel {
+        session: SessionId,
+        label: String,
+    },
     /// 更新某個 session 的簡短狀態字串 (對應 `ertangle_status`)。
     SessionNote {
         session: SessionId,
