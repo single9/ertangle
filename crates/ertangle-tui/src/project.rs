@@ -294,10 +294,127 @@ pub(crate) fn grid_rects(area: Rect, n: usize) -> Vec<Rect> {
     }
 }
 
+/// Returns cached transcript lines for a Grid pane, rebuilding only when the
+/// session transcript, active tool count, or render settings change.
+fn grid_cell_lines(app: &mut App, id: &SessionId, inner_w: usize) -> Vec<Line<'static>> {
+    let stamp = crate::draw::transcript_stamp(app, id);
+    let active_tools_len = app
+        .state
+        .sessions
+        .get(id)
+        .map_or(0, |s| s.active_tools.len());
+    if let Some(c) = app.grid_cache.get(id) {
+        if c.stamp == stamp
+            && c.width == inner_w
+            && c.raw == app.raw_md
+            && c.show_tools == app.show_tools
+            && c.show_thoughts == app.show_thoughts
+            && c.active_tools_len == active_tools_len
+        {
+            return c.lines.clone();
+        }
+    }
+    let (lines, _) = build_transcript_lines(app, id, inner_w);
+    app.grid_cache.insert(
+        id.clone(),
+        crate::app::GridCellCache {
+            stamp,
+            width: inner_w,
+            raw: app.raw_md,
+            show_tools: app.show_tools,
+            show_thoughts: app.show_thoughts,
+            active_tools_len,
+            lines: lines.clone(),
+        },
+    );
+    lines
+}
+
+fn has_pending_question(app: &App, id: &SessionId) -> bool {
+    app.state
+        .pending_questions
+        .values()
+        .any(|q| &q.session == id)
+}
+
+/// Formats a compact monitoring title for a Grid pane.
+fn grid_cell_title(
+    app: &App,
+    s: &Session,
+    slot: usize,
+    page_info: Option<(usize, usize)>,
+) -> String {
+    let mut title = format!(" [{}] {} {}", slot + 1, s.status.glyph(), s.label);
+    if has_pending_question(app, &s.id) {
+        title.push_str(" [?]");
+    } else if s.status == SessionStatus::WaitingApproval {
+        title.push_str(" [!]");
+    }
+    if let Some(t) = s.active_tools.last() {
+        title.push_str(&format!(
+            " · {}:{}",
+            if t.is_subagent { "sub" } else { "run" },
+            truncate(&t.name, 14)
+        ));
+    } else if let Some(task) = app
+        .state
+        .tasks
+        .values()
+        .find(|t| t.assignee.as_deref() == Some(s.id.as_str()) && t.status == TaskStatus::Doing)
+    {
+        title.push_str(&format!(" · {}", truncate(&task.title, 18)));
+    } else if let Some(note) = s.status_note.as_deref().filter(|n| !n.is_empty()) {
+        title.push_str(&format!(" · {}", truncate(note, 18)));
+    }
+    if let Some(ctx) = &s.context {
+        if let Some(window) = ctx.window.filter(|&w| w > 0) {
+            let pct = (ctx.used.saturating_mul(100) / window).min(100);
+            title.push_str(&format!(" · {pct}%"));
+        }
+    }
+    if let Some((cur, total)) = page_info {
+        title.push_str(&format!(" · {cur}/{total}"));
+    }
+    title.push(' ');
+    title
+}
+
+/// Selects the `slot`-th (0-based) visible pane on the current Grid page.
+pub(crate) fn select_grid_slot(app: &mut App, slot: usize) -> bool {
+    let ids = scoped_ids(app);
+    let sel_id = app.selected_id();
+    let sel = ids
+        .iter()
+        .position(|i| Some(i) == sel_id.as_ref())
+        .unwrap_or(0);
+    let (start, n, _) = grid_page(sel, ids.len());
+    if slot >= n {
+        return false;
+    }
+    let Some(target_id) = ids.get(start + slot).cloned() else {
+        return false;
+    };
+    select_session_by_id(app, &target_id)
+}
+
+/// Selects a session in `app.session_ids()` by ID.
+pub(crate) fn select_session_by_id(app: &mut App, id: &SessionId) -> bool {
+    let Some(idx) = app.session_ids().iter().position(|s| s == id) else {
+        return false;
+    };
+    app.selected = idx;
+    app.sidebar_focus = None;
+    app.selection = None;
+    app.sync_active_host_from_selection();
+    true
+}
+
 pub(crate) fn draw_grid(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let ids = scoped_ids(app);
     app.transcript_area = Rect::default();
+    app.grid_areas.clear();
     if ids.is_empty() {
+        app.grid_cache.clear();
         f.render_widget(
             Paragraph::new(tr!("尚無 session：按 n 建立，或直接輸入 prompt"))
                 .block(Block::default().borders(Borders::ALL).title(" Grid ")),
@@ -311,35 +428,33 @@ pub(crate) fn draw_grid(f: &mut TuiFrame, area: Rect, app: &mut App) {
         .position(|i| Some(i) == sel_id.as_ref())
         .unwrap_or(0);
     let (start, n, pages) = grid_page(sel, ids.len());
+    let visible_ids: Vec<SessionId> = ids.get(start..start + n).unwrap_or(&[]).to_vec();
+    app.grid_cache.retain(|k, _| visible_ids.contains(k));
     let rects = grid_rects(area, n);
     for (k, rect) in rects.iter().enumerate() {
-        let Some(id) = ids.get(start + k) else {
+        let Some(id) = visible_ids.get(k).cloned() else {
             continue;
         };
-        let Some(s) = app.state.sessions.get(id) else {
+        let Some(s) = app.state.sessions.get(&id).cloned() else {
             continue;
         };
+        app.grid_areas.push((*rect, id.clone()));
         let selected = start + k == sel;
         let inner_w = rect.width.saturating_sub(2).max(8) as usize;
-        let (all, _) = build_transcript_lines(app, id, inner_w);
+        let all = grid_cell_lines(app, &id, inner_w);
         let h = rect.height.saturating_sub(2) as usize;
         let tail_slice = all.get(all.len().saturating_sub(h)..).unwrap_or(&[]);
         let tail: Vec<Line<'static>> = tail_slice.to_vec();
-        let mut title = format!(" {} {}", s.status.glyph(), s.label);
-        if let Some(t) = s.active_tools.last() {
-            title.push_str(&format!(
-                " · {}:{}",
-                if t.is_subagent { "sub" } else { "run" },
-                truncate(&t.name, 14)
-            ));
-        }
-        if k == 0 && pages > 1 {
-            title.push_str(&format!(" · {}/{}", start / GRID_PAGE + 1, pages));
-        }
-        title.push(' ');
+        let page_info = (k == 0 && pages > 1).then_some((start / GRID_PAGE + 1, pages));
+        let title = grid_cell_title(app, &s, k, page_info);
+        let has_question = has_pending_question(app, &id);
         let border = if selected {
             Style::default()
                 .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else if has_question || s.status == SessionStatus::WaitingApproval {
+            Style::default()
+                .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(status_color(s.status))

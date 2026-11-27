@@ -43,6 +43,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     // 隱藏的欄位要清掉區域，避免滑鼠命中上一次的位置。
     app.sessions_area = Rect::default();
     app.tab_areas.clear();
+    app.grid_areas.clear();
     app.tasks_area = Rect::default();
     app.task_rows.clear();
 
@@ -2621,7 +2622,7 @@ pub(crate) fn draw_status(f: &mut TuiFrame, area: Rect, app: &App) {
         CenterView::Flow => {
             tr!("  j/k 選 session  Enter 開逐字稿  l 圖／清單  Esc/F 返回  E 顯示已結束")
         }
-        CenterView::Grid => tr!("  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"),
+        CenterView::Grid => tr!("  1-4/點擊 選格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"),
     };
     let text = Line::from(vec![
         Span::styled(

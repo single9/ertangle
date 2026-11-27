@@ -60,6 +60,19 @@ pub(crate) fn handle_mouse(
                     return Ok(());
                 }
             }
+            if app.view == CenterView::Grid {
+                if let Some((_, id)) = app
+                    .grid_areas
+                    .iter()
+                    .find(|(r, _)| r.contains(pos))
+                    .cloned()
+                {
+                    if crate::project::select_session_by_id(app, &id) {
+                        writer.set_active(&app.active_host);
+                    }
+                    return Ok(());
+                }
+            }
             if let Some(&(_, idx)) = app.tab_areas.iter().find(|(r, _)| r.contains(pos)) {
                 if idx < app.session_ids().len() {
                     app.selected = idx;

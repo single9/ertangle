@@ -3594,7 +3594,7 @@ msgid "  j/k 選 session  Enter 開逐字稿  l 圖／清單  Esc/F 返回  E �
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
+msgid "  1-4/點擊 選格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
 msgstr ""
 
 #: crates/ertangle-tui/src/flow/draw.rs

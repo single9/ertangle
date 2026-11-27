@@ -3610,8 +3610,8 @@ msgid "  j/k 選 session  Enter 開逐字稿  l 圖／清單  Esc/F 返回  E �
 msgstr "  j/k select session  Enter open transcript  l graph/list  Esc/F back  E show ended"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
-msgstr "  Select a session to switch panes (4 per page)  Enter/V back to single transcript  ? help"
+msgid "  1-4/點擊 選格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
+msgstr "  1-4/click pane (4/page)  Enter/V transcript  ? help"
 
 #: crates/ertangle-tui/src/flow/draw.rs
 msgid "{n} 存活"
@@ -4958,6 +4958,9 @@ msgstr "Lost connection to the daemon (it may have been shut down). The screen s
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "  選 session 切換窗格 (每頁 4 個)  Enter/V 回單一逐字稿  ? 說明"
+#~ msgstr "  Select a session to switch panes (4 per page)  Enter/V back to single transcript  ? help"
 
 #~ msgid " 檔案瀏覽 ({pos}/{total} · Tab 進入/採用) "
 #~ msgstr " File browser ({pos}/{total} · Tab to open/select) "

@@ -319,6 +319,12 @@ fn handle_normal_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) -> R
             app.status = tr!("在選取 session 的工作目錄執行 shell 命令 (!<命令>)");
         }
         KeyCode::Enter if app.view == CenterView::Grid => app.view = CenterView::Transcript,
+        KeyCode::Char(c @ '1'..='4') if app.view == CenterView::Grid => {
+            let slot = (c as usize) - ('1' as usize);
+            if crate::project::select_grid_slot(app, slot) {
+                writer.set_active(&app.active_host);
+            }
+        }
         KeyCode::Enter if app.view == CenterView::Tasks => crate::tasks::jump_to_assignee(app),
         KeyCode::Enter | KeyCode::Char('v') if app.view == CenterView::Diff => {
             toggle_collapse_current_file(app)

@@ -7400,3 +7400,60 @@ fn at_suggestions_browse_directories_and_fuzzy_filter() {
     .unwrap();
     assert_eq!(app.input, "@\"my dir/hello world.txt\" ");
 }
+
+#[test]
+fn t104_grid_click_slot_keys_titles_and_cache() {
+    let mut app = sample_app(&[]);
+    add_session(&mut app, "ses_b", "worker/b", 20);
+    if let Some(s) = app.state.sessions.get_mut("ses_b") {
+        s.status = SessionStatus::WaitingApproval;
+        s.status_note = Some("needs ok".into());
+        s.context = Some(ertangle_core::ContextUsage {
+            used: 42,
+            window: Some(100),
+        });
+    }
+    app.view = CenterView::Grid;
+    let (_, text) = render_size(&mut app, 120, 40);
+    // Enriched titles include slot numbers, pending approval badge, status note, and context %.
+    assert!(text.contains("[1]"), "{text}");
+    assert!(text.contains("[2]"), "{text}");
+    assert!(text.contains("[!]"), "{text}");
+    assert!(text.contains("needs ok"), "{text}");
+    assert!(text.contains("42%"), "{text}");
+    assert_eq!(app.grid_areas.len(), 2);
+    assert_eq!(app.grid_cache.len(), 2);
+
+    // Pressing '2' selects the second pane; pressing '1' returns to the first.
+    let (mut w, _peer) = pair_writer();
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.selected_id().as_deref(), Some("ses_b"));
+    handle_key(
+        &mut app,
+        &mut w,
+        KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE),
+    )
+    .unwrap();
+    assert_eq!(app.selected_id().as_deref(), Some("ses_test"));
+
+    // Clicking the second Grid cell selects ses_b.
+    let (rect_b, id_b) = app.grid_areas[1].clone();
+    assert_eq!(id_b, "ses_b");
+    crate::mouse::handle_mouse(
+        &mut app,
+        &mut w,
+        crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: rect_b.x + 1,
+            row: rect_b.y + 1,
+            modifiers: KeyModifiers::NONE,
+        },
+    )
+    .unwrap();
+    assert_eq!(app.selected_id().as_deref(), Some("ses_b"));
+}

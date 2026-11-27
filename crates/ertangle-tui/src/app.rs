@@ -210,6 +210,18 @@ impl HostData {
     }
 }
 
+/// Cached rendered lines for a single Grid view pane.
+#[derive(Clone)]
+pub(crate) struct GridCellCache {
+    pub(crate) stamp: TranscriptStamp,
+    pub(crate) width: usize,
+    pub(crate) raw: bool,
+    pub(crate) show_tools: bool,
+    pub(crate) show_thoughts: bool,
+    pub(crate) active_tools_len: usize,
+    pub(crate) lines: Vec<ratatui::text::Line<'static>>,
+}
+
 pub(crate) struct App {
     pub(crate) state: State,
     /// 多主機狀態快照清單 (以 host name 為鍵)。
@@ -335,6 +347,10 @@ pub(crate) struct App {
     pub(crate) bus_baselined: bool,
     /// 分頁模式下每個分頁的區域與對應 session 索引 (供滑鼠點選)。
     pub(crate) tab_areas: Vec<(Rect, usize)>,
+    /// Grid view cell rectangles and corresponding session IDs for mouse selection.
+    pub(crate) grid_areas: Vec<(Rect, SessionId)>,
+    /// Per-pane transcript render cache for Grid view.
+    pub(crate) grid_cache: std::collections::HashMap<SessionId, GridCellCache>,
     /// 通知設定與狀態 (T15)。
     pub(crate) notify: crate::notify::Notifier,
     /// 任務視圖：游標 (`tasks::visible_task_ids` 的索引)與清單捲動起點。
@@ -476,6 +492,8 @@ impl App {
             bus_seen: 0,
             bus_baselined: false,
             tab_areas: Vec::new(),
+            grid_areas: Vec::new(),
+            grid_cache: std::collections::HashMap::new(),
             notify: crate::notify::Notifier::from_cfg(&cfg.tui),
             task_cursor: 0,
             flow_cursor: 0,
