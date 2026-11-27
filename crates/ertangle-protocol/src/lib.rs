@@ -779,6 +779,24 @@ mod tests {
         assert!(sp.prompt.is_none());
         assert!(sp.role.is_none());
 
+        let req_oc: Request = decode_line(
+            r#"{"op":"spawn","cwd":null,"kind":"opencode","label":null,"model":null,"effort":null,"permission":"auto","budget_usd":null,"worktree":false,"prompt":null,"role":null,"transport":"auto"}"#,
+        )
+        .unwrap();
+        let Request::Spawn(sp_oc) = req_oc else {
+            panic!("expected Spawn")
+        };
+        assert_eq!(sp_oc.kind, Some(AgentKind::OpenCode));
+
+        let req_open_code: Request = decode_line(
+            r#"{"op":"spawn","cwd":null,"kind":"open_code","label":null,"model":null,"effort":null,"permission":"auto","budget_usd":null,"worktree":false,"prompt":null,"role":null,"transport":"auto"}"#,
+        )
+        .unwrap();
+        let Request::Spawn(sp_open_code) = req_open_code else {
+            panic!("expected Spawn")
+        };
+        assert_eq!(sp_open_code.kind, Some(AgentKind::OpenCode));
+
         let handoff: Request =
             decode_line(r#"{"op":"handoff","session":"ses_1","kind":"claude","note":null}"#)
                 .unwrap();

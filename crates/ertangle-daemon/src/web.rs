@@ -1535,6 +1535,7 @@ mod tests {
         assert!(INDEX_HTML.contains("prompt: promptText || null"));
         assert!(INDEX_HTML.contains("role: newSessionState.role || null"));
         assert!(!INDEX_HTML.contains("if (!promptText || !ws) return;"));
+        assert!(INDEX_HTML.contains("if (kind === \"open_code\") return \"opencode\";"));
     }
 
     mod hex {

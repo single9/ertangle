@@ -101,7 +101,7 @@ pub type Seq = u64;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentKind {
-    #[serde(alias = "opencode", alias = "OpenCode")]
+    #[serde(alias = "open_code", alias = "opencode", alias = "OpenCode")]
     OpenCode,
     #[serde(alias = "claude", alias = "claude-code", alias = "ClaudeCode")]
     ClaudeCode,
@@ -127,7 +127,7 @@ impl AgentKind {
 
     pub fn parse(s: &str) -> Option<AgentKind> {
         Some(match s.to_ascii_lowercase().as_str() {
-            "opencode" | "oc" => AgentKind::OpenCode,
+            "opencode" | "open_code" | "oc" => AgentKind::OpenCode,
             "claude" | "claude-code" | "claudecode" => AgentKind::ClaudeCode,
             "codex" => AgentKind::Codex,
             "antigravity" | "agy" | "gemini" => AgentKind::Antigravity,
@@ -2799,6 +2799,10 @@ pub(crate) mod tests {
         for k in AgentKind::builtins() {
             assert_eq!(AgentKind::parse(k.id()).as_ref(), Some(&k));
         }
+        assert_eq!(
+            AgentKind::parse("open_code").as_ref(),
+            Some(&AgentKind::OpenCode)
+        );
         assert_eq!(AgentKind::OpenCode.acp_command().unwrap().0, "opencode");
         assert!(AgentKind::Codex.acp_command().is_none());
     }

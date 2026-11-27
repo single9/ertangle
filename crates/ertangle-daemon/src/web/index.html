@@ -5036,9 +5036,11 @@
     const modelRequested = {};
     const lastModelRender = {};
 
-    // Session.kind 序列化為 claude_code，daemon 與清單用 claude。
+    // Session.kind 序列化為 claude_code / open_code，daemon 與清單用 claude / opencode。
     function normKind(kind) {
-      return kind === "claude_code" ? "claude" : (kind || "opencode");
+      if (kind === "claude_code") return "claude";
+      if (kind === "open_code") return "opencode";
+      return kind || "opencode";
     }
 
     function requestModels(kind) {
