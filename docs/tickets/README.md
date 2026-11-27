@@ -112,6 +112,7 @@
 | [T105](T105-custom-worktree-symlinks.md) | Custom worktree `symlink_paths` and `.worktreeinclude` (已完成) | P2 | T100 |
 | [T106](T106-tui-diff-open-in-editor.md) | Open Diff file at cursor line in `$EDITOR` (`e` key) (已完成) | P3 | T35 |
 | [T107](T107-automated-merge-queue.md) | Automated Merge Queue with verification gate (`auto_merge_queue`) (已完成) | P2 | T56, T99, T101 |
+| [T108](T108-coordinator-retention-resume-summary-and-rename.md) | Retain ended coordinators, show summary/recency in resume picker, and add `:rename` | P2 | T58, T73 |
 
 ## Language convention
 
