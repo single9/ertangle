@@ -782,6 +782,8 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
         custom_mode,
         custom_text,
         custom_cursor,
+        scroll: user_scroll,
+        scroll_max,
         ..
     } = &p.stage
     else {
@@ -793,10 +795,10 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
     let w = input_area.width;
     let inner_w = w.saturating_sub(4) as usize;
     let dim = Style::default().fg(Color::DarkGray);
-    let mut lines: Vec<Line> = Vec::new();
+    let mut q_lines: Vec<Line> = Vec::new();
     if let Some(h) = q.header.as_deref().filter(|h| !h.is_empty()) {
         for l in wrap_display(h, inner_w) {
-            lines.push(Line::from(Span::styled(
+            q_lines.push(Line::from(Span::styled(
                 l,
                 Style::default()
                     .fg(Color::Yellow)
@@ -805,9 +807,9 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
         }
     }
     for l in wrap_display(&q.question, inner_w) {
-        lines.push(Line::from(l));
+        q_lines.push(Line::from(l));
     }
-    lines.push(Line::from(""));
+    let mut lines: Vec<Line> = vec![Line::from("")];
     let mut cursor_line = lines.len();
     let mut custom_cursor_at: Option<(usize, (usize, usize))> = None;
     let n_opts = p.items.len();
@@ -882,7 +884,6 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
             }
         }
     }
-    lines.push(Line::from(""));
     let hint = if *custom_mode {
         tr!("輸入自訂答案 · Enter 送出 · Esc 返回選項")
     } else if *multi_select {
@@ -891,41 +892,168 @@ fn draw_question_picker(f: &mut TuiFrame, input_area: Rect, app: &App) {
         tr!("↑↓ 移動 · 1-9 直接選擇 · Enter 選擇 · Esc 稍後回答")
     };
     let hint = if questions.len() > 1 && !*custom_mode {
-        format!("{hint} · {}", tr!("s 跳過此題"))
+        format!("{hint} · {}", tr!("Ctrl+S 跳過此題"))
     } else if questions.len() > 1 && q.options.is_empty() {
         format!("{hint} · {}", tr!("留空 Enter 跳過此題"))
     } else {
         hint
     };
-    for l in wrap_display(&hint, inner_w) {
-        lines.push(Line::from(Span::styled(l, dim)));
+    let hint_lines: Vec<Line> = wrap_display(&hint, inner_w)
+        .into_iter()
+        .map(|l| Line::from(Span::styled(l, dim)))
+        .collect();
+    // 貼在輸入框正上方，往上長高，但不超過畫面一半，避免蓋住整個對話紀錄。
+    let avail = input_area.y.saturating_sub(f.area().y);
+    let layout = question_layout(
+        f.area().height,
+        avail,
+        q_lines.len(),
+        lines.len(),
+        hint_lines.len(),
+    );
+    let h = layout.height;
+    if h < 3 {
+        return;
     }
-    // 貼在輸入框正上方，往上長高。
-    let max_h = input_area.y.saturating_sub(f.area().y);
-    let h = (lines.len() as u16 + 2).min(max_h);
-    let area = Rect::new(input_area.x, input_area.y - h, w, h);
-    let room = h.saturating_sub(2) as usize;
+    let area = Rect::new(input_area.x, input_area.y.saturating_sub(h), w, h);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(format!(" {} ", p.title));
+    let inner = block.inner(area);
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(block, area);
+
+    // Question text: scrolled only by the user (PgUp/PgDn), never by the option cursor.
+    let q_text_rows = layout.question_text_rows();
+    let q_total = q_lines.len();
+    let q_max = q_total.saturating_sub(q_text_rows);
+    scroll_max.set(u16::try_from(q_max).unwrap_or(u16::MAX));
+    let q_scroll = (*user_scroll as usize).min(q_max);
+    let mut y = inner.y;
+    let q_rect = Rect::new(inner.x, y, inner.width, to_u16(q_text_rows));
+    f.render_widget(
+        Paragraph::new(q_lines).scroll((to_u16(q_scroll), 0)),
+        q_rect,
+    );
+    y = y.saturating_add(q_rect.height);
+    if layout.indicator {
+        let shown = q_scroll.saturating_add(q_text_rows);
+        let arrows = match (q_scroll > 0, q_scroll < q_max) {
+            (true, true) => "▲▼",
+            (true, false) => "▲",
+            _ => "▼",
+        };
+        let text = tr!(
+            "{arrows} PgUp/PgDn 捲動問題 ({shown}/{total})",
+            arrows = arrows,
+            shown = shown,
+            total = q_total
+        );
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                text,
+                Style::default().fg(Color::Yellow),
+            ))),
+            Rect::new(inner.x, y, inner.width, 1),
+        );
+        y = y.saturating_add(1);
+    }
+
+    // Options: auto-scrolled so the highlighted row (or custom answer cursor) stays visible.
+    let room = layout.body_rows;
     if let Some((start, (r, _))) = custom_cursor_at {
         cursor_line = start + r;
     }
-    let scroll = (cursor_line + 1).saturating_sub(room) as u16;
-    f.render_widget(ratatui::widgets::Clear, area);
+    let scroll = (cursor_line + 1).saturating_sub(room);
+    let body_rect = Rect::new(inner.x, y, inner.width, to_u16(room));
+    f.render_widget(Paragraph::new(lines).scroll((to_u16(scroll), 0)), body_rect);
+    y = y.saturating_add(body_rect.height);
     f.render_widget(
-        Paragraph::new(lines).scroll((scroll, 0)).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
-                .title(format!(" {} ", p.title)),
-        ),
-        area,
+        Paragraph::new(hint_lines),
+        Rect::new(inner.x, y, inner.width, to_u16(layout.hint_rows)),
     );
     // Put the terminal cursor at the edit point so the IME preedit anchors there.
     if let Some((start, (r, col))) = custom_cursor_at {
-        let row_y = (start + r).saturating_sub(scroll as usize);
+        let row_y = (start + r).saturating_sub(scroll);
         if row_y < room && area.width > 2 {
             let x = (area.x + 1 + 7 + col as u16).min(area.x + area.width.saturating_sub(2));
-            f.set_cursor_position((x, area.y + 1 + row_y as u16));
+            f.set_cursor_position((x, body_rect.y.saturating_add(to_u16(row_y))));
         }
+    }
+}
+
+fn to_u16(n: usize) -> u16 {
+    u16::try_from(n).unwrap_or(u16::MAX)
+}
+
+/// Smallest popup height the question picker shrinks to when the screen allows it.
+const QUESTION_MIN_H: u16 = 8;
+/// Tallest popup the question picker grows to, so the transcript stays visible.
+const QUESTION_MAX_H: u16 = 18;
+
+/// Row budget of the question picker popup (all counts exclude the border).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct QuestionLayout {
+    /// Total popup height including the border.
+    pub height: u16,
+    /// Rows for the question pane, including the scroll indicator row.
+    pub question_rows: usize,
+    /// Whether the question overflows and the last question row is a scroll indicator.
+    pub indicator: bool,
+    /// Rows for the options/custom answer pane.
+    pub body_rows: usize,
+    /// Rows for the key hints.
+    pub hint_rows: usize,
+}
+
+impl QuestionLayout {
+    /// Rows left for question text once the indicator row is taken.
+    pub(crate) fn question_text_rows(&self) -> usize {
+        self.question_rows
+            .saturating_sub(usize::from(self.indicator))
+    }
+}
+
+/// Lays out the question picker: cap the height at half the screen (within
+/// [`QUESTION_MIN_H`, `QUESTION_MAX_H`] and the space above the input box), then split it so the
+/// question keeps at least half of the rows it needs and the options keep the rest.
+pub(crate) fn question_layout(
+    screen_h: u16,
+    avail: u16,
+    question_len: usize,
+    body_len: usize,
+    hint_len: usize,
+) -> QuestionLayout {
+    let cap = (screen_h / 2)
+        .clamp(QUESTION_MIN_H, QUESTION_MAX_H)
+        .min(avail);
+    let want = question_len
+        .saturating_add(body_len)
+        .saturating_add(hint_len)
+        .saturating_add(2);
+    let height = to_u16(want).min(cap);
+    let room = usize::from(height.saturating_sub(2));
+    if want.saturating_sub(2) <= room {
+        return QuestionLayout {
+            height,
+            question_rows: question_len,
+            indicator: false,
+            body_rows: body_len,
+            hint_rows: hint_len,
+        };
+    }
+    let hint_rows = hint_len.min(2).min(room.saturating_sub(2));
+    let rest = room - hint_rows;
+    let body_min = body_len.min(rest / 2);
+    let question_rows = question_len.min(rest - body_min);
+    let indicator = question_rows < question_len && question_rows >= 2;
+    QuestionLayout {
+        height,
+        question_rows,
+        indicator,
+        body_rows: rest - question_rows,
+        hint_rows,
     }
 }
 

@@ -1,7 +1,7 @@
 //! Helix 風格的 Space 選單 (which-key)與 spawn 選擇器 (agent → model → prompt)。
 
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ertangle_core::{AgentKind, Attachment, Role, SessionId, SessionStatus};
 use std::path::{Path, PathBuf};
 use tr::tr;
@@ -359,6 +359,15 @@ pub(crate) enum PickStage {
         custom_text: String,
         /// Cursor inside `custom_text`, as a char index.
         custom_cursor: usize,
+        /// How long after a question is shown before answer keys are accepted.
+        arm_delay: std::time::Duration,
+        /// Earliest moment answer keys (Enter, digits, skip) count for the current question;
+        /// stray IME commit keys that arrive before this are dropped.
+        armed_at: std::time::Instant,
+        /// Rows the user scrolled the question text with PgUp/PgDn.
+        scroll: u16,
+        /// Largest useful `scroll`, written by the renderer so key handling can clamp it.
+        scroll_max: std::cell::Cell<u16>,
     },
     /// 選擇多 Agent 團隊範本。
     Playbook,
@@ -754,6 +763,10 @@ pub(crate) fn start_question_picker(app: &mut App, q: &ertangle_core::UserQuesti
             custom_mode: false,
             custom_text: String::new(),
             custom_cursor: 0,
+            arm_delay: app.question_arm_delay,
+            armed_at: std::time::Instant::now(),
+            scroll: 0,
+            scroll_max: std::cell::Cell::new(0),
         },
         resume_scope: ResumeScope::default(),
         title: String::new(),
@@ -796,6 +809,9 @@ fn load_question(p: &mut Picker, index: usize) {
         custom_mode,
         custom_text,
         custom_cursor,
+        arm_delay,
+        armed_at,
+        scroll,
         ..
     } = &mut p.stage
     else {
@@ -804,6 +820,10 @@ fn load_question(p: &mut Picker, index: usize) {
     let Some(q) = questions.get(index) else {
         return;
     };
+    // Re-arm on every question so an IME burst cannot answer the next one too.
+    let now = std::time::Instant::now();
+    *armed_at = now.checked_add(*arm_delay).unwrap_or(now);
+    *scroll = 0;
     *cur = index;
     *id = q.id.clone();
     *session = q.session.clone();
@@ -894,14 +914,38 @@ fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let rows = question_rows(p);
     let n_opts = p.items.len();
-    let (multi, custom_mode) = match &p.stage {
+    let (multi, custom_mode, armed) = match &mut p.stage {
         PickStage::Question {
             multi_select,
             custom_mode,
+            armed_at,
+            scroll,
+            scroll_max,
             ..
-        } => (*multi_select, *custom_mode),
+        } => {
+            match key.code {
+                KeyCode::PageUp => {
+                    *scroll = scroll.saturating_sub(QUESTION_SCROLL_STEP);
+                    return Ok(());
+                }
+                KeyCode::PageDown => {
+                    *scroll = scroll
+                        .saturating_add(QUESTION_SCROLL_STEP)
+                        .min(scroll_max.get());
+                    return Ok(());
+                }
+                _ => {}
+            }
+            let armed = key.kind != KeyEventKind::Repeat && std::time::Instant::now() >= *armed_at;
+            (*multi_select, *custom_mode, armed)
+        }
         _ => return Ok(()),
     };
+    // IME commits and auto-repeat can leak Enter/digits right after the picker opens;
+    // those must never answer (or skip) a question the user has not read yet.
+    if !armed && is_question_answer_key(&key, multi, custom_mode) {
+        return Ok(());
+    }
 
     if custom_mode {
         return handle_custom_input(app, writer, key);
@@ -963,7 +1007,7 @@ fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
                 enter_custom(p);
             }
         }
-        KeyCode::Char('s') if !ctrl => return skip_question(app, writer),
+        KeyCode::Char('s') if ctrl => return skip_question(app, writer),
         KeyCode::Char(c @ '1'..='9') if !ctrl => {
             let i = (c as usize) - ('1' as usize);
             if i >= rows {
@@ -998,6 +1042,23 @@ fn handle_question_key(app: &mut App, writer: &mut HostRouter, key: KeyEvent) ->
         _ => {}
     }
     Ok(())
+}
+
+/// Rows PgUp/PgDn scroll the question text by.
+const QUESTION_SCROLL_STEP: u16 = 3;
+
+/// Keys that answer, skip, or change the answer of a question; these are held back while
+/// the picker is still arming and ignored when they are auto-repeats.
+fn is_question_answer_key(key: &KeyEvent, multi: bool, custom_mode: bool) -> bool {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    match key.code {
+        KeyCode::Enter => true,
+        _ if custom_mode => false,
+        KeyCode::Char('s') => ctrl,
+        KeyCode::Char('1'..='9') => !ctrl,
+        KeyCode::Char(' ') => multi && !ctrl,
+        _ => false,
+    }
 }
 
 /// 跳過群組中的目前問題 (送出空答案)；群組至少要有一題有答案，所以不能全部跳過。

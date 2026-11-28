@@ -1584,6 +1584,8 @@ fn scope_filters_sessions_by_project_and_names_disambiguate() {
 fn test_app() -> App {
     let mut app = App::new();
     app.scope_here = false;
+    // Answer-key arming is covered by dedicated tests; others answer right away.
+    app.question_arm_delay = std::time::Duration::ZERO;
     app
 }
 
@@ -4862,8 +4864,8 @@ fn question_picker_group_skip_sends_empty_answer_but_not_all_skipped() {
     app.state.pending_questions.insert(q2.id.clone(), q2);
     // Skipping every question is refused on the last one.
     crate::menu::start_question_picker(&mut app, &q1);
-    qpick_key(&mut app, &mut w, KeyCode::Char('s'));
-    qpick_key(&mut app, &mut w, KeyCode::Char('s'));
+    qpick_ctrl(&mut app, &mut w, KeyCode::Char('s'));
+    qpick_ctrl(&mut app, &mut w, KeyCode::Char('s'));
     assert!(app.picker.is_some());
     assert!(qpick_sent(&mut peer).is_empty());
     qpick_key(&mut app, &mut w, KeyCode::Char('2'));
@@ -7593,4 +7595,218 @@ fn rename_and_label_commands_send_session_label() {
     let (mut w, _peer) = pair_writer();
     crate::commands::execute_command(&mut app, &mut w, "rename x").unwrap();
     assert!(app.status.contains("沒有選取"));
+}
+
+// ---- question picker: IME bursts and popup sizing ----
+
+fn qpick_ctrl(app: &mut App, w: &mut HostRouter, code: KeyCode) {
+    crate::menu::handle_pick_key(app, w, KeyEvent::new(code, KeyModifiers::CONTROL)).unwrap();
+}
+
+fn qpick_repeat(app: &mut App, w: &mut HostRouter, code: KeyCode) {
+    let mut key = KeyEvent::new(code, KeyModifiers::NONE);
+    key.kind = crossterm::event::KeyEventKind::Repeat;
+    crate::menu::handle_pick_key(app, w, key).unwrap();
+}
+
+/// Pretend the arm delay has elapsed for the current question.
+fn qpick_arm(app: &mut App) {
+    if let Some(crate::menu::PickStage::Question { armed_at, .. }) =
+        app.picker.as_mut().map(|p| &mut p.stage)
+    {
+        *armed_at = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(1))
+            .unwrap();
+    }
+}
+
+fn qpick_custom_text(app: &App) -> String {
+    match app.picker.as_ref().map(|p| &p.stage) {
+        Some(crate::menu::PickStage::Question { custom_text, .. }) => custom_text.clone(),
+        _ => String::new(),
+    }
+}
+
+#[test]
+fn question_picker_ignores_ime_burst_right_after_open() {
+    let mut app = test_app();
+    app.question_arm_delay = std::time::Duration::from_secs(60);
+    let (mut w, mut peer) = pair_writer();
+    let q = qpick_q("qst_ime", false, true, None);
+    crate::menu::start_question_picker(&mut app, &q);
+    // An IME commit leaks Enter and candidate digits right as the picker opens.
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    qpick_key(&mut app, &mut w, KeyCode::Char('2'));
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    assert!(app.picker.is_some(), "burst must not answer the question");
+    assert!(qpick_sent(&mut peer).is_empty());
+    // Navigation still works while arming.
+    qpick_key(&mut app, &mut w, KeyCode::Down);
+    assert_eq!(app.picker.as_ref().unwrap().cursor, 1);
+    // Once armed, a deliberate Enter answers.
+    qpick_arm(&mut app);
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    assert!(app.picker.is_none());
+    assert!(qpick_sent(&mut peer).contains("Chocolate"));
+}
+
+#[test]
+fn question_picker_rearms_for_next_question_in_group() {
+    let mut app = test_app();
+    app.question_arm_delay = std::time::Duration::from_secs(60);
+    let (mut w, mut peer) = pair_writer();
+    let q1 = qpick_q("qst_r1", false, true, Some("g"));
+    let q2 = qpick_q("qst_r2", false, true, Some("g"));
+    app.state
+        .pending_questions
+        .insert(q1.id.clone(), q1.clone());
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    crate::menu::start_question_picker(&mut app, &q1);
+    qpick_arm(&mut app);
+    qpick_key(&mut app, &mut w, KeyCode::Char('1'));
+    // A second Enter from the same burst lands on question 2 and must be ignored.
+    qpick_key(&mut app, &mut w, KeyCode::Enter);
+    assert!(app.picker.is_some());
+    assert!(qpick_sent(&mut peer).is_empty());
+}
+
+#[test]
+fn question_picker_rejects_repeated_answer_keys() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let q1 = qpick_q("qst_k1", false, true, Some("g"));
+    let q2 = qpick_q("qst_k2", false, true, Some("g"));
+    app.state
+        .pending_questions
+        .insert(q1.id.clone(), q1.clone());
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    crate::menu::start_question_picker(&mut app, &q1);
+    qpick_repeat(&mut app, &mut w, KeyCode::Enter);
+    qpick_repeat(&mut app, &mut w, KeyCode::Char('1'));
+    assert_eq!(
+        app.picker.as_ref().unwrap().title,
+        tr!("問題 ({n}/{total})", n = 1, total = 2),
+        "repeat keys must not advance the group"
+    );
+    // Repeated Down still navigates.
+    qpick_repeat(&mut app, &mut w, KeyCode::Down);
+    assert_eq!(app.picker.as_ref().unwrap().cursor, 1);
+    // Custom mode: a repeated Enter must not send the typed text either.
+    qpick_key(&mut app, &mut w, KeyCode::Char('4'));
+    qpick_type(&mut app, &mut w, "x");
+    qpick_repeat(&mut app, &mut w, KeyCode::Enter);
+    assert_eq!(qpick_custom_text(&app), "x");
+    assert!(qpick_sent(&mut peer).is_empty());
+}
+
+#[test]
+fn question_picker_skip_needs_ctrl_s() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let q1 = qpick_q("qst_p1", false, true, Some("g"));
+    let q2 = qpick_q("qst_p2", false, true, Some("g"));
+    app.state
+        .pending_questions
+        .insert(q1.id.clone(), q1.clone());
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    crate::menu::start_question_picker(&mut app, &q1);
+    // A stray `s` (e.g. pinyin leaking from an IME) no longer skips.
+    qpick_key(&mut app, &mut w, KeyCode::Char('s'));
+    assert_eq!(
+        app.picker.as_ref().unwrap().title,
+        tr!("問題 ({n}/{total})", n = 1, total = 2)
+    );
+    qpick_ctrl(&mut app, &mut w, KeyCode::Char('s'));
+    assert_eq!(
+        app.picker.as_ref().unwrap().title,
+        tr!("問題 ({n}/{total})", n = 2, total = 2)
+    );
+    assert!(qpick_sent(&mut peer).is_empty());
+}
+
+#[test]
+fn question_picker_custom_typing_never_triggers_shortcuts() {
+    let mut app = test_app();
+    let (mut w, mut peer) = pair_writer();
+    let mut q1 = qpick_q("qst_t1", false, true, Some("g"));
+    q1.options.clear();
+    let q2 = qpick_q("qst_t2", false, true, Some("g"));
+    app.state
+        .pending_questions
+        .insert(q1.id.clone(), q1.clone());
+    app.state.pending_questions.insert(q2.id.clone(), q2);
+    crate::menu::start_question_picker(&mut app, &q1);
+    qpick_type(&mut app, &mut w, "1s 2 ");
+    qpick_ctrl(&mut app, &mut w, KeyCode::Char('s'));
+    assert_eq!(qpick_custom_text(&app), "1s 2 ");
+    assert_eq!(
+        app.picker.as_ref().unwrap().title,
+        tr!("問題 ({n}/{total})", n = 1, total = 2)
+    );
+    assert!(qpick_sent(&mut peer).is_empty());
+}
+
+#[test]
+fn question_layout_caps_height_and_keeps_question_rows() {
+    use crate::draw::question_layout;
+    // Everything fits: popup is exactly as tall as its content.
+    let l = question_layout(40, 35, 2, 4, 1);
+    assert_eq!(l.height, 9);
+    assert!(!l.indicator);
+    // Long question on a tall screen: capped at 18 rows, never half the screen more.
+    let l = question_layout(60, 55, 40, 10, 2);
+    assert_eq!(l.height, 18);
+    assert!(l.indicator);
+    assert_eq!(l.question_rows + l.body_rows + l.hint_rows, 16);
+    assert!(l.question_text_rows() >= 4, "{l:?}");
+    assert!(l.body_rows >= 5, "{l:?}");
+    // Small screen: at most half of it (but at least the minimum).
+    let l = question_layout(20, 15, 40, 10, 2);
+    assert_eq!(l.height, 10);
+    // Never taller than the room above the input box.
+    let l = question_layout(40, 5, 40, 10, 2);
+    assert_eq!(l.height, 5);
+}
+
+#[test]
+fn question_picker_long_question_stays_readable_and_scrolls() {
+    let mut app = test_app();
+    let (mut w, _peer) = pair_writer();
+    let mut q = qpick_q("qst_long", false, true, None);
+    q.header = Some("HEADERX".into());
+    q.question = (0..40)
+        .map(|i| format!("line{i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    q.options = (0..8)
+        .map(|i| ertangle_core::QuestionOption::plain(format!("opt{i}")))
+        .collect();
+    crate::menu::start_question_picker(&mut app, &q);
+    // Move to the last option: the question header must remain visible.
+    for _ in 0..7 {
+        qpick_key(&mut app, &mut w, KeyCode::Down);
+    }
+    let (term, text) = render_size(&mut app, 100, 50);
+    assert!(text.contains("HEADERX"), "{text}");
+    assert!(text.contains("opt7"), "{text}");
+    assert!(text.contains("PgUp/PgDn"), "{text}");
+    let popup_rows = (0..50)
+        .filter(|&y| row_text(&term, y).contains("line") || row_text(&term, y).contains("opt"))
+        .count();
+    assert!(popup_rows <= 16, "popup too tall: {popup_rows}");
+    assert!(!text.contains("line39"));
+    // PgDn scrolls the question text; the selection stays put.
+    for _ in 0..20 {
+        qpick_key(&mut app, &mut w, KeyCode::PageDown);
+    }
+    let (_, text) = render_size(&mut app, 100, 50);
+    assert!(text.contains("line39"), "{text}");
+    assert!(!text.contains("HEADERX"));
+    assert_eq!(app.picker.as_ref().unwrap().cursor, 7);
+    // PgUp brings the header back even after over-scrolling.
+    for _ in 0..20 {
+        qpick_key(&mut app, &mut w, KeyCode::PageUp);
+    }
+    let (_, text) = render_size(&mut app, 100, 50);
+    assert!(text.contains("HEADERX"), "{text}");
 }

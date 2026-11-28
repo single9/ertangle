@@ -3378,11 +3378,15 @@ msgid "↑↓ 移動 · 1-9 直接選擇 · Enter 選擇 · Esc 稍後回答"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "s 跳過此題"
+msgid "Ctrl+S 跳過此題"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "留空 Enter 跳過此題"
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid "{arrows} PgUp/PgDn 捲動問題 ({shown}/{total})"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -4290,7 +4294,7 @@ msgstr ""
 msgid "交接給哪個 agent"
 msgstr ""
 
-#: crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/menu.rs
+#: crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/menu.rs crates/ertangle-tui/src/tests.rs crates/ertangle-tui/src/tests.rs crates/ertangle-tui/src/tests.rs crates/ertangle-tui/src/tests.rs
 msgid "問題 ({n}/{total})"
 msgstr ""
 

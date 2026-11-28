@@ -222,6 +222,10 @@ pub(crate) struct GridCellCache {
     pub(crate) lines: Vec<ratatui::text::Line<'static>>,
 }
 
+/// Default question picker arm delay: long enough to swallow an IME commit burst,
+/// short enough that a deliberate answer is not noticeably delayed.
+pub(crate) const QUESTION_ARM_DELAY: std::time::Duration = std::time::Duration::from_millis(300);
+
 pub(crate) struct App {
     pub(crate) state: State,
     /// 多主機狀態快照清單 (以 host name 為鍵)。
@@ -263,6 +267,8 @@ pub(crate) struct App {
     pub(crate) picker: Option<crate::menu::Picker>,
     /// 使用者已略過 (Esc) 或已送出答案的問題 id；不會再自動開啟選擇器。
     pub(crate) dismissed_questions: std::collections::HashSet<String>,
+    /// Delay after a question picker shows a question before answer keys are accepted.
+    pub(crate) question_arm_delay: std::time::Duration,
     /// M3：目前顯示的 worktree diff 內容與游標行。
     pub(crate) diff_session: Option<SessionId>,
     pub(crate) diff_raw_lines: Vec<String>,
@@ -445,6 +451,7 @@ impl App {
             menu_path: Vec::new(),
             picker: None,
             dismissed_questions: Default::default(),
+            question_arm_delay: QUESTION_ARM_DELAY,
             diff_session: None,
             diff_raw_lines: Vec::new(),
             diff_files: Vec::new(),
