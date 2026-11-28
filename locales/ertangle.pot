@@ -2361,6 +2361,10 @@ msgstr ""
 msgid "版面：自動"
 msgstr ""
 
+#: crates/ertangle-tui/src/app.rs
+msgid "已聚焦 Projects：j/k 選擇 · Enter 切換 · p 返回"
+msgstr ""
+
 #: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs
 msgid "已展開已結束的 session，E 摺疊"
 msgstr ""
@@ -3349,7 +3353,7 @@ msgstr ""
 msgid "本專案"
 msgstr ""
 
-#: crates/ertangle-tui/src/draw.rs
+#: crates/ertangle-tui/src/draw.rs crates/ertangle-tui/src/draw.rs
 msgid "全部專案"
 msgstr ""
 
@@ -3458,19 +3462,27 @@ msgid "⏸暫停跟隨"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
+msgid " Projects "
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " p 聚焦 · P 全部 · Space P "
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "已結束 ({n})"
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "P 展開 · Space P 切換"
-msgstr ""
-
-#: crates/ertangle-tui/src/draw.rs crates/ertangle-tui/src/draw.rs
-msgid " Projects & Sessions "
+msgid " Sessions · 全部 "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Projects & Sessions · 全部 "
+msgid " Sessions "
+msgstr ""
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " E 摺疊 "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -3703,6 +3715,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/help.rs
 msgid "選取下一個／上一個 session"
+msgstr ""
+
+#: crates/ertangle-tui/src/help.rs
+msgid "在 Projects 與 Sessions 之間切換焦點"
 msgstr ""
 
 #: crates/ertangle-tui/src/help.rs

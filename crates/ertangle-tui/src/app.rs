@@ -321,6 +321,10 @@ pub(crate) struct App {
     pub(crate) input_sel: Option<(usize, usize)>,
     /// `Normal` 模式誤打字時記下的時間；用來提示要先進輸入模式。
     pub(crate) input_nudge: Option<std::time::Instant>,
+    /// 最近一次繪製時 Projects 清單的區域 (供滑鼠點選)。
+    pub(crate) projects_area: Rect,
+    /// Projects 清單目前捲動的起始索引 (滑鼠點選需加此偏移)。
+    pub(crate) projects_offset: usize,
     /// 最近一次繪製時 Sessions 清單的區域 (供滑鼠點選)。
     pub(crate) sessions_area: Rect,
     /// Sessions 清單目前捲動的起始索引 (滑鼠點選需加此偏移)。
@@ -484,6 +488,8 @@ impl App {
             input_area: Rect::default(),
             input_sel: None,
             input_nudge: None,
+            projects_area: Rect::default(),
+            projects_offset: 0,
             sessions_area: Rect::default(),
             sessions_offset: 0,
             transcript_area: Rect::default(),
@@ -652,8 +658,28 @@ impl App {
             .collect()
     }
 
+    /// Summary of all projects on the active host:
+    /// `(project_root, project_name, live_count, total_count)`, with `home_project` first.
+    pub(crate) fn all_project_roots(&self) -> Vec<(String, String, usize, usize)> {
+        let mut map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+        for s in self.state.sessions.values() {
+            let entry = map.entry(s.project_root()).or_default();
+            if s.status.is_live() {
+                entry.0 += 1;
+            }
+            entry.1 += 1;
+        }
+        let mut out: Vec<(String, String, usize, usize)> = map
+            .into_iter()
+            .map(|(root, (live, total))| (root.to_string(), project_name(root, &[]), live, total))
+            .collect();
+        out.sort_by_key(|(root, name, _, _)| (root != &self.home_project, name.clone()));
+        out
+    }
+
     /// Summary of other projects on the active host: `(project_name, live_count, total_count)`.
     /// Returns empty when `!self.scope_here`.
+    #[cfg(test)]
     pub(crate) fn other_project_summaries(&self) -> Vec<(String, usize, usize)> {
         self.other_project_roots()
             .into_iter()
@@ -1259,23 +1285,33 @@ impl App {
         self.sync_active_host_from_selection();
     }
 
-    /// 移動側欄選取：包含可見 session 清單、已結束折疊列 (`EndedFold`) 與其他專案折疊列 (`OtherProject`)。
+    /// 移動側欄選取：由上而下依序為 `Projects` (`OtherProject`)、`Sessions` 清單、與已結束折疊列 (`EndedFold`)。
     pub(crate) fn move_selection(&mut self, delta: isize) {
         if delta == 0 {
             return;
         }
         let steps = delta.abs();
         for _ in 0..steps {
-            if delta > 0 {
-                let n = self.visible_sessions().len();
-                let ended = self.ended_count();
-                let num_others = if self.scope_here {
-                    self.other_project_roots().len()
-                } else {
-                    0
-                };
+            let n = self.visible_sessions().len();
+            let ended = self.ended_count();
+            let num_others = if self.scope_here {
+                self.other_project_roots().len()
+            } else {
+                0
+            };
 
+            if delta > 0 {
                 match self.sidebar_focus {
+                    Some(SidebarFocus::OtherProject(idx)) => {
+                        if idx + 1 < num_others {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(idx + 1));
+                        } else if n > 0 {
+                            self.sidebar_focus = None;
+                            self.selected = 0;
+                        } else if ended > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::EndedFold);
+                        }
+                    }
                     None => {
                         let live = self.live_visible_count();
                         let at_live_end = self.show_ended && ended > 0 && self.selected + 1 == live;
@@ -1285,8 +1321,6 @@ impl App {
                             self.selected += 1;
                         } else if ended > 0 && !self.show_ended {
                             self.sidebar_focus = Some(SidebarFocus::EndedFold);
-                        } else if num_others > 0 {
-                            self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
                         }
                     }
                     Some(SidebarFocus::EndedFold) => {
@@ -1295,29 +1329,24 @@ impl App {
                             // Expanded: the ended sessions sit right below the fold header.
                             self.sidebar_focus = None;
                             self.selected = live;
-                        } else if num_others > 0 {
-                            self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
-                        }
-                    }
-                    Some(SidebarFocus::OtherProject(idx)) => {
-                        if idx + 1 < num_others {
-                            self.sidebar_focus = Some(SidebarFocus::OtherProject(idx + 1));
                         }
                     }
                 }
             } else {
-                let n = self.visible_sessions().len();
-                let ended = self.ended_count();
-
                 match self.sidebar_focus {
                     Some(SidebarFocus::OtherProject(idx)) => {
                         if idx > 0 {
                             self.sidebar_focus = Some(SidebarFocus::OtherProject(idx - 1));
-                        } else if ended > 0 && !self.show_ended {
+                        }
+                    }
+                    None => {
+                        let live = self.live_visible_count();
+                        if self.show_ended && ended > 0 && self.selected == live && live > 0 {
                             self.sidebar_focus = Some(SidebarFocus::EndedFold);
-                        } else if n > 0 {
-                            self.sidebar_focus = None;
-                            self.selected = n - 1;
+                        } else if self.selected > 0 {
+                            self.selected = self.selected.saturating_sub(1);
+                        } else if num_others > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(num_others - 1));
                         }
                     }
                     Some(SidebarFocus::EndedFold) => {
@@ -1326,18 +1355,31 @@ impl App {
                         if last > 0 {
                             self.sidebar_focus = None;
                             self.selected = last - 1;
-                        }
-                    }
-                    None => {
-                        let live = self.live_visible_count();
-                        if self.show_ended && ended > 0 && self.selected == live {
-                            self.sidebar_focus = Some(SidebarFocus::EndedFold);
-                        } else if self.selected > 0 {
-                            self.selected = self.selected.saturating_sub(1);
+                        } else if num_others > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(num_others - 1));
                         }
                     }
                 }
             }
+        }
+    }
+
+    /// Toggle keyboard focus between `Projects` and `Sessions` in the left sidebar.
+    pub(crate) fn toggle_projects_focus(&mut self) {
+        if matches!(self.sidebar_focus, Some(SidebarFocus::OtherProject(_))) {
+            self.sidebar_focus = None;
+            return;
+        }
+        let num_others = if self.scope_here {
+            self.other_project_roots().len()
+        } else {
+            0
+        };
+        if num_others > 0 {
+            self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
+            self.status = tr!("已聚焦 Projects：j/k 選擇 · Enter 切換 · p 返回");
+        } else {
+            crate::menu::start_project_picker(self);
         }
     }
 
@@ -1371,21 +1413,25 @@ impl App {
             }
             SidebarFocus::OtherProject(idx) => {
                 let others = self.other_project_roots();
-                if let Some((root, name, _, _)) = others.get(idx) {
-                    let root_path = std::path::PathBuf::from(root);
-                    self.active_project = root_path;
-                    self.home_project = root.clone();
-                    self.scope_here = true;
-                    self.sidebar_focus = None;
-                    self.selected = 0;
-                    self.selection = None;
-                    self.md_cache = None;
-                    self.rebuild_pending = true;
-                    self.clamp_selection();
-                    self.status = tr!("已切換專案：{project}", project = name);
+                if let Some((root, name, _, _)) = others.get(idx).cloned() {
+                    self.switch_to_project_root(&root, &name);
                 }
             }
         }
+    }
+
+    /// Switch `home_project` / `active_project` to `root` and scope the view to it.
+    pub(crate) fn switch_to_project_root(&mut self, root: &str, name: &str) {
+        self.active_project = std::path::PathBuf::from(root);
+        self.home_project = root.to_string();
+        self.scope_here = true;
+        self.sidebar_focus = None;
+        self.selected = 0;
+        self.selection = None;
+        self.md_cache = None;
+        self.rebuild_pending = true;
+        self.clamp_selection();
+        self.status = tr!("已切換專案：{project}", project = name);
     }
 
     /// 摺疊側欄目前焦點項目：若在 `EndedFold` 且目前展開，則摺疊之。

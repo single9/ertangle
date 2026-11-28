@@ -21,6 +21,7 @@ pub(crate) const HELP: &[(&str, &[(&str, &str)])] = &[
                 tr_noop!("對選取的 session 輸入 prompt (也可 @peer、#channel 傳訊息)"),
             ),
             ("j / k", tr_noop!("選取下一個／上一個 session")),
+            ("p", tr_noop!("在 Projects 與 Sessions 之間切換焦點")),
             ("Ctrl-K", tr_noop!("依關鍵字跳轉到 session")),
             ("?", tr_noop!("這個說明面板")),
             ("Space ,", tr_noop!("開啟設定面板 (含 Web 版支援)")),

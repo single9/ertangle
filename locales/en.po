@@ -2378,6 +2378,10 @@ msgid "版面：自動"
 msgstr "Layout: auto"
 
 #: crates/ertangle-tui/src/app.rs
+msgid "已聚焦 Projects：j/k 選擇 · Enter 切換 · p 返回"
+msgstr "Projects focused: j/k select · Enter switch · p back"
+
+#: crates/ertangle-tui/src/app.rs
 msgid "已展開已結束的 session，E 摺疊"
 msgstr "Ended sessions expanded, E to collapse"
 
@@ -3475,20 +3479,28 @@ msgid "⏸暫停跟隨"
 msgstr "⏸not following"
 
 #: crates/ertangle-tui/src/draw.rs
+msgid " Projects "
+msgstr " Projects "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " p 聚焦 · P 全部 · Space P "
+msgstr " p focus · P all · Space P "
+
+#: crates/ertangle-tui/src/draw.rs
 msgid "已結束 ({n})"
 msgstr "Ended ({n})"
 
 #: crates/ertangle-tui/src/draw.rs
-msgid "P 展開 · Space P 切換"
-msgstr "P expand · Space P switch"
+msgid " Sessions · 全部 "
+msgstr " Sessions · all "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Projects & Sessions "
-msgstr " Projects & Sessions "
+msgid " Sessions "
+msgstr " Sessions "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " Projects & Sessions · 全部 "
-msgstr " Projects & Sessions · all "
+msgid " E 摺疊 "
+msgstr " E fold "
 
 #: crates/ertangle-tui/src/draw.rs
 msgid "思考中"
@@ -3721,6 +3733,10 @@ msgstr "Type a prompt for the selected session (or message with @peer, #channel)
 #: crates/ertangle-tui/src/help.rs
 msgid "選取下一個／上一個 session"
 msgstr "Select next / previous session"
+
+#: crates/ertangle-tui/src/help.rs
+msgid "在 Projects 與 Sessions 之間切換焦點"
+msgstr "Toggle focus between Projects and Sessions"
 
 #: crates/ertangle-tui/src/help.rs
 msgid "依關鍵字跳轉到 session"
@@ -5032,6 +5048,18 @@ msgstr "Failed to launch editor: {e}"
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
 
+#~ msgid " P 展開 · Space P 切換 "
+#~ msgstr " P expand · Space P switch "
+
+#~ msgid "P 展開 · Space P 切換"
+#~ msgstr "P expand · Space P switch"
+
+#~ msgid " Projects & Sessions "
+#~ msgstr " Projects & Sessions "
+
+#~ msgid " Projects & Sessions · 全部 "
+#~ msgstr " Projects & Sessions · all "
+
 #~ msgid "s 跳過此題"
 #~ msgstr "s skip this question"
 
@@ -5086,14 +5114,8 @@ msgstr "Connection lost, reconnecting; please wait"
 #~ msgid "用法：/layout three|two|tabs"
 #~ msgstr "Usage: /layout three|two|tabs"
 
-#~ msgid " Sessions "
-#~ msgstr " Sessions "
-
 #~ msgid " Sessions · +{n} "
 #~ msgstr " Sessions · +{n} "
-
-#~ msgid " Sessions · 全部 "
-#~ msgstr " Sessions · all "
 
 #~ msgid "Bus：顯示 (b 或 Esc 關閉)"
 #~ msgstr "Bus: shown (b or Esc to close)"

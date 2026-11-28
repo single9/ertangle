@@ -339,7 +339,7 @@ Every structured agent session is automatically injected with a stdio MCP server
 
 ### 1. Layouts and Views
 
-- **Layout Modes**: On wide terminals (`>= 130` cols), automatically expands to a "Three-pane" layout (`Projects & Sessions` on the left + Center + right split with `Flow` graph on top and `Bus / Tasks` below). Press `L` to pin and cycle through "Two-pane", "Tabs" (Top Session Tabs + Center), and "Three-pane"; run `:layout auto` to restore adaptive sizing, and press `b` to toggle the right pane between `Flow + Bus` and `Project`.
+- **Layout Modes**: On wide terminals (`>= 130` cols), automatically expands to a "Three-pane" layout (`Projects` & `Sessions` on the left + Center + right split with `Flow` graph on top and `Bus / Tasks` below). Press `L` to pin and cycle through "Two-pane", "Tabs" (Top Session Tabs + Center), and "Three-pane"; run `:layout auto` to restore adaptive sizing, and press `b` to toggle the right pane between `Flow + Bus` and `Project`.
 - **Center Views**: Press `Tab` (or `F` for Flow) to cycle across the main views:
   1. **Overview**: Real-time streaming transcript with Markdown rendering (headers, lists, tables, code blocks).
   2. **Diff**: Real-time colored Git Diff view with inline review support.
@@ -359,7 +359,8 @@ Every structured agent session is automatically injected with a stdio MCP server
 | `!` | Enter **Shell Command mode** (run shell commands directly in the selected session's workspace `!<cmd>`) |
 | `n` | Create new session (select Agent, Model, input Prompt; supports `Ctrl-R` for Role, `Ctrl-T` for Worktree, `Ctrl-F` for Effort) |
 | `i` / `Enter` | Focus input box to send prompt (supports `@peer` and `#channel` routing) |
-| `j` / `k` or `↑` / `↓` | Select sessions and collapsible groups in `Projects & Sessions`; move line cursor in Diff; select task in Tasks view |
+| `j` / `k` or `↑` / `↓` | Select projects (`Projects`), sessions (`Sessions`), and ended fold (`Ended`) in the left sidebar; move line cursor in Diff; select task in Tasks view |
+| `p` | Toggle keyboard focus between `Projects` and `Sessions` in the left sidebar (opens project picker if no other projects exist) |
 | `l` / `→` / `h` / `←` / `Space` | Expand (`l` / `→`) or collapse (`h` / `←`) ended (`▸ Ended (N)`) and other-project rows in the sidebar (`Space` toggles) |
 | `[` / `]` | Jump to previous / next session |
 | `Ctrl-K` | **Jump-Anywhere**: Fuzzy search and jump to any session |

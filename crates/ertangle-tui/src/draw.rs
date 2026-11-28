@@ -41,6 +41,7 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
         app.bus_seen = app.state.messages.len();
     }
     // 隱藏的欄位要清掉區域，避免滑鼠命中上一次的位置。
+    app.projects_area = Rect::default();
     app.sessions_area = Rect::default();
     app.tab_areas.clear();
     app.grid_areas.clear();
@@ -51,9 +52,9 @@ pub(crate) fn draw(f: &mut TuiFrame, app: &mut App) {
     draw_header(f, header_chunk, app);
 
     let (side_l, side_r) = if w >= 140 {
-        (34, 46)
+        (36, 46)
     } else if w >= 110 {
-        (30, 40)
+        (32, 40)
     } else if w >= 84 {
         (26, 32)
     } else {
@@ -1521,7 +1522,150 @@ fn push_span(
     spans.push(Span::styled(text, style));
 }
 
+fn format_project_counts(live: usize, total: usize) -> String {
+    if live > 0 {
+        format!("({live} live / {total})")
+    } else {
+        format!("({total})")
+    }
+}
+
+fn draw_projects(f: &mut TuiFrame, area: Rect, app: &mut App) {
+    app.projects_area = area;
+    let inner_w = area.width.saturating_sub(4) as usize;
+    let mut items: Vec<ListItem> = Vec::new();
+
+    if app.scope_here {
+        let (mut active_live, mut active_total) = (0usize, 0usize);
+        for s in app.state.sessions.values() {
+            if s.project_root() == app.home_project {
+                active_total += 1;
+                if s.status.is_live() {
+                    active_live += 1;
+                }
+            }
+        }
+        let active_name = if app.home_project.is_empty() {
+            ".".to_string()
+        } else {
+            project_name(&app.home_project, &[])
+        };
+        let counts = format_project_counts(active_live, active_total);
+        let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
+        items.push(ListItem::new(Line::from(vec![
+            Span::styled("● ", Style::default().fg(project_color(&app.home_project))),
+            Span::styled(
+                truncate_width(&active_name, max_name),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
+        ])));
+
+        for (root, name, live, total) in app.other_project_roots() {
+            let counts = format_project_counts(live, total);
+            let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled("○ ", Style::default().fg(project_color(&root))),
+                Span::styled(
+                    truncate_width(&name, max_name),
+                    Style::default().fg(if live > 0 {
+                        Color::Gray
+                    } else {
+                        Color::DarkGray
+                    }),
+                ),
+                Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
+            ])));
+        }
+    } else {
+        let (mut all_live, mut all_total) = (0usize, 0usize);
+        for s in app.state.sessions.values() {
+            all_total += 1;
+            if s.status.is_live() {
+                all_live += 1;
+            }
+        }
+        let counts = format_project_counts(all_live, all_total);
+        let all_label = tr!("全部專案");
+        let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
+        items.push(ListItem::new(Line::from(vec![
+            Span::styled("● ", Style::default().fg(Color::Cyan)),
+            Span::styled(
+                truncate_width(&all_label, max_name),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
+        ])));
+
+        for (root, name, live, total) in app.all_project_roots() {
+            let counts = format_project_counts(live, total);
+            let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
+            let is_home = root == app.home_project;
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(
+                    if is_home { "● " } else { "○ " },
+                    Style::default().fg(project_color(&root)),
+                ),
+                Span::styled(
+                    truncate_width(&name, max_name),
+                    Style::default().fg(if live > 0 {
+                        Color::Gray
+                    } else {
+                        Color::DarkGray
+                    }),
+                ),
+                Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
+            ])));
+        }
+    }
+
+    let mut list_state = ListState::default();
+    if let Some(SidebarFocus::OtherProject(idx)) = app.sidebar_focus {
+        if app.scope_here {
+            list_state.select(Some(1 + idx));
+        }
+    }
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(tr!(" Projects "))
+        .title_bottom(
+            Line::styled(
+                tr!(" p 聚焦 · P 全部 · Space P "),
+                Style::default().fg(Color::DarkGray),
+            )
+            .right_aligned(),
+        );
+    let list = List::new(items)
+        .block(block)
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+    f.render_stateful_widget(list, area, &mut list_state);
+    app.projects_offset = list_state.offset();
+}
+
 pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
+    let area = if area.height >= 9 {
+        let proj_rows = if app.scope_here {
+            1 + app.other_project_roots().len()
+        } else {
+            1 + app.all_project_roots().len()
+        };
+        let proj_h = (proj_rows as u16 + 2).clamp(3, 7).min(area.height / 2);
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(proj_h), Constraint::Min(4)])
+            .split(area);
+        if let Some(&p_area) = chunks.first() {
+            draw_projects(f, p_area, app);
+        }
+        chunks.get(1).copied().unwrap_or(area)
+    } else {
+        app.projects_area = Rect::default();
+        area
+    };
+
     app.sessions_area = area;
     let vis = app.visible_sessions();
     let multi_host = app.has_multiple_hosts();
@@ -1544,8 +1688,8 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     };
     let multi_project = roots.len() > 1;
     let show_project = multi_project || !app.scope_here;
-    // 邊框佔 2 欄，`▸ ` 選取符號另外佔 2 欄。
-    let inner_w = area.width.saturating_sub(4) as usize;
+    // 邊框佔 2 欄。
+    let inner_w = area.width.saturating_sub(2) as usize;
 
     // 每筆 session 只用一行：狀態 + 標籤 + 少數警示標記。
     // 模型、branch、context、成本等細節都在逐字稿下方 (footer) 顯示，側欄不再重複。
@@ -1561,10 +1705,14 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                 _ => Color::DarkGray,
             };
             let dim = Style::default().fg(Color::DarkGray);
+            let is_ended = !s.status.is_live();
             let depth = app.session_tree_depth(host_name, &s.id);
             let mut spans: Vec<Span<'static>> = Vec::new();
             let mut used = 0usize;
 
+            if is_ended {
+                push_span(&mut spans, &mut used, "  ", dim);
+            }
             if depth > 0 {
                 push_span(&mut spans, &mut used, " ".repeat(depth.min(3) * 2), dim);
                 push_span(&mut spans, &mut used, "↳", dim);
@@ -1605,9 +1753,6 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     if p >= 92.0 { Color::Red } else { Color::Yellow },
                 ));
             }
-            if s.tool_calls > 0 {
-                right.push((format!("{} calls", s.tool_calls), Color::DarkGray));
-            }
             if !s.bg_procs.is_empty() {
                 right.push((
                     format!("bg{}", s.bg_procs.len()),
@@ -1626,11 +1771,24 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
             // 標籤吃掉剩下的寬度 (至少留 1 欄，太窄時用 `…`)。
             // 角色、模型、branch、context、成本等細節都在逐字稿 footer 顯示。
             let budget = inner_w.saturating_sub(used + 1 + right_w).max(1);
+            let label_style = if is_ended {
+                dim
+            } else {
+                match s.status {
+                    SessionStatus::WaitingApproval => Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                    SessionStatus::Failed => {
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                    }
+                    _ => Style::default(),
+                }
+            };
             push_span(
                 &mut spans,
                 &mut used,
                 format!(" {}", truncate_width(&s.label, budget)),
-                Style::default(),
+                label_style,
             );
             if !right.is_empty() {
                 let pad = inner_w.saturating_sub(used + right_w);
@@ -1664,33 +1822,6 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
         );
     }
 
-    if app.scope_here {
-        let others = app.other_project_summaries();
-        if !others.is_empty() {
-            // `List` prepends 2 columns for `highlight_symbol`, so subtract 2 to stay inside `inner_w`.
-            let max_w = inner_w.saturating_sub(2).max(1);
-            items.push(ListItem::new(Line::from(Span::styled(
-                "─".repeat(max_w),
-                Style::default().fg(Color::DarkGray),
-            ))));
-            for (name, live, total) in others {
-                let text = if live > 0 {
-                    format!("▸ {name} ({live} live / {total})")
-                } else {
-                    format!("▸ {name} ({total})")
-                };
-                items.push(ListItem::new(Line::from(Span::styled(
-                    truncate_width(&text, max_w),
-                    Style::default().fg(Color::DarkGray),
-                ))));
-            }
-            items.push(ListItem::new(Line::from(Span::styled(
-                truncate_width(&tr!("P 展開 · Space P 切換"), max_w),
-                Style::default().fg(Color::DarkGray),
-            ))));
-        }
-    }
-
     let mut list_state = ListState::default();
     if let Some(focus) = app.sidebar_focus {
         match focus {
@@ -1699,30 +1830,29 @@ pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
                     list_state.select(Some(fold_row));
                 }
             }
-            SidebarFocus::OtherProject(idx) => {
-                let divider_idx = sessions.len() + if ended > 0 { 1 } else { 0 };
-                list_state.select(Some(divider_idx + 1 + idx));
-            }
+            SidebarFocus::OtherProject(_) => {}
         }
     } else if !sessions.is_empty() {
         let selected = app.selected.min(sessions.len() - 1);
         list_state.select(Some(app.session_list_row(selected, ended > 0)));
     }
 
+    let mut block = Block::default()
+        .borders(Borders::ALL)
+        .title(if !app.scope_here {
+            tr!(" Sessions · 全部 ")
+        } else {
+            tr!(" Sessions ")
+        });
+    if ended > 0 {
+        block = block.title_bottom(
+            Line::styled(tr!(" E 摺疊 "), Style::default().fg(Color::DarkGray)).right_aligned(),
+        );
+    }
+
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(if app.scope_here {
-                    tr!(" Projects & Sessions ")
-                } else if show_project {
-                    tr!(" Projects & Sessions · 全部 ")
-                } else {
-                    tr!(" Projects & Sessions ")
-                }),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
-        .highlight_symbol("▸ ");
+        .block(block)
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
     f.render_stateful_widget(list, area, &mut list_state);
     app.sessions_offset = list_state.offset();
 }

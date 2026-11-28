@@ -85,6 +85,29 @@ pub(crate) fn handle_mouse(
                 }
                 return Ok(());
             }
+            let p_area = app.projects_area;
+            if p_area.width > 0
+                && p_area.height > 2
+                && mouse.row > p_area.y
+                && mouse.row < p_area.y + p_area.height - 1
+                && p_area.contains(pos)
+            {
+                let rel_row = mouse.row.saturating_sub(p_area.y + 1);
+                let idx = app.projects_offset + rel_row as usize;
+                if idx == 0 {
+                    crate::app::toggle_scope(app, None);
+                } else {
+                    let target = if app.scope_here {
+                        app.other_project_roots().get(idx - 1).cloned()
+                    } else {
+                        app.all_project_roots().get(idx - 1).cloned()
+                    };
+                    if let Some((root, name, _, _)) = target {
+                        app.switch_to_project_root(&root, &name);
+                    }
+                }
+                return Ok(());
+            }
             if area.width > 0
                 && area.height > 2
                 && mouse.row < area.y + area.height - 1

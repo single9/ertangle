@@ -114,6 +114,7 @@
 | [T107](T107-automated-merge-queue.md) | Automated Merge Queue with verification gate (`auto_merge_queue`) (已完成) | P2 | T56, T99, T101 |
 | [T108](T108-coordinator-retention-resume-summary-and-rename.md) | Retain ended coordinators, show summary/recency in resume picker, and add `:rename` (已完成) | P2 | T58, T73 |
 | [T109](T109-web-spawn-and-wire-enum-aliases.md) | Fix Web UI session spawn failure, optional initial prompt, role selector, and wire enum aliases (已完成) | P1 | T30 |
+| [T110](T110-tui-sidebar-projects-sessions-redesign.md) | TUI: split left sidebar into `Projects` and `Sessions` panels and polish row density (已完成) | P2 | T85, T87 |
 
 ## Language convention
 

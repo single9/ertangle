@@ -33,7 +33,7 @@ pub(crate) fn build_flow_model(app: &App, now_ms: u64) -> FlowModel {
     FlowModel {
         summary: build_summary(app, &nodes, messages.len()),
         nodes,
-        ended_folded: if app.show_ended { 0 } else { app.ended_count() },
+        ended_folded: app.ended_count(),
         edges,
         edges_truncated,
         now_ms,
@@ -46,7 +46,8 @@ fn in_window(ts: u64, now_ms: u64) -> bool {
 
 fn build_nodes(app: &App) -> Vec<FlowNode> {
     let state = &app.state;
-    app.visible_sessions_with(app.show_ended)
+    // Flow always focuses on live sessions regardless of the sidebar's `show_ended` fold.
+    app.visible_sessions_with(false)
         .into_iter()
         .filter(|(host, _)| host == app.active_host())
         .filter_map(|(host, id)| {
@@ -543,8 +544,8 @@ mod tests {
 
         app.show_ended = true;
         let m = build_flow_model(&app, NOW);
-        assert_eq!(m.nodes.len(), 4);
-        assert_eq!(m.ended_folded, 0);
+        assert_eq!(m.nodes.len(), 2);
+        assert_eq!(m.ended_folded, 2);
         assert_eq!(m.summary.ended, 2);
     }
 
