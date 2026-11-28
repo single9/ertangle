@@ -96,15 +96,10 @@ pub(crate) fn handle_mouse(
                 let idx = app.projects_offset + rel_row as usize;
                 if idx == 0 {
                     crate::app::toggle_scope(app, None);
-                } else {
-                    let target = if app.scope_here {
-                        app.other_project_roots().get(idx - 1).cloned()
-                    } else {
-                        app.all_project_roots().get(idx - 1).cloned()
-                    };
-                    if let Some((root, name, _, _)) = target {
-                        app.switch_to_project_root(&root, &name);
-                    }
+                } else if let Some((root, name, _, _)) =
+                    app.all_project_roots().get(idx - 1).cloned()
+                {
+                    app.switch_to_project_root(&root, &name);
                 }
                 return Ok(());
             }

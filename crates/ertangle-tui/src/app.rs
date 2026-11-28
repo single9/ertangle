@@ -637,6 +637,7 @@ impl App {
     /// Summary of other projects on the active host with exact roots:
     /// `(project_root, project_name, live_count, total_count)`.
     /// Returns empty when `!self.scope_here`.
+    #[cfg(test)]
     pub(crate) fn other_project_roots(&self) -> Vec<(String, String, usize, usize)> {
         if !self.scope_here {
             return Vec::new();
@@ -658,10 +659,14 @@ impl App {
             .collect()
     }
 
-    /// Summary of all projects on the active host:
-    /// `(project_root, project_name, live_count, total_count)`, with `home_project` first.
+    /// Summary of all projects on the active host in stable alphabetical order:
+    /// `(project_root, project_name, live_count, total_count)`.
+    /// Always includes `home_project` (when non-empty) so the active project stays visible in place.
     pub(crate) fn all_project_roots(&self) -> Vec<(String, String, usize, usize)> {
         let mut map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+        if !self.home_project.is_empty() {
+            map.entry(self.home_project.as_str()).or_default();
+        }
         for s in self.state.sessions.values() {
             let entry = map.entry(s.project_root()).or_default();
             if s.status.is_live() {
@@ -673,7 +678,7 @@ impl App {
             .into_iter()
             .map(|(root, (live, total))| (root.to_string(), project_name(root, &[]), live, total))
             .collect();
-        out.sort_by_key(|(root, name, _, _)| (root != &self.home_project, name.clone()));
+        out.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
         out
     }
 
@@ -1269,15 +1274,12 @@ impl App {
                     }
                 }
                 SidebarFocus::OtherProject(idx) => {
-                    let num = if self.scope_here {
-                        self.other_project_roots().len()
-                    } else {
-                        0
-                    };
-                    if num == 0 {
+                    // Row 0 is "All Projects", rows 1..=N are `all_project_roots()`.
+                    let max_idx = self.all_project_roots().len();
+                    if max_idx == 0 {
                         self.sidebar_focus = None;
-                    } else if idx >= num {
-                        self.sidebar_focus = Some(SidebarFocus::OtherProject(num - 1));
+                    } else if idx > max_idx {
+                        self.sidebar_focus = Some(SidebarFocus::OtherProject(max_idx));
                     }
                 }
             }
@@ -1294,16 +1296,14 @@ impl App {
         for _ in 0..steps {
             let n = self.visible_sessions().len();
             let ended = self.ended_count();
-            let num_others = if self.scope_here {
-                self.other_project_roots().len()
-            } else {
-                0
-            };
+            // Projects panel has row 0 ("All Projects") + `all_project_roots()` rows.
+            let proj_count = self.all_project_roots().len();
+            let max_proj_idx = proj_count;
 
             if delta > 0 {
                 match self.sidebar_focus {
                     Some(SidebarFocus::OtherProject(idx)) => {
-                        if idx + 1 < num_others {
+                        if idx < max_proj_idx {
                             self.sidebar_focus = Some(SidebarFocus::OtherProject(idx + 1));
                         } else if n > 0 {
                             self.sidebar_focus = None;
@@ -1345,8 +1345,8 @@ impl App {
                             self.sidebar_focus = Some(SidebarFocus::EndedFold);
                         } else if self.selected > 0 {
                             self.selected = self.selected.saturating_sub(1);
-                        } else if num_others > 0 {
-                            self.sidebar_focus = Some(SidebarFocus::OtherProject(num_others - 1));
+                        } else if proj_count > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(max_proj_idx));
                         }
                     }
                     Some(SidebarFocus::EndedFold) => {
@@ -1355,8 +1355,8 @@ impl App {
                         if last > 0 {
                             self.sidebar_focus = None;
                             self.selected = last - 1;
-                        } else if num_others > 0 {
-                            self.sidebar_focus = Some(SidebarFocus::OtherProject(num_others - 1));
+                        } else if proj_count > 0 {
+                            self.sidebar_focus = Some(SidebarFocus::OtherProject(max_proj_idx));
                         }
                     }
                 }
@@ -1370,13 +1370,17 @@ impl App {
             self.sidebar_focus = None;
             return;
         }
-        let num_others = if self.scope_here {
-            self.other_project_roots().len()
-        } else {
-            0
-        };
-        if num_others > 0 {
-            self.sidebar_focus = Some(SidebarFocus::OtherProject(0));
+        let projects = self.all_project_roots();
+        if projects.len() > 1 {
+            let focus_idx = if !self.scope_here {
+                0
+            } else {
+                projects
+                    .iter()
+                    .position(|(root, _, _, _)| root == &self.home_project)
+                    .map_or(1, |i| i + 1)
+            };
+            self.sidebar_focus = Some(SidebarFocus::OtherProject(focus_idx));
             self.status = tr!("已聚焦 Projects：j/k 選擇 · Enter 切換 · p 返回");
         } else {
             crate::menu::start_project_picker(self);
@@ -1412,9 +1416,20 @@ impl App {
                 }
             }
             SidebarFocus::OtherProject(idx) => {
-                let others = self.other_project_roots();
-                if let Some((root, name, _, _)) = others.get(idx).cloned() {
-                    self.switch_to_project_root(&root, &name);
+                if idx == 0 {
+                    self.scope_here = false;
+                    self.sidebar_focus = None;
+                    self.selected = 0;
+                    self.selection = None;
+                    self.md_cache = None;
+                    self.rebuild_pending = true;
+                    self.clamp_selection();
+                    self.status = tr!("已切換至全部專案");
+                } else {
+                    let projects = self.all_project_roots();
+                    if let Some((root, name, _, _)) = projects.get(idx - 1).cloned() {
+                        self.switch_to_project_root(&root, &name);
+                    }
                 }
             }
         }

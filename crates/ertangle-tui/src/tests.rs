@@ -6189,7 +6189,10 @@ fn other_project_summary_rows_in_sidebar() {
     let (_, text) = render_size(&mut app, 120, 40);
     assert!(text.contains("Projects"), "projects panel title: {text}");
     assert!(text.contains("Sessions"), "sessions panel title: {text}");
-    assert!(text.contains("● alpha"), "active project row: {text}");
+    assert!(
+        text.contains("● alpha (1 live / 1) ✓"),
+        "active project row: {text}"
+    );
     assert!(text.contains("○ beta (1 live / 1)"), "summary row: {text}");
     assert!(
         squash(&text).contains(&squash("p 聚焦 · P 全部 · Space P")),
@@ -6222,18 +6225,19 @@ fn t110_clicking_projects_panel_switches_project_and_toggles_scope() {
     let _ = render_size(&mut app, 120, 40);
     let (mut w, _peer) = pair_writer();
 
-    // Click row 1 in Projects (beta) -> switches home_project to /work/beta.
+    // Row 0 is "All Projects", row 1 is alpha, row 2 is beta.
+    // Click row 2 in Projects (beta) -> switches home_project to /work/beta.
     let click_beta = MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: app.projects_area.x + 2,
-        row: app.projects_area.y + 2,
+        row: app.projects_area.y + 3,
         modifiers: KeyModifiers::NONE,
     };
     handle_mouse(&mut app, &mut w, click_beta).unwrap();
     assert_eq!(app.home_project, "/work/beta");
     assert!(app.scope_here);
 
-    // Click row 0 in Projects (active project) -> toggles to All Projects mode.
+    // Click row 0 in Projects (All Projects) -> toggles to All Projects mode.
     let click_top = MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: app.projects_area.x + 2,
@@ -6595,15 +6599,23 @@ fn t87_sidebar_keyboard_navigation_and_focus() {
     assert_eq!(app.selected, 0);
     assert_eq!(app.sidebar_focus, None);
 
-    // Moving up at session 0 enters Projects (OtherProject(0)).
+    // Moving up at session 0 enters Projects at the bottom row (beta = index 2).
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(2)));
+
+    // Moving up reaches alpha (1) then All Projects (0), and stops at 0.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(1)));
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
     handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
     assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
 
-    // Moving up at top of Projects stays at OtherProject(0).
-    handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
-    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
-
-    // Moving down from Projects returns to session 0.
+    // Moving down through Projects returns to session 0.
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(1)));
+    handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(2)));
     handle_key(&mut app, &mut w, kev(KeyCode::Char('j'))).unwrap();
     assert_eq!(app.sidebar_focus, None);
     assert_eq!(app.selected, 0);
@@ -6621,9 +6633,9 @@ fn t87_sidebar_keyboard_navigation_and_focus() {
     assert_eq!(app.sidebar_focus, None);
     assert_eq!(app.selected, 0);
 
-    // 'p' toggles focus between Sessions and Projects.
+    // 'p' toggles focus between Sessions and Projects (focusing active project row 1).
     handle_key(&mut app, &mut w, kev(KeyCode::Char('p'))).unwrap();
-    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(1)));
     handle_key(&mut app, &mut w, kev(KeyCode::Char('p'))).unwrap();
     assert_eq!(app.sidebar_focus, None);
 
@@ -6683,11 +6695,11 @@ fn t87_sidebar_activation_and_project_switch() {
     handle_key(&mut app, &mut w, kev(KeyCode::Char('h'))).unwrap();
     assert!(!app.show_ended);
 
-    // Navigate up from EndedFold -> session 0 -> OtherProject(0) and activate with Enter.
+    // Navigate up from EndedFold -> session 0 -> OtherProject(2) (beta) and activate with Enter.
     handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
     assert_eq!(app.sidebar_focus, None);
     handle_key(&mut app, &mut w, kev(KeyCode::Char('k'))).unwrap();
-    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(2)));
     handle_key(&mut app, &mut w, kev(KeyCode::Enter)).unwrap();
     assert_eq!(app.home_project, "/work/beta");
     assert_eq!(app.sidebar_focus, None);
@@ -6721,9 +6733,9 @@ fn t87_sidebar_zero_live_sessions_navigation() {
     handle_key(&mut app, &mut w, kev(KeyCode::Down)).unwrap();
     assert_eq!(app.sidebar_focus, Some(SidebarFocus::EndedFold));
 
-    // Up from EndedFold when live sessions is 0 navigates into OtherProject(0).
+    // Up from EndedFold when live sessions is 0 navigates into OtherProject(2) (beta).
     handle_key(&mut app, &mut w, kev(KeyCode::Up)).unwrap();
-    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(0)));
+    assert_eq!(app.sidebar_focus, Some(SidebarFocus::OtherProject(2)));
 
     // Activating switches project to /work/beta.
     handle_key(&mut app, &mut w, kev(KeyCode::Enter)).unwrap();

@@ -2373,6 +2373,10 @@ msgstr ""
 msgid "已摺疊已結束的 session ({n})，E 展開"
 msgstr ""
 
+#: crates/ertangle-tui/src/app.rs
+msgid "已切換至全部專案"
+msgstr ""
+
 #: crates/ertangle-tui/src/app.rs crates/ertangle-tui/src/app.rs
 msgid "已切換專案：{project}"
 msgstr ""

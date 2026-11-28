@@ -1532,100 +1532,89 @@ fn format_project_counts(live: usize, total: usize) -> String {
 
 fn draw_projects(f: &mut TuiFrame, area: Rect, app: &mut App) {
     app.projects_area = area;
-    let inner_w = area.width.saturating_sub(4) as usize;
-    let mut items: Vec<ListItem> = Vec::new();
+    let inner_w = area.width.saturating_sub(2) as usize;
+    let projects = app.all_project_roots();
+    let (mut all_live, mut all_total) = (0usize, 0usize);
+    for &(_, _, live, total) in &projects {
+        all_live += live;
+        all_total += total;
+    }
 
-    if app.scope_here {
-        let (mut active_live, mut active_total) = (0usize, 0usize);
-        for s in app.state.sessions.values() {
-            if s.project_root() == app.home_project {
-                active_total += 1;
-                if s.status.is_live() {
-                    active_live += 1;
-                }
-            }
-        }
-        let active_name = if app.home_project.is_empty() {
-            ".".to_string()
-        } else {
-            project_name(&app.home_project, &[])
-        };
-        let counts = format_project_counts(active_live, active_total);
-        let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
-        items.push(ListItem::new(Line::from(vec![
-            Span::styled("● ", Style::default().fg(project_color(&app.home_project))),
-            Span::styled(
-                truncate_width(&active_name, max_name),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
-        ])));
+    let mut items: Vec<ListItem> = Vec::with_capacity(1 + projects.len());
 
-        for (root, name, live, total) in app.other_project_roots() {
-            let counts = format_project_counts(live, total);
-            let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
-            items.push(ListItem::new(Line::from(vec![
-                Span::styled("○ ", Style::default().fg(project_color(&root))),
-                Span::styled(
-                    truncate_width(&name, max_name),
-                    Style::default().fg(if live > 0 {
-                        Color::Gray
-                    } else {
-                        Color::DarkGray
-                    }),
-                ),
-                Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
-            ])));
-        }
-    } else {
-        let (mut all_live, mut all_total) = (0usize, 0usize);
-        for s in app.state.sessions.values() {
-            all_total += 1;
-            if s.status.is_live() {
-                all_live += 1;
-            }
-        }
-        let counts = format_project_counts(all_live, all_total);
-        let all_label = tr!("全部專案");
-        let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
-        items.push(ListItem::new(Line::from(vec![
-            Span::styled("● ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                truncate_width(&all_label, max_name),
+    // Row 0: All Projects (active when `!app.scope_here`).
+    let all_active = !app.scope_here;
+    let all_counts = format_project_counts(all_live, all_total);
+    let all_label = tr!("全部專案");
+    let all_suffix_w = if all_active { 2 } else { 0 };
+    let max_all = inner_w
+        .saturating_sub(all_counts.len() + 3 + all_suffix_w)
+        .max(1);
+    let mut all_spans = vec![
+        Span::styled(
+            if all_active { "● " } else { "○ " },
+            Style::default().fg(Color::Cyan),
+        ),
+        Span::styled(
+            truncate_width(&all_label, max_all),
+            if all_active {
                 Style::default()
                     .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
-        ])));
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Gray)
+            },
+        ),
+        Span::styled(
+            format!(" {all_counts}"),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ];
+    if all_active {
+        all_spans.push(Span::styled(
+            " ✓",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+    items.push(ListItem::new(Line::from(all_spans)));
 
-        for (root, name, live, total) in app.all_project_roots() {
-            let counts = format_project_counts(live, total);
-            let max_name = inner_w.saturating_sub(counts.len() + 3).max(1);
-            let is_home = root == app.home_project;
-            items.push(ListItem::new(Line::from(vec![
-                Span::styled(
-                    if is_home { "● " } else { "○ " },
-                    Style::default().fg(project_color(&root)),
-                ),
-                Span::styled(
-                    truncate_width(&name, max_name),
-                    Style::default().fg(if live > 0 {
-                        Color::Gray
-                    } else {
-                        Color::DarkGray
-                    }),
-                ),
-                Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
-            ])));
+    // Rows 1..=N: projects in fixed alphabetical order; active one is marked in place.
+    for (root, name, live, total) in projects {
+        let is_active = app.scope_here && root == app.home_project;
+        let counts = format_project_counts(live, total);
+        let suffix_w = if is_active { 2 } else { 0 };
+        let max_name = inner_w.saturating_sub(counts.len() + 3 + suffix_w).max(1);
+        let name_style = if is_active {
+            Style::default().add_modifier(Modifier::BOLD)
+        } else if live > 0 {
+            Style::default().fg(Color::Gray)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        let mut spans = vec![
+            Span::styled(
+                if is_active { "● " } else { "○ " },
+                Style::default().fg(project_color(&root)),
+            ),
+            Span::styled(truncate_width(&name, max_name), name_style),
+            Span::styled(format!(" {counts}"), Style::default().fg(Color::DarkGray)),
+        ];
+        if is_active {
+            spans.push(Span::styled(
+                " ✓",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ));
         }
+        items.push(ListItem::new(Line::from(spans)));
     }
 
     let mut list_state = ListState::default();
     if let Some(SidebarFocus::OtherProject(idx)) = app.sidebar_focus {
-        if app.scope_here {
-            list_state.select(Some(1 + idx));
-        }
+        list_state.select(Some(idx));
     }
 
     let block = Block::default()
@@ -1647,11 +1636,7 @@ fn draw_projects(f: &mut TuiFrame, area: Rect, app: &mut App) {
 
 pub(crate) fn draw_sessions(f: &mut TuiFrame, area: Rect, app: &mut App) {
     let area = if area.height >= 9 {
-        let proj_rows = if app.scope_here {
-            1 + app.other_project_roots().len()
-        } else {
-            1 + app.all_project_roots().len()
-        };
+        let proj_rows = 1 + app.all_project_roots().len();
         let proj_h = (proj_rows as u16 + 2).clamp(3, 7).min(area.height / 2);
         let chunks = Layout::default()
             .direction(Direction::Vertical)

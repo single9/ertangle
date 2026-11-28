@@ -2390,6 +2390,10 @@ msgid "已摺疊已結束的 session ({n})，E 展開"
 msgstr "Ended sessions collapsed ({n}), E to expand"
 
 #: crates/ertangle-tui/src/app.rs
+msgid "已切換至全部專案"
+msgstr "Switched to all projects"
+
+#: crates/ertangle-tui/src/app.rs
 msgid "已切換專案：{project}"
 msgstr "Switched project: {project}"
 
