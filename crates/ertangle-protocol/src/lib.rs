@@ -420,6 +420,10 @@ pub enum Request {
         #[serde(default)]
         addr: Option<String>,
     },
+    /// 執行期切換 OS 層級防休眠 (TUI settings 立即套用)。
+    KeepAwake {
+        enabled: bool,
+    },
     /// 列出某個 agent 可選的 model (Claude 內建清單；其他 agent 向 CLI 查詢，最多數秒)。
     ListModels {
         /// agent 種類 (`claude`、`codex`、`opencode`、`antigravity`)。
@@ -609,6 +613,17 @@ mod tests {
             panic!("expected WorktreeMerge")
         };
         assert_eq!(strategy, None);
+    }
+
+    #[test]
+    fn keep_awake_request_serde_roundtrip() {
+        let line = encode_line(&Request::KeepAwake { enabled: true }).unwrap();
+        assert_eq!(line.trim(), r#"{"op":"keep_awake","enabled":true}"#);
+        let back: Request = decode_line(line.trim()).unwrap();
+        let Request::KeepAwake { enabled } = back else {
+            panic!("expected KeepAwake")
+        };
+        assert!(enabled);
     }
 
     #[test]

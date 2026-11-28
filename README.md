@@ -261,6 +261,7 @@ Every structured agent session is automatically injected with a stdio MCP server
   - Press `z` or run `ertangle sleep <session>` to send `SIGSTOP`, freezing idle agent processes and freeing CPU. Press `z` or send a message to dispatch `SIGCONT` and wake them up.
 - **OS Keep-Awake (opt-in, default off)**:
   - Set `[power] keep_awake = true` in the global `~/.config/ertangle/config.toml` (repo-local `.ertangle/config.toml` cannot enable it), or start with `ertangle daemon --keep-awake` (`--no-keep-awake` overrides the config). While the daemon runs, it holds `caffeinate` on macOS or `systemd-inhibit --what=idle:sleep` on Linux so long agent runs are not interrupted by system sleep; the lock is released on shutdown. If the helper is missing or the platform is unsupported, a warning is logged and the daemon continues without the lock.
+  - You can also toggle it in the TUI settings panel (`:settings` or `Space ,`); the change is written to the global config and applied to the running daemon immediately.
 
 ### 5. Permission Policy & Rule Engine
 

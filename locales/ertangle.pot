@@ -2088,6 +2088,18 @@ msgid "Web 版未在執行"
 msgstr ""
 
 #: crates/ertangle-daemon/src/handlers/mod.rs
+msgid "已停用防休眠"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/mod.rs
+msgid "已啟用防休眠"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/mod.rs
+msgid "防休眠無法啟用，詳情請看 daemon 記錄"
+msgstr ""
+
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "未知的 agent：{kind}"
 msgstr ""
 
@@ -3025,7 +3037,7 @@ msgstr ""
 msgid "已將預設 {key} 設為 {value} ({path})，新建立的 session 起生效"
 msgstr ""
 
-#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs
+#: crates/ertangle-tui/src/commands.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs
 msgid "寫入設定失敗：{e}"
 msgstr ""
 
@@ -4700,6 +4712,10 @@ msgid "Web 版"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "電源"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "介面"
 msgstr ""
 
@@ -4800,6 +4816,10 @@ msgid "Web 版連接埠 (Web Port)"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "daemon 執行期間防止系統休眠"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "介面語言"
 msgstr ""
 
@@ -4889,6 +4909,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "已更新 Web 版連接埠並儲存至 {path}"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "已更新防休眠並儲存至 {path}"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs

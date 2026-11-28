@@ -292,6 +292,19 @@ pub(crate) fn dispatch(shared: &Arc<Shared>, reply: &ClientTx, req: Request) {
                 let _ = reply.send(Frame::ok_note(msg));
             }
         },
+        Request::KeepAwake { enabled } => {
+            let lock = crate::power::WakeLock::acquire(enabled);
+            let active = lock.is_active();
+            *crate::lock(&shared.wake_lock) = lock;
+            let msg = if !enabled {
+                tr!("已停用防休眠")
+            } else if active {
+                tr!("已啟用防休眠")
+            } else {
+                tr!("防休眠無法啟用，詳情請看 daemon 記錄")
+            };
+            let _ = reply.send(Frame::ok_note(msg));
+        }
     }
 }
 

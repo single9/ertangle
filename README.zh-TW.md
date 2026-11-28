@@ -261,6 +261,7 @@ Daemon 會在啟動 session 時自動注入包含 **16 個協作工具**的 stdi
   - 按 `z` 或執行 `ertangle sleep <session>`，發送 `SIGSTOP` 暫停 Agent 處理程序節省系統資源；按 `z` 或收到訊息時發送 `SIGCONT` 自動喚醒。
 - **系統防休眠 (選用，預設關閉)**：
   - 在全域設定檔 `~/.config/ertangle/config.toml` 設定 `[power] keep_awake = true` (repo 內的 `.ertangle/config.toml` 無法啟用)，或以 `ertangle daemon --keep-awake` 啟動 (`--no-keep-awake` 可覆寫設定檔)。daemon 執行期間，macOS 會持有 `caffeinate`、Linux 會持有 `systemd-inhibit --what=idle:sleep`，避免長時間執行的 Agent 被系統休眠中斷；daemon 關閉時自動釋放。若找不到對應工具或平台不支援，只會記錄警告並以未鎖定狀態繼續執行。
+  - 也可在 TUI 設定面板 (`:settings` 或 `Space ,`) 切換；變更會寫入全域設定檔並立即套用到執行中的 daemon。
 
 ### 5. 權限政策與安全防護 (Policy Engine)
 

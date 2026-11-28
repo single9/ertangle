@@ -2104,6 +2104,18 @@ msgid "Web 版未在執行"
 msgstr "Web version is not running"
 
 #: crates/ertangle-daemon/src/handlers/mod.rs
+msgid "已停用防休眠"
+msgstr "Sleep prevention disabled"
+
+#: crates/ertangle-daemon/src/handlers/mod.rs
+msgid "已啟用防休眠"
+msgstr "Sleep prevention enabled"
+
+#: crates/ertangle-daemon/src/handlers/mod.rs
+msgid "防休眠無法啟用，詳情請看 daemon 記錄"
+msgstr "Could not enable sleep prevention; see the daemon log for details"
+
+#: crates/ertangle-daemon/src/handlers/mod.rs
 msgid "未知的 agent：{kind}"
 msgstr "Unknown agent: {kind}"
 
@@ -4717,6 +4729,10 @@ msgid "Web 版"
 msgstr "Web companion"
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "電源"
+msgstr "Power"
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "介面"
 msgstr "Interface"
 
@@ -4817,6 +4833,10 @@ msgid "Web 版連接埠 (Web Port)"
 msgstr "Web port"
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "daemon 執行期間防止系統休眠"
+msgstr "Prevent system sleep while the daemon runs"
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "介面語言"
 msgstr "Language"
 
@@ -4907,6 +4927,10 @@ msgstr "Saved to {path}"
 #: crates/ertangle-tui/src/settings.rs
 msgid "已更新 Web 版連接埠並儲存至 {path}"
 msgstr "Web version port updated and saved to {path}"
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "已更新防休眠並儲存至 {path}"
+msgstr "Sleep prevention updated and saved to {path}"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "已更新合併策略並儲存至 {path}"

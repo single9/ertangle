@@ -36,10 +36,11 @@ pub(crate) enum Item {
     AutoCompactThreshold,
     WebCompanion,
     WebPort,
+    KeepAwake,
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 24] = [
+pub(crate) const ITEMS: [Item; 25] = [
     Item::DefaultAgent,
     Item::DefaultRole,
     Item::DefaultPermission,
@@ -63,6 +64,7 @@ pub(crate) const ITEMS: [Item; 24] = [
     Item::AutoCompactThreshold,
     Item::WebCompanion,
     Item::WebPort,
+    Item::KeepAwake,
     Item::Language,
 ];
 
@@ -167,6 +169,7 @@ impl Item {
             Item::CollabInstructions => tr!("協作說明"),
             Item::AutoCompact => tr!("上下文"),
             Item::WebCompanion => tr!("Web 版"),
+            Item::KeepAwake => tr!("電源"),
             Item::Language => tr!("介面"),
             _ => return None,
         })
@@ -211,6 +214,7 @@ impl Item {
             Item::AutoCompactThreshold => tr!("自動 compact 的觸發門檻 (上下文用量 %)"),
             Item::WebCompanion => tr!("Web 版支援 (Web UI)"),
             Item::WebPort => tr!("Web 版連接埠 (Web Port)"),
+            Item::KeepAwake => tr!("daemon 執行期間防止系統休眠"),
             Item::Language => tr!("介面語言"),
         }
     }
@@ -259,6 +263,7 @@ impl Item {
                 }
             }
             Item::WebPort => c.web.port.map(|p| p.to_string()).unwrap_or_default(),
+            Item::KeepAwake => on_off(c.power.keep_awake()),
             Item::Language => c.tui.language.clone().unwrap_or_default(),
         }
     }
@@ -326,7 +331,8 @@ impl Item {
             | Item::TokenHints
             | Item::AutoResume
             | Item::AutoCompact
-            | Item::SharedCargoTarget => {
+            | Item::SharedCargoTarget
+            | Item::KeepAwake => {
                 vec![pair("on", &tr!("開")), pair("off", &tr!("關"))]
             }
             Item::AutoCompactThreshold => ["50", "60", "70", "80", "90"]
@@ -409,6 +415,7 @@ impl Item {
                 | Item::AutoResume
                 | Item::AutoCompact
                 | Item::SharedCargoTarget
+                | Item::KeepAwake
         )
     }
 }
@@ -563,6 +570,22 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         app.status = tr!("已更新 Web 版連接埠並儲存至 {path}", path = path.display());
         return;
     }
+    if item == Item::KeepAwake {
+        // 電源設定只寫全域檔，並立即通知 daemon 取得或釋放 inhibitor。
+        let enabled = value == "on";
+        let toml_value = Some(ertangle_daemon::config::TomlValue::Boolean(enabled));
+        match Config::set_toml(&path, &["power"], "keep_awake", toml_value) {
+            Ok(()) => {
+                s.cfg = Config::load_file(&path);
+                if let Some(w) = writer {
+                    let _ = crate::send(w, &ertangle_protocol::Request::KeepAwake { enabled });
+                }
+                app.status = tr!("已更新防休眠並儲存至 {path}", path = path.display());
+            }
+            Err(e) => app.status = tr!("寫入設定失敗：{e}", e = e),
+        }
+        return;
+    }
     let (table, key): (&[&str], &str) = match item {
         Item::DefaultAgent => (&["defaults"], "agent"),
         Item::DefaultRole => (&["defaults"], "role"),
@@ -578,7 +601,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::AutoCompactThreshold => return,
         Item::SharedCargoTarget => (&["agent_spawn"], "shared_cargo_target"),
         Item::MergeStrategy => (&["git"], "merge_strategy"),
-        Item::WebCompanion | Item::WebPort => return,
+        Item::WebCompanion | Item::WebPort | Item::KeepAwake => return,
         Item::Language => (&["tui"], "language"),
         Item::Model => (&["agents", ""], "model"),
         Item::Effort => (&["agents", ""], "effort"),
@@ -770,5 +793,22 @@ mod tests {
             .choices(&s)
             .first()
             .is_some_and(|(v, _)| v.is_empty()));
+    }
+
+    #[test]
+    fn keep_awake_setting_is_a_toggle_backed_by_power_config() {
+        let mut s = settings_with(None);
+        assert!(ITEMS.contains(&Item::KeepAwake));
+        assert!(Item::KeepAwake.is_toggle());
+        assert_eq!(Item::KeepAwake.current(&s), "off");
+        let values: Vec<_> = Item::KeepAwake
+            .choices(&s)
+            .into_iter()
+            .map(|(v, _)| v)
+            .collect();
+        assert_eq!(values, ["on", "off"]);
+
+        s.cfg = Config::parse("[power]\nkeep_awake = true\n").unwrap_or_default();
+        assert_eq!(Item::KeepAwake.current(&s), "on");
     }
 }
