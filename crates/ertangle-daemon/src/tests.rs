@@ -6055,3 +6055,13 @@ fn session_label_request_renames_live_and_archived_sessions() {
         "歷史"
     );
 }
+
+#[test]
+fn keep_awake_request_dispatches_and_releases_lock() {
+    let shared = test_shared();
+    let (tx, rx) = client_channel(None);
+    shared.handle(&tx, Request::KeepAwake { enabled: false });
+    let reply = rx.try_iter().next().unwrap();
+    assert!(matches!(reply, Frame::Ok { note: Some(n) } if n.contains("已停用")));
+    assert!(!lock(&shared.wake_lock).is_active());
+}
