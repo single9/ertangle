@@ -30,6 +30,7 @@ pub(crate) enum Item {
     SharedCargoTarget,
     MergeStrategy,
     CollabInstructions,
+    CollabDelegation,
     InjectSkill,
     TokenHints,
     AutoCompact,
@@ -40,7 +41,7 @@ pub(crate) enum Item {
     Language,
 }
 
-pub(crate) const ITEMS: [Item; 25] = [
+pub(crate) const ITEMS: [Item; 26] = [
     Item::DefaultAgent,
     Item::DefaultRole,
     Item::DefaultPermission,
@@ -58,6 +59,7 @@ pub(crate) const ITEMS: [Item; 25] = [
     Item::SharedCargoTarget,
     Item::MergeStrategy,
     Item::CollabInstructions,
+    Item::CollabDelegation,
     Item::InjectSkill,
     Item::TokenHints,
     Item::AutoCompact,
@@ -155,7 +157,47 @@ impl Settings {
 /// 要向 CLI 查 model 清單的 agent。
 const LIVE_KINDS: [&str; 3] = ["opencode", "antigravity", "codex"];
 
+pub(crate) const TAB_COUNT: usize = 4;
+
+pub(crate) fn tab_title(tab: usize) -> String {
+    match tab {
+        0 => tr!("1: Agent"),
+        1 => tr!("2: Spawn & Git"),
+        2 => tr!("3: 協作 & 壓縮"),
+        _ => tr!("4: Web & 系統"),
+    }
+}
+
 impl Item {
+    /// Tab index (`0..TAB_COUNT`) that this setting belongs to.
+    pub(crate) fn tab(self) -> usize {
+        match self {
+            Item::DefaultAgent
+            | Item::DefaultRole
+            | Item::DefaultPermission
+            | Item::WorkerOrder1
+            | Item::WorkerOrder2
+            | Item::WorkerOrder3
+            | Item::WorkerOrder4
+            | Item::TargetAgent
+            | Item::Model
+            | Item::Effort => 0,
+            Item::SpawnWorktree
+            | Item::SpawnConfirm
+            | Item::SpawnMaxEffort
+            | Item::AutoResume
+            | Item::SharedCargoTarget
+            | Item::MergeStrategy => 1,
+            Item::CollabInstructions
+            | Item::CollabDelegation
+            | Item::InjectSkill
+            | Item::TokenHints
+            | Item::AutoCompact
+            | Item::AutoCompactThreshold => 2,
+            Item::WebCompanion | Item::WebPort | Item::KeepAwake | Item::Language => 3,
+        }
+    }
+
     /// 這個項目是分區的第一列時，回傳分區標題 (設定面板在它上方畫標題列)。
     pub(crate) fn section(self) -> Option<String> {
         Some(match self {
@@ -196,9 +238,6 @@ impl Item {
             Item::WorkerOrder3 => tr!("第 3 順位"),
             Item::WorkerOrder4 => tr!("第 4 順位"),
             Item::TargetAgent => tr!("下面兩項設定的對象 agent"),
-            Item::Model if s.loading_models() => {
-                tr!("{agent} 的預設 model (清單載入中…)", agent = s.agent)
-            }
             Item::Model => tr!("{agent} 的預設 model", agent = s.agent),
             Item::Effort => tr!("{agent} 的預設 effort", agent = s.agent),
             Item::SpawnWorktree => tr!("agent 自己建立的 session 用獨立 worktree"),
@@ -208,6 +247,7 @@ impl Item {
             Item::SharedCargoTarget => tr!("worktree 共用 cargo target (編譯排隊、不重複)"),
             Item::MergeStrategy => tr!("worktree 合併策略"),
             Item::CollabInstructions => tr!("把協作說明注入每個 agent"),
+            Item::CollabDelegation => tr!("Coordinator 主動分派 worker 策略"),
             Item::InjectSkill => tr!("把 ertangle-ade skill 注入協作說明"),
             Item::TokenHints => tr!("把省 token 提示注入協作說明"),
             Item::AutoCompact => tr!("上下文快滿時自動 compact"),
@@ -247,6 +287,11 @@ impl Item {
                 .map(|s| s.to_string())
                 .unwrap_or_default(),
             Item::CollabInstructions => on_off(c.collab.instructions != Some(false)),
+            Item::CollabDelegation => c
+                .collab
+                .delegation
+                .map(|d| d.to_string())
+                .unwrap_or_default(),
             Item::InjectSkill => on_off(c.collab.inject_skill == Some(true)),
             Item::TokenHints => on_off(c.collab.token_hints == Some(true)),
             Item::WebCompanion => {
@@ -294,6 +339,12 @@ impl Item {
                 pair("ask", &tr!("ask：每個動作都問")),
                 pair("auto", &tr!("auto：自動核准一般動作")),
                 pair("bypass", &tr!("bypass：完全不問")),
+            ],
+            Item::CollabDelegation => vec![
+                pair("", &tr!("未設定 (balanced)")),
+                pair("proactive", "proactive"),
+                pair("balanced", "balanced"),
+                pair("manual", "manual"),
             ],
             Item::TargetAgent => installed_agents().into_iter().map(|a| pair(a, a)).collect(),
             Item::Model => {
@@ -398,11 +449,50 @@ impl Item {
     /// 目前值的顯示文字。
     pub(crate) fn display(self, s: &Settings) -> String {
         let cur = self.current(s);
-        self.choices(s)
+        let val = self
+            .choices(s)
             .into_iter()
             .find(|(v, _)| *v == cur)
             .map(|(_, l)| l)
-            .unwrap_or(cur)
+            .unwrap_or(cur);
+        if self == Item::Model && s.loading_models() {
+            format!("{val} ({})", tr!("載入中…"))
+        } else {
+            val
+        }
+    }
+
+    /// 顯示在設定面板下方說明區的簡短解釋。
+    pub(crate) fn description(self) -> String {
+        match self {
+            Item::DefaultAgent => tr!("新建立 session 時預設使用的 agent CLI (未設定時依環境偵測)。"),
+            Item::DefaultRole => tr!("人工直接開啟新 session 的預設角色 (coordinator / worker / reviewer)。"),
+            Item::DefaultPermission => tr!("工具執行權限：ask 每次詢問、auto 自動核准一般操作、bypass 全免問。"),
+            Item::WorkerOrder1 | Item::WorkerOrder2 | Item::WorkerOrder3 | Item::WorkerOrder4 => {
+                tr!("Coordinator 呼叫 ertangle_spawn 未指定 agent 時，依此順序挑第一個已安裝且額度充足的 agent。")
+            }
+            Item::TargetAgent => tr!("切換下方兩列「預設 model / effort」所設定的目標 agent。"),
+            Item::Model => tr!("該 agent 未指定模型時的預設 model；Enter 可搜尋即時清單。"),
+            Item::Effort => tr!("該 agent 的預設推理深度 (僅 claude / codex 等支援 effort 的 agent 生效)。"),
+            Item::SpawnWorktree => tr!("開啟時，agent 透過 ertangle_spawn 建立的子 session 會自動取得獨立 git worktree。"),
+            Item::SpawnConfirm => tr!("當子 session 使用高階模型或超過 effort 上限時的確認策略。"),
+            Item::SpawnMaxEffort => tr!("超過此 effort 等級的 spawn 請求會依上方策略要求確認。"),
+            Item::AutoResume => tr!("daemon 重啟或斷線重連後，自動接續先前執行中的 session。"),
+            Item::SharedCargoTarget => tr!("多個 worktree 共用同一個 CARGO_TARGET_DIR，省空間並避免重複編譯。"),
+            Item::MergeStrategy => tr!("Coordinator 執行 ertangle_merge 時預設使用的 git 合併策略 (merge / squash / rebase)。"),
+            Item::CollabInstructions => tr!("啟動或連線時自動注入 [ertangle collaboration instructions] 協作規範。"),
+            Item::CollabDelegation => tr!(
+                "proactive：實作優先派給 worker；balanced：小改 inline、多檔或測試迴圈派給 worker；manual：除非明確要求否則不主動派工。"
+            ),
+            Item::InjectSkill => tr!("將內嵌的 ertangle-ade 協作技能全文直接附在協作說明後方。"),
+            Item::TokenHints => tr!("在協作說明附上減少回合數與輸出長度的省 token 守則。"),
+            Item::AutoCompact => tr!("當對話上下文用量達到門檻且 session 閒置時，自動觸發 compact。"),
+            Item::AutoCompactThreshold => tr!("觸發自動 compact 的上下文使用率百分比 (預設 85%)。"),
+            Item::WebCompanion => tr!("啟用或切換 Web UI 監聽位址 (localhost / tailscale / 0.0.0.0)，可立即套用。"),
+            Item::WebPort => tr!("Web UI HTTP/WebSocket 服務監聽的連接埠 (預設 7421)。"),
+            Item::KeepAwake => tr!("有執行中 session 時防止系統進入休眠，確保長任務不中斷。"),
+            Item::Language => tr!("切換 TUI 顯示語言 (繁體中文 / English / 自動偵測)，變更立即生效。"),
+        }
     }
 
     pub(crate) fn is_toggle(self) -> bool {
@@ -594,6 +684,7 @@ fn apply_value(app: &mut App, writer: Option<&mut HostRouter>, value: String) {
         Item::SpawnConfirm => (&["agent_spawn"], "confirm"),
         Item::SpawnMaxEffort => (&["agent_spawn"], "max_effort"),
         Item::CollabInstructions => (&["collab"], "instructions"),
+        Item::CollabDelegation => (&["collab"], "delegation"),
         Item::InjectSkill => (&["collab"], "inject_skill"),
         Item::TokenHints => (&["collab"], "token_hints"),
         Item::AutoResume => (&["agent_spawn"], "auto_resume"),
@@ -716,6 +807,42 @@ fn open_sub(app: &mut App) {
     });
 }
 
+fn active_tab(cursor: usize) -> usize {
+    ITEMS.get(cursor).map_or(0, |item| item.tab())
+}
+
+fn tab_indices(tab: usize) -> Vec<usize> {
+    ITEMS
+        .iter()
+        .enumerate()
+        .filter_map(|(i, item)| (item.tab() == tab).then_some(i))
+        .collect()
+}
+
+fn move_in_tab(cursor: &mut usize, dir: isize) {
+    let tab = active_tab(*cursor);
+    let indices = tab_indices(tab);
+    if indices.is_empty() {
+        return;
+    }
+    let pos = indices.iter().position(|&i| i == *cursor).unwrap_or(0);
+    let next = if dir > 0 {
+        (pos + 1) % indices.len()
+    } else {
+        (pos + indices.len() - 1) % indices.len()
+    };
+    if let Some(&idx) = indices.get(next) {
+        *cursor = idx;
+    }
+}
+
+fn switch_tab(cursor: &mut usize, target_tab: usize) {
+    let tab = target_tab % TAB_COUNT;
+    if let Some(first) = tab_indices(tab).first().copied() {
+        *cursor = first;
+    }
+}
+
 pub(crate) fn handle_key(app: &mut App, writer: Option<&mut HostRouter>, key: KeyEvent) {
     if app.settings.as_ref().is_some_and(|s| s.sub.is_some()) {
         return handle_sub_key(app, writer, key);
@@ -727,12 +854,12 @@ pub(crate) fn handle_key(app: &mut App, writer: Option<&mut HostRouter>, key: Ke
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if let Some(s) = app.settings.as_mut() {
-                s.cursor = (s.cursor + 1) % ITEMS.len();
+                move_in_tab(&mut s.cursor, 1);
             }
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if let Some(s) = app.settings.as_mut() {
-                s.cursor = (s.cursor + ITEMS.len() - 1) % ITEMS.len();
+                move_in_tab(&mut s.cursor, -1);
             }
         }
         // 開關直接切換；其他項目開清單選 (清單長，不適合左右輪替)。
@@ -746,6 +873,24 @@ pub(crate) fn handle_key(app: &mut App, writer: Option<&mut HostRouter>, key: Ke
                 cycle(app, writer, 1)
             } else {
                 open_sub(app)
+            }
+        }
+        KeyCode::Tab => {
+            if let Some(s) = app.settings.as_mut() {
+                let next = (active_tab(s.cursor) + 1) % TAB_COUNT;
+                switch_tab(&mut s.cursor, next);
+            }
+        }
+        KeyCode::BackTab => {
+            if let Some(s) = app.settings.as_mut() {
+                let prev = (active_tab(s.cursor) + TAB_COUNT - 1) % TAB_COUNT;
+                switch_tab(&mut s.cursor, prev);
+            }
+        }
+        KeyCode::Char(c @ '1'..='4') => {
+            if let Some(s) = app.settings.as_mut() {
+                let tab = (c as usize).saturating_sub('1' as usize);
+                switch_tab(&mut s.cursor, tab);
             }
         }
         KeyCode::Right | KeyCode::Char('l') => cycle(app, writer, 1),

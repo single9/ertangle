@@ -394,49 +394,102 @@ pub(crate) fn draw_help(f: &mut TuiFrame, app: &App) {
     );
 }
 
-/// 設定面板：每列一個設定，目前值用 ◀ ▶ 包起來；選取列反相顯示。
+/// 設定面板：依分頁顯示設定項目，支援 Tab / 1-4 切換分頁、↑↓ 選取、←→／Enter 調整。
 pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
     let Some(s) = app.settings.as_ref() else {
         return;
     };
+    let active_tab = crate::settings::ITEMS
+        .get(s.cursor)
+        .map_or(0, |item| item.tab());
+    let tab_items: Vec<(usize, crate::settings::Item)> = crate::settings::ITEMS
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, item)| item.tab() == active_tab)
+        .collect();
+
     let full = f.area();
     let w = full.width.saturating_sub(6).clamp(40, 100);
-    let sections = crate::settings::ITEMS
+    let sections = tab_items
         .iter()
-        .filter(|i| i.section().is_some())
+        .filter(|(_, i)| i.section().is_some())
         .count() as u16;
-    let h = (crate::settings::ITEMS.len() as u16 + sections + 5).min(full.height);
+    // Tab bar (1) + divider (1) + items + section headers + desc divider (1) + desc (3) + borders (2).
+    let h = (tab_items.len() as u16 + sections + 8).min(full.height);
+    let box_w = w.min(full.width);
     let area = Rect::new(
-        full.x + full.width.saturating_sub(w) / 2,
+        full.x + full.width.saturating_sub(box_w) / 2,
         full.y + full.height.saturating_sub(h) / 2,
-        w.min(full.width),
+        box_w,
         h,
     );
-    let label_w = crate::settings::ITEMS
+    let inner_w = box_w.saturating_sub(2) as usize;
+    let raw_label_w = tab_items
         .iter()
-        .map(|i| UnicodeWidthStr::width(i.label(s).as_str()))
+        .map(|(_, i)| UnicodeWidthStr::width(i.label(s).as_str()))
         .max()
         .unwrap_or(20);
+    // Cap label column so long translations never squeeze or push the value column off-screen.
+    let label_w = raw_label_w
+        .min((inner_w.saturating_mul(55) / 100).max(16))
+        .max(12);
+    let val_budget = inner_w.saturating_sub(label_w + 4).max(8);
+
     let mut lines: Vec<Line> = Vec::new();
-    for (i, item) in crate::settings::ITEMS.iter().enumerate() {
+    let mut tab_spans: Vec<Span<'static>> = vec![Span::raw(" ")];
+    for t in 0..crate::settings::TAB_COUNT {
+        if t > 0 {
+            tab_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
+        }
+        let title = crate::settings::tab_title(t);
+        if t == active_tab {
+            tab_spans.push(Span::styled(
+                format!("[{title}]"),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            tab_spans.push(Span::styled(title, Style::default().fg(Color::DarkGray)));
+        }
+    }
+    lines.push(Line::from(tab_spans));
+    lines.push(Line::from(Span::styled(
+        "─".repeat(inner_w.max(1)),
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let mut cursor_line = 0usize;
+    for (i, item) in tab_items {
+        let sec_start = lines.len();
         if let Some(title) = item.section() {
+            let sec_text = truncate_width(&format!(" ── {title} ──"), inner_w.max(1));
             lines.push(Line::from(Span::styled(
-                format!(" ── {title} ──"),
+                sec_text,
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             )));
         }
-        lines.push({
-            let label = item.label(s);
-            let pad = label_w.saturating_sub(UnicodeWidthStr::width(label.as_str()));
-            let value = item.display(s);
-            let value = if item.is_toggle() {
-                format!("[{value}]")
+        let sel = i == s.cursor;
+        if sel {
+            cursor_line = if item.section().is_some() {
+                sec_start
             } else {
-                format!("{value} ▾")
+                lines.len()
             };
-            let sel = i == s.cursor;
+        }
+        lines.push({
+            let label = truncate_width(&item.label(s), label_w);
+            let pad = label_w.saturating_sub(UnicodeWidthStr::width(label.as_str()));
+            let raw_val = item.display(s);
+            let value = if item.is_toggle() {
+                format!("[{raw_val}]")
+            } else {
+                format!("{raw_val} ▾")
+            };
+            let value = truncate_width(&value, val_budget);
             let base = if sel {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
@@ -448,21 +501,65 @@ pub(crate) fn draw_settings(f: &mut TuiFrame, app: &App) {
             ])
         });
     }
-    lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled(
-        tr!(" ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"),
-        Style::default().fg(Color::Gray),
-    )));
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(tr!(" 設定 (寫入全域 config.toml) "))
+        .title_bottom(
+            Line::styled(
+                tr!(" ↑↓ 選 · Tab/1-4 切頁 · Enter 開清單/切換 · ←→ 輪替 · Esc 關 "),
+                Style::default().fg(Color::Gray),
+            )
+            .centered(),
+        );
+    let inner = block.inner(area);
     f.render_widget(ratatui::widgets::Clear, area);
-    f.render_widget(
-        Paragraph::new(lines).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
-                .title(tr!(" 設定 (寫入全域 config.toml) ")),
-        ),
-        area,
-    );
+    f.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(3), Constraint::Length(4)])
+        .split(inner);
+    let list_area = chunks.first().copied().unwrap_or(inner);
+    let desc_area = chunks.get(1).copied().unwrap_or(Rect::default());
+
+    let list_h = list_area.height as usize;
+    let scroll_y = if list_h > 0 && lines.len() > list_h {
+        cursor_line
+            .saturating_sub(list_h / 2)
+            .min(lines.len() - list_h) as u16
+    } else {
+        0
+    };
+    f.render_widget(Paragraph::new(lines).scroll((scroll_y, 0)), list_area);
+
+    if desc_area.height >= 2 {
+        let desc = crate::settings::ITEMS
+            .get(s.cursor)
+            .map(|item| item.description())
+            .unwrap_or_default();
+        let desc_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(1)])
+            .split(desc_area);
+        if let Some(&div_rect) = desc_chunks.first() {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    "─".repeat(inner_w.max(1)),
+                    Style::default().fg(Color::DarkGray),
+                )),
+                div_rect,
+            );
+        }
+        if let Some(&text_rect) = desc_chunks.get(1) {
+            f.render_widget(
+                Paragraph::new(format!(" {desc}"))
+                    .style(Style::default().fg(Color::Gray))
+                    .wrap(Wrap { trim: true }),
+                text_rect,
+            );
+        }
+    }
     if let Some(sub) = &s.sub {
         draw_settings_sub(f, s, sub, area);
     }

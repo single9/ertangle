@@ -11,7 +11,7 @@ use std::path::Path;
 
 use ertangle_core::{Role, Session, State};
 
-use crate::config::Config;
+use crate::config::{Config, DelegationMode};
 
 /// `.ertangle/instructions.md` 最多取用的位元組數，避免把整份文件塞進每個 agent 的 context。
 const MAX_REPO_INSTRUCTIONS: usize = 8 * 1024;
@@ -50,6 +50,16 @@ fn push_extra(out: &mut String, extra: &str) {
 /// 組出某個 session 的協作說明。`parent` 是產生它的 session (人產生的為 `None`)；
 /// `extra` 原樣附加在最後。
 pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) -> String {
+    collab_instructions_with(me, parent, extra, DelegationMode::Balanced)
+}
+
+/// Like [`collab_instructions`], with explicit coordinator [`DelegationMode`].
+pub fn collab_instructions_with(
+    me: &Session,
+    parent: Option<&Session>,
+    extra: &str,
+    delegation: DelegationMode,
+) -> String {
     let mut out = format!("{HEADER}\n");
     let spawned_by = match (parent, me.parent.as_deref()) {
         (Some(p), _) => format!("session \"{}\" ({})", p.label, p.id),
@@ -78,11 +88,22 @@ pub fn collab_instructions(me: &Session, parent: Option<&Session>, extra: &str) 
     }
     let has_parent = parent.is_some() || me.parent.is_some();
     if me.role == Role::Coordinator {
-        out.push_str(
+        let delegation_line = match delegation {
+            DelegationMode::Proactive => {
+                "- Delegation (proactive): Your role is orchestration—decompose tasks, locate exact files/line ranges, dispatch implementation to workers via ertangle_spawn (using cheaper default models), review diffs via ertangle_diff, and merge via ertangle_merge. Delegate multi-file changes, build/test iteration loops, and parallelizable subtasks to workers instead of implementing them inline; only answer questions or 1-2 line fixes inline."
+            }
+            DelegationMode::Balanced => {
+                "- Delegation (balanced): Do trivial queries or 1-2 step single-file edits inline. For multi-file implementation, iterative build/test loops, or parallelizable subtasks, proactively delegate via ertangle_spawn to cheaper default workers instead of running long inline loops on the coordinator model."
+            }
+            DelegationMode::Manual => {
+                "- Delegation (manual): Spawn the fewest workers; do small tasks inline unless the user explicitly asks to delegate or parallelism is clearly needed."
+            }
+        };
+        out.push_str(&format!(
             "- Coordination: Spawn workers using ertangle_spawn and schedule dependencies with ertangle_task_create (via depends_on); use ertangle_wait to await replies, do not poll.\n\
              - Budget & Models: Sessions spawned via ertangle_spawn get independent workspaces by default. Do not self-select expensive models or effort; use defaults unless needed. Ask the user before using high-tier models. If usage exceeds configured limits, the system will prompt for confirmation.\n\
-             - Token economy: Spawn the fewest workers; do small tasks inline. Give self-contained prompts with exact files/line ranges so workers do not re-explore. Prefer cheaper default models for mechanical work. Check quota via ertangle_whoami before spawning; when `QUOTA_WARN <agent>` arrives, stop spawning `<agent>` workers (other agents with available quota can still be used) and have active `<agent>` sessions commit and report. Reuse an idle worker via ertangle_task_create instead of spawning a new one.\n",
-        );
+             {delegation_line} Give self-contained prompts with exact files/line ranges so workers do not re-explore. Prefer cheaper default models for mechanical work. Check quota via ertangle_whoami before spawning; when `QUOTA_WARN <agent>` arrives, stop spawning `<agent>` workers (other agents with available quota can still be used) and have active `<agent>` sessions commit and report. Reuse an idle worker via ertangle_task_create instead of spawning a new one.\n",
+        ));
     } else {
         let report_target = if has_parent {
             "via ertangle_send"
@@ -185,7 +206,7 @@ pub fn for_session(
     Some(match me {
         Some(s) => {
             let parent = s.parent.as_ref().and_then(|p| state.sessions.get(p));
-            collab_instructions(s, parent, &extra)
+            collab_instructions_with(s, parent, &extra, cfg.delegation_mode())
         }
         None => general_instructions(&extra),
     })
@@ -416,11 +437,11 @@ mod tests {
         let me = sess("ses_c", "coordinator/x", Role::Coordinator);
         let t = collab_instructions(&me, None, "");
         assert!(
-            t.contains("Token economy") && t.contains("QUOTA_WARN"),
+            t.contains("Delegation (balanced):") && t.contains("QUOTA_WARN"),
             "{t}"
         );
         let w = collab_instructions(&sess("ses_w", "w", Role::Worker), None, "");
-        assert!(!w.contains("Token economy"));
+        assert!(!w.contains("Delegation ("));
     }
 
     #[test]
@@ -460,5 +481,35 @@ mod tests {
         .unwrap();
         let on = for_session(&st, "nobody", &global, &repo).unwrap();
         assert!(on.contains("# ertangle ADE collaboration"), "{on}");
+    }
+
+    #[test]
+    fn delegation_mode_controls_coordinator_guidance() {
+        let global = temp_dir("collab-del-g");
+        let repo = temp_dir("collab-del-r");
+        let mut st = State::new();
+        let mut c = sess("ses_c", "coord", Role::Coordinator);
+        c.cwd = repo.to_string_lossy().into();
+        st.sessions.insert("ses_c".into(), c);
+
+        let def = for_session(&st, "ses_c", &global, &repo).unwrap();
+        assert!(def.contains("Delegation (balanced):"), "{def}");
+
+        std::fs::write(
+            global.join("config.toml"),
+            "[collab]\ndelegation = \"proactive\"\n",
+        )
+        .unwrap();
+        let pro = for_session(&st, "ses_c", &global, &repo).unwrap();
+        assert!(pro.contains("Delegation (proactive):"), "{pro}");
+
+        std::fs::create_dir_all(repo.join(".ertangle")).unwrap();
+        std::fs::write(
+            repo.join(".ertangle").join("config.toml"),
+            "[collab]\ndelegation = \"manual\"\n",
+        )
+        .unwrap();
+        let man = for_session(&st, "ses_c", &global, &repo).unwrap();
+        assert!(man.contains("Delegation (manual):"), "{man}");
     }
 }

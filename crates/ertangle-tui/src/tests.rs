@@ -2694,7 +2694,13 @@ fn settings_panel_cycles_values_and_writes_config() {
     assert_eq!(app.mode, Mode::Settings);
     // 寬字元在 buffer 中夾著空白格，比對前去掉空白。
     let text: String = render(&mut app).split_whitespace().collect();
-    assert!(text.contains("預設權限") && text.contains("獨立worktree"));
+    assert!(text.contains("預設權限") && text.contains("1:Agent"));
+
+    // Tab 切到第 2 分頁 (Spawn & Git)。
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Tab));
+    let tab2: String = render(&mut app).split_whitespace().collect();
+    assert!(tab2.contains("獨立worktree"), "{tab2}");
+    crate::settings::handle_key(&mut app, None, key(KeyCode::Char('1')));
 
     // 第 2 列「預設角色」：未設定 → worker
     let role_idx = crate::settings::ITEMS

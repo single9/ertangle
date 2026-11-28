@@ -161,11 +161,33 @@ impl AgentSpawnCfg {
 }
 
 /// 注入每個 agent 的協作說明 (`collab.rs`)。
+/// Coordinator delegation strategy for spawning workers (`[collab] delegation`).
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DelegationMode {
+    Proactive,
+    #[default]
+    Balanced,
+    Manual,
+}
+
+impl std::fmt::Display for DelegationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DelegationMode::Proactive => f.write_str("proactive"),
+            DelegationMode::Balanced => f.write_str("balanced"),
+            DelegationMode::Manual => f.write_str("manual"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct CollabCfg {
     /// 是否注入 (預設開啟)。
     pub instructions: Option<bool>,
+    /// Coordinator 主動分派 worker 的策略 (`proactive` / `balanced` / `manual`)。
+    pub delegation: Option<DelegationMode>,
     /// 附加在通則後面的文字。
     pub extra: Option<String>,
     /// 全域的 ADE 系統提示檔 (Markdown／文字)，附加在每個 agent 的協作說明裡。只認全域設定。
@@ -631,6 +653,11 @@ fn repo_config_path(cwd: &Path) -> PathBuf {
 }
 
 impl Config {
+    /// Effective coordinator delegation strategy (`balanced` when unset).
+    pub fn delegation_mode(&self) -> DelegationMode {
+        self.collab.delegation.unwrap_or_default()
+    }
+
     pub fn parse(src: &str) -> Result<Config, toml::de::Error> {
         toml::from_str(src)
     }
@@ -737,6 +764,9 @@ impl Config {
         }
         if local.collab.instructions.is_some() {
             out.collab.instructions = local.collab.instructions;
+        }
+        if local.collab.delegation.is_some() {
+            out.collab.delegation = local.collab.delegation;
         }
         if local.collab.inject_skill.is_some() {
             out.collab.inject_skill = local.collab.inject_skill;

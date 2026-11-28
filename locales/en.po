@@ -3339,12 +3339,12 @@ msgid " 說明 (Esc 關閉) "
 msgstr " Help (Esc to close) "
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"
-msgstr " ↑↓ move · Enter pick · ←→ cycle · Esc close"
-
-#: crates/ertangle-tui/src/draw.rs
 msgid " 設定 (寫入全域 config.toml) "
 msgstr " Settings (config.toml) "
+
+#: crates/ertangle-tui/src/draw.rs
+msgid " ↑↓ 選 · Tab/1-4 切頁 · Enter 開清單/切換 · ←→ 輪替 · Esc 關 "
+msgstr " ↑↓ select · Tab/1-4 tab · Enter pick/toggle · ←→ cycle · Esc close "
 
 #: crates/ertangle-tui/src/draw.rs
 msgid " 過濾："
@@ -4717,6 +4717,22 @@ msgid "搜尋 {current}/{total}"
 msgstr "Search {current}/{total}"
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "1: Agent"
+msgstr "1: Agent"
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "2: Spawn & Git"
+msgstr "2: Spawn & Git"
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "3: 協作 & 壓縮"
+msgstr "3: Collab & Context"
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "4: Web & 系統"
+msgstr "4: Web & System"
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "新 session 預設值"
 msgstr "New-session defaults"
 
@@ -4789,10 +4805,6 @@ msgid "下面兩項設定的對象 agent"
 msgstr "Agent for rows below"
 
 #: crates/ertangle-tui/src/settings.rs
-msgid "{agent} 的預設 model (清單載入中…)"
-msgstr "{agent} model (loading…)"
-
-#: crates/ertangle-tui/src/settings.rs
 msgid "{agent} 的預設 model"
 msgstr "{agent} model"
 
@@ -4829,20 +4841,24 @@ msgid "把協作說明注入每個 agent"
 msgstr "Inject collab instructions"
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "Coordinator 主動分派 worker 策略"
+msgstr "Coordinator worker delegation policy"
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "把 ertangle-ade skill 注入協作說明"
 msgstr "Inject ertangle-ade skill"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "把省 token 提示注入協作說明"
-msgstr "Inject token-saving hints into the collaboration instructions"
+msgstr "Inject token-saving hints"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "上下文快滿時自動 compact"
-msgstr "Auto-compact when context is nearly full"
+msgstr "Auto-compact near full"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "自動 compact 的觸發門檻 (上下文用量 %)"
-msgstr "Auto-compact threshold (context usage %)"
+msgstr "Auto-compact threshold (%)"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "Web 版支援 (Web UI)"
@@ -4854,7 +4870,7 @@ msgstr "Web port"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "daemon 執行期間防止系統休眠"
-msgstr "Prevent system sleep while the daemon runs"
+msgstr "Keep awake while daemon runs"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "介面語言"
@@ -4883,6 +4899,10 @@ msgstr "auto: approve routine"
 #: crates/ertangle-tui/src/settings.rs
 msgid "bypass：完全不問"
 msgstr "bypass: never ask"
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "未設定 (balanced)"
+msgstr "Unset (balanced)"
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "未設定 (agent 自己的預設)"
@@ -4927,6 +4947,102 @@ msgstr "Default (7421)"
 #: crates/ertangle-tui/src/settings.rs
 msgid "自動 (依 LANG 環境變數)"
 msgstr "Auto (from LANG)"
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "載入中…"
+msgstr "loading…"
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "新建立 session 時預設使用的 agent CLI (未設定時依環境偵測)。"
+msgstr "Default agent CLI for new sessions (auto-detected when unset)."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "人工直接開啟新 session 的預設角色 (coordinator / worker / reviewer)。"
+msgstr "Default role for user-created sessions (coordinator / worker / reviewer)."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "工具執行權限：ask 每次詢問、auto 自動核准一般操作、bypass 全免問。"
+msgstr "Tool permission policy: ask every time, auto-approve routine ops, or bypass."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "Coordinator 呼叫 ertangle_spawn 未指定 agent 時，依此順序挑第一個已安裝且額度充足的 agent。"
+msgstr "Order of installed agents with available quota used when ertangle_spawn omits `kind`."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "切換下方兩列「預設 model / effort」所設定的目標 agent。"
+msgstr "Select which agent the default model and effort rows below configure."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "該 agent 未指定模型時的預設 model；Enter 可搜尋即時清單。"
+msgstr "Default model for the target agent; press Enter to search live models."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "該 agent 的預設推理深度 (僅 claude / codex 等支援 effort 的 agent 生效)。"
+msgstr "Default reasoning effort for the target agent (for agents supporting effort)."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "開啟時，agent 透過 ertangle_spawn 建立的子 session 會自動取得獨立 git worktree。"
+msgstr "Give agent-spawned child sessions their own isolated git worktree by default."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "當子 session 使用高階模型或超過 effort 上限時的確認策略。"
+msgstr "Confirmation policy when spawning costly models or effort above the cap."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "超過此 effort 等級的 spawn 請求會依上方策略要求確認。"
+msgstr "Spawn requests above this effort level require confirmation."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "daemon 重啟或斷線重連後，自動接續先前執行中的 session。"
+msgstr "Automatically resume previously running sessions after daemon restart."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "多個 worktree 共用同一個 CARGO_TARGET_DIR，省空間並避免重複編譯。"
+msgstr "Share CARGO_TARGET_DIR across worktrees to save disk and rebuild time."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "Coordinator 執行 ertangle_merge 時預設使用的 git 合併策略 (merge / squash / rebase)。"
+msgstr "Default git merge strategy used by ertangle_merge (merge / squash / rebase)."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "啟動或連線時自動注入 [ertangle collaboration instructions] 協作規範。"
+msgstr "Inject [ertangle collaboration instructions] on startup and MCP connect."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "proactive：實作優先派給 worker；balanced：小改 inline、多檔或測試迴圈派給 worker；manual：除非明確要求否則不主動派工。"
+msgstr "proactive: delegate implementation to workers; balanced: small edits inline, multi-file/test loops to workers; manual: only spawn when asked."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "將內嵌的 ertangle-ade 協作技能全文直接附在協作說明後方。"
+msgstr "Append the full embedded ertangle-ade skill text after collab instructions."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "在協作說明附上減少回合數與輸出長度的省 token 守則。"
+msgstr "Append token-saving guidelines for fewer turns and smaller tool outputs."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "當對話上下文用量達到門檻且 session 閒置時，自動觸發 compact。"
+msgstr "Automatically compact idle sessions when context usage reaches the threshold."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "觸發自動 compact 的上下文使用率百分比 (預設 85%)。"
+msgstr "Context usage percentage threshold that triggers auto-compact (default 85%)."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "啟用或切換 Web UI 監聽位址 (localhost / tailscale / 0.0.0.0)，可立即套用。"
+msgstr "Enable or switch Web UI bind address (localhost / tailscale / 0.0.0.0); applies immediately."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "Web UI HTTP/WebSocket 服務監聽的連接埠 (預設 7421)。"
+msgstr "Port for the Web UI HTTP/WebSocket server (default 7421)."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "有執行中 session 時防止系統進入休眠，確保長任務不中斷。"
+msgstr "Prevent system sleep while sessions are active."
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "切換 TUI 顯示語言 (繁體中文 / English / 自動偵測)，變更立即生效。"
+msgstr "Switch TUI display language (Traditional Chinese / English / Auto); applies immediately."
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "已儲存到 {path} (新建立的 session 起生效)"
@@ -5051,6 +5167,27 @@ msgstr "Failed to launch editor: {e}"
 #: crates/ertangle-tui/src/lib.rs
 msgid "連線中斷中，正在重連；請稍候"
 msgstr "Connection lost, reconnecting; please wait"
+
+#~ msgid "{agent} 的預設 model (清單載入中…)"
+#~ msgstr "{agent} model (loading…)"
+
+#~ msgid "proactive：實作優先派給 worker"
+#~ msgstr "proactive: delegate implementation to workers"
+
+#~ msgid "balanced：小改自己做，多檔或測試迴圈派給 worker"
+#~ msgstr "balanced: small inline, multi-file to workers"
+
+#~ msgid "manual：除非明確要求否則不主動派工"
+#~ msgstr "manual: only spawn when explicitly asked"
+
+#~ msgid " 設定 ({cur}/{total} · 寫入全域 config.toml) "
+#~ msgstr " Settings ({cur}/{total} · writes global config.toml) "
+
+#~ msgid " ↑↓ 選 · Tab 跳區 · Enter 開清單/切換 · ←→ 輪替 · Esc 關 "
+#~ msgstr " ↑↓ select · Tab section · Enter pick/toggle · ←→ cycle · Esc close "
+
+#~ msgid " ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"
+#~ msgstr " ↑↓ move · Enter pick · ←→ cycle · Esc close"
 
 #~ msgid " P 展開 · Space P 切換 "
 #~ msgstr " P expand · Space P switch "

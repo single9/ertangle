@@ -3322,11 +3322,11 @@ msgid " 說明 (Esc 關閉) "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " ↑↓ 選項目 · Enter 開清單選擇 (開關直接切換)· ←→ 輪替 · Esc 關閉　變更立即儲存"
+msgid " 設定 (寫入全域 config.toml) "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
-msgid " 設定 (寫入全域 config.toml) "
+msgid " ↑↓ 選 · Tab/1-4 切頁 · Enter 開清單/切換 · ←→ 輪替 · Esc 關 "
 msgstr ""
 
 #: crates/ertangle-tui/src/draw.rs
@@ -4700,6 +4700,22 @@ msgid "搜尋 {current}/{total}"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "1: Agent"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "2: Spawn & Git"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "3: 協作 & 壓縮"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "4: Web & 系統"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "新 session 預設值"
 msgstr ""
 
@@ -4772,10 +4788,6 @@ msgid "下面兩項設定的對象 agent"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
-msgid "{agent} 的預設 model (清單載入中…)"
-msgstr ""
-
-#: crates/ertangle-tui/src/settings.rs
 msgid "{agent} 的預設 model"
 msgstr ""
 
@@ -4809,6 +4821,10 @@ msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "把協作說明注入每個 agent"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "Coordinator 主動分派 worker 策略"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
@@ -4868,6 +4884,10 @@ msgid "bypass：完全不問"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
+msgid "未設定 (balanced)"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
 msgid "未設定 (agent 自己的預設)"
 msgstr ""
 
@@ -4909,6 +4929,102 @@ msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs
 msgid "自動 (依 LANG 環境變數)"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "載入中…"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "新建立 session 時預設使用的 agent CLI (未設定時依環境偵測)。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "人工直接開啟新 session 的預設角色 (coordinator / worker / reviewer)。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "工具執行權限：ask 每次詢問、auto 自動核准一般操作、bypass 全免問。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "Coordinator 呼叫 ertangle_spawn 未指定 agent 時，依此順序挑第一個已安裝且額度充足的 agent。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "切換下方兩列「預設 model / effort」所設定的目標 agent。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "該 agent 未指定模型時的預設 model；Enter 可搜尋即時清單。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "該 agent 的預設推理深度 (僅 claude / codex 等支援 effort 的 agent 生效)。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "開啟時，agent 透過 ertangle_spawn 建立的子 session 會自動取得獨立 git worktree。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "當子 session 使用高階模型或超過 effort 上限時的確認策略。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "超過此 effort 等級的 spawn 請求會依上方策略要求確認。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "daemon 重啟或斷線重連後，自動接續先前執行中的 session。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "多個 worktree 共用同一個 CARGO_TARGET_DIR，省空間並避免重複編譯。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "Coordinator 執行 ertangle_merge 時預設使用的 git 合併策略 (merge / squash / rebase)。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "啟動或連線時自動注入 [ertangle collaboration instructions] 協作規範。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "proactive：實作優先派給 worker；balanced：小改 inline、多檔或測試迴圈派給 worker；manual：除非明確要求否則不主動派工。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "將內嵌的 ertangle-ade 協作技能全文直接附在協作說明後方。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "在協作說明附上減少回合數與輸出長度的省 token 守則。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "當對話上下文用量達到門檻且 session 閒置時，自動觸發 compact。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "觸發自動 compact 的上下文使用率百分比 (預設 85%)。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "啟用或切換 Web UI 監聽位址 (localhost / tailscale / 0.0.0.0)，可立即套用。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "Web UI HTTP/WebSocket 服務監聽的連接埠 (預設 7421)。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "有執行中 session 時防止系統進入休眠，確保長任務不中斷。"
+msgstr ""
+
+#: crates/ertangle-tui/src/settings.rs
+msgid "切換 TUI 顯示語言 (繁體中文 / English / 自動偵測)，變更立即生效。"
 msgstr ""
 
 #: crates/ertangle-tui/src/settings.rs crates/ertangle-tui/src/settings.rs
