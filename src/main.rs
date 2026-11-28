@@ -62,6 +62,12 @@ enum Cmd {
         /// 允許在未走 SSH 轉發下綁定非 loopback 位址 (危險：傳輸為明文，僅供專用私有網路)
         #[arg(long)]
         insecure_listen_public: bool,
+        /// daemon 執行期間阻止系統閒置休眠 (覆寫設定檔 [power] keep_awake)
+        #[arg(long, overrides_with = "no_keep_awake")]
+        keep_awake: bool,
+        /// 不阻止系統休眠 (覆寫設定檔 [power] keep_awake)
+        #[arg(long, overrides_with = "keep_awake")]
+        no_keep_awake: bool,
     },
     /// 顯示遠端連線資訊 (Tailscale 位址、Token 路徑與連線指令)
     RemoteInfo {
@@ -554,6 +560,15 @@ fn init_language() {
     }
 }
 
+/// `--keep-awake` / `--no-keep-awake` 轉成覆寫值；都沒給時交由設定檔決定。
+fn keep_awake_flag(on: bool, off: bool) -> Option<bool> {
+    match (on, off) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    }
+}
+
 fn main() -> Result<()> {
     init_tracing();
     init_language();
@@ -585,6 +600,8 @@ fn main() -> Result<()> {
             token,
             token_file,
             insecure_listen_public,
+            keep_awake,
+            no_keep_awake,
         } => cmd_daemon(
             listen,
             web,
@@ -592,6 +609,7 @@ fn main() -> Result<()> {
             token,
             token_file,
             insecure_listen_public,
+            keep_awake_flag(keep_awake, no_keep_awake),
         ),
         Cmd::RemoteInfo { json } => cmd_remote_info(json),
         Cmd::Mcp { session, socket } => ertangle_daemon::mcp::run_with_socket(session, socket),
@@ -780,4 +798,35 @@ fn init_tracing() {
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
         .try_init();
+}
+
+#[cfg(test)]
+mod keep_awake_cli_tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Option<bool> {
+        let cli = Cli::try_parse_from(args);
+        match cli.ok().and_then(|c| c.cmd) {
+            Some(Cmd::Daemon {
+                keep_awake,
+                no_keep_awake,
+                ..
+            }) => keep_awake_flag(keep_awake, no_keep_awake),
+            _ => Some(false),
+        }
+    }
+
+    #[test]
+    fn keep_awake_flags_override_config() {
+        assert_eq!(parse(&["ertangle", "daemon"]), None);
+        assert_eq!(parse(&["ertangle", "daemon", "--keep-awake"]), Some(true));
+        assert_eq!(
+            parse(&["ertangle", "daemon", "--no-keep-awake"]),
+            Some(false)
+        );
+        assert_eq!(
+            parse(&["ertangle", "daemon", "--no-keep-awake", "--keep-awake"]),
+            Some(true)
+        );
+    }
 }

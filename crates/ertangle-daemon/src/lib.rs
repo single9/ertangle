@@ -33,6 +33,7 @@ pub use server::{
     RemoteOptions,
 };
 mod paths;
+pub mod power;
 pub(crate) mod procs;
 pub use client::{ensure_daemon, is_running, send_request, Client, ConnStream};
 pub use git::{
@@ -328,6 +329,8 @@ pub(crate) struct Shared {
     /// 已經提醒過成本接近上限的 session (降回門檻以下或調高上限後才會重新提醒)。
     pub(crate) budget_warned: Mutex<std::collections::HashSet<SessionId>>,
     pub(crate) web_server: Mutex<Option<WebServerState>>,
+    /// OS 防休眠鎖；daemon 存活期間持有，teardown 時釋放 (`process::exit` 不會跑 Drop)。
+    pub(crate) wake_lock: Mutex<power::WakeLock>,
 }
 
 impl Shared {
@@ -394,6 +397,7 @@ impl Shared {
             quota_warned: Default::default(),
             budget_warned: Default::default(),
             web_server: Mutex::new(None),
+            wake_lock: Mutex::new(power::WakeLock::disabled()),
         });
 
         let weak_shared = Arc::downgrade(&shared);
@@ -1016,6 +1020,7 @@ impl Shared {
     /// 結束所有 agent 子處理程序、刷出 log、移除 socket。
     fn teardown(self: &Arc<Self>) {
         self.stop_web();
+        lock(&self.wake_lock).release();
         let ctls: Vec<Arc<dyn AgentControl>> = {
             let mut inner = lock(&self.inner);
             inner.sessions.drain().map(|(_, e)| e.ctl).collect()

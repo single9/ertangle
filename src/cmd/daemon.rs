@@ -16,6 +16,7 @@ pub(crate) fn cmd_daemon(
     token: Option<String>,
     token_file: Option<PathBuf>,
     insecure_listen_public: bool,
+    keep_awake: Option<bool>,
 ) -> Result<()> {
     ertangle_daemon::run_remote(RemoteOptions {
         listen,
@@ -24,6 +25,7 @@ pub(crate) fn cmd_daemon(
         token,
         token_file,
         insecure_listen_public,
+        keep_awake,
     })
 }
 

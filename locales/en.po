@@ -200,12 +200,20 @@ msgid "daemon socket 路徑 (預設讀取 ERTANGLE_SOCKET 環境變數或標準 
 msgstr "Daemon socket path (defaults to ERTANGLE_SOCKET environment variable or standard runtime path)"
 
 #: src/cmd/helptext/help_strings.rs
+msgid "daemon 執行期間阻止系統閒置休眠 (覆寫設定檔 [power] keep_awake)"
+msgstr "Prevent system idle sleep while the daemon runs (overrides [power] keep_awake in config)"
+
+#: src/cmd/helptext/help_strings.rs
 msgid "ertangle — 終端機原生的多 agent 開發環境"
 msgstr "ertangle — a terminal-native multi-agent development environment"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "stdio MCP server 模式 (供 agent 子處理程序設定為 MCP 工具)"
 msgstr "Run as a stdio MCP server (for agent child processes to use as an MCP tool)"
+
+#: src/cmd/helptext/help_strings.rs
+msgid "不阻止系統休眠 (覆寫設定檔 [power] keep_awake)"
+msgstr "Do not prevent system sleep (overrides [power] keep_awake in config)"
 
 #: src/cmd/helptext/help_strings.rs
 msgid "中斷正在執行的 turn"

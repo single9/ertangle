@@ -259,6 +259,8 @@ Every structured agent session is automatically injected with a stdio MCP server
   - When reaching threshold (default 80%), visual warnings trigger. Exceeding limits halts execution and holds pending prompts until budget is increased via `:budget <amount>`.
 - **Idle Process Suspension (Sleep/Wake)**:
   - Press `z` or run `ertangle sleep <session>` to send `SIGSTOP`, freezing idle agent processes and freeing CPU. Press `z` or send a message to dispatch `SIGCONT` and wake them up.
+- **OS Keep-Awake (opt-in, default off)**:
+  - Set `[power] keep_awake = true` in the global `~/.config/ertangle/config.toml` (repo-local `.ertangle/config.toml` cannot enable it), or start with `ertangle daemon --keep-awake` (`--no-keep-awake` overrides the config). While the daemon runs, it holds `caffeinate` on macOS or `systemd-inhibit --what=idle:sleep` on Linux so long agent runs are not interrupted by system sleep; the lock is released on shutdown. If the helper is missing or the platform is unsupported, a warning is logged and the daemon continues without the lock.
 
 ### 5. Permission Policy & Rule Engine
 

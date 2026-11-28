@@ -537,6 +537,21 @@ impl GitCfg {
     }
 }
 
+/// OS 層級電源設定 (`[power]`)；為安全起見僅讀取全域設定檔。
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PowerCfg {
+    /// daemon 執行期間阻止系統閒置休眠 (預設 false)。
+    pub keep_awake: Option<bool>,
+}
+
+impl PowerCfg {
+    /// 是否啟用防休眠；未設定時為 false。
+    pub fn keep_awake(&self) -> bool {
+        self.keep_awake.unwrap_or(false)
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
@@ -556,6 +571,8 @@ pub struct Config {
     pub auto_compact: AutoCompactCfg,
     /// Web 版支援設定；為安全起見僅讀取全域設定檔。
     pub web: WebCfg,
+    /// 電源設定 (`[power]`)；僅讀取全域設定檔，repo 設定檔不可啟用防休眠。
+    pub power: PowerCfg,
     /// 遠端主機清單；為安全起見僅讀取全域設定檔，不接受 repo 設定檔覆寫。
     pub remotes: BTreeMap<String, RemoteHostCfg>,
     /// 使用者自訂的多 Agent 團隊範本；與內建範本合併，同名者覆寫。
@@ -764,6 +781,7 @@ impl Config {
         for (name, pb) in local.playbooks {
             out.playbooks.insert(name, pb);
         }
+        // power 只認全域設定：clone 下來的 repo 不該能讓使用者的機器整夜不休眠。
         out
     }
 
@@ -1363,6 +1381,47 @@ notify_min_turn_secs = 30
         assert_eq!(c.collab.extra.as_deref(), Some("全域")); // repo 沒寫的欄位保留全域
         assert_eq!(c.roles["reviewer"].instructions.as_deref(), Some("repo"));
         assert_eq!(c.roles["reviewer"].model.as_deref(), Some("m"));
+    }
+
+    #[test]
+    fn power_keep_awake_is_global_only() {
+        let parsed = Config::parse("[power]\nkeep_awake = true\n").unwrap_or_default();
+        assert!(parsed.power.keep_awake());
+        assert!(!Config::default().power.keep_awake());
+
+        let local_on = Config::parse("[power]\nkeep_awake = true\n").unwrap_or_default();
+        let merged = Config::layered(Config::default(), local_on);
+        assert!(
+            !merged.power.keep_awake(),
+            "repo config must not enable keep_awake"
+        );
+
+        let global_on = Config::parse("[power]\nkeep_awake = true\n").unwrap_or_default();
+        let local_off = Config::parse("[power]\nkeep_awake = false\n").unwrap_or_default();
+        let merged = Config::layered(global_on, local_off);
+        assert!(
+            merged.power.keep_awake(),
+            "repo config must not override global power"
+        );
+    }
+
+    #[test]
+    fn power_keep_awake_load_ignores_repo_file() {
+        let tmp = std::env::temp_dir().join(format!("ertangle-power-{}", std::process::id()));
+        let global = tmp.join("global");
+        let repo = tmp.join("repo");
+        let local_dir = repo.join(".ertangle");
+        assert!(std::fs::create_dir_all(&global).is_ok());
+        assert!(std::fs::create_dir_all(&local_dir).is_ok());
+        assert!(std::fs::write(
+            local_dir.join("config.toml"),
+            "[power]\nkeep_awake = true\n"
+        )
+        .is_ok());
+        assert!(!Config::load(&global, &repo).power.keep_awake());
+        assert!(std::fs::write(global.join("config.toml"), "[power]\nkeep_awake = true\n").is_ok());
+        assert!(Config::load(&global, &repo).power.keep_awake());
+        let _ = std::fs::remove_dir_all(&tmp); // best-effort cleanup
     }
 
     #[test]

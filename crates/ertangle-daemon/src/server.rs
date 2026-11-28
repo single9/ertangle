@@ -116,6 +116,8 @@ pub struct RemoteOptions {
     pub token_file: Option<PathBuf>,
     /// 允許綁定非 loopback 位址
     pub insecure_listen_public: bool,
+    /// `--keep-awake` / `--no-keep-awake`；`None` 時依全域設定 `[power] keep_awake`。
+    pub keep_awake: Option<bool>,
 }
 
 /// 判斷指定 IP 是否屬於 Tailscale 專用網段 (IPv4 100.64.0.0/10 或 IPv6 fd7a:115c:a1e0::/48)。
@@ -550,6 +552,8 @@ pub fn run_remote(opts: RemoteOptions) -> Result<()> {
     fs::create_dir_all(state_dir())?;
 
     let shared = Shared::restore(&log_path(), policy, default_cwd, auth_token)?;
+    let keep_awake = opts.keep_awake.unwrap_or_else(|| cfg.power.keep_awake());
+    *lock(&shared.wake_lock) = crate::power::WakeLock::acquire(keep_awake);
 
     // 若指定了 `--listen <host:port>`，在背景執行緒啟動 TCP 監聽 (M5 遠端模式)。
     if let Some(addr) = listen_tcp {
